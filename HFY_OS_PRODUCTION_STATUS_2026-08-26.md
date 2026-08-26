@@ -151,7 +151,12 @@ Healthchecks.io was selected for the external watchdog. HFY OS now contains sepa
 
 Each handler sends its ping only after its database automation completes successfully. It does not ping at job start. A job that is never invoked, throws before completion, or cannot reach its success endpoint will therefore remain missed in Healthchecks.io.
 
-The Healthchecks.io account magic link has been sent to `austyn@hearforyou.group`. The two checks and production environment values still need to be created after that link is accepted.
+The Healthchecks.io account is active under `austyn@hearforyou.group`. Both checks are configured in UTC with two hours of grace for Vercel Hobby's flexible execution window:
+
+- Auto-complete: `0 12 * * *`
+- Reconciliation: `15 12 * * *`
+
+Both private success URLs are stored as Vercel Production secrets. Commit `a1a39cb` is deployed, and both production handlers were manually invoked after deployment. Both Healthchecks.io checks received the expected success pings and currently show **up**.
 
 The active production schedules are:
 
@@ -222,6 +227,25 @@ RLS policies remain important hardening, but with one internal owner, no client 
 - Supabase Pro daily backups are sufficient for the current operating phase. PITR is deferred.
 - Healthchecks.io free tier is the selected Cron watchdog, with one check per job and success-only pings.
 - The RLS deferral is considered safe because the browser publishable key is used only for authentication, not direct operational-data queries.
+
+## Execution update
+
+Completed after Claude's review:
+
+- Verified the publishable key is used client-side only for Supabase Auth password sign-in.
+- Added success-only Healthchecks.io pings to both Cron handlers.
+- Added automated tests for configured, missing, and failed Healthchecks pings.
+- Passed 75 tests, TypeScript checking, lint, and the production build.
+- Created and configured both Healthchecks.io checks.
+- Stored both private check URLs in Vercel Production.
+- Deployed commit `a1a39cb` and confirmed both live jobs ping successfully.
+- Removed the temporary repository deployment credential used for this push.
+
+Still awaiting user-provided account information or authentication:
+
+- Accept the Supabase owner invitation.
+- Sign in to Squarespace so the Resend DNS records can be installed.
+- Complete the Supabase billing address/payment profile so the approved $25/month Pro upgrade can be confirmed.
 
 ## Requested review from Claude
 
