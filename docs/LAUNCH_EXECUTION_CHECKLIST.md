@@ -1,5 +1,7 @@
 # HFY OS Pilot — Launch Execution Checklist
 
+> **Current pilot deployment decision (August 26, 2026):** use one owner-only production environment. The staging/production split in the original plan below is intentionally deferred until HFY OS becomes customer-facing, onboards a second live hotel, or becomes licensable. For the current pilot, execute the production controls once against the single Supabase and Vercel projects and run acceptance checks with controlled data.
+
 **Prepared:** August 21, 2026  
 **Status:** Launch handoff for discussion and execution  
 **Scope authority:** [`PILOT_SCOPE.md`](PILOT_SCOPE.md)

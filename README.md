@@ -1,6 +1,6 @@
 # HFY OS
 
-HFY OS is the clean-client pilot application for new hotel residencies. Ace Hotel remains operationally live in Airtable and is not read, written, migrated, or synchronized by this application. A clearly labeled Ace parity sandbox may be created in staging to prove the Residency workflow without becoming an Ace cutover.
+HFY OS is the clean-client pilot application for new hotel residencies. Ace Hotel remains operationally live in Airtable and is not read, written, migrated, or synchronized by this application. During the owner-only pilot, HFY OS uses one real production environment; a separate staging environment is deferred until customer-facing access or a second live hotel makes that separation valuable.
 
 The pilot includes:
 
@@ -29,7 +29,7 @@ Requirements: Node.js 22.17 or newer, pnpm 11, a Supabase project, a Vercel Pro 
    ```
 
 6. Start the app with `pnpm dev`, open the company-wide `/app/setup` view, and save the Invoice branding (company name, billing contact, address, and logo). Then create the first new-client Residency, Shifts, and approved DJ list. Open that Residency's Invoices page to configure its bill-to details, billing cadence, presentation, delivery rule, and Draft Invoices.
-   To create the Ace build-and-prove fixture in a migrated staging database, run `pnpm seed:ace-parity`. It creates only the two specified Dayparts and the $80/hour Talent default; it does not contact Airtable and leaves the unknown client rate at $0 until an approved rate is entered.
+   To create the Ace build-and-prove fixture in a safe non-Ace database, run `pnpm seed:ace-parity`. It creates only the two specified Dayparts and the $80/hour Talent default; it does not contact Airtable and leaves the unknown client rate at $0 until an approved rate is entered.
 7. Use the Residency switcher to verify calendar, Talent, payouts, Invoices, and Setup are scoped to the new program. Client-facing login behavior will be designed later; `/hotel` is not an active product surface.
 8. Switch from Operations to Pipeline to create a Lead. Moving a Lead to Won requires its Residency foundation fields and updates that same database record into Operations; it does not create a replacement record.
 
@@ -60,15 +60,15 @@ Set a strong `CRON_SECRET`; Vercel sends it as a bearer token. Vercel Pro is req
 
 ## Pilot deployment checklist
 
-- Create separate Supabase staging and production projects.
-- Apply migrations and bootstrap private buckets in each.
-- Configure Vercel preview/production environment variables.
+- Use the single owner-only Supabase and Vercel production environment for the current pilot.
+- Apply migrations and bootstrap private buckets there.
+- Configure production environment variables in Vercel.
 - Verify the Resend domain and `billing@hearforyou.group` reply inbox.
 - Create the HFY admin manually.
 - Run the full test suite.
-- Complete one staging cycle: create Shift/Assignments → auto-complete → Ready to Pay → Paid.
-- Complete one staging scheduled Invoice cycle: select eligible Shifts → matching system total → approve/native PDF generation → exactly one email when auto-send is enabled.
-- Complete one staging custom Invoice cycle: add independent client line items → save Draft → approve/native PDF generation. Confirm it never links to or captures a Shift.
+- Complete one controlled production cycle: create Shift/Assignments → auto-complete → Ready to Pay → Paid.
+- Complete one controlled scheduled Invoice cycle: select eligible Shifts → matching system total → approve/native PDF generation → exactly one email when auto-send is enabled.
+- Complete one controlled custom Invoice cycle: add independent client line items → save Draft → approve/native PDF generation. Confirm it never links to or captures a Shift.
 - Open the generated PDF and confirm it contains only hotel billing details: scheduled service dates, times, hours, client rates, and client totals. It must not contain artist identity, artist pay, payment details, or internal margin.
 - Attempt cross-Residency access and overlapping DJ selection; both must fail.
 
