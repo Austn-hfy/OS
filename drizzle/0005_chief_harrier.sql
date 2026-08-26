@@ -1,0 +1,2 @@
+ALTER TABLE "shifts" ADD COLUMN "calendar_color" text;--> statement-breakpoint
+ALTER TABLE "shifts" ADD CONSTRAINT "shifts_calendar_color_valid" CHECK ("shifts"."calendar_color" IS NULL OR "shifts"."calendar_color" ~ '^#[0-9A-Fa-f]{6}$');

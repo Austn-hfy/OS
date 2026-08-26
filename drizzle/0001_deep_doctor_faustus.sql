@@ -1,0 +1,1 @@
+ALTER TABLE "talent_onboarding_submissions" ADD COLUMN "w9_storage_path" text;

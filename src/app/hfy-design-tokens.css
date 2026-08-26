@@ -1,0 +1,54 @@
+:root {
+  /* HFY OS — Light Frost visual system */
+  --hfy-font-sans: Inter, Arial, sans-serif;
+
+  --hfy-canvas: #e9edef;
+  --hfy-canvas-cool: #dce5eb;
+  --hfy-ink: #16212b;
+  --hfy-ink-soft: #344656;
+  --hfy-muted: #687784;
+  --hfy-label: #536676;
+  --hfy-line: rgba(48, 68, 84, 0.14);
+  --hfy-line-strong: rgba(48, 68, 84, 0.22);
+
+  --hfy-surface: rgba(247, 249, 250, 0.78);
+  --hfy-surface-strong: rgba(250, 251, 252, 0.91);
+  --hfy-surface-nested: rgba(225, 232, 237, 0.66);
+  --hfy-slate-surface: rgba(77, 96, 112, 0.12);
+  --hfy-inset-highlight: rgba(255, 255, 255, 0.7);
+
+  --hfy-action: #8bc7f1;
+  --hfy-action-strong: #347fbb;
+  --hfy-action-ink: #173b57;
+  --hfy-action-soft: rgba(139, 199, 241, 0.24);
+  --hfy-focus-ring: rgba(74, 151, 210, 0.24);
+  --hfy-coral: #e88d7a;
+  --hfy-coral-soft: rgba(232, 141, 122, 0.16);
+
+  --hfy-success: #32765a;
+  --hfy-success-soft: rgba(50, 118, 90, 0.11);
+  --hfy-warning: #b76427;
+  --hfy-warning-soft: rgba(210, 126, 55, 0.13);
+  --hfy-error: #b74b52;
+  --hfy-error-soft: rgba(183, 75, 82, 0.11);
+
+  --hfy-space-1: 4px;
+  --hfy-space-2: 8px;
+  --hfy-space-3: 12px;
+  --hfy-space-4: 16px;
+  --hfy-space-6: 24px;
+  --hfy-space-8: 32px;
+  --hfy-space-12: 48px;
+  --hfy-space-16: 64px;
+
+  --hfy-control-height: 44px;
+  --hfy-control-height-large: 52px;
+  --hfy-radius-control: 11px;
+  --hfy-radius-card: 15px;
+  --hfy-radius-feature: 22px;
+  --hfy-radius-pill: 999px;
+
+  --hfy-shadow-section: 0 12px 32px rgba(48, 65, 78, 0.11);
+  --hfy-shadow-floating: 0 24px 64px rgba(48, 65, 78, 0.17);
+  --hfy-motion: 180ms ease;
+}

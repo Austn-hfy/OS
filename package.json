@@ -1,0 +1,51 @@
+{
+  "name": "hfy-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.17.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "provision": "tsx scripts/provision-user.ts",
+    "seed:ace-parity": "tsx scripts/seed-ace-parity.ts",
+    "storage:bootstrap": "tsx scripts/bootstrap-storage.ts",
+    "pdf:sample": "tsx scripts/render-sample-invoice.ts"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "149.0.0",
+    "@supabase/ssr": "0.12.4",
+    "@supabase/supabase-js": "2.112.3",
+    "drizzle-orm": "0.45.2",
+    "next": "16.3.1",
+    "playwright-core": "1.62.1",
+    "postgres": "3.4.9",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "resend": "6.21.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.5",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "drizzle-kit": "0.31.10",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.3.1",
+    "tsx": "4.23.12",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.11"
+  },
+  "packageManager": "pnpm@11.19.0"
+}

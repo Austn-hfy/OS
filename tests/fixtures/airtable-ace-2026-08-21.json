@@ -1,0 +1,91 @@
+{
+  "source": "Read-only Airtable pull from HFY OS on 2026-08-21",
+  "baseId": "app7UJ081WoOWoQTS",
+  "assignments": [
+    {
+      "recordId": "recNb51V2IDMWHAwW",
+      "name": "2026-08-16 - Pool - sxclsv",
+      "hours": 7,
+      "effectiveRateDollars": 80,
+      "totalCompensationDollars": 560,
+      "bookingStatus": "completed",
+      "compensationType": "hourly",
+      "paymentEligible": true,
+      "payoutStatus": "ready_to_pay"
+    },
+    {
+      "recordId": "recO7eHUk0nkenbKn",
+      "name": "2026-08-29 - Amigo - Bubba",
+      "hours": 3,
+      "effectiveRateDollars": 80,
+      "totalCompensationDollars": 240,
+      "bookingStatus": "confirmed",
+      "compensationType": "hourly",
+      "paymentEligible": false,
+      "payoutStatus": "not_ready"
+    },
+    {
+      "recordId": "recsGM9RJ1NFqQeJy",
+      "name": "2026-09-04 - Amigo - MODGIRL",
+      "hours": 0,
+      "effectiveRateDollars": 80,
+      "totalCompensationDollars": 0,
+      "bookingStatus": "confirmed",
+      "compensationType": "na",
+      "paymentEligible": false,
+      "payoutStatus": "na"
+    }
+  ],
+  "shifts": [
+    {
+      "recordId": "recdrrFGxBIq7O4kl",
+      "name": "Ace • Sun Nov 1 • Pool",
+      "startsAt": "2026-11-01T19:00:00.000Z",
+      "endsAt": "2026-11-02T02:00:00.000Z",
+      "hours": 7,
+      "clientRateDollars": 100,
+      "billableAmountDollars": 700
+    },
+    {
+      "recordId": "recQ9c2hIePW7udZy",
+      "name": "Ace • Sat Oct 31 • Amigo",
+      "startsAt": "2026-11-01T04:00:00.000Z",
+      "endsAt": "2026-11-01T07:00:00.000Z",
+      "hours": 3,
+      "clientRateDollars": 100,
+      "billableAmountDollars": 300
+    }
+  ],
+  "invoices": [
+    {
+      "recordId": "recu8fb8LhVjhj3gw",
+      "invoiceNumber": "ACE-0724-0830",
+      "invoiceDate": "2026-08-31",
+      "paymentTermsDays": 7,
+      "dueDate": "2026-09-07",
+      "status": "draft",
+      "invoiceTotalDollars": 16800,
+      "calculatedAmountDollars": 16800,
+      "talentCostDollars": 12040,
+      "balanceDollars": 16800,
+      "varianceDollars": 0,
+      "grossMarginDollars": 4760,
+      "marginFraction": 0.2833333333333333
+    },
+    {
+      "recordId": "recoXXm1wtKO8nZul",
+      "invoiceNumber": "ACE-1030-1101",
+      "invoiceDate": "2026-11-02",
+      "paymentTermsDays": 7,
+      "dueDate": "2026-11-09",
+      "status": "draft",
+      "invoiceTotalDollars": 2700,
+      "calculatedAmountDollars": 2700,
+      "talentCostDollars": 0,
+      "balanceDollars": 2700,
+      "varianceDollars": 0,
+      "grossMarginDollars": 2700,
+      "marginFraction": 1
+    }
+  ]
+}

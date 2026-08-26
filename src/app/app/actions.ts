@@ -1,0 +1,775 @@
+"use server";
+
+import { randomUUID } from "node:crypto";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { getDb } from "@/db/client";
+import { assignments, auditLog, clientAccounts, invoiceLineItems, invoices, residencies, residencyTalent, shifts, talent, talentPaymentProfiles } from "@/db/schema";
+import { calculateBillableAmountCents } from "@/domain/airtable-parity";
+import { zonedLocalDateTimeToUtc } from "@/domain/time";
+import { requireInternalActor } from "@/lib/auth";
+import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
+import { saveDaypart } from "@/services/dayparts";
+import { saveInvoiceBranding } from "@/services/invoice-branding";
+import { approveInvoice, sendApprovedInvoice } from "@/services/invoices";
+import { createResidencyDateBooking } from "@/services/residency-bookings";
+import { createShift } from "@/services/shifts";
+
+export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
+
+function centsFromDollars(value: FormDataEntryValue | null): number {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) throw new Error("Enter a valid dollar amount.");
+  return Math.round(amount * 100);
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+export async function updateInvoiceBrandingAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      companyName: z.string().trim().min(2).max(100),
+      billingEmail: z.email(),
+      billingAddress: z.string().trim().max(500),
+    }).parse(Object.fromEntries(formData));
+    const logoValue = formData.get("logo");
+    if (logoValue !== null && !(logoValue instanceof File)) throw new Error("Choose a valid logo image.");
+    await saveInvoiceBranding(actor, { ...parsed, logoFile: logoValue instanceof File && logoValue.size > 0 ? logoValue : null });
+    revalidatePath("/app/setup");
+    return { status: "success", message: "Invoice branding saved. New approvals will use these details." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to save Invoice branding." };
+  }
+}
+
+export async function createResidencyAction(formData: FormData) {
+  const actor = await requireInternalActor();
+  const parsed = z.object({
+    clientName: z.string().trim().min(2),
+    residencyName: z.string().trim().min(2),
+    cityState: z.string().trim(),
+    timezone: z.string().trim().min(3),
+    tier: z.enum(["operations_only", "complete"]),
+    invoicePrefix: z.string().trim().min(2).max(12),
+    billingContactEmail: z.email(),
+    billingContactName: z.string().trim().min(2),
+    paymentTermsDays: z.coerce.number().int().min(0).max(365),
+  }).parse(Object.fromEntries(formData));
+  const database = getDb();
+  await database.transaction(async (tx) => {
+    const [account] = await tx.insert(clientAccounts).values({ name: parsed.clientName }).returning({ id: clientAccounts.id });
+    const [residency] = await tx.insert(residencies).values({
+      clientAccountId: account.id,
+      slug: slugify(parsed.residencyName),
+      name: parsed.residencyName,
+      cityState: parsed.cityState,
+      timezone: parsed.timezone,
+      tier: parsed.tier,
+      defaultTalentRateCents: centsFromDollars(formData.get("defaultTalentRate")),
+      clientHourlyRateCents: centsFromDollars(formData.get("clientHourlyRate")),
+      paymentTermsDays: parsed.paymentTermsDays,
+      billingContactEmail: parsed.billingContactEmail,
+      billingContactName: parsed.billingContactName,
+      invoicePrefix: parsed.invoicePrefix.toUpperCase(),
+      autoSendInvoices: formData.get("autoSendInvoices") === "on",
+      autoSendReason: formData.get("autoSendInvoices") === "on" ? "Enabled for pilot Residency" : "Manual send",
+    }).returning({ id: residencies.id });
+    await tx.insert(auditLog).values({
+      residencyId: residency.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "residency_created",
+      entityType: "residency",
+      entityId: residency.id,
+      details: { clientName: parsed.clientName, tier: parsed.tier },
+    });
+  });
+  revalidatePath("/app");
+  revalidatePath("/app/setup");
+}
+
+const leadContactSchema = z.object({
+  companyName: z.string().trim().min(2).max(160),
+  primaryContactName: z.string().trim().min(1).max(120),
+  primaryContactPhone: z.string().trim().max(60),
+  primaryContactEmail: z.union([z.literal(""), z.email()]),
+  source: z.enum(["inbound", "outbound"]),
+  pipelineStatus: z.enum(["contacted", "call_scheduled", "call_complete", "discovery_scheduled", "discovery_complete", "proposal_sent", "won", "lost"]),
+  notes: z.string().max(20_000),
+});
+
+export async function createLeadAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = leadContactSchema.omit({ pipelineStatus: true }).parse({
+      ...Object.fromEntries(formData),
+      pipelineStatus: undefined,
+    });
+    const token = randomUUID().replaceAll("-", "").slice(0, 10);
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [account] = await tx.insert(clientAccounts).values({ name: parsed.companyName }).returning({ id: clientAccounts.id });
+      const [lead] = await tx.insert(residencies).values({
+        clientAccountId: account.id,
+        slug: `${slugify(parsed.companyName) || "lead"}-${token}`,
+        name: parsed.companyName,
+        invoicePrefix: `LEAD-${token.toUpperCase()}`,
+        operatingMode: "pipeline",
+        primaryContactName: parsed.primaryContactName,
+        primaryContactPhone: parsed.primaryContactPhone,
+        primaryContactEmail: parsed.primaryContactEmail,
+        leadSource: parsed.source,
+        pipelineStatus: "contacted",
+        pipelineStatusChangedAt: new Date(),
+        leadNotes: parsed.notes,
+      }).returning({ id: residencies.id });
+      await tx.insert(auditLog).values({
+        residencyId: lead.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "lead_created",
+        entityType: "residency",
+        entityId: lead.id,
+        details: { source: parsed.source, pipelineStatus: "contacted" },
+      });
+    });
+    revalidatePath("/app/leads");
+    return { status: "success", message: `${parsed.companyName} added to Contacted.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to create this Lead." };
+  }
+}
+
+export async function updateLeadAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const leadId = z.uuid().parse(formData.get("leadId"));
+    const parsed = leadContactSchema.parse(Object.fromEntries(formData));
+    const conversion = parsed.pipelineStatus === "won" ? z.object({
+      cityState: z.string().trim().min(2).max(120),
+      timezone: z.string().trim().min(3).max(100),
+      tier: z.enum(["operations_only", "complete"]),
+      invoicePrefix: z.string().trim().min(2).max(20).transform((value) => value.toUpperCase()),
+      defaultTalentRate: z.coerce.number().min(0).max(100_000),
+      clientHourlyRate: z.coerce.number().min(0).max(100_000),
+      billingContactName: z.string().trim().min(1).max(120),
+      billingContactEmail: z.email(),
+      billingAddress: z.string().trim().max(600),
+      paymentTermsDays: z.coerce.number().int().min(0).max(365),
+      invoiceFrequency: z.enum(["weekly", "monthly", "manual"]),
+      billingCycleStartWeekday: z.coerce.number().int().min(0).max(6),
+      billingCycleLengthDays: z.coerce.number().int().min(1).max(31),
+      invoiceLinePresentation: z.enum(["service_detail", "daily_summary", "period_summary"]),
+    }).parse(Object.fromEntries(formData)) : null;
+
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [lead] = await tx.select({
+        id: residencies.id,
+        clientAccountId: residencies.clientAccountId,
+        status: residencies.pipelineStatus,
+      }).from(residencies).where(and(
+        eq(residencies.id, leadId),
+        eq(residencies.operatingMode, "pipeline"),
+        eq(residencies.active, true),
+      )).limit(1);
+      if (!lead) throw new Error("Lead not found or already converted.");
+      const now = new Date();
+      const becameWon = parsed.pipelineStatus === "won";
+      await tx.update(clientAccounts).set({ name: parsed.companyName, updatedAt: now }).where(eq(clientAccounts.id, lead.clientAccountId));
+      const [updated] = await tx.update(residencies).set({
+        name: parsed.companyName,
+        primaryContactName: parsed.primaryContactName,
+        primaryContactPhone: parsed.primaryContactPhone,
+        primaryContactEmail: parsed.primaryContactEmail,
+        leadSource: parsed.source,
+        pipelineStatus: parsed.pipelineStatus,
+        pipelineStatusChangedAt: lead.status === parsed.pipelineStatus ? undefined : now,
+        leadNotes: parsed.notes,
+        operatingMode: becameWon ? "operations" : "pipeline",
+        convertedAt: becameWon ? now : null,
+        ...(conversion ? {
+          cityState: conversion.cityState,
+          timezone: conversion.timezone,
+          tier: conversion.tier,
+          invoicePrefix: conversion.invoicePrefix,
+          defaultTalentRateCents: Math.round(conversion.defaultTalentRate * 100),
+          clientHourlyRateCents: Math.round(conversion.clientHourlyRate * 100),
+          billingContactName: conversion.billingContactName,
+          billingContactEmail: conversion.billingContactEmail,
+          billingAddress: conversion.billingAddress,
+          paymentTermsDays: conversion.paymentTermsDays,
+          invoiceFrequency: conversion.invoiceFrequency,
+          billingCycleStartWeekday: conversion.billingCycleStartWeekday,
+          billingCycleLengthDays: conversion.billingCycleLengthDays,
+          invoiceLinePresentation: conversion.invoiceLinePresentation,
+          autoSendInvoices: formData.get("autoSendInvoices") === "on",
+          autoSendReason: formData.get("autoSendInvoices") === "on" ? "Enabled at Lead conversion" : "Manual send",
+        } : {}),
+        updatedAt: now,
+      }).where(eq(residencies.id, lead.id)).returning({ id: residencies.id });
+      await tx.insert(auditLog).values({
+        residencyId: lead.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: becameWon ? "lead_converted_to_residency" : "lead_updated",
+        entityType: "residency",
+        entityId: lead.id,
+        details: { fromStatus: lead.status, toStatus: parsed.pipelineStatus, source: parsed.source, operatingMode: becameWon ? "operations" : "pipeline" },
+      });
+      return updated;
+    });
+    revalidatePath("/app/leads");
+    if (parsed.pipelineStatus === "won") revalidatePath("/app");
+    return { status: "success", message: parsed.pipelineStatus === "won" ? `${parsed.companyName} converted to an Operations Residency.` : `${parsed.companyName} saved.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this Lead." };
+  }
+}
+
+export async function createTalentAction(formData: FormData) {
+  const actor = await requireInternalActor();
+  const parsed = z.object({
+    stageName: z.string().trim().min(1),
+    fullName: z.string().trim(),
+    email: z.union([z.literal(""), z.email()]),
+    phone: z.string().trim(),
+    homeMarket: z.string().trim(),
+    genres: z.string(),
+    priority: z.coerce.number().int().min(1).max(5),
+  }).parse(Object.fromEntries(formData));
+  const [artist] = await getDb().insert(talent).values({
+    stageName: parsed.stageName,
+    fullName: parsed.fullName,
+    email: parsed.email,
+    phone: parsed.phone,
+    homeMarket: parsed.homeMarket,
+    genres: parsed.genres.split(",").map((genre) => genre.trim()).filter(Boolean),
+    priority: parsed.priority,
+    rosterStatus: "ready",
+    talentStatus: "active",
+  }).returning({ id: talent.id });
+  await getDb().insert(auditLog).values({
+    actorUserId: actor.userId,
+    actorLabel: actor.email,
+    action: "talent_created",
+    entityType: "talent",
+    entityId: artist.id,
+    details: { stageName: parsed.stageName },
+  });
+  revalidatePath("/app/talent");
+  revalidatePath("/app/setup");
+}
+
+export async function updateArtistAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      talentId: z.uuid(),
+      stageName: z.string().trim().min(1),
+      fullName: z.string().trim(),
+      email: z.union([z.literal(""), z.email()]),
+      phone: z.string().trim(),
+      instagramHandle: z.string().trim(),
+      homeMarket: z.string().trim(),
+      genres: z.string(),
+      priority: z.union([z.literal(""), z.coerce.number().int().min(1).max(5)]),
+      rosterStatus: z.enum(["needs_review", "ready"]),
+      talentStatus: z.enum(["active", "inactive"]),
+      talentNotes: z.string(),
+      paymentMethod: z.string().trim(),
+      zelleEmail: z.union([z.literal(""), z.email()]),
+      zellePhone: z.string().trim(),
+      lastFour: z.union([z.literal(""), z.string().regex(/^\d{4}$/)]),
+    }).parse(Object.fromEntries(formData));
+    const genres = parsed.genres.split(",").map((genre) => genre.trim()).filter(Boolean);
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [artist] = await tx.update(talent).set({
+        stageName: parsed.stageName,
+        fullName: parsed.fullName,
+        email: parsed.email,
+        phone: parsed.phone,
+        instagramHandle: parsed.instagramHandle,
+        homeMarket: parsed.homeMarket,
+        genres,
+        priority: parsed.priority === "" ? null : parsed.priority,
+        rosterStatus: parsed.rosterStatus,
+        talentStatus: parsed.talentStatus,
+        talentNotes: parsed.talentNotes,
+        updatedAt: new Date(),
+      }).where(eq(talent.id, parsed.talentId)).returning({ id: talent.id });
+      if (!artist) throw new Error("Artist not found.");
+      await tx.insert(talentPaymentProfiles).values({
+        talentId: parsed.talentId,
+        paymentMethod: parsed.paymentMethod,
+        zelleEmail: parsed.zelleEmail,
+        zellePhone: parsed.zellePhone,
+        lastFour: parsed.lastFour,
+        updatedAt: new Date(),
+      }).onConflictDoUpdate({
+        target: talentPaymentProfiles.talentId,
+        set: {
+          paymentMethod: parsed.paymentMethod,
+          zelleEmail: parsed.zelleEmail,
+          zellePhone: parsed.zellePhone,
+          lastFour: parsed.lastFour,
+          updatedAt: new Date(),
+        },
+      });
+      await tx.insert(auditLog).values({
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "talent_updated",
+        entityType: "talent",
+        entityId: parsed.talentId,
+        details: { stageName: parsed.stageName, rosterStatus: parsed.rosterStatus, talentStatus: parsed.talentStatus, paymentMethod: parsed.paymentMethod },
+      });
+    });
+    revalidatePath("/app/talent");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/setup");
+    return { status: "success", message: `${parsed.stageName} saved.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to save this artist." };
+  }
+}
+
+export async function approveResidencyTalentAction(formData: FormData) {
+  const actor = await requireInternalActor();
+  const parsed = z.object({ residencyId: z.uuid(), talentId: z.uuid() }).parse(Object.fromEntries(formData));
+  await getDb().insert(residencyTalent).values({
+    residencyId: parsed.residencyId,
+    talentId: parsed.talentId,
+    approvedByUserId: actor.userId,
+    active: true,
+  }).onConflictDoUpdate({
+    target: [residencyTalent.residencyId, residencyTalent.talentId],
+    set: { active: true, approvedByUserId: actor.userId },
+  });
+  revalidatePath("/app/setup");
+}
+
+const customInvoiceLineSchema = z.object({
+  serviceDate: z.union([z.literal(""), z.iso.date()]).nullable().optional(),
+  description: z.string().trim().min(1).max(250),
+  quantity: z.coerce.number().positive().max(100_000),
+  unitLabel: z.string().trim().min(1).max(40),
+  unitAmount: z.coerce.number().min(0).max(10_000_000),
+});
+
+export async function createResidencyInvoiceAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      kind: z.enum(["scheduled_period", "custom"]),
+      invoiceNumber: z.string().trim().min(1).max(80),
+      billingPeriodStart: z.iso.date(),
+      billingPeriodEnd: z.iso.date(),
+      invoiceDate: z.iso.date(),
+      notes: z.string().trim().max(2_000),
+    }).parse(Object.fromEntries(formData));
+    if (parsed.billingPeriodEnd < parsed.billingPeriodStart) throw new Error("The period end must be on or after the start date.");
+
+    const database = getDb();
+    const [residency] = await database.select({
+      id: residencies.id,
+      paymentTermsDays: residencies.paymentTermsDays,
+      defaultInvoiceNote: residencies.defaultInvoiceNote,
+    }).from(residencies).where(eq(residencies.id, parsed.residencyId)).limit(1);
+    if (!residency) throw new Error("Residency not found.");
+
+    const shiftIds = z.array(z.uuid()).parse(formData.getAll("shiftIds"));
+    const customLines = parsed.kind === "custom"
+      ? z.array(customInvoiceLineSchema).min(1).max(100).parse(JSON.parse(z.string().parse(formData.get("manualLinesJson"))))
+      : [];
+    if (parsed.kind === "scheduled_period" && !shiftIds.length) throw new Error("Select at least one scheduled service.");
+
+    await database.transaction(async (tx) => {
+      let scheduledRows: Array<{ id: string; serviceDate: string; startsAt: Date; endsAt: Date; clientRateCents: number }> = [];
+      if (parsed.kind === "scheduled_period") {
+        scheduledRows = await tx.select({
+          id: shifts.id,
+          serviceDate: shifts.serviceDate,
+          startsAt: shifts.startsAt,
+          endsAt: shifts.endsAt,
+          clientRateCents: shifts.clientRateCents,
+        }).from(shifts).where(and(
+          eq(shifts.residencyId, parsed.residencyId),
+          inArray(shifts.id, shiftIds),
+        ));
+        if (scheduledRows.length !== new Set(shiftIds).size) throw new Error("One or more selected services no longer belongs to this Residency.");
+        for (const shift of scheduledRows) {
+          if (shift.serviceDate < parsed.billingPeriodStart || shift.serviceDate > parsed.billingPeriodEnd) throw new Error("Every selected service must fall inside the billing period.");
+        }
+        const occupied = await tx.select({ id: shifts.id }).from(shifts).where(and(inArray(shifts.id, shiftIds), inArray(shifts.billingStatus, ["invoiced", "not_billable"])));
+        if (occupied.length) throw new Error("One or more selected services is already invoiced or marked not billable.");
+        const alreadyLinked = await tx.select({ id: shifts.id }).from(shifts).where(and(inArray(shifts.id, shiftIds), isNotNull(shifts.invoiceId)));
+        if (alreadyLinked.length) throw new Error("One or more selected services is already linked to an Invoice.");
+      }
+
+      const manualValues = customLines.map((line, index) => {
+        const quantityThousandths = Math.round(Number(line.quantity) * 1_000);
+        const unitAmountCents = Math.round(Number(line.unitAmount) * 100);
+        return {
+          type: "special_event" as const,
+          serviceDate: line.serviceDate || null,
+          description: line.description,
+          quantityThousandths,
+          unitLabel: line.unitLabel,
+          unitAmountCents,
+          totalCents: Math.round((quantityThousandths * unitAmountCents) / 1_000),
+          sortOrder: index,
+        };
+      });
+      const totalCents = parsed.kind === "scheduled_period"
+        ? scheduledRows.reduce((sum, shift) => sum + calculateBillableAmountCents(shift.startsAt, shift.endsAt, shift.clientRateCents), 0)
+        : manualValues.reduce((sum, line) => sum + line.totalCents, 0);
+      if (totalCents <= 0) throw new Error("The Invoice total must be greater than zero.");
+
+      const [invoice] = await tx.insert(invoices).values({
+        residencyId: parsed.residencyId,
+        invoiceNumber: parsed.invoiceNumber,
+        billingPeriodStart: parsed.billingPeriodStart,
+        billingPeriodEnd: parsed.billingPeriodEnd,
+        invoiceDate: parsed.invoiceDate,
+        paymentTermsDays: residency.paymentTermsDays,
+        kind: parsed.kind,
+        notes: parsed.notes || residency.defaultInvoiceNote,
+        totalCents,
+        status: "draft",
+      }).returning({ id: invoices.id });
+
+      if (parsed.kind === "scheduled_period") {
+        await tx.update(shifts).set({
+          invoiceId: invoice.id,
+          billingStatus: "invoiced",
+          invoiceLinkIssue: false,
+          invoiceLinkNote: "",
+          updatedAt: new Date(),
+        }).where(inArray(shifts.id, shiftIds));
+      } else {
+        await tx.insert(invoiceLineItems).values(manualValues.map((line) => ({ ...line, invoiceId: invoice.id })));
+      }
+      await tx.insert(auditLog).values({
+        residencyId: parsed.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "invoice_created",
+        entityType: "invoice",
+        entityId: invoice.id,
+        details: { invoiceNumber: parsed.invoiceNumber, kind: parsed.kind, totalCents, shiftCount: scheduledRows.length, lineCount: manualValues.length },
+      });
+    });
+    revalidatePath("/app/invoices");
+    revalidatePath("/app/calendar");
+    return { status: "success", message: `${parsed.invoiceNumber} saved as a Draft Invoice.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to create this Invoice." };
+  }
+}
+
+export async function updateResidencyInvoiceSettingsAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      billingContactName: z.string().trim().min(1).max(120),
+      billingContactEmail: z.email(),
+      billingAddress: z.string().trim().max(600),
+      invoicePrefix: z.string().trim().min(2).max(20).transform((value) => value.toUpperCase()),
+      paymentTermsDays: z.coerce.number().int().min(0).max(365),
+      invoiceFrequency: z.enum(["weekly", "monthly", "manual"]),
+      billingCycleStartWeekday: z.coerce.number().int().min(0).max(6),
+      billingCycleLengthDays: z.coerce.number().int().min(1).max(31),
+      invoiceLinePresentation: z.enum(["service_detail", "daily_summary", "period_summary"]),
+      defaultInvoiceNote: z.string().trim().max(2_000),
+      autoSendReason: z.string().trim().max(500),
+    }).parse(Object.fromEntries(formData));
+    const autoSendInvoices = formData.get("autoSendInvoices") === "on";
+    const autoSendReason = autoSendInvoices ? "Enabled for approved Invoices" : (parsed.autoSendReason || "Manual send");
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [updated] = await tx.update(residencies).set({
+        billingContactName: parsed.billingContactName,
+        billingContactEmail: parsed.billingContactEmail,
+        billingAddress: parsed.billingAddress,
+        invoicePrefix: parsed.invoicePrefix,
+        paymentTermsDays: parsed.paymentTermsDays,
+        invoiceFrequency: parsed.invoiceFrequency,
+        billingCycleStartWeekday: parsed.billingCycleStartWeekday,
+        billingCycleLengthDays: parsed.billingCycleLengthDays,
+        invoiceLinePresentation: parsed.invoiceLinePresentation,
+        defaultInvoiceNote: parsed.defaultInvoiceNote,
+        autoSendInvoices,
+        autoSendReason,
+        updatedAt: new Date(),
+      }).where(eq(residencies.id, parsed.residencyId)).returning({ id: residencies.id });
+      if (!updated) throw new Error("Residency not found.");
+      await tx.insert(auditLog).values({
+        residencyId: parsed.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_invoice_settings_updated",
+        entityType: "residency",
+        entityId: parsed.residencyId,
+        details: { invoiceFrequency: parsed.invoiceFrequency, invoiceLinePresentation: parsed.invoiceLinePresentation, autoSendInvoices },
+      });
+    });
+    revalidatePath("/app/invoices");
+    return { status: "success", message: "Residency Invoice setup saved." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to save Invoice setup." };
+  }
+}
+
+export async function createShiftAction(formData: FormData) {
+  const actor = await requireInternalActor();
+  const parsed = z.object({
+    residencyId: z.uuid(),
+    name: z.string().trim().min(1),
+    serviceDate: z.iso.date(),
+    room: z.string().trim().min(1),
+    startsAtLocal: z.string().min(16),
+    endsAtLocal: z.string().min(16),
+    notes: z.string(),
+  }).parse(Object.fromEntries(formData));
+  const [residency] = await getDb().select({ timezone: residencies.timezone }).from(residencies).where(eq(residencies.id, parsed.residencyId)).limit(1);
+  if (!residency) throw new Error("Residency not found.");
+  await createShift(actor, {
+    residencyId: parsed.residencyId,
+    name: parsed.name,
+    serviceDate: parsed.serviceDate,
+    room: parsed.room,
+    startsAt: zonedLocalDateTimeToUtc(parsed.startsAtLocal, residency.timezone),
+    endsAt: zonedLocalDateTimeToUtc(parsed.endsAtLocal, residency.timezone),
+    notes: parsed.notes,
+  });
+  revalidatePath("/app/calendar");
+}
+
+const daypartPayloadSchema = z.object({
+  id: z.uuid().optional(),
+  residencyId: z.uuid(),
+  name: z.string().trim().min(1),
+  room: z.string().trim().min(1),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  defaultTalentRateCents: z.number().int().min(0).nullable().optional(),
+  activeUntil: z.iso.date().nullable().optional(),
+  active: z.boolean(),
+  sortOrder: z.number().int().min(0).max(10_000).optional(),
+  rules: z.array(z.object({
+    weekday: z.number().int().min(0).max(6),
+    startMinute: z.number().int().min(0).max(1439),
+    endMinute: z.number().int().min(1).max(2879),
+    defaultDjCount: z.number().int().min(1).max(20),
+  })).min(1),
+});
+
+export async function saveDaypartAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const raw = z.string().min(2).parse(formData.get("payload"));
+    const parsed = daypartPayloadSchema.parse(JSON.parse(raw));
+    await saveDaypart(actor, parsed);
+    revalidatePath("/app/setup");
+    revalidatePath("/app/calendar");
+    return { status: "success", message: `${parsed.name} saved.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to save this Daypart." };
+  }
+}
+
+export async function updateResidencyTalentDefaultAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      defaultTalentRate: z.coerce.number().min(0).max(100_000),
+    }).parse(Object.fromEntries(formData));
+    const defaultTalentRateCents = Math.round(parsed.defaultTalentRate * 100);
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [residency] = await tx.select({ id: residencies.id, defaultTalentRateCents: residencies.defaultTalentRateCents })
+        .from(residencies)
+        .where(eq(residencies.id, parsed.residencyId))
+        .limit(1);
+      if (!residency) throw new Error("Residency not found.");
+      await tx.update(residencies).set({ defaultTalentRateCents, updatedAt: new Date() }).where(eq(residencies.id, parsed.residencyId));
+      await tx.insert(auditLog).values({
+        residencyId: parsed.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_talent_default_updated",
+        entityType: "residency",
+        entityId: parsed.residencyId,
+        details: { previousCents: residency.defaultTalentRateCents, defaultTalentRateCents },
+      });
+    });
+    revalidatePath("/app/setup");
+    revalidatePath("/app/calendar");
+    return { status: "success", message: "Residency talent default saved." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to save the Residency rate." };
+  }
+}
+
+const residencyBookingPayloadSchema = z.object({
+  residencyId: z.uuid(),
+  serviceDate: z.iso.date(),
+  dayparts: z.array(z.object({
+    daypartId: z.uuid().nullable(),
+    name: z.string().trim().min(1).optional(),
+    room: z.string().trim().min(1).optional(),
+    calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+    startMinute: z.number().int().min(0).max(1439),
+    endMinute: z.number().int().min(1).max(2879),
+    clientRateOverrideCents: z.number().int().min(0).nullable().optional(),
+    assignments: z.array(z.object({
+      talentId: z.uuid().nullable().optional(),
+      startsAtMinute: z.number().int().min(0).max(2879).optional(),
+      endsAtMinute: z.number().int().min(1).max(2879).optional(),
+      compensationType: z.enum(["hourly", "fixed", "na"]).optional(),
+      talentRateOverrideCents: z.number().int().min(0).nullable().optional(),
+      fixedFeeCents: z.number().int().min(0).nullable().optional(),
+    })).min(1),
+  }).superRefine((slot, context) => {
+    if (slot.daypartId === null && (!slot.name || !slot.room || !slot.calendarColor)) {
+      context.addIssue({ code: "custom", message: "A one-time slot needs a name, room, and calendar color." });
+    }
+  })).min(1),
+});
+
+export async function bookResidencyDateAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const raw = z.string().min(2).parse(formData.get("payload"));
+    const parsed = residencyBookingPayloadSchema.parse(JSON.parse(raw));
+    const created = await createResidencyDateBooking(actor, parsed);
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/payouts");
+    revalidatePath("/app/invoices");
+    revalidatePath("/app");
+    return { status: "success", message: `${created.shiftIds.length} Shift${created.shiftIds.length === 1 ? "" : "s"} created and linked.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to book this date." };
+  }
+}
+
+export async function transitionAssignmentAction(formData: FormData) {
+  const actor = await requireInternalActor();
+  const parsed = z.object({
+    assignmentId: z.uuid(),
+    targetStatus: z.enum(["open", "offered", "confirmed", "completed", "cancelled"]),
+  }).parse(Object.fromEntries(formData));
+  await transitionAssignment(actor, parsed.assignmentId, parsed.targetStatus);
+  revalidatePath("/app/calendar");
+  revalidatePath("/app/payouts");
+}
+
+export async function replaceAssignmentTalentAction(formData: FormData) {
+  const actor = await requireInternalActor();
+  const parsed = z.object({ assignmentId: z.uuid(), talentId: z.uuid() }).parse(Object.fromEntries(formData));
+  await replaceAssignmentTalent(actor, parsed.assignmentId, parsed.talentId);
+  revalidatePath("/app/calendar");
+  revalidatePath("/app/payouts");
+}
+
+export async function rescheduleAssignmentAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      assignmentId: z.uuid(),
+      talentId: z.uuid(),
+      startsAtMinute: z.coerce.number().int().min(0).max(2879),
+      endsAtMinute: z.coerce.number().int().min(1).max(2879),
+    }).parse(Object.fromEntries(formData));
+    await rescheduleAssignment(actor, parsed.assignmentId, parsed);
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/payouts");
+    return { status: "success", message: "DJ and hours updated." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this DJ." };
+  }
+}
+
+export async function removeCalendarAssignmentAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const assignmentId = z.uuid().parse(formData.get("assignmentId"));
+    await transitionAssignment(actor, assignmentId, "cancelled");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/payouts");
+    return { status: "success", message: "DJ removed from this Shift." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to remove this DJ." };
+  }
+}
+
+export async function markAssignmentPaidAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const assignmentId = z.uuid().parse(formData.get("assignmentId"));
+    const [assignment] = await getDb().select({
+      totalCompensationCents: assignments.totalCompensationCents,
+      paymentMethod: talentPaymentProfiles.paymentMethod,
+    }).from(assignments)
+      .leftJoin(talentPaymentProfiles, eq(assignments.talentId, talentPaymentProfiles.talentId))
+      .where(eq(assignments.id, assignmentId)).limit(1);
+    if (!assignment) throw new Error("Assignment not found.");
+    const paidAt = new Date();
+    await markAssignmentPaid(actor, assignmentId, {
+      paidAt,
+      paidAmountCents: assignment.totalCompensationCents,
+      paymentReference: `${assignment.paymentMethod?.trim() || "Manual"} · HFY OS`,
+    });
+    revalidatePath("/app/payouts");
+    revalidatePath("/app");
+    return { status: "success", message: "Marked paid today." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to mark this payout paid." };
+  }
+}
+
+export async function changeAssignmentPaidDateAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({ assignmentId: z.uuid(), paidAt: z.iso.date() }).parse(Object.fromEntries(formData));
+    await changeAssignmentPaidDate(actor, parsed.assignmentId, new Date(`${parsed.paidAt}T12:00:00.000Z`));
+    revalidatePath("/app/payouts");
+    revalidatePath("/app");
+    return { status: "success", message: "Paid date updated." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to change the paid date." };
+  }
+}
+
+export async function approveInvoiceAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const result = await approveInvoice(actor, z.uuid().parse(formData.get("invoiceId")));
+    revalidatePath("/app/invoices");
+    revalidatePath("/app");
+    if (result.status === "manual") return { status: "success", message: "PDF generated and Invoice approved for manual delivery." };
+    if (result.status === "failed") return { status: "success", message: "PDF generated and Invoice approved. Delivery needs attention." };
+    return { status: "success", message: "PDF generated, Invoice approved, and delivery completed." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to approve this Invoice." };
+  }
+}
+
+export async function retryInvoiceSendAction(formData: FormData) {
+  await requireInternalActor();
+  try {
+    await sendApprovedInvoice(z.uuid().parse(formData.get("invoiceId")));
+  } catch {
+    // The service writes an Attention item that is visible to the operator.
+  }
+  revalidatePath("/app/invoices");
+  revalidatePath("/app");
+}
