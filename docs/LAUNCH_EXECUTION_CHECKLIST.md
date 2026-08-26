@@ -197,6 +197,8 @@ References:
    - `INVOICE_FROM_EMAIL`
    - `INVOICE_REPLY_TO`
    - `CRON_SECRET`
+   - `HEALTHCHECKS_AUTO_COMPLETE_URL`
+   - `HEALTHCHECKS_RECONCILE_URL`
    - `NEXT_PUBLIC_APP_URL`
 4. Use the staging Supabase transaction-pooler string for `DATABASE_URL`.
 5. Generate a unique, random staging `CRON_SECRET`.
