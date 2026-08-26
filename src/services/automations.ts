@@ -3,8 +3,8 @@ import { getDb } from "@/db/client";
 import { assignments, auditLog, automationRuns, invoices, residencies, shifts } from "@/db/schema";
 import { calculateCompensationCents, isPaymentEligible, nextPayoutStatus } from "@/domain/airtable-parity";
 import { hasReachedDailyRunWindow, localDateKey } from "@/domain/time";
+import { sendApprovedInvoice } from "@/services/invoice-delivery";
 import { reconcileShiftInvoiceLinks } from "@/services/shifts";
-import { sendApprovedInvoice } from "@/services/invoices";
 
 export async function runAutoComplete(now = new Date()) {
   const database = getDb();
