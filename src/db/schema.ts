@@ -208,6 +208,9 @@ export const talent = pgTable("talent", {
   legacyTotalEarningsCents: integer("legacy_total_earnings_cents").notNull().default(0),
   legacyOwedFrom: text("legacy_owed_from").notNull().default(""),
   legacyUpcomingBookings: text("legacy_upcoming_bookings").notNull().default(""),
+  airtableRosterStatusLabel: text("airtable_roster_status_label").notNull().default(""),
+  airtableTalentStatusLabel: text("airtable_talent_status_label").notNull().default(""),
+  airtablePaymentDetails: text("airtable_payment_details").notNull().default(""),
   airtableImportedAt: timestamp("airtable_imported_at", { withTimezone: true }),
   ...timestamps,
 }, (table) => [

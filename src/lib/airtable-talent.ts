@@ -8,8 +8,45 @@ export type AirtableAttachment = {
 
 export type AirtableTalentRecord = {
   id: string;
-  fields: Record<string, unknown>;
+  fields?: Record<string, unknown>;
+  cellValuesByFieldId?: Record<string, unknown>;
 };
+
+const TALENT_FIELD_NAMES_BY_ID: Record<string, string> = {
+  fldz4UOnimTL7RrRK: "Stage Name",
+  fldcKZSMBGvTL2g11: "Full Name",
+  fld5qiBtHcBWPvBNc: "Email",
+  fldAnSPRBhm22pLQS: "Phone",
+  fldmbHy0Le21ZiUvW: "Instagram Handle",
+  fldSV5cDRKo77diQr: "W-9",
+  fldmdvpt6ZWp6vvXm: "Assignments",
+  fldAqSlRvK7xJspFs: "Payment Method",
+  fldQ1uq4FrzaVxGyp: "Zelle Email",
+  fld2hHNIu5aHqBuLP: "Zelle Phone",
+  fldwLq2tsV7Zqze2W: "ACH Account Name",
+  fldOAP4oI0zh6rS7w: "ACH Routing Number",
+  fldSC9zkA6doJK20z: "ACH Account Number",
+  fldK3X0couKDsQPDM: "Payment Details",
+  fldHSum7WiFA5iGNg: "Roster Status",
+  fldNGaG0gRxRONyGT: "Talent Status",
+  fldWUKEOwP4NlQH5u: "Home Market",
+  fldDmKCdjFxpUDALy: "Genres",
+  fldgILtuyym9hQw7g: "Priority",
+  fldSLQ2y4nltCM5BH: "Talent Notes",
+  fld2rYD6cFjteR9J9: "Total Outstanding Owed",
+  fld41ZZm78srhGsnJ: "Upcoming Bookings",
+  fldkuOeo4M0vowtRv: "Owed From",
+  fldjd2QIrDHuaQwWd: "Total Earnings (All Time)",
+};
+
+function recordFields(record: AirtableTalentRecord) {
+  if (record.fields) return record.fields;
+  if (!record.cellValuesByFieldId) return {};
+  return Object.fromEntries(Object.entries(record.cellValuesByFieldId).flatMap(([fieldId, value]) => {
+    const fieldName = TALENT_FIELD_NAMES_BY_ID[fieldId];
+    return fieldName ? [[fieldName, value]] : [];
+  }));
+}
 
 function selectionName(value: unknown) {
   if (typeof value === "string") return value;
@@ -57,7 +94,7 @@ function attachments(value: unknown): AirtableAttachment[] {
 }
 
 export function parseAirtableTalentRecord(record: AirtableTalentRecord) {
-  const fields = record.fields;
+  const fields = recordFields(record);
   const stageName = textValue(fields["Stage Name"]);
   if (!record.id || !stageName) throw new Error("Every Airtable Talent record must have an ID and Stage Name.");
   const rosterName = selectionName(fields["Roster Status"]).toLowerCase();
@@ -78,6 +115,9 @@ export function parseAirtableTalentRecord(record: AirtableTalentRecord) {
     instagramHandle: textValue(fields["Instagram Handle"]),
     rosterStatus: rosterName.includes("ready") ? "ready" as const : "needs_review" as const,
     talentStatus: statusName.includes("inactive") ? "inactive" as const : "active" as const,
+    airtableRosterStatusLabel: selectionName(fields["Roster Status"]),
+    airtableTalentStatusLabel: selectionName(fields["Talent Status"]),
+    airtablePaymentDetails: textValue(fields["Payment Details"]),
     homeMarket: selectionName(fields["Home Market"]) || textValue(fields["Home Market"]),
     genres: stringList(fields.Genres),
     priority,
