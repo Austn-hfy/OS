@@ -4,6 +4,7 @@ import { approveResidencyTalentAction, createResidencyAction, createShiftAction,
 import { DaypartManager } from "./daypart-manager";
 import { InvoiceBrandingSettings } from "./invoice-branding-settings";
 import { ResidencyRateEditor } from "./residency-rate-editor";
+import { SensitiveInput } from "@/components/privacy-mode";
 
 export default async function SetupPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
   const { residency } = await searchParams;
@@ -28,7 +29,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
           <div className="field"><label>City / State</label><input name="cityState" placeholder="Palm Springs, CA" /></div>
           <div className="field"><label>Timezone</label><input name="timezone" defaultValue="America/Los_Angeles" required /></div>
           <div className="row"><div className="field"><label>Tier</label><select name="tier"><option value="operations_only">Operations Only</option><option value="complete">Complete</option></select></div><div className="field"><label>Invoice prefix</label><input name="invoicePrefix" placeholder="HOTEL" required /></div></div>
-          <div className="row"><div className="field"><label>Talent rate ($/hr)</label><input name="defaultTalentRate" type="number" min="0" step="0.01" required /></div><div className="field"><label>Client rate ($/hr)</label><input name="clientHourlyRate" type="number" min="0" step="0.01" required /></div></div>
+          <div className="row"><div className="field"><label>Talent rate ($/hr)</label><SensitiveInput name="defaultTalentRate" type="number" min="0" step="0.01" required /></div><div className="field"><label>Client rate ($/hr)</label><SensitiveInput name="clientHourlyRate" type="number" min="0" step="0.01" required /></div></div>
           <div className="field"><label>Billing contact name</label><input name="billingContactName" required /></div>
           <div className="field"><label>Billing contact email</label><input name="billingContactEmail" type="email" required /></div>
           <div className="field"><label>Payment terms (days)</label><input name="paymentTermsDays" type="number" defaultValue="7" min="0" max="365" required /></div>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatMoney } from "@/components/format";
+import { PrivateValue } from "@/components/privacy-mode";
 import { getDashboardData } from "@/data/internal";
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
@@ -20,8 +21,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <div className="metrics">
               <div className="metric"><strong>{selected.upcomingShiftCount}</strong><span>Upcoming shifts</span></div>
               <div className="metric"><strong>{selected.openAssignmentCount}</strong><span>Open / pending</span></div>
-              <div className="metric"><strong>{formatMoney(selected.readyToPayCents)}</strong><span>Ready to pay</span></div>
-              <div className="metric"><strong>{formatMoney(selected.outstandingReceivablesCents)}</strong><span>Receivables</span></div>
+              <div className="metric"><strong><PrivateValue>{formatMoney(selected.readyToPayCents)}</PrivateValue></strong><span>Ready to pay</span></div>
+              <div className="metric"><strong><PrivateValue>{formatMoney(selected.outstandingReceivablesCents)}</PrivateValue></strong><span>Receivables</span></div>
             </div>
           </article>
           <article className="card residency-profile-card">
@@ -63,8 +64,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <div className="metrics">
                 <div className="metric"><strong>{residency.upcomingShiftCount}</strong><span>Upcoming shifts</span></div>
                 <div className="metric"><strong>{residency.openAssignmentCount}</strong><span>Open / pending</span></div>
-                <div className="metric"><strong>{formatMoney(residency.readyToPayCents)}</strong><span>Ready to pay</span></div>
-                <div className="metric"><strong>{formatMoney(residency.outstandingReceivablesCents)}</strong><span>Receivables</span></div>
+                <div className="metric"><strong><PrivateValue>{formatMoney(residency.readyToPayCents)}</PrivateValue></strong><span>Ready to pay</span></div>
+                <div className="metric"><strong><PrivateValue>{formatMoney(residency.outstandingReceivablesCents)}</PrivateValue></strong><span>Receivables</span></div>
               </div>
               <div className={residency.attentionCount ? "attention" : "muted"}>
                 {residency.attentionCount ? `${residency.attentionCount} item${residency.attentionCount === 1 ? "" : "s"} need attention` : "No open exceptions"}

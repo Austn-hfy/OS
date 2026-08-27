@@ -5,10 +5,11 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type { InternalActor } from "@/lib/auth";
 import { signOut } from "@/app/actions";
+import { PrivacyModeIndicator, PrivacyModeProvider, PrivacyModeToggle } from "@/components/privacy-mode";
 
 type ResidencyOption = { id: string; name: string; cityState: string | null; tier: string };
 
-export function InternalShell({ actor, residencies, children }: { actor: InternalActor; residencies: ResidencyOption[]; children: React.ReactNode }) {
+export function InternalShell({ actor, residencies, initialPrivacyMode, children }: { actor: InternalActor; residencies: ResidencyOption[]; initialPrivacyMode: boolean; children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -39,6 +40,7 @@ export function InternalShell({ actor, residencies, children }: { actor: Interna
   }
 
   return (
+    <PrivacyModeProvider initialEnabled={initialPrivacyMode}>
     <div className="shell">
       <aside className="sidebar">
         <Link className="brand" href="/app" onClick={() => setSwitcherOpen(false)}>
@@ -74,11 +76,13 @@ export function InternalShell({ actor, residencies, children }: { actor: Interna
           {links.map(([label, href]) => <Link className={isActive(href) ? "active" : ""} href={href} key={href}>{label}</Link>)}
         </nav>
         <div className="sidebar-footer">
+          <PrivacyModeToggle />
           <p>{actor.displayName}<br />{actor.email}</p>
           <form action={signOut}><button className="button secondary" type="submit">Sign out</button></form>
         </div>
       </aside>
-      <main className={`main ${pathname === "/app/calendar" ? "calendar-main" : ""}`}>{children}</main>
+      <main className={`main ${pathname === "/app/calendar" ? "calendar-main" : ""}`}><PrivacyModeIndicator />{children}</main>
     </div>
+    </PrivacyModeProvider>
   );
 }

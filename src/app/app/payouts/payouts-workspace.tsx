@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { changeAssignmentPaidDateAction, markAssignmentPaidAction, type ResidencyActionState } from "@/app/app/actions";
 import { Status } from "@/components/format";
+import { PrivateValue } from "@/components/privacy-mode";
 import type { getPayoutQueue } from "@/data/internal";
 
 type PayoutRow = Awaited<ReturnType<typeof getPayoutQueue>>[number];
@@ -65,10 +66,10 @@ function paymentDetails(row: PayoutRow) {
   return method || "Not configured";
 }
 
-function compensationLabel(row: PayoutRow) {
+function CompensationLabel({ row }: { row: PayoutRow }) {
   if (row.compensationType === "na") return "N/A";
   if (row.compensationType === "fixed") return "Fixed fee";
-  return `${money(row.talentRateCents)}/hr${row.talentRateOverrideCents !== null ? " · override" : ""}`;
+  return <><PrivateValue>{money(row.talentRateCents)}</PrivateValue>/hr{row.talentRateOverrideCents !== null ? " · override" : ""}</>;
 }
 
 function MarkPaidForm({ assignmentId, compact = false }: { assignmentId: string; compact?: boolean }) {
@@ -184,9 +185,9 @@ export function PayoutsWorkspace({ rows }: { rows: PayoutRow[] }) {
     return <article className={`payout-list-row ${selectedId === row.id ? "selected" : ""}`} role="button" tabIndex={0} aria-label={`Open payout for ${row.talentName || "open slot"}`} onClick={() => openRow(row.id)} onKeyDown={(event) => handleRowKey(event, row.id)} key={row.id}>
       <div className="payout-artist-cell"><strong>{row.talentName || "Open slot"}</strong><small>{row.talentFullName || row.talentEmail || "Person not linked"}</small></div>
       <time className="payout-date-cell" dateTime={row.serviceDate}>{dateLabel(row.serviceDate)}</time>
-      <div className="payout-assignment-cell"><strong>{row.shiftName}</strong><small>{row.residencyName} · {compensationLabel(row)}</small></div>
-      <div className="payout-payment-cell">{paymentDetails(row)}</div>
-      <strong className="payout-amount-cell">{money(row.totalCompensationCents)}</strong>
+      <div className="payout-assignment-cell"><strong>{row.shiftName}</strong><small>{row.residencyName} · <CompensationLabel row={row} /></small></div>
+      <div className="payout-payment-cell"><PrivateValue>{paymentDetails(row)}</PrivateValue></div>
+      <strong className="payout-amount-cell"><PrivateValue>{money(row.totalCompensationCents)}</PrivateValue></strong>
       <div className="payout-status-cell"><Status value={displayStatus(row)} />{row.payoutStatus === "paid" && row.paidAt ? <small>{dateLabel(row.paidAt, row.residencyTimezone)}</small> : null}</div>
       <div className="payout-action-cell">{row.payoutStatus === "ready_to_pay" ? <MarkPaidForm assignmentId={row.id} compact /> : <span>View details →</span>}</div>
     </article>;
@@ -205,16 +206,16 @@ export function PayoutsWorkspace({ rows }: { rows: PayoutRow[] }) {
     <div className={`payout-workspace-shell ${selected ? "detail-open" : ""}`}>
       <section className="payout-list-panel">
         <div className="payout-list-heading"><span>Artist</span><span>Service date</span><span>Assignment</span><span>Live payment details</span><span>Amount</span><span>Status</span><span>Action</span></div>
-        <div className="payout-list">{tab === "paid" ? paidGroups.map((group) => <section className="payout-paid-group" key={group.date}><header className="payout-paid-group-heading"><div><strong>{group.date === "date-missing" ? "Paid date missing" : dateLabel(group.date)}</strong><span>{group.rows.length} payout{group.rows.length === 1 ? "" : "s"} in this session</span></div><strong>{money(group.totalCents)}</strong></header>{group.rows.map(payoutRow)}</section>) : filteredRows.map(payoutRow)}{!filteredRows.length ? <div className="empty payout-list-empty">No payouts match this view.</div> : null}</div>
+        <div className="payout-list">{tab === "paid" ? paidGroups.map((group) => <section className="payout-paid-group" key={group.date}><header className="payout-paid-group-heading"><div><strong>{group.date === "date-missing" ? "Paid date missing" : dateLabel(group.date)}</strong><span>{group.rows.length} payout{group.rows.length === 1 ? "" : "s"} in this session</span></div><strong><PrivateValue>{money(group.totalCents)}</PrivateValue></strong></header>{group.rows.map(payoutRow)}</section>) : filteredRows.map(payoutRow)}{!filteredRows.length ? <div className="empty payout-list-empty">No payouts match this view.</div> : null}</div>
       </section>
     </div>
 
     {selected ? <div className="payout-detail-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setSelectedId(null); }}><aside className="payout-detail-drawer" role="dialog" aria-modal="true" aria-labelledby="payout-summary-title"><header className="payout-detail-drawer-heading"><div><p className="eyebrow">Payout</p><h2 id="payout-summary-title">Payout Summary</h2></div><button className="quick-modal-close" type="button" aria-label="Close payout summary" onClick={() => setSelectedId(null)}>×</button></header><div className="payout-detail-scroll">
       <header className="payout-detail-header"><div><h2>{selected.shiftName}</h2><p>{selected.residencyName} · {dateLabel(selected.serviceDate)}</p></div><Status value={displayStatus(selected)} /></header>
-      <section className="payout-total-card"><span>Total Compensation</span><strong>{money(selected.totalCompensationCents)}</strong><small>{compensationLabel(selected)}</small></section>
+      <section className="payout-total-card"><span>Total Compensation</span><strong><PrivateValue>{money(selected.totalCompensationCents)}</PrivateValue></strong><small><CompensationLabel row={selected} /></small></section>
       <section className="payout-detail-section"><p className="eyebrow">Talent / Person</p><h3>{selected.talentName || "Open slot"}</h3><dl><div><dt>Full name</dt><dd>{selected.talentFullName || "Not provided"}</dd></div><div><dt>Email</dt><dd>{selected.talentEmail || "Not provided"}</dd></div></dl></section>
-      <section className="payout-detail-section"><p className="eyebrow">Live Payment Details</p><h3>{paymentDetails(selected)}</h3><dl><div><dt>Phone</dt><dd>{selected.zellePhone || selected.talentPhone || "Not provided"}</dd></div><div><dt>Method</dt><dd>{selected.paymentMethod || "Not configured"}</dd></div></dl></section>
-      <section className="payout-detail-section"><p className="eyebrow">Payout Status</p><div className="payout-detail-status"><Status value={displayStatus(selected)} />{selected.paymentReference ? <span>{selected.paymentReference}</span> : null}</div></section>
+      <section className="payout-detail-section"><p className="eyebrow">Live Payment Details</p><h3><PrivateValue>{paymentDetails(selected)}</PrivateValue></h3><dl><div><dt>Phone</dt><dd><PrivateValue>{selected.zellePhone || selected.talentPhone || "Not provided"}</PrivateValue></dd></div><div><dt>Method</dt><dd><PrivateValue>{selected.paymentMethod || "Not configured"}</PrivateValue></dd></div></dl></section>
+      <section className="payout-detail-section"><p className="eyebrow">Payout Status</p><div className="payout-detail-status"><Status value={displayStatus(selected)} />{selected.paymentReference ? <span><PrivateValue>{selected.paymentReference}</PrivateValue></span> : null}</div></section>
       <section className="payout-detail-section"><p className="eyebrow">Paid Date</p>{selected.payoutStatus === "paid" ? <ChangePaidDate row={selected} /> : <strong className="payout-not-paid">Not paid yet</strong>}</section>
       {selected.payoutStatus === "ready_to_pay" ? <div className="payout-detail-action"><MarkPaidForm assignmentId={selected.id} /><p>Marks this payout Paid and records today as the Paid Date.</p></div> : null}
     </div></aside></div> : null}
