@@ -8,7 +8,9 @@
 
 The production Vercel runtime successfully generated, stored, and approved a real client-facing Invoice PDF with Chromium. The document passed structural, textual, and visual review. It does not expose talent cost, margin, Artist identity, payout information, payment details, internal notes, or other internal data.
 
-The earlier `Invalid Compact JWS` failure correctly failed closed. After the Vercel Storage credential was replaced with the correct legacy JWT-format `service_role` key, the same Draft completed Approval successfully. The immutable PDF is present in `invoice-pdfs`, the Invoice is Approved, no Invoice Delivery record exists, auto-send remains disabled, and Resend was never called for this Invoice.
+The earlier `Invalid Compact JWS` failure correctly failed closed. After the Vercel Storage credential was replaced with the correct legacy JWT-format `service_role` key, the same Draft completed Approval successfully. The immutable PDF was stored in `invoice-pdfs`, the Invoice reached Approved, no Invoice Delivery record was created, auto-send remained disabled, and Resend was never called for this Invoice.
+
+After the acceptance proof was complete, the owner explicitly approved removal of the isolated fixture. The synthetic Client Account, Residency, Artist, Shifts, Assignments, Invoice, Attention item, audit rows, and stored PDF were permanently removed from the live application on August 26, 2026. A final verification query returned zero for every fixture category and the live HFY OS Overview returned to its empty new-system state.
 
 ## Production prerequisites verified
 
@@ -135,7 +137,7 @@ The rendered page was inspected as a PNG after PDF rendering.
 - Correct two-line billing address after the synthetic fixture was corrected
 - Footer and version visible
 
-## Final production state
+## Verified acceptance state before cleanup
 
 - Invoice status: Approved
 - Invoice version: 1
@@ -156,13 +158,29 @@ The rendered page was inspected as a PNG after PDF rendering.
 - Prior `invoice_pdf_generation_failed` Attention item: resolved
 - Production action after Approval: Download PDF only
 
+## Post-acceptance cleanup
+
+Removed after explicit owner approval:
+
+- Synthetic Client Account: 1
+- Synthetic Residency: 1
+- Synthetic Artist: 1
+- Synthetic Shifts: 4
+- Synthetic Assignments: 4
+- Controlled Invoice: 1
+- Resolved Attention item: 1
+- Fixture audit rows: 3
+- Stored Invoice PDF: 1
+
+Final verification returned zero matching records or objects in all nine checked categories: Client Accounts, Residencies, Artists, Shifts, Assignments, Invoices, Attention items, audit rows, and `invoice-pdfs` Storage objects. The live production Overview now reports that there are no new-system Residencies. Ace remains in Airtable and was never touched.
+
 ## Remaining verification note
 
 The normal authenticated Download PDF action successfully initiated a browser download. The browser security boundary did not permit the automation to extract that download's local filesystem path, so SHA-256 was not recomputed from the downloaded bytes in this session. No workaround was attempted.
 
 The Invoice and Storage metadata independently confirm the same 45,560-byte object, and the application stored the PDF SHA-256 at generation time. The production UI removes the approval action once Approved, and the server-side approval path rejects any Invoice whose status is not Draft.
 
-The controlled fixture remains in production pending fresh approval to delete or archive it. Auto-send remains disabled, and no Invoice-delivery test was performed.
+The controlled fixture has been removed after explicit owner approval. No Invoice-delivery test was performed.
 
 ## Repository commits used during the proof
 
