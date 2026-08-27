@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, inArray, isNull, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { auditLog, daypartDayRules, dayparts, residencies, shifts, talent } from "@/db/schema";
+import { auditLog, daypartDayRules, dayparts, residencies, residencyTalent, shifts, talent } from "@/db/schema";
 import { validateDaypartRules, weekdayForDate, type DaypartRuleInput } from "@/domain/dayparts";
 import type { InternalActor } from "@/lib/auth";
 
@@ -134,12 +134,27 @@ export async function getDaypartSuggestions(residencyId: string, serviceDate: st
   }));
 }
 
-export async function getActiveTalentLookup() {
-  return getDb().select({
+export async function getActiveTalentLookup(residencyId?: string) {
+  const database = getDb();
+  if (!residencyId) return database.select({
     id: talent.id,
     stageName: talent.stageName,
     homeMarket: talent.homeMarket,
     genres: talent.genres,
     priority: talent.priority,
   }).from(talent).where(eq(talent.talentStatus, "active")).orderBy(asc(talent.stageName));
+  return database.select({
+    id: talent.id,
+    stageName: talent.stageName,
+    homeMarket: talent.homeMarket,
+    genres: talent.genres,
+    priority: talent.priority,
+  }).from(residencyTalent)
+    .innerJoin(talent, eq(residencyTalent.talentId, talent.id))
+    .where(and(
+      eq(residencyTalent.residencyId, residencyId),
+      eq(residencyTalent.active, true),
+      eq(talent.talentStatus, "active"),
+    ))
+    .orderBy(asc(talent.stageName));
 }

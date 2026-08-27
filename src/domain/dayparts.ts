@@ -6,7 +6,8 @@ export type DaypartRuleInput = {
   weekday: number;
   startMinute: number;
   endMinute: number;
-  defaultDjCount: number;
+  /** @deprecated Dayparts define hours, never a required artist headcount. */
+  defaultDjCount?: number;
 };
 
 export type ProjectableDaypart = {
@@ -30,7 +31,6 @@ export type ProjectedDaypartSlot = {
   defaultTalentRateCents: number | null;
   startMinute: number;
   endMinute: number;
-  defaultDjCount: number;
 };
 
 export type SlotSchedulingStatus = "empty" | "partial" | "filled";
@@ -150,8 +150,7 @@ export function validateDaypartRules(rules: DaypartRuleInput[]): DaypartRuleInpu
     weekdays.add(rule.weekday);
     if (!Number.isInteger(rule.startMinute) || rule.startMinute < 0 || rule.startMinute >= 1440) throw new Error(`${weekdayNames[rule.weekday]} needs a valid start time.`);
     if (!Number.isInteger(rule.endMinute) || rule.endMinute <= rule.startMinute || rule.endMinute > rule.startMinute + 1440) throw new Error(`${weekdayNames[rule.weekday]} needs a valid end time.`);
-    if (!Number.isInteger(rule.defaultDjCount) || rule.defaultDjCount < 1 || rule.defaultDjCount > 20) throw new Error(`${weekdayNames[rule.weekday]} needs between 1 and 20 DJs.`);
-    return rule;
+    return { ...rule, defaultDjCount: 1 };
   }).sort((left, right) => left.weekday - right.weekday);
 }
 
@@ -185,7 +184,6 @@ export function projectDaypartSlots(
         defaultTalentRateCents: daypart.defaultTalentRateCents,
         startMinute: rule.startMinute,
         endMinute: rule.endMinute,
-        defaultDjCount: rule.defaultDjCount,
       });
     }
     date = addDays(date, 1);

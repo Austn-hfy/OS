@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState, type CSSProperties } from "react";
-import { bookResidencyDateAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, type ResidencyActionState } from "@/app/app/actions";
+import { addCalendarAssignmentAction, bookResidencyDateAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, type ResidencyActionState } from "@/app/app/actions";
 import { ArtistSearchPicker } from "@/components/artist-search-picker";
 import { Status } from "@/components/format";
 import { SensitiveInput } from "@/components/privacy-mode";
@@ -28,7 +28,6 @@ type ResidencyEvent = MonthCalendarEvent & {
   shiftStartMinute: number;
   shiftEndMinute: number;
   projected: boolean;
-  defaultDjCount: number;
   assignments: CalendarAssignment[];
 };
 
@@ -44,13 +43,13 @@ type ResidencyCalendarProps = {
     defaultTalentRateCents: number | null;
     activeUntil: string | null;
     active: boolean;
-    rules: Array<{ weekday: number; startMinute: number; endMinute: number; defaultDjCount: number }>;
+    rules: Array<{ weekday: number; startMinute: number; endMinute: number }>;
   }>;
   talent: Array<{ id: string; stageName: string; homeMarket: string; genres: string[]; priority: number | null }>;
 };
 
 type SlotDraft = { id: string; talentId: string; start: string; end: string; confirmed: boolean; compensationType: "hourly" | "fixed" | "na"; rateOverride: string; fixedFee: string };
-type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; name: string; room: string; color: string; defaultTalentRateCents: number | null; existing: boolean; start: string; end: string; defaultDjCount: number; clientRateOverride: string; slots: SlotDraft[] };
+type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; name: string; room: string; color: string; defaultTalentRateCents: number | null; existing: boolean; start: string; end: string; clientRateOverride: string; slots: SlotDraft[] };
 type ReplacementDraft = { assignmentId: string; talentId: string; start: string; end: string };
 type ModalState = { type: "add"; date: string } | { type: "edit"; eventId: string } | null;
 type StatusFilter = "needs" | "all" | "filled";
@@ -74,6 +73,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   const [timeMode, setTimeMode] = useState<"standing" | "custom">("standing");
   const [addMode, setAddMode] = useState<AddMode>("choose");
   const [replacementDraft, setReplacementDraft] = useState<ReplacementDraft | null>(null);
+  const [newAssignmentDraft, setNewAssignmentDraft] = useState<SlotDraft | null>(null);
   const [editState, setEditState] = useState<ResidencyActionState>(initialActionState);
   const [editPending, setEditPending] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("needs");
@@ -158,7 +158,6 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
         existing: existingDayparts.has(daypart.id),
         start,
         end,
-        defaultDjCount: rule.defaultDjCount,
         clientRateOverride: "",
         slots: [],
       }];
@@ -175,7 +174,6 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
       existing: false,
       start: "18:00",
       end: "21:00",
-      defaultDjCount: 1,
       clientRateOverride: "",
       slots: [],
     });
@@ -187,6 +185,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     setAddMode(preferred ? "daypart" : "choose");
     setTimeMode(initial.recurringToday ? "standing" : "custom");
     setReplacementDraft(null);
+    setNewAssignmentDraft(null);
     setEditState(initialActionState);
     setModal({ type: "add", date });
   }
@@ -198,6 +197,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
       return;
     }
     setReplacementDraft(null);
+    setNewAssignmentDraft(null);
     setEditState(initialActionState);
     setModal({ type: "edit", eventId: event.id });
   }
@@ -206,6 +206,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     const event = events.find((item) => !item.projected && item.date === date && item.daypartId === daypartId);
     if (event) {
       setReplacementDraft(null);
+      setNewAssignmentDraft(null);
       setEditState(initialActionState);
       setModal({ type: "edit", eventId: event.id });
     }
@@ -363,6 +364,58 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     }
   }, [editingEvent, replacementDraft]);
 
+  const newAssignmentWarning = useMemo(() => {
+    if (!newAssignmentDraft || !editingEvent || !newAssignmentDraft.start || !newAssignmentDraft.end) return "";
+    try {
+      const candidate = resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, newAssignmentDraft.start, newAssignmentDraft.end);
+      if (!candidate.withinShift) {
+        return `The ${editingEvent.title} service window is ${formatLocalMinute(editingEvent.shiftStartMinute)}–${formatLocalMinute(editingEvent.shiftEndMinute)}. Please adjust DJ times.`;
+      }
+      const existingWindows = editingEvent.assignments.map((assignment) => resolveAssignmentMinutes(
+        editingEvent.shiftStartMinute,
+        editingEvent.shiftEndMinute,
+        assignment.startClock,
+        assignment.endClock,
+      ));
+      if (hasOverlappingAssignmentMinutes([candidate, ...existingWindows])) return `This DJ's time overlaps another DJ in the ${editingEvent.title} slot.`;
+      return "";
+    } catch {
+      return "Choose valid start and end times for this DJ.";
+    }
+  }, [editingEvent, newAssignmentDraft]);
+
+  function startAddingAssignment() {
+    if (!editingEvent) return;
+    const existingEnds = editingEvent.assignments.map((assignment) => resolveAssignmentMinutes(
+      editingEvent.shiftStartMinute,
+      editingEvent.shiftEndMinute,
+      assignment.startClock,
+      assignment.endClock,
+    ).endMinute);
+    const suggestedStart = existingEnds.length ? Math.max(...existingEnds) : editingEvent.shiftStartMinute;
+    setReplacementDraft(null);
+    setEditState(initialActionState);
+    setNewAssignmentDraft(emptySlot("", minuteToClock(suggestedStart < editingEvent.shiftEndMinute ? suggestedStart : editingEvent.shiftStartMinute), minuteToClock(editingEvent.shiftEndMinute)));
+  }
+
+  async function saveNewAssignment() {
+    if (!editingEvent || !newAssignmentDraft?.talentId || !newAssignmentDraft.start || !newAssignmentDraft.end || newAssignmentWarning) return;
+    const window = resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, newAssignmentDraft.start, newAssignmentDraft.end);
+    const formData = new FormData();
+    formData.set("shiftId", editingEvent.id);
+    formData.set("talentId", newAssignmentDraft.talentId);
+    formData.set("startsAtMinute", String(window.startMinute));
+    formData.set("endsAtMinute", String(window.endMinute));
+    formData.set("compensationType", newAssignmentDraft.compensationType);
+    formData.set("talentRateOverride", newAssignmentDraft.rateOverride);
+    formData.set("fixedFee", newAssignmentDraft.fixedFee);
+    setEditPending(true);
+    const result = await addCalendarAssignmentAction(formData);
+    setEditPending(false);
+    setEditState(result);
+    if (result.status === "success") setNewAssignmentDraft(null);
+  }
+
   async function saveReplacement() {
     if (!editingEvent || !replacementDraft?.talentId || !replacementDraft.start || !replacementDraft.end || replacementWarning) return;
     const window = resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, replacementDraft.start, replacementDraft.end);
@@ -397,11 +450,11 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
         <div className="calendar-title"><p className="eyebrow">{residency.name}</p><h1>Calendar</h1></div>
         <div className="calendar-command-controls">
           <div className="calendar-view-filters">
-          <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="needs">Needs DJs</option><option value="all">All slots</option><option value="filled">Filled</option></select></div>
+          <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="needs">Needs coverage</option><option value="all">All slots</option><option value="filled">Scheduled</option></select></div>
           <div className="field"><label htmlFor="calendar-daypart-filter">Daypart</label><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></div>
           </div>
           <div className="calendar-month-cluster">
-            <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs a DJ" : "slots need DJs"}</span></div>
+            <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs coverage" : "slots need coverage"}</span></div>
             <div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={previousHref}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={nextHref}>→</Link></div>
           </div>
         </div>
@@ -429,7 +482,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                   {!activeSuggestion.oneTime ? <div className="quick-time-choice"><button className={timeMode === "standing" ? "active" : ""} type="button" disabled={!activeSuggestion.recurringToday} onClick={() => setTimeMode("standing")}>Use standing hours</button><button className={timeMode === "custom" ? "active" : ""} type="button" onClick={() => setTimeMode("custom")}>Custom hours</button></div> : null}
                   {timeMode === "standing" ? <div className="quick-time-summary"><span>{activeSuggestion.room}</span><strong>{formatLocalMinute(clockToMinute(activeSuggestion.start))}–{formatLocalMinute(resolveEndMinute(clockToMinute(activeSuggestion.start), activeSuggestion.end))}</strong></div> : <div className="quick-time-fields"><div className="field"><label>Start</label><input type="time" value={activeSuggestion.start} onChange={(event) => updateShiftTime("start", event.target.value)} required /></div><div className="field"><label>End</label><input type="time" value={activeSuggestion.end} onChange={(event) => updateShiftTime("end", event.target.value)} required /></div></div>}
 
-                  <div className="quick-assignment-heading"><div><strong>DJ assignments</strong><small>{activeSuggestion.defaultDjCount} usually scheduled · add one or several</small></div></div>
+                  <div className="quick-assignment-heading"><div><strong>DJ assignments</strong><small>Add one DJ or several. Individual hours must cover the service window without overlapping.</small></div></div>
                   <div className="quick-assignment-list">{activeSuggestion.slots.map((slot, slotIndex) => {
                     const artist = talent.find((item) => item.id === slot.talentId);
                     return <div className={`quick-assignment-card ${slot.confirmed ? "confirmed" : "draft"}`} key={slot.id}>
@@ -449,13 +502,22 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
               </form>
             ) : editingEvent ? <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
-              <p className="quick-guidance">Change or remove one DJ at a time. A replacement is not saved until you confirm both the DJ and their hours.</p>
+              <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours because those hours determine pay.</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft)} onClick={startAddingAssignment}>+ Add another DJ</button></div>
+              {newAssignmentDraft ? <section className="replacement-editor new-assignment-editor">
+                <div className="replacement-step"><span>1</span><div><strong>Choose the DJ</strong><small>Only artists approved for this Residency appear here.</small></div></div>
+                {newAssignmentDraft.talentId ? <div className="replacement-selected"><div><span>Selected DJ</span><strong>{talent.find((item) => item.id === newAssignmentDraft.talentId)?.stageName}</strong></div><button type="button" onClick={() => setNewAssignmentDraft({ ...newAssignmentDraft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose DJ" artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} onSelect={(talentId) => setNewAssignmentDraft({ ...newAssignmentDraft, talentId })} />}
+                <div className="replacement-step"><span>2</span><div><strong>Set their hours</strong><small>The service window may use one DJ or several, but their times cannot overlap.</small></div></div>
+                <div className="quick-dj-time-fields"><div className="field"><label>Starts</label><input aria-label="New DJ start time" type="time" value={newAssignmentDraft.start} onChange={(event) => setNewAssignmentDraft({ ...newAssignmentDraft, start: event.target.value })} /></div><div className="field"><label>Ends</label><input aria-label="New DJ end time" type="time" value={newAssignmentDraft.end} onChange={(event) => setNewAssignmentDraft({ ...newAssignmentDraft, end: event.target.value })} /></div></div>
+                <details className="quick-more"><summary>Pay options</summary><div className="quick-more-fields"><div className="field"><label>Compensation</label><select value={newAssignmentDraft.compensationType} onChange={(event) => setNewAssignmentDraft({ ...newAssignmentDraft, compensationType: event.target.value as SlotDraft["compensationType"] })}><option value="hourly">Hourly</option><option value="fixed">Fixed fee</option><option value="na">N/A</option></select></div><div className="field"><label>{newAssignmentDraft.compensationType === "fixed" ? "Fixed fee" : "Talent rate override"}</label><SensitiveInput type="number" min="0" step="0.01" value={newAssignmentDraft.compensationType === "fixed" ? newAssignmentDraft.fixedFee : newAssignmentDraft.rateOverride} onChange={(event) => setNewAssignmentDraft({ ...newAssignmentDraft, ...(newAssignmentDraft.compensationType === "fixed" ? { fixedFee: event.target.value } : { rateOverride: event.target.value }) })} placeholder={newAssignmentDraft.compensationType === "hourly" ? "Uses Daypart or Residency default" : undefined} /></div></div></details>
+                {newAssignmentWarning ? <p className="error" aria-live="polite">{newAssignmentWarning}</p> : null}
+                <div className="replacement-actions"><button className="button secondary" type="button" onClick={() => setNewAssignmentDraft(null)}>Cancel</button><button className="button" type="button" disabled={editPending || !newAssignmentDraft.talentId || !newAssignmentDraft.start || !newAssignmentDraft.end || Boolean(newAssignmentWarning)} onClick={saveNewAssignment}>{editPending ? "Saving…" : "Add DJ to Shift"}</button></div>
+              </section> : null}
               <div className="quick-reschedule-list">{editingEvent.assignments.map((assignment, index) => {
                 const changing = replacementDraft?.assignmentId === assignment.id;
                 const replacement = changing ? talent.find((item) => item.id === replacementDraft.talentId) : undefined;
                 return <div className={`quick-reschedule-row ${changing ? "changing" : ""}`} key={assignment.id}>
                   <div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName || assignment.guestName || "Open slot"}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div>
-                  <div className="quick-existing-actions"><button className="button secondary" type="button" disabled={editPending} onClick={() => { setEditState(initialActionState); setReplacementDraft({ assignmentId: assignment.id, talentId: "", start: "", end: "" }); }}>Change DJ</button><button className="remove-dj-button" type="button" disabled={editPending} onClick={() => removeExistingAssignment(assignment.id)}>Remove DJ</button></div>
+                  <div className="quick-existing-actions"><button className="button secondary" type="button" disabled={editPending} onClick={() => { setNewAssignmentDraft(null); setEditState(initialActionState); setReplacementDraft({ assignmentId: assignment.id, talentId: "", start: "", end: "" }); }}>Change DJ</button><button className="remove-dj-button" type="button" disabled={editPending} onClick={() => removeExistingAssignment(assignment.id)}>Remove DJ</button></div>
                   {changing && replacementDraft ? <div className="replacement-editor">
                     <div className="replacement-step"><span>1</span><div><strong>Choose the replacement DJ</strong><small>The current DJ remains unchanged until you save.</small></div></div>
                     {replacement ? <div className="replacement-selected"><div><span>Replacement</span><strong>{replacement.stageName}</strong></div><button type="button" onClick={() => setReplacementDraft({ ...replacementDraft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose replacement" artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} onSelect={(talentId) => setReplacementDraft({ ...replacementDraft, talentId })} />}

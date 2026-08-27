@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, dayparts, invoices, residencies, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, dayparts, invoices, residencies, residencyTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
 import { hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
@@ -30,6 +30,13 @@ export type CreateResidencyDateBookingInput = {
   residencyId: string;
   serviceDate: string;
   dayparts: DaypartBookingInput[];
+};
+
+export type AddShiftAssignmentInput = BookingAssignmentInput & {
+  shiftId: string;
+  talentId: string;
+  startsAtMinute: number;
+  endsAtMinute: number;
 };
 
 export async function createResidencyDateBooking(actor: InternalActor, input: CreateResidencyDateBookingInput) {
@@ -69,8 +76,14 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
 
     const talentIds = [...new Set(input.dayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
     const talentRows = talentIds.length ? await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
-      .where(and(inArray(talent.id, talentIds), eq(talent.talentStatus, "active"))) : [];
-    if (talentRows.length !== talentIds.length) throw new Error("One or more selected DJs are not active Talent records.");
+      .innerJoin(residencyTalent, eq(residencyTalent.talentId, talent.id))
+      .where(and(
+        inArray(talent.id, talentIds),
+        eq(talent.talentStatus, "active"),
+        eq(residencyTalent.residencyId, residency.id),
+        eq(residencyTalent.active, true),
+      )) : [];
+    if (talentRows.length !== talentIds.length) throw new Error("One or more selected DJs are not active on this Residency's approved list.");
 
     const createdShiftIds: string[] = [];
     for (const requested of input.dayparts) {
@@ -204,5 +217,103 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
       });
     }
     return { shiftIds: createdShiftIds };
+  });
+}
+
+export async function addAssignmentToShift(actor: InternalActor, input: AddShiftAssignmentInput) {
+  return getDb().transaction(async (tx) => {
+    const [shift] = await tx.select({
+      id: shifts.id,
+      residencyId: shifts.residencyId,
+      daypartId: shifts.daypartId,
+      serviceDate: shifts.serviceDate,
+      startsAt: shifts.startsAt,
+      endsAt: shifts.endsAt,
+      timezone: residencies.timezone,
+      defaultTalentRateCents: residencies.defaultTalentRateCents,
+      daypartDefaultTalentRateCents: dayparts.defaultTalentRateCents,
+    }).from(shifts)
+      .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
+      .leftJoin(dayparts, eq(shifts.daypartId, dayparts.id))
+      .where(and(eq(shifts.id, input.shiftId), eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
+      .limit(1);
+    if (!shift) throw new Error("Shift not found.");
+
+    const [selectedTalent] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
+      .innerJoin(residencyTalent, eq(residencyTalent.talentId, talent.id))
+      .where(and(
+        eq(talent.id, input.talentId),
+        eq(talent.talentStatus, "active"),
+        eq(residencyTalent.residencyId, shift.residencyId),
+        eq(residencyTalent.active, true),
+      ))
+      .limit(1);
+    if (!selectedTalent) throw new Error("This DJ is not active on the Residency's approved list.");
+
+    if (!Number.isInteger(input.startsAtMinute) || !Number.isInteger(input.endsAtMinute) || input.endsAtMinute <= input.startsAtMinute) {
+      throw new Error("Choose valid DJ hours.");
+    }
+    const assignmentStartsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.startsAtMinute), shift.timezone);
+    const assignmentEndsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.endsAtMinute), shift.timezone);
+    if (assignmentStartsAt < shift.startsAt || assignmentEndsAt > shift.endsAt) {
+      throw new Error("The DJ's hours must stay inside the Daypart service window.");
+    }
+
+    const overlappingShiftAssignment = await tx.select({ id: assignments.id }).from(assignments).where(and(
+      eq(assignments.shiftId, shift.id),
+      ne(assignments.bookingStatus, "cancelled"),
+      lt(assignments.startsAt, assignmentEndsAt),
+      gt(assignments.endsAt, assignmentStartsAt),
+    )).limit(1);
+    if (overlappingShiftAssignment.length) throw new Error("DJ times cannot overlap within the same Daypart Shift.");
+
+    const artistConflict = await tx.select({ id: assignments.id }).from(assignments).where(and(
+      eq(assignments.talentId, selectedTalent.id),
+      inArray(assignments.bookingStatus, ["pending_hfy_confirmation", "offered", "confirmed"]),
+      lt(assignments.startsAt, assignmentEndsAt),
+      gt(assignments.endsAt, assignmentStartsAt),
+    )).limit(1);
+    if (artistConflict.length) throw new Error(`${selectedTalent.stageName} already has an overlapping active booking.`);
+
+    const compensationType = input.compensationType ?? "hourly";
+    const talentRateCents = resolveTalentRateCents(
+      input.talentRateOverrideCents,
+      shift.daypartDefaultTalentRateCents,
+      shift.defaultTalentRateCents,
+    );
+    const fixedFeeCents = compensationType === "fixed" ? input.fixedFeeCents ?? 0 : null;
+    const totalCompensationCents = calculateCompensationCents({
+      compensationType,
+      startsAt: assignmentStartsAt,
+      endsAt: assignmentEndsAt,
+      talentRateCents,
+      fixedFeeCents,
+    });
+    const [assignment] = await tx.insert(assignments).values({
+      shiftId: shift.id,
+      talentId: selectedTalent.id,
+      createdByUserId: actor.userId,
+      source: "internal",
+      setName: selectedTalent.stageName,
+      startsAt: assignmentStartsAt,
+      endsAt: assignmentEndsAt,
+      bookingStatus: "confirmed",
+      compensationType,
+      talentRateOverrideCents: input.talentRateOverrideCents ?? null,
+      talentRateCents,
+      fixedFeeCents,
+      totalCompensationCents,
+      payoutStatus: compensationType === "na" ? "na" : "not_ready",
+    }).returning({ id: assignments.id });
+    await tx.insert(auditLog).values({
+      residencyId: shift.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "assignment_added_to_shift",
+      entityType: "assignment",
+      entityId: assignment.id,
+      details: { shiftId: shift.id, talentId: selectedTalent.id, startsAtMinute: input.startsAtMinute, endsAtMinute: input.endsAtMinute },
+    });
+    return { id: assignment.id };
   });
 }

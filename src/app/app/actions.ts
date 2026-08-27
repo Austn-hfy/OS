@@ -1,19 +1,20 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAccounts, invoiceLineItems, invoices, residencies, residencyTalent, shifts, talent, talentPaymentProfiles } from "@/db/schema";
+import { assignments, auditLog, clientAccounts, invoiceLineItems, invoices, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
 import { saveDaypart } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
-import { createResidencyDateBooking } from "@/services/residency-bookings";
+import { addAssignmentToShift, createResidencyDateBooking } from "@/services/residency-bookings";
 import { createShift } from "@/services/shifts";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_residency";
@@ -500,6 +501,208 @@ export async function approveResidencyTalentAction(formData: FormData) {
   revalidatePath("/app/setup");
 }
 
+export async function updateResidencyApprovedTalentAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const raw = z.string().min(2).parse(formData.get("payload"));
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      talentIds: z.array(z.uuid()).max(1_000).transform((ids) => [...new Set(ids)]),
+    }).parse(JSON.parse(raw));
+    const database = getDb();
+    const [residency] = await database.select({ id: residencies.id, name: residencies.name }).from(residencies)
+      .where(and(eq(residencies.id, parsed.residencyId), eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
+      .limit(1);
+    if (!residency) throw new Error("Residency not found.");
+    const validTalent = parsed.talentIds.length ? await database.select({ id: talent.id }).from(talent).where(and(
+      inArray(talent.id, parsed.talentIds),
+      eq(talent.talentStatus, "active"),
+      isNull(talent.archivedAt),
+    )) : [];
+    if (validTalent.length !== parsed.talentIds.length) throw new Error("One or more selected DJs are no longer active.");
+    await database.transaction(async (tx) => {
+      await tx.update(residencyTalent).set({ active: false }).where(eq(residencyTalent.residencyId, residency.id));
+      if (parsed.talentIds.length) {
+        await tx.insert(residencyTalent).values(parsed.talentIds.map((talentId) => ({
+          residencyId: residency.id,
+          talentId,
+          active: true,
+          approvedByUserId: actor.userId,
+        }))).onConflictDoUpdate({
+          target: [residencyTalent.residencyId, residencyTalent.talentId],
+          set: { active: true, approvedByUserId: actor.userId },
+        });
+      }
+      await tx.insert(auditLog).values({
+        residencyId: residency.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_approved_talent_updated",
+        entityType: "residency",
+        entityId: residency.id,
+        details: { talentIds: parsed.talentIds, count: parsed.talentIds.length },
+      });
+    });
+    revalidatePath("/app/setup");
+    revalidatePath("/app/talent");
+    revalidatePath("/app/calendar");
+    return { status: "success", message: `${parsed.talentIds.length} approved DJ${parsed.talentIds.length === 1 ? "" : "s"} saved for ${residency.name}.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to save the approved DJ list." };
+  }
+}
+
+const residencyContactSchema = z.object({
+  id: z.union([z.literal(""), z.uuid()]),
+  residencyId: z.uuid(),
+  name: z.string().trim().min(2).max(120),
+  title: z.string().trim().max(120),
+  email: z.union([z.literal(""), z.email()]).transform((value) => value.toLocaleLowerCase()),
+  phone: z.string().trim().max(50),
+  accessRole: z.enum(["none", "manager", "calendar_viewer"]),
+  isPrimary: z.boolean(),
+});
+
+export async function saveResidencyContactAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = residencyContactSchema.parse({
+      ...Object.fromEntries(formData),
+      isPrimary: formData.get("isPrimary") === "on",
+    });
+    if (parsed.accessRole !== "none" && !parsed.email) throw new Error("An email is required before login access can be assigned.");
+    const database = getDb();
+    const [residency] = await database.select({ id: residencies.id, name: residencies.name }).from(residencies).where(and(
+      eq(residencies.id, parsed.residencyId),
+      eq(residencies.active, true),
+      eq(residencies.operatingMode, "operations"),
+    )).limit(1);
+    if (!residency) throw new Error("Residency not found.");
+
+    await database.transaction(async (tx) => {
+      if (parsed.isPrimary) await tx.update(residencyContacts).set({ isPrimary: false }).where(eq(residencyContacts.residencyId, residency.id));
+      const values = {
+        residencyId: residency.id,
+        name: parsed.name,
+        title: parsed.title,
+        email: parsed.email,
+        phone: parsed.phone,
+        accessRole: parsed.accessRole === "none" ? null : parsed.accessRole,
+        isPrimary: parsed.isPrimary,
+        updatedAt: new Date(),
+      } as const;
+      const [saved] = parsed.id
+        ? await tx.update(residencyContacts).set(values).where(and(eq(residencyContacts.id, parsed.id), eq(residencyContacts.residencyId, residency.id))).returning({ id: residencyContacts.id, userId: residencyContacts.userId })
+        : await tx.insert(residencyContacts).values(values).returning({ id: residencyContacts.id, userId: residencyContacts.userId });
+      if (!saved) throw new Error("Contact not found.");
+      if (saved.userId) {
+        await tx.update(residencyMemberships).set({
+          active: parsed.accessRole !== "none",
+          ...(parsed.accessRole !== "none" ? { accessRole: parsed.accessRole } : {}),
+        }).where(and(eq(residencyMemberships.userId, saved.userId), eq(residencyMemberships.residencyId, residency.id)));
+      }
+      await tx.insert(auditLog).values({
+        residencyId: residency.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: parsed.id ? "residency_contact_updated" : "residency_contact_created",
+        entityType: "residency_contact",
+        entityId: saved.id,
+        details: { accessRole: parsed.accessRole, isPrimary: parsed.isPrimary },
+      });
+    });
+    revalidatePath("/app/setup");
+    return { status: "success", message: `${parsed.name} was saved for ${residency.name}.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to save this contact." };
+  }
+}
+
+export async function inviteResidencyContactAction(input: { contactId: string }): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const { contactId } = z.object({ contactId: z.uuid() }).parse(input);
+    const database = getDb();
+    const [contact] = await database.select({
+      id: residencyContacts.id,
+      residencyId: residencyContacts.residencyId,
+      name: residencyContacts.name,
+      email: residencyContacts.email,
+      accessRole: residencyContacts.accessRole,
+      userId: residencyContacts.userId,
+      residencyName: residencies.name,
+    }).from(residencyContacts).innerJoin(residencies, eq(residencyContacts.residencyId, residencies.id)).where(and(
+      eq(residencyContacts.id, contactId),
+      eq(residencyContacts.active, true),
+      eq(residencies.active, true),
+    )).limit(1);
+    if (!contact) throw new Error("Contact not found.");
+    if (!contact.email || !contact.accessRole) throw new Error("Add an email and access level before sending an invitation.");
+
+    const admin = createSupabaseAdminClient();
+    const existingLocal = (await database.select({ id: users.id }).from(users).where(eq(users.email, contact.email)).limit(1))[0];
+    let authUserId = existingLocal?.id ?? contact.userId ?? null;
+    let invitationStatus: "active" | "invited" = existingLocal ? "active" : "invited";
+    if (!authUserId) {
+      const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1_000 });
+      if (listError) throw listError;
+      const existingAuth = listed.users.find((user) => user.email?.toLocaleLowerCase() === contact.email);
+      if (existingAuth) {
+        authUserId = existingAuth.id;
+        invitationStatus = "active";
+      } else {
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hfy.app";
+        const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(contact.email, {
+          data: { display_name: contact.name },
+          redirectTo: `${siteUrl}/auth/invite`,
+        });
+        if (inviteError) throw inviteError;
+        authUserId = invited.user.id;
+      }
+    }
+    if (!authUserId) throw new Error("The invitation did not create an account.");
+
+    await database.transaction(async (tx) => {
+      await tx.insert(users).values({
+        id: authUserId,
+        email: contact.email,
+        displayName: contact.name,
+        role: "hotel_user",
+        active: true,
+      }).onConflictDoUpdate({ target: users.id, set: { email: contact.email, displayName: contact.name, role: "hotel_user", active: true, updatedAt: new Date() } });
+      await tx.insert(residencyMemberships).values({
+        userId: authUserId,
+        residencyId: contact.residencyId,
+        accessRole: contact.accessRole!,
+        active: true,
+      }).onConflictDoUpdate({
+        target: [residencyMemberships.userId, residencyMemberships.residencyId],
+        set: { accessRole: contact.accessRole!, active: true },
+      });
+      await tx.update(residencyContacts).set({
+        userId: authUserId,
+        invitationStatus,
+        invitedAt: invitationStatus === "invited" ? new Date() : undefined,
+        acceptedAt: invitationStatus === "active" ? new Date() : undefined,
+        updatedAt: new Date(),
+      }).where(eq(residencyContacts.id, contact.id));
+      await tx.insert(auditLog).values({
+        residencyId: contact.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: invitationStatus === "invited" ? "residency_contact_invited" : "residency_contact_access_activated",
+        entityType: "residency_contact",
+        entityId: contact.id,
+        details: { accessRole: contact.accessRole },
+      });
+    });
+    revalidatePath("/app/setup");
+    return { status: "success", message: invitationStatus === "invited" ? `Invitation sent to ${contact.email}.` : `${contact.email} already has an account and now has access.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to invite this contact." };
+  }
+}
+
 const customInvoiceLineSchema = z.object({
   serviceDate: z.union([z.literal(""), z.iso.date()]).nullable().optional(),
   description: z.string().trim().min(1).max(250),
@@ -713,7 +916,6 @@ const daypartPayloadSchema = z.object({
     weekday: z.number().int().min(0).max(6),
     startMinute: z.number().int().min(0).max(1439),
     endMinute: z.number().int().min(1).max(2879),
-    defaultDjCount: z.number().int().min(1).max(20),
   })).min(1),
 });
 
@@ -722,7 +924,7 @@ export async function saveDaypartAction(_previous: ResidencyActionState, formDat
     const actor = await requireInternalActor();
     const raw = z.string().min(2).parse(formData.get("payload"));
     const parsed = daypartPayloadSchema.parse(JSON.parse(raw));
-    await saveDaypart(actor, parsed);
+    await saveDaypart(actor, { ...parsed, rules: parsed.rules.map((rule) => ({ ...rule, defaultDjCount: 1 })) });
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
     return { status: "success", message: `${parsed.name} saved.` };
@@ -731,37 +933,81 @@ export async function saveDaypartAction(_previous: ResidencyActionState, formDat
   }
 }
 
-export async function updateResidencyTalentDefaultAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+export async function updateResidencyRatesAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
   try {
     const actor = await requireInternalActor();
     const parsed = z.object({
       residencyId: z.uuid(),
       defaultTalentRate: z.coerce.number().min(0).max(100_000),
+      clientHourlyRate: z.coerce.number().min(0).max(100_000),
     }).parse(Object.fromEntries(formData));
     const defaultTalentRateCents = Math.round(parsed.defaultTalentRate * 100);
+    const clientHourlyRateCents = Math.round(parsed.clientHourlyRate * 100);
     const database = getDb();
     await database.transaction(async (tx) => {
-      const [residency] = await tx.select({ id: residencies.id, defaultTalentRateCents: residencies.defaultTalentRateCents })
+      const [residency] = await tx.select({ id: residencies.id, defaultTalentRateCents: residencies.defaultTalentRateCents, clientHourlyRateCents: residencies.clientHourlyRateCents })
         .from(residencies)
         .where(eq(residencies.id, parsed.residencyId))
         .limit(1);
       if (!residency) throw new Error("Residency not found.");
-      await tx.update(residencies).set({ defaultTalentRateCents, updatedAt: new Date() }).where(eq(residencies.id, parsed.residencyId));
+      await tx.update(residencies).set({ defaultTalentRateCents, clientHourlyRateCents, updatedAt: new Date() }).where(eq(residencies.id, parsed.residencyId));
       await tx.insert(auditLog).values({
         residencyId: parsed.residencyId,
         actorUserId: actor.userId,
         actorLabel: actor.email,
-        action: "residency_talent_default_updated",
+        action: "residency_default_rates_updated",
         entityType: "residency",
         entityId: parsed.residencyId,
-        details: { previousCents: residency.defaultTalentRateCents, defaultTalentRateCents },
+        details: {
+          previousTalentRateCents: residency.defaultTalentRateCents,
+          previousClientRateCents: residency.clientHourlyRateCents,
+          defaultTalentRateCents,
+          clientHourlyRateCents,
+        },
       });
     });
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
-    return { status: "success", message: "Residency talent default saved." };
+    return { status: "success", message: "Default talent and client rates saved." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to save the Residency rate." };
+  }
+}
+
+export async function updateResidencyProfileAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      name: z.string().trim().min(2).max(160),
+      cityState: z.string().trim().max(120),
+      timezone: z.string().trim().min(3).max(100),
+      tier: z.enum(["operations_only", "complete"]),
+      internalNotes: z.string().trim().max(10_000),
+    }).parse(Object.fromEntries(formData));
+    const [updated] = await getDb().update(residencies).set({
+      name: parsed.name,
+      cityState: parsed.cityState,
+      timezone: parsed.timezone,
+      tier: parsed.tier,
+      internalNotes: parsed.internalNotes,
+      updatedAt: new Date(),
+    }).where(and(eq(residencies.id, parsed.residencyId), eq(residencies.operatingMode, "operations"))).returning({ id: residencies.id });
+    if (!updated) throw new Error("Residency not found.");
+    await getDb().insert(auditLog).values({
+      residencyId: parsed.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "residency_profile_updated",
+      entityType: "residency",
+      entityId: parsed.residencyId,
+      details: { name: parsed.name, cityState: parsed.cityState, timezone: parsed.timezone, tier: parsed.tier },
+    });
+    revalidatePath("/app");
+    revalidatePath("/app/setup");
+    return { status: "success", message: "Residency profile saved." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to save the Residency profile." };
   }
 }
 
@@ -854,6 +1100,35 @@ export async function removeCalendarAssignmentAction(formData: FormData): Promis
     return { status: "success", message: "DJ removed from this Shift." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to remove this DJ." };
+  }
+}
+
+export async function addCalendarAssignmentAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      shiftId: z.uuid(),
+      talentId: z.uuid(),
+      startsAtMinute: z.coerce.number().int().min(0).max(2879),
+      endsAtMinute: z.coerce.number().int().min(1).max(2879),
+      compensationType: z.enum(["hourly", "fixed", "na"]),
+      talentRateOverride: z.string(),
+      fixedFee: z.string(),
+    }).parse(Object.fromEntries(formData));
+    await addAssignmentToShift(actor, {
+      shiftId: parsed.shiftId,
+      talentId: parsed.talentId,
+      startsAtMinute: parsed.startsAtMinute,
+      endsAtMinute: parsed.endsAtMinute,
+      compensationType: parsed.compensationType,
+      talentRateOverrideCents: parsed.talentRateOverride.trim() ? centsFromDollars(parsed.talentRateOverride) : null,
+      fixedFeeCents: parsed.fixedFee.trim() ? centsFromDollars(parsed.fixedFee) : null,
+    });
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/payouts");
+    return { status: "success", message: "DJ added to this Shift." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to add this DJ." };
   }
 }
 

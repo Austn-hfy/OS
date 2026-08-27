@@ -112,7 +112,6 @@ describe("Daypart weekly rules", () => {
       id: "projected:pool-music:2026-09-04",
       color: "#2783DC",
       defaultTalentRateCents: 9_000,
-      defaultDjCount: 2,
     });
   });
 

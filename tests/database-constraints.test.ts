@@ -33,6 +33,11 @@ beforeAll(async () => {
   const invoiceBranding = await readFile(new URL("../drizzle/0007_worthless_titanium_man.sql", import.meta.url), "utf8");
   const residencyInvoiceWorkspace = await readFile(new URL("../drizzle/0008_colorful_sunspot.sql", import.meta.url), "utf8");
   const pipelineFoundation = await readFile(new URL("../drizzle/0009_peaceful_ironclad.sql", import.meta.url), "utf8");
+  const airtableTalent = await readFile(new URL("../drizzle/0010_lovely_hobgoblin.sql", import.meta.url), "utf8");
+  const airtableLabels = await readFile(new URL("../drizzle/0011_tranquil_vin_gonzales.sql", import.meta.url), "utf8");
+  const paymentCleanup = await readFile(new URL("../drizzle/0012_married_butterfly.sql", import.meta.url), "utf8");
+  const artistArchive = await readFile(new URL("../drizzle/0013_exotic_scourge.sql", import.meta.url), "utf8");
+  const residencyAccess = await readFile(new URL("../drizzle/0014_glamorous_owl.sql", import.meta.url), "utf8");
   await database.exec(initial.replaceAll("--> statement-breakpoint", ""));
   await database.exec(onboarding);
   await database.exec(rowSecurity.replaceAll("--> statement-breakpoint", ""));
@@ -43,6 +48,11 @@ beforeAll(async () => {
   await database.exec(invoiceBranding.replaceAll("--> statement-breakpoint", ""));
   await database.exec(residencyInvoiceWorkspace.replaceAll("--> statement-breakpoint", ""));
   await database.exec(pipelineFoundation.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(airtableTalent.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(airtableLabels.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(paymentCleanup.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(artistArchive.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(residencyAccess.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -94,6 +104,24 @@ describe("database replacements for Airtable audit formulas", () => {
         AND NOT relrowsecurity;
     `);
     expect(result.rows).toEqual([]);
+  });
+
+  it("stores a separate contact and an explicit client access role", async () => {
+    await database.exec(`
+      INSERT INTO residency_contacts (residency_id, name, email, access_role, is_primary)
+      VALUES ('${ids.residencyA}', 'Calendar Contact', 'calendar@example.test', 'calendar_viewer', true);
+      UPDATE residency_memberships
+      SET access_role = 'calendar_viewer'
+      WHERE user_id = '${ids.hotel}' AND residency_id = '${ids.residencyA}';
+    `);
+    const contact = await database.query<{ access_role: string; is_primary: boolean }>(`
+      SELECT access_role, is_primary FROM residency_contacts WHERE email = 'calendar@example.test';
+    `);
+    const membership = await database.query<{ access_role: string }>(`
+      SELECT access_role FROM residency_memberships WHERE user_id = '${ids.hotel}';
+    `);
+    expect(contact.rows[0]).toEqual({ access_role: "calendar_viewer", is_primary: true });
+    expect(membership.rows[0]?.access_role).toBe("calendar_viewer");
   });
 
   it("requires exactly one valid Shift parent", async () => {

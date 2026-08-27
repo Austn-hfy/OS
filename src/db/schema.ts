@@ -16,6 +16,8 @@ import {
 import type { InvoiceDocumentSnapshot } from "@/domain/invoice-document";
 
 export const userRole = pgEnum("user_role", ["internal_admin", "hotel_user"]);
+export const residencyAccessRole = pgEnum("residency_access_role", ["manager", "calendar_viewer"]);
+export const invitationStatus = pgEnum("invitation_status", ["not_invited", "invited", "active", "revoked"]);
 export const serviceTier = pgEnum("service_tier", ["operations_only", "complete"]);
 export const operatingMode = pgEnum("operating_mode", ["pipeline", "operations"]);
 export const leadSource = pgEnum("lead_source", ["inbound", "outbound"]);
@@ -183,11 +185,34 @@ export const residencyMemberships = pgTable("residency_memberships", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  accessRole: residencyAccessRole("access_role").notNull().default("manager"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("residency_memberships_user_residency_unique").on(table.userId, table.residencyId),
   index("residency_memberships_residency_idx").on(table.residencyId),
+]);
+
+export const residencyContacts = pgTable("residency_contacts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  title: text("title").notNull().default(""),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  accessRole: residencyAccessRole("access_role"),
+  invitationStatus: invitationStatus("invitation_status").notNull().default("not_invited"),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  invitedAt: timestamp("invited_at", { withTimezone: true }),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  index("residency_contacts_residency_idx").on(table.residencyId, table.active),
+  uniqueIndex("residency_contacts_residency_email_unique")
+    .on(table.residencyId, sql`lower(${table.email})`)
+    .where(sql`${table.email} <> ''`),
 ]);
 
 export const talent = pgTable("talent", {

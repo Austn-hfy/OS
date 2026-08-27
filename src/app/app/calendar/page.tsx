@@ -3,7 +3,7 @@ import { formatTimeInput } from "@/components/format";
 import { MonthCalendar, calendarToneForSlot, type MonthCalendarEvent } from "@/components/month-calendar";
 import { getCalendarData, getDashboardData } from "@/data/internal";
 import { monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
-import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus, weekdayForDate } from "@/domain/dayparts";
+import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { getActiveTalentLookup, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar } from "./residency-calendar";
 
@@ -26,7 +26,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         .map((assignment) => resolveAssignmentMinutes(shiftStartMinute, shiftEndMinute, formatTimeInput(assignment.startsAt, shift.residencyTimezone), formatTimeInput(assignment.endsAt, shift.residencyTimezone)))
         .filter((window) => window.withinShift);
       const schedulingStatus = slotSchedulingStatus(shiftStartMinute, shiftEndMinute, coverage);
-      const statusLabel = schedulingStatus === "empty" ? "Needs DJ" : schedulingStatus === "partial" ? "Partial" : `${activeAssignments.length} DJ${activeAssignments.length === 1 ? "" : "s"}`;
+      const statusLabel = schedulingStatus === "empty" ? "Needs coverage" : schedulingStatus === "partial" ? "Partially covered" : `${activeAssignments.length} DJ${activeAssignments.length === 1 ? "" : "s"}`;
       return {
         id: shift.id,
         date: shift.serviceDate,
@@ -54,7 +54,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <div className="field calendar-filter"><label htmlFor="calendar-residency">Residency calendar</label><select id="calendar-residency" name="calendarResidency" defaultValue={calendarResidency?.id ?? ""}><option value="">All residencies</option>{residencyList.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div>
             <button className="button secondary" type="submit">View</button>
           </form>
-          <div className="calendar-month-cluster"><div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs a DJ" : "slots need DJs"}</span></div><div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link></div></div>
+          <div className="calendar-month-cluster"><div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs coverage" : "slots need coverage"}</span></div><div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link></div></div>
         </div></header>
         <MonthCalendar compact monthKey={monthKey} events={events} ariaLabel="HFY company programming calendar" />
       </div>
@@ -66,7 +66,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const [calendar, dayparts, talent] = await Promise.all([
     getCalendarData(workspaceResidency.id, range),
     getDaypartsForResidency(workspaceResidency.id),
-    getActiveTalentLookup(),
+    getActiveTalentLookup(workspaceResidency.id),
   ]);
   const realEvents = calendar.map((shift) => {
     const activeAssignments = shift.assignments.filter((assignment) => assignment.bookingStatus !== "cancelled");
@@ -83,9 +83,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       .filter((window) => window.withinShift);
     const schedulingStatus = slotSchedulingStatus(shiftStartMinute, shiftEndMinute, coverageWindows);
     const schedulingLabel = schedulingStatus === "empty"
-      ? "Needs DJ"
+      ? "Needs coverage"
       : schedulingStatus === "partial"
-        ? "Partial"
+        ? "Partially covered"
         : `${activeAssignments.length} DJ${activeAssignments.length === 1 ? "" : "s"}`;
     return {
     id: shift.id,
@@ -99,7 +99,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     shiftStartMinute,
     shiftEndMinute,
     projected: false,
-    defaultDjCount: matchedDaypart?.rules.find((rule) => rule.weekday === weekdayForDate(shift.serviceDate))?.defaultDjCount ?? 1,
     schedulingStatus,
     assignments: activeAssignments.map((assignment) => ({
       id: assignment.id,
@@ -120,14 +119,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     id: slot.id,
     date: slot.date,
     title: slot.name,
-    time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · Needs DJ`,
+    time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · Open`,
     residencyName: "Projected from Setup",
     color: slot.color,
     daypartId: slot.daypartId,
     shiftStartMinute: slot.startMinute,
     shiftEndMinute: slot.endMinute,
     projected: true,
-    defaultDjCount: slot.defaultDjCount,
     schedulingStatus: "empty" as const,
     assignments: [],
   }));
@@ -138,7 +136,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         residency={{ id: workspaceResidency.id, name: workspaceResidency.name, timezone: workspaceResidency.timezone, defaultTalentRateCents: workspaceResidency.defaultTalentRateCents, clientHourlyRateCents: workspaceResidency.clientHourlyRateCents }}
         monthKey={monthKey}
         events={events}
-        dayparts={dayparts.map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })) }))}
+        dayparts={dayparts.map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute })) }))}
         talent={talent}
       />
     </div>

@@ -12,6 +12,7 @@ import {
   talentDocuments,
   talentPaymentProfiles,
   residencyTalent,
+  residencyContacts,
 } from "@/db/schema";
 import {
   calculateBillableAmountCents,
@@ -153,7 +154,17 @@ export async function getTalentDirectory(residencyId?: string) {
 
 export async function getArtistLookupData(residencyId?: string) {
   const database = getDb();
-  const artistRows = await database.select().from(talent).orderBy(desc(talent.priority), asc(talent.stageName));
+  const scopedTalentIds = residencyId
+    ? (await database.select({ talentId: residencyTalent.talentId }).from(residencyTalent).where(and(
+      eq(residencyTalent.residencyId, residencyId),
+      eq(residencyTalent.active, true),
+    ))).map((row) => row.talentId)
+    : null;
+  const artistRows = scopedTalentIds
+    ? scopedTalentIds.length
+      ? await database.select().from(talent).where(inArray(talent.id, scopedTalentIds)).orderBy(desc(talent.priority), asc(talent.stageName))
+      : []
+    : await database.select().from(talent).orderBy(desc(talent.priority), asc(talent.stageName));
   const artistIds = artistRows.map((artist) => artist.id);
   if (!artistIds.length) return [];
 
@@ -186,6 +197,7 @@ export async function getArtistLookupData(residencyId?: string) {
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
       .where(and(
         inArray(assignments.talentId, artistIds),
+        residencyId ? eq(shifts.residencyId, residencyId) : undefined,
         or(eq(assignments.payoutStatus, "ready_to_pay"), gte(shifts.serviceDate, todayUtc())),
       ))
       .orderBy(asc(shifts.serviceDate), asc(assignments.startsAt)),
@@ -231,9 +243,10 @@ export async function getArtistLookupData(residencyId?: string) {
     return {
       ...artist,
       approvedForCurrentResidency: residencyId ? approvedResidencies.some((approval) => approval.residencyId === residencyId) : null,
+      scopedResidencyId: residencyId ?? null,
       approvedResidencies: approvedResidencies.map((approval) => ({ id: approval.residencyId, name: approval.residencyName })),
       liveOutstandingOwedCents,
-      totalOutstandingOwedCents: liveOutstandingOwedCents + artist.legacyOutstandingOwedCents,
+      totalOutstandingOwedCents: residencyId ? liveOutstandingOwedCents : liveOutstandingOwedCents + artist.legacyOutstandingOwedCents,
       outstandingAssignments,
       upcomingBookings,
       paymentProfile: paymentProfile ? {
@@ -401,13 +414,34 @@ export async function getInvoiceWorkspace(residencyId: string) {
 
 export async function getSetupData() {
   const database = getDb();
-  const [residencyRows, talentRows, approvals, invoiceBranding] = await Promise.all([
-    database.select({ id: residencies.id, name: residencies.name, timezone: residencies.timezone, defaultTalentRateCents: residencies.defaultTalentRateCents }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name)),
-    database.select({ id: talent.id, stageName: talent.stageName }).from(talent).where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
+  const [residencyRows, talentRows, approvals, contacts, invoiceBranding] = await Promise.all([
+    database.select({
+      id: residencies.id,
+      name: residencies.name,
+      cityState: residencies.cityState,
+      timezone: residencies.timezone,
+      tier: residencies.tier,
+      internalNotes: residencies.internalNotes,
+      defaultTalentRateCents: residencies.defaultTalentRateCents,
+      clientHourlyRateCents: residencies.clientHourlyRateCents,
+    }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name)),
+    database.select({ id: talent.id, stageName: talent.stageName, homeMarket: talent.homeMarket }).from(talent).where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
     database.select({ residencyId: residencyTalent.residencyId, talentId: residencyTalent.talentId }).from(residencyTalent).where(eq(residencyTalent.active, true)),
+    database.select({
+      id: residencyContacts.id,
+      residencyId: residencyContacts.residencyId,
+      name: residencyContacts.name,
+      title: residencyContacts.title,
+      email: residencyContacts.email,
+      phone: residencyContacts.phone,
+      accessRole: residencyContacts.accessRole,
+      invitationStatus: residencyContacts.invitationStatus,
+      isPrimary: residencyContacts.isPrimary,
+      active: residencyContacts.active,
+    }).from(residencyContacts).where(eq(residencyContacts.active, true)).orderBy(asc(residencyContacts.name)),
     getInvoiceBrandingSettings(),
   ]);
-  return { residencies: residencyRows, talent: talentRows, approvals, invoiceBranding };
+  return { residencies: residencyRows, talent: talentRows, approvals, contacts, invoiceBranding };
 }
 
 export async function getPipelineLeads() {

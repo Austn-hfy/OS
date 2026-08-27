@@ -15,7 +15,7 @@ export type PreviewDaypart = {
   rules: DaypartRuleInput[];
 };
 
-type RuleDraft = { enabled: boolean; start: string; end: string; defaultDjCount: number };
+type RuleDraft = { enabled: boolean; start: string; end: string };
 type Draft = Omit<PreviewDaypart, "id" | "defaultTalentRateCents" | "activeUntil" | "rules"> & {
   id?: string;
   defaultTalentRate: string;
@@ -35,8 +35,8 @@ function blankDraft(room = "", weekday?: number, startMinute = 1080, color = col
     active: true,
     sortOrder: 0,
     rules: weekdayNames.map((_, index) => index === weekday
-      ? { enabled: true, start: minuteToClock(startMinute), end: minuteToClock(startMinute + 180), defaultDjCount: 1 }
-      : { enabled: false, start: "", end: "", defaultDjCount: 1 }),
+      ? { enabled: true, start: minuteToClock(startMinute), end: minuteToClock(startMinute + 180) }
+      : { enabled: false, start: "", end: "" }),
   };
 }
 
@@ -48,8 +48,8 @@ function fromDaypart(daypart: PreviewDaypart): Draft {
     rules: weekdayNames.map((_, weekday) => {
       const rule = daypart.rules.find((item) => item.weekday === weekday);
       return rule
-        ? { enabled: true, start: minuteToClock(rule.startMinute), end: minuteToClock(rule.endMinute), defaultDjCount: rule.defaultDjCount }
-        : { enabled: false, start: "", end: "", defaultDjCount: 1 };
+        ? { enabled: true, start: minuteToClock(rule.startMinute), end: minuteToClock(rule.endMinute) }
+        : { enabled: false, start: "", end: "" };
     }),
   };
 }
@@ -100,7 +100,7 @@ export function PreviewDaypartManager({ dayparts, onChange }: { dayparts: Previe
     const rules = draft.rules.flatMap((rule, weekday) => {
       if (!rule.enabled || !rule.start || !rule.end) return [];
       const startMinute = clockToMinute(rule.start);
-      return [{ weekday, startMinute, endMinute: resolveEndMinute(startMinute, rule.end), defaultDjCount: rule.defaultDjCount }];
+      return [{ weekday, startMinute, endMinute: resolveEndMinute(startMinute, rule.end), defaultDjCount: 1 }];
     });
     if (!rules.length) return;
     const rate = draft.defaultTalentRate.trim() ? Math.round(Number(draft.defaultTalentRate) * 100) : null;
@@ -158,7 +158,9 @@ export function PreviewDaypartManager({ dayparts, onChange }: { dayparts: Previe
               <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this continues indefinitely.</small></div>
             </div>
             <label className="checkbox-row"><input type="checkbox" checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} /> Active Daypart</label>
-            <div className="week-rule-grid">{draft.rules.map((rule, weekday) => <div className={`week-rule ${rule.enabled ? "enabled" : ""}`} key={weekdayNames[weekday]}><button className="week-toggle" type="button" aria-pressed={rule.enabled} onClick={() => updateRule(weekday, { enabled: !rule.enabled, start: "", end: "" })}>{weekdayNames[weekday].slice(0, 3)}</button>{rule.enabled ? <div className="week-rule-fields"><div className="field"><label>Start</label><input type="time" value={rule.start} onChange={(event) => updateRule(weekday, { start: event.target.value })} required /></div><div className="field"><label>End</label><input type="time" value={rule.end} onChange={(event) => updateRule(weekday, { end: event.target.value })} required /></div><div className="field"><label>DJs</label><input type="number" min="1" max="20" value={rule.defaultDjCount} onChange={(event) => updateRule(weekday, { defaultDjCount: Number(event.target.value) })} required /></div></div> : <p>Off</p>}</div>)}</div>
+            <div className="week-rule-intro"><div><strong>Weekly hours</strong><small>Select every day this Daypart runs. Artist count stays flexible.</small></div></div>
+            <div className="week-rule-grid">{draft.rules.map((rule, weekday) => <div className={`week-rule ${rule.enabled ? "enabled" : ""}`} key={weekdayNames[weekday]}><button className="week-toggle" type="button" aria-pressed={rule.enabled} onClick={() => updateRule(weekday, { enabled: !rule.enabled, start: "", end: "" })}>{weekdayNames[weekday].slice(0, 3)}</button>{rule.enabled ? <div className="week-rule-fields"><div className="field"><label>Start</label><input type="time" value={rule.start} onChange={(event) => updateRule(weekday, { start: event.target.value })} required /></div><div className="field"><label>End</label><input type="time" value={rule.end} onChange={(event) => updateRule(weekday, { end: event.target.value })} required /></div></div> : <p>Off</p>}</div>)}</div>
+            <p className="privacy-note">Schedule one artist or several from the calendar. Their individual times determine whether the service window is fully covered.</p>
           </div>
           <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button><button className="button" type="submit">Save Daypart</button></div>
         </form>

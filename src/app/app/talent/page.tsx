@@ -8,7 +8,7 @@ export default async function TalentPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <header className="page-header artist-lookup-page-header"><div><p className="eyebrow">{selected?.name ?? "Shared roster"}</p><h1>Artist Lookup</h1><p className="subhead">Search the roster, then open one artist to see outstanding pay, upcoming bookings, contact information, and payment details.</p></div></header>
-      <ArtistLookup artists={rows} residencies={residencies} />
+      <ArtistLookup artists={rows} residencies={residencies} currentResidency={selected ?? null} />
     </>
   );
 }
