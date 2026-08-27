@@ -476,6 +476,33 @@
 }
 .hfy-style-system .sidebar-footer { color: var(--hfy-muted); font-size: 11px; }
 .hfy-style-system .sidebar-footer .button { min-height: 36px; margin-top: 8px; padding: 7px 12px; font-size: 10px; }
+.hfy-style-system .privacy-mode-toggle {
+  border-color: var(--hfy-line);
+  color: var(--hfy-ink-soft);
+  background: rgba(250, 252, 253, 0.48);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+}
+.hfy-style-system .privacy-mode-toggle:hover {
+  border-color: rgba(52, 127, 187, 0.3);
+  color: var(--hfy-ink);
+  background: rgba(250, 252, 253, 0.78);
+}
+.hfy-style-system .privacy-mode-toggle.active {
+  border-color: rgba(52, 127, 187, 0.3);
+  color: var(--hfy-action-ink);
+  background: rgba(139, 199, 241, 0.28);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.72), 0 9px 24px rgba(48, 65, 78, 0.1);
+}
+.hfy-style-system .privacy-mode-icon {
+  color: var(--hfy-action-ink);
+  background: var(--hfy-action-soft);
+}
+.hfy-style-system .privacy-mode-toggle.active .privacy-mode-icon {
+  color: var(--hfy-action-ink);
+  background: rgba(139, 199, 241, 0.58);
+}
+.hfy-style-system .privacy-mode-toggle small,
+.hfy-style-system .privacy-mode-toggle.active small { color: var(--hfy-muted); }
 .hfy-style-system .mode-switch { border-color: rgba(20, 49, 72, .11); background: rgba(20, 49, 72, .045); }
 .hfy-style-system .mode-switch a,
 .hfy-style-system .mode-switch button { color: #61758a; }
