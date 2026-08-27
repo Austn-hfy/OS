@@ -1,14 +1,14 @@
 # HFY OS - Production Invoice Acceptance Audit
 
 **Audit date:** August 26, 2026  
-**Production app:** https://hfy-os.vercel.app  
+**Production app:** https://hfy.app  
 **Controlled Invoice:** `HFYQA-2026-0904`
 
 ## Outcome
 
-The production Vercel runtime successfully generated and returned a real client-facing Invoice PDF with Chromium. The file passed structural, checksum, textual, and visual review. It does not expose talent cost, margin, Artist identity, payout information, payment details, internal notes, or other internal data.
+The production Vercel runtime successfully generated, stored, and approved a real client-facing Invoice PDF with Chromium. The document passed structural, textual, and visual review. It does not expose talent cost, margin, Artist identity, payout information, payment details, internal notes, or other internal data.
 
-The final fail-closed Approval transaction did not complete because Supabase Storage rejected Vercel's configured server credential with `Invalid Compact JWS`. The Invoice remains Draft, no Storage object was created, no Invoice Delivery record was created, and Resend was never called.
+The earlier `Invalid Compact JWS` failure correctly failed closed. After the Vercel Storage credential was replaced with the correct legacy JWT-format `service_role` key, the same Draft completed Approval successfully. The immutable PDF is present in `invoice-pdfs`, the Invoice is Approved, no Invoice Delivery record exists, auto-send remains disabled, and Resend was never called for this Invoice.
 
 ## Production prerequisites verified
 
@@ -18,7 +18,10 @@ The final fail-closed Approval transaction did not complete because Supabase Sto
 - Owner `austyn@hearforyou.group`: confirmed and previously signed in
 - Vercel deployment: healthy
 - Healthchecks monitors: previously verified up
-- Resend domain delivery: intentionally not attempted because DNS remains unverified
+- Resend domain: verified
+- Supabase Auth custom SMTP: active through a dedicated Resend send-only credential
+- Owner production login: working
+- Invoice delivery: intentionally not attempted; the acceptance Residency remains manual-send only
 
 ## Controlled fixture created
 
@@ -134,31 +137,32 @@ The rendered page was inspected as a PNG after PDF rendering.
 
 ## Final production state
 
-- Invoice status: Draft
+- Invoice status: Approved
 - Invoice version: 1
 - Invoice total: $2,000
-- `pdf_storage_path`: null
-- `pdf_generated_at`: null
-- `pdf_byte_size`: null
-- Objects in `invoice-pdfs`: 0
+- `pdf_storage_path`: `11111111-1111-4111-8111-111111110002/11111111-1111-4111-8111-111111110004/v1/fa1f2e9279dd416e-dc9b7dc9-5196-4cf4-886e-f56c2a61d7ea.pdf`
+- `pdf_source_hash`: `fa1f2e9279dd416edd27ecb560e2ca756325d04ce117f4b67522587f3e126ffc`
+- `pdf_sha256`: `b2be3ef730673073ceb5de1164a2ce043b8158e94df41cdf0edc71202597d952`
+- `pdf_generated_at`: August 27, 2026 at 02:11:14.906 UTC
+- `pdf_generated_by_user_id`: `d32a4d34-3882-45aa-a5b6-2f77cd037220`
+- `pdf_byte_size`: 45,560
+- Canonical snapshot: present as a JSON object
+- Objects in `invoice-pdfs`: 1 matching object
+- Storage object size: 45,560
 - Invoice Delivery records: 0
 - Auto-send: false
 - Resend attempts: 0
-- Open Attention item: `invoice_pdf_generation_failed`
-- Attention detail: `Invalid Compact JWS`
+- Approval audit entry: present
+- Prior `invoice_pdf_generation_failed` Attention item: resolved
+- Production action after Approval: Download PDF only
 
-## Remaining blocker
+## Remaining verification note
 
-Vercel's `SUPABASE_SERVICE_ROLE_KEY` value must be corrected or replaced so the Supabase Storage API accepts the server-side upload. The Supabase dashboard currently has both a backend `sb_secret_...` key and a legacy JWT-based `service_role` key available. No private key was revealed, copied, or moved during this audit.
+The normal authenticated Download PDF action successfully initiated a browser download. The browser security boundary did not permit the automation to extract that download's local filesystem path, so SHA-256 was not recomputed from the downloaded bytes in this session. No workaround was attempted.
 
-After the Vercel secret is corrected:
+The Invoice and Storage metadata independently confirm the same 45,560-byte object, and the application stored the PDF SHA-256 at generation time. The production UI removes the approval action once Approved, and the server-side approval path rejects any Invoice whose status is not Draft.
 
-1. Redeploy production so the corrected secret is active.
-2. Approve the existing Draft `HFYQA-2026-0904` through the normal HFY OS Invoice action.
-3. Confirm the `invoice-pdfs` object exists.
-4. Confirm the Invoice stores path, source hash, SHA-256, byte size, snapshot, version, generated timestamp, and generating user.
-5. Download through the normal authenticated Invoice PDF route and compare its SHA-256.
-6. Keep auto-send disabled and do not call Resend until Squarespace DNS verification is complete.
+The controlled fixture remains in production pending fresh approval to delete or archive it. Auto-send remains disabled, and no Invoice-delivery test was performed.
 
 ## Repository commits used during the proof
 
