@@ -1,6 +1,12 @@
+import { notFound } from "next/navigation";
+import { isJoinEnabled } from "./gate";
 import { OnboardingForm } from "./onboarding-form";
 
+export const dynamic = "force-dynamic";
+
 export default function TalentOnboardingPage() {
+  if (!isJoinEnabled()) notFound();
+
   return (
     <main className="login-shell">
       <section className="login-art">

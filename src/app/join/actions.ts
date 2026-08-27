@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { talentOnboardingSubmissions } from "@/db/schema";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isJoinEnabled } from "./gate";
 
 export type OnboardingState = { status: "idle" | "success" | "error"; message: string };
 
@@ -20,6 +21,10 @@ const submissionSchema = z.object({
 });
 
 export async function submitTalentOnboarding(_previous: OnboardingState, formData: FormData): Promise<OnboardingState> {
+  if (!isJoinEnabled()) {
+    return { status: "error", message: "Artist onboarding is currently closed." };
+  }
+
   const parsed = submissionSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { status: "error", message: "Complete the required contact fields." };
   const file = formData.get("w9");
