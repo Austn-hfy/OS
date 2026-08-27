@@ -1,4 +1,5 @@
 confirmModulesPurge: false
 allowBuilds:
+  '@sentry/cli': true
   esbuild: true
   unrs-resolver: true

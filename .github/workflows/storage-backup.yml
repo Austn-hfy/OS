@@ -1,0 +1,70 @@
+name: Supabase Storage Backup
+
+on:
+  schedule:
+    - cron: "20 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-storage-backup
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STORAGE_BACKUP_PASSPHRASE: ${{ secrets.STORAGE_BACKUP_PASSPHRASE }}
+      EXPORT_DIR: storage-export
+      VERIFY_DIR: storage-verify
+      ARCHIVE_PATH: hfy-storage-backup-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz.enc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.0
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate protected configuration
+        run: |
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$STORAGE_BACKUP_PASSPHRASE"
+
+      - name: Export and verify Storage
+        run: |
+          pnpm storage:export --output "$EXPORT_DIR"
+          pnpm storage:verify --input "$EXPORT_DIR"
+
+      - name: Encrypt export
+        run: |
+          tar -czf - -C "$EXPORT_DIR" . | openssl enc -aes-256-cbc -pbkdf2 -iter 250000 -salt -pass env:STORAGE_BACKUP_PASSPHRASE -out "$ARCHIVE_PATH"
+          rm -rf "$EXPORT_DIR"
+
+      - name: Prove encrypted archive can be decrypted and verified
+        run: |
+          mkdir "$VERIFY_DIR"
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 -pass env:STORAGE_BACKUP_PASSPHRASE -in "$ARCHIVE_PATH" | tar -xzf - -C "$VERIFY_DIR"
+          pnpm storage:verify --input "$VERIFY_DIR"
+          rm -rf "$VERIFY_DIR"
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: hfy-storage-backup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ARCHIVE_PATH }}
+          if-no-files-found: error
+          retention-days: 90

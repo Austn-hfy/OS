@@ -20,9 +20,13 @@
     "provision": "tsx scripts/provision-user.ts",
     "seed:ace-parity": "tsx scripts/seed-ace-parity.ts",
     "storage:bootstrap": "tsx scripts/bootstrap-storage.ts",
+    "storage:export": "tsx scripts/export-storage.ts",
+    "storage:verify": "tsx scripts/verify-storage-export.ts",
+    "storage:restore": "tsx scripts/restore-storage.ts",
     "pdf:sample": "tsx scripts/render-sample-invoice.ts"
   },
   "dependencies": {
+    "@sentry/nextjs": "10.71.0",
     "@sparticuz/chromium": "149.0.0",
     "@supabase/ssr": "0.12.4",
     "@supabase/supabase-js": "2.112.3",
