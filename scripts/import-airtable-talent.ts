@@ -107,7 +107,6 @@ for (const record of records) {
     legacy_upcoming_bookings: record.legacyUpcomingBookings,
     airtable_roster_status_label: record.airtableRosterStatusLabel,
     airtable_talent_status_label: record.airtableTalentStatusLabel,
-    airtable_payment_details: record.airtablePaymentDetails,
     airtable_imported_at: importedAt.toISOString(),
     updated_at: importedAt.toISOString(),
   };

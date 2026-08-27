@@ -17,7 +17,7 @@ const supabase = createClient(requiredEnv("NEXT_PUBLIC_SUPABASE_URL"), requiredE
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const artistsResult = await supabase.from("talent").select("id,airtable_record_id,stage_name,full_name,email,phone,instagram_handle,roster_status,talent_status,home_market,genres,priority,talent_notes,legacy_outstanding_owed_cents,legacy_total_earnings_cents,legacy_owed_from,legacy_upcoming_bookings,airtable_roster_status_label,airtable_talent_status_label,airtable_payment_details,airtable_imported_at");
+const artistsResult = await supabase.from("talent").select("id,airtable_record_id,stage_name,full_name,email,phone,instagram_handle,roster_status,talent_status,home_market,genres,priority,talent_notes,legacy_outstanding_owed_cents,legacy_total_earnings_cents,legacy_owed_from,legacy_upcoming_bookings,airtable_roster_status_label,airtable_talent_status_label,airtable_imported_at");
 if (artistsResult.error) throw new Error(`Could not read imported artists: ${artistsResult.error.message}`);
 const artists = artistsResult.data;
 const artistIds = artists.map((artist) => artist.id);
@@ -62,7 +62,6 @@ for (const [index, source] of sourceRecords.entries()) {
     ["upcoming bookings", artist.legacy_upcoming_bookings, source.legacyUpcomingBookings],
     ["Airtable roster label", artist.airtable_roster_status_label, source.airtableRosterStatusLabel],
     ["Airtable talent label", artist.airtable_talent_status_label, source.airtableTalentStatusLabel],
-    ["Airtable payment summary", artist.airtable_payment_details, source.airtablePaymentDetails],
   ];
   for (const [field, actual, expected] of checks) {
     if (!sameStrings(actual, expected)) errors.push(`${source.airtableRecordId}: ${field} mismatch`);

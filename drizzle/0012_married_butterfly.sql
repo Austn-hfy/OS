@@ -1,0 +1,1 @@
+ALTER TABLE "talent" DROP COLUMN "airtable_payment_details";

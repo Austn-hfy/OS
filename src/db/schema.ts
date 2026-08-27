@@ -210,7 +210,6 @@ export const talent = pgTable("talent", {
   legacyUpcomingBookings: text("legacy_upcoming_bookings").notNull().default(""),
   airtableRosterStatusLabel: text("airtable_roster_status_label").notNull().default(""),
   airtableTalentStatusLabel: text("airtable_talent_status_label").notNull().default(""),
-  airtablePaymentDetails: text("airtable_payment_details").notNull().default(""),
   airtableImportedAt: timestamp("airtable_imported_at", { withTimezone: true }),
   ...timestamps,
 }, (table) => [

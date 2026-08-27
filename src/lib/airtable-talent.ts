@@ -117,7 +117,6 @@ export function parseAirtableTalentRecord(record: AirtableTalentRecord) {
     talentStatus: statusName.includes("inactive") ? "inactive" as const : "active" as const,
     airtableRosterStatusLabel: selectionName(fields["Roster Status"]),
     airtableTalentStatusLabel: selectionName(fields["Talent Status"]),
-    airtablePaymentDetails: textValue(fields["Payment Details"]),
     homeMarket: selectionName(fields["Home Market"]) || textValue(fields["Home Market"]),
     genres: stringList(fields.Genres),
     priority,
