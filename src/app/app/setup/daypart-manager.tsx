@@ -5,7 +5,7 @@ import { saveDaypartAction, type ResidencyActionState } from "@/app/app/actions"
 import { clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, weekdayNames } from "@/domain/dayparts";
 import { SensitiveInput } from "@/components/privacy-mode";
 
-type DaypartRow = {
+export type DaypartRow = {
   id: string;
   name: string;
   room: string;
@@ -87,11 +87,14 @@ function displayRange(dayparts: DaypartRow[]) {
   };
 }
 
-export function DaypartManager({ residencyId, dayparts }: { residencyId: string; dayparts: DaypartRow[] }) {
+export function DaypartManager({ residencyId, dayparts, onSaved }: { residencyId: string; dayparts: DaypartRow[]; onSaved?: () => void }) {
   const [draft, setDraft] = useState<EditorDraft | null>(null);
   const submitDaypart = async (previous: ResidencyActionState, formData: FormData) => {
     const result = await saveDaypartAction(previous, formData);
-    if (result.status === "success") setDraft(null);
+    if (result.status === "success") {
+      setDraft(null);
+      onSaved?.();
+    }
     return result;
   };
   const [state, formAction, pending] = useActionState(submitDaypart, initialActionState);

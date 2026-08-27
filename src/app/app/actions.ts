@@ -5,7 +5,7 @@ import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAccounts, invoiceLineItems, invoices, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
+import { assignments, auditLog, clientAccounts, invoiceLineItems, invoices, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { requireInternalActor } from "@/lib/auth";
@@ -15,8 +15,10 @@ import { saveInvoiceBranding } from "@/services/invoice-branding";
 import { addAssignmentToShift, createResidencyDateBooking } from "@/services/residency-bookings";
 import { createShift } from "@/services/shifts";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { issuePublicCalendarToken } from "@/domain/public-calendar";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
+export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
 export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_residency";
 
 function centsFromDollars(value: FormDataEntryValue | null): number {
@@ -47,50 +49,99 @@ export async function updateInvoiceBrandingAction(_previous: ResidencyActionStat
   }
 }
 
-export async function createResidencyAction(formData: FormData) {
-  const actor = await requireInternalActor();
-  const parsed = z.object({
-    clientName: z.string().trim().min(2),
-    residencyName: z.string().trim().min(2),
-    cityState: z.string().trim(),
-    timezone: z.string().trim().min(3),
-    tier: z.enum(["operations_only", "complete"]),
-    invoicePrefix: z.string().trim().min(2).max(12),
-    billingContactEmail: z.email(),
-    billingContactName: z.string().trim().min(2),
-    paymentTermsDays: z.coerce.number().int().min(0).max(365),
-  }).parse(Object.fromEntries(formData));
-  const database = getDb();
-  await database.transaction(async (tx) => {
-    const [account] = await tx.insert(clientAccounts).values({ name: parsed.clientName }).returning({ id: clientAccounts.id });
-    const [residency] = await tx.insert(residencies).values({
-      clientAccountId: account.id,
-      slug: slugify(parsed.residencyName),
-      name: parsed.residencyName,
-      cityState: parsed.cityState,
-      timezone: parsed.timezone,
-      tier: parsed.tier,
-      defaultTalentRateCents: centsFromDollars(formData.get("defaultTalentRate")),
-      clientHourlyRateCents: centsFromDollars(formData.get("clientHourlyRate")),
-      paymentTermsDays: parsed.paymentTermsDays,
-      billingContactEmail: parsed.billingContactEmail,
-      billingContactName: parsed.billingContactName,
-      invoicePrefix: parsed.invoicePrefix.toUpperCase(),
-      autoSendInvoices: formData.get("autoSendInvoices") === "on",
-      autoSendReason: formData.get("autoSendInvoices") === "on" ? "Enabled for pilot Residency" : "Manual send",
-    }).returning({ id: residencies.id });
-    await tx.insert(auditLog).values({
-      residencyId: residency.id,
-      actorUserId: actor.userId,
-      actorLabel: actor.email,
-      action: "residency_created",
-      entityType: "residency",
-      entityId: residency.id,
-      details: { clientName: parsed.clientName, tier: parsed.tier },
+export async function createResidencyAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      clientName: z.string().trim().min(2),
+      residencyName: z.string().trim().min(2),
+      cityState: z.string().trim(),
+      timezone: z.string().trim().min(3),
+      tier: z.enum(["operations_only", "complete"]),
+      invoicePrefix: z.string().trim().min(2).max(12),
+      billingContactEmail: z.email(),
+      billingContactName: z.string().trim().min(2),
+      paymentTermsDays: z.coerce.number().int().min(0).max(365),
+    }).parse(Object.fromEntries(formData));
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [account] = await tx.insert(clientAccounts).values({ name: parsed.clientName }).returning({ id: clientAccounts.id });
+      const [residency] = await tx.insert(residencies).values({
+        clientAccountId: account.id,
+        slug: slugify(parsed.residencyName),
+        name: parsed.residencyName,
+        cityState: parsed.cityState,
+        timezone: parsed.timezone,
+        tier: parsed.tier,
+        defaultTalentRateCents: centsFromDollars(formData.get("defaultTalentRate")),
+        clientHourlyRateCents: centsFromDollars(formData.get("clientHourlyRate")),
+        paymentTermsDays: parsed.paymentTermsDays,
+        billingContactEmail: parsed.billingContactEmail,
+        billingContactName: parsed.billingContactName,
+        invoicePrefix: parsed.invoicePrefix.toUpperCase(),
+        autoSendInvoices: formData.get("autoSendInvoices") === "on",
+        autoSendReason: formData.get("autoSendInvoices") === "on" ? "Enabled for pilot Residency" : "Manual send",
+      }).returning({ id: residencies.id });
+      await tx.insert(auditLog).values({
+        residencyId: residency.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_created",
+        entityType: "residency",
+        entityId: residency.id,
+        details: { clientName: parsed.clientName, tier: parsed.tier },
+      });
     });
-  });
-  revalidatePath("/app");
-  revalidatePath("/app/setup");
+    revalidatePath("/app");
+    revalidatePath("/app/setup");
+    return { status: "success", message: `${parsed.residencyName} is ready in Operations.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to create this Residency." };
+  }
+}
+
+export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLinkActionState, formData: FormData): Promise<PublicCalendarLinkActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const residencyId = z.uuid().parse(formData.get("residencyId"));
+    const { token, tokenHash } = issuePublicCalendarToken();
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [residency] = await tx.select({ id: residencies.id, name: residencies.name }).from(residencies).where(and(
+        eq(residencies.id, residencyId),
+        eq(residencies.active, true),
+        eq(residencies.operatingMode, "operations"),
+      )).limit(1);
+      if (!residency) throw new Error("Residency not found.");
+
+      await tx.insert(publicCalendarLinks).values({
+        residencyId,
+        tokenHash,
+        rotatedByUserId: actor.userId,
+      }).onConflictDoUpdate({
+        target: publicCalendarLinks.residencyId,
+        set: { tokenHash, rotatedByUserId: actor.userId, rotatedAt: new Date() },
+      });
+      await tx.insert(auditLog).values({
+        residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "public_calendar_link_rotated",
+        entityType: "residency",
+        entityId: residencyId,
+        details: { residencyName: residency.name },
+      });
+    });
+    revalidatePath("/app/setup");
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://hfy.app";
+    return {
+      status: "success",
+      message: "New public calendar link created. The previous link, if any, is now invalid.",
+      url: new URL(`/share/calendar/${token}`, baseUrl).toString(),
+    };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to create a public calendar link." };
+  }
 }
 
 const leadContactSchema = z.object({

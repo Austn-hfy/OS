@@ -10,6 +10,8 @@ import { PreviewDaypartManager, type PreviewDaypart } from "./preview-daypart-ma
 import { PreviewPayouts } from "./preview-payouts";
 import { PreviewInvoices } from "./preview-invoices";
 import { PreviewLeads } from "./preview-leads";
+import { ResidencyCreateFields } from "@/app/app/residency-create-form";
+import { PrivacyModeProvider } from "@/components/privacy-mode";
 
 type View = "overview" | "calendar" | "talent" | "payouts" | "invoices" | "setup" | "settings" | "leads";
 type BookingStatus = "pending_hfy_confirmation" | "confirmed" | "completed" | "cancelled";
@@ -60,6 +62,7 @@ const initialPreviewDayparts: PreviewDaypart[] = [
 
 const residencies = [
   { id: "ace-parity", name: "Ace Hotel", location: "Palm Springs, CA", tier: "Operations Only", shifts: 2, open: 1, ready: "$0", receivables: "$0", attention: 0 },
+  { id: "hotel-v", name: "Hotel V", location: "Demo Residency", tier: "Operations Only", shifts: 0, open: 0, ready: "$0", receivables: "$0", attention: 0 },
 ];
 
 const shifts = [
@@ -91,6 +94,8 @@ export function PreviewApp() {
   const [bookings, setBookings] = useState(initialBookings);
   const [previewDayparts, setPreviewDayparts] = useState(initialPreviewDayparts);
   const [residencyDefaultRate, setResidencyDefaultRate] = useState("80.00");
+  const [daypartsExpanded, setDaypartsExpanded] = useState(false);
+  const [daypartsPanelResidencyId, setDaypartsPanelResidencyId] = useState<string | null>(null);
 
   const residency = residencies.find((item) => item.id === residencyId) ?? residencies[0];
   const inResidency = residencyId !== null;
@@ -107,12 +112,16 @@ export function PreviewApp() {
     setResidencyId(id);
     setView("overview");
     setSwitcherOpen(false);
+    setDaypartsExpanded(false);
+    setDaypartsPanelResidencyId(null);
   }
 
   function openDashboard() {
     setResidencyId(null);
     setView("overview");
     setSwitcherOpen(false);
+    setDaypartsExpanded(false);
+    setDaypartsPanelResidencyId(null);
   }
 
   function updateBooking(id: string, status: BookingStatus) {
@@ -120,7 +129,7 @@ export function PreviewApp() {
   }
 
   return (
-    <div className={`shell ${!inResidency && view === "overview" ? "hfy-style-pilot" : ""}`}>
+    <PrivacyModeProvider initialEnabled={false}><div className={`shell ${!inResidency && view === "overview" ? "hfy-style-pilot" : ""}`}>
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">HFY</span><span className="brand-copy"><strong>HFY OS</strong><span>Programming desk</span></span></div>
         <div className="context-switcher-wrap">
@@ -154,7 +163,7 @@ export function PreviewApp() {
             : inResidency
             ? (["overview", "calendar", "payouts", "invoices", "setup"] as View[])
             : (["overview", "calendar", "talent", "settings"] as View[])
-          ).map((item) => <button className={view === item ? "active" : ""} type="button" onClick={() => setView(item)} key={item}>{item === "settings" ? "Admin settings" : item === "talent" ? "Artist Lookup" : item}</button>)}
+          ).map((item) => <div className="nav-entry" key={item}><button className={view === item ? "active" : ""} type="button" onClick={() => setView(item)}>{item === "settings" ? "Admin settings" : item === "talent" ? "Artist Lookup" : item}</button>{item === "calendar" ? <div className={`day-parts-nav ${daypartsExpanded ? "expanded" : ""}`}><button className="day-parts-nav-toggle" type="button" aria-expanded={daypartsExpanded} onClick={() => { if (inResidency) { const willOpen = daypartsPanelResidencyId !== residency.id; setDaypartsExpanded(willOpen); setDaypartsPanelResidencyId(willOpen ? residency.id : null); } else setDaypartsExpanded((open) => !open); }}><span>Day Parts</span><span aria-hidden="true">⌄</span></button>{!inResidency && daypartsExpanded ? <div className="day-parts-nav-list">{residencies.map((item) => <button className={daypartsPanelResidencyId === item.id ? "active" : ""} type="button" onClick={() => setDaypartsPanelResidencyId(item.id)} key={item.id}>{item.name}</button>)}</div> : null}</div> : null}</div>)}
         </nav>
         <div className="sidebar-footer"><p>Aus<br />Local preview</p><span className="preview-badge">Sample data only</span></div>
       </aside>
@@ -169,7 +178,7 @@ export function PreviewApp() {
         {!inResidency && view === "overview" ? <Overview onOpen={openResidency} pending={counts.pending} confirmed={counts.confirmed} /> : null}
         {!inResidency && view === "calendar" ? <CompanyCalendar bookings={bookings} dayparts={previewDayparts} /> : null}
         {!inResidency && view === "talent" ? <PreviewArtistLookup /> : null}
-        {!inResidency && view === "settings" ? <CompanySettings onOpen={openResidency} /> : null}
+        {!inResidency && view === "settings" ? <CompanySettings /> : null}
         {inPipeline ? <PreviewLeads /> : null}
         {inResidency && view === "overview" ? <ResidencyOverview residency={residency} pending={residencyBookings.filter((item) => item.status === "pending_hfy_confirmation").length} onNavigate={setView} /> : null}
         {inResidency && view === "calendar" ? <Calendar residency={residency} shifts={residencyShifts} bookings={residencyBookings} dayparts={previewDayparts} onUpdate={updateBooking} /> : null}
@@ -177,12 +186,14 @@ export function PreviewApp() {
         {inResidency && view === "invoices" ? <Invoices residency={residency} /> : null}
         {inResidency && view === "setup" ? <Setup residency={residency} dayparts={previewDayparts} onDaypartsChange={setPreviewDayparts} defaultTalentRate={residencyDefaultRate} onDefaultTalentRateChange={setResidencyDefaultRate} /> : null}
       </main>
-    </div>
+      {daypartsPanelResidencyId ? <div className="day-parts-panel-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDaypartsPanelResidencyId(null); }}><aside className="day-parts-panel" role="dialog" aria-modal="true"><header className="day-parts-panel-header"><div><p className="eyebrow">{residencies.find((item) => item.id === daypartsPanelResidencyId)?.name}</p><h2>Day Parts</h2><p>Review and edit the standing weekly schedule without leaving the calendar.</p></div><button className="quick-modal-close" type="button" onClick={() => { setDaypartsPanelResidencyId(null); if (inResidency) setDaypartsExpanded(false); }}>×</button></header><div className="day-parts-panel-scroll"><PreviewDaypartManager dayparts={previewDayparts} onChange={setPreviewDayparts} /></div></aside></div> : null}
+    </div></PrivacyModeProvider>
   );
 }
 
 function Overview({ onOpen }: { onOpen: (id: string) => void; pending: number; confirmed: number }) {
-  return <section className="hfy-company-overview"><header className="page-header"><div><p className="eyebrow">HFY company</p><h1>Overview</h1><p className="subhead">See every residency at once, then open one to work inside that program. Ace remains live in Airtable; its clearly labeled sandbox here is build-and-prove only.</p></div></header><section className="grid residency-grid">{residencies.map((item) => <button className="card residency-card residency-card-button" type="button" aria-label={`Open ${item.name} residency`} onClick={() => onOpen(item.id)} key={item.id}><div className="residency-card-top"><div><h2>{item.name}</h2><p className="location">{item.location}</p></div><span className={`pill ${item.tier === "Complete" ? "complete" : ""}`}>{item.tier}</span></div><div className="metrics"><div className="metric"><strong>{item.shifts}</strong><span>Upcoming shifts</span></div><div className="metric"><strong>{item.open}</strong><span>Open / pending</span></div><div className="metric"><strong>{item.ready}</strong><span>Ready to pay</span></div><div className="metric"><strong>{item.receivables}</strong><span>Receivables</span></div></div><div className="residency-card-status"><span className={`residency-health ${item.attention ? "attention" : ""}`}>{item.attention ? "1 item needs attention" : "No open exceptions"}</span><span className="preview-link">Open residency →</span></div></button>)}</section></section>;
+  const [creating, setCreating] = useState(false);
+  return <section className="hfy-company-overview"><header className="page-header"><div><p className="eyebrow">HFY company</p><h1>Overview</h1><p className="subhead">See every residency at once, then open one to work inside that program. Ace remains live in Airtable; its clearly labeled sandbox here is build-and-prove only.</p></div></header><section className="active-residencies-section"><div className="section-heading active-residencies-heading"><div><p className="eyebrow">Operations</p><h2>Active Residencies</h2><p className="subhead">Open a program or create the next Residency from this company workspace.</p></div><button className="button" type="button" onClick={() => setCreating(true)}>+ Create New Residency</button></div><div className="active-residencies-grid">{residencies.map((item) => <button className="card residency-card residency-card-button" type="button" aria-label={`Open ${item.name} residency`} onClick={() => onOpen(item.id)} key={item.id}><div className="residency-card-top"><div><h2>{item.name}</h2><p className="location">{item.location}</p></div><span className={`pill ${item.tier === "Complete" ? "complete" : ""}`}>{item.tier}</span></div><div className="metrics"><div className="metric"><strong>{item.shifts}</strong><span>Upcoming shifts</span></div><div className="metric"><strong>{item.open}</strong><span>Open / pending</span></div><div className="metric"><strong>{item.ready}</strong><span>Ready to pay</span></div><div className="metric"><strong>{item.receivables}</strong><span>Receivables</span></div></div><div className="residency-card-status"><span className={`residency-health ${item.attention ? "attention" : ""}`}>{item.attention ? "1 item needs attention" : "No open exceptions"}</span><span className="preview-link">Open residency →</span></div></button>)}</div></section>{creating ? <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreating(false); }}><section className="quick-modal residency-create-modal" role="dialog" aria-modal="true"><header className="quick-modal-header"><div><p className="eyebrow">Operations</p><h2>Create New Residency</h2><p>Preview only—nothing entered here will be saved.</p></div><button className="quick-modal-close" type="button" onClick={() => setCreating(false)}>×</button></header><div className="quick-modal-body"><form className="residency-create-form" onSubmit={(event) => { event.preventDefault(); setCreating(false); }}><ResidencyCreateFields /><div className="residency-create-actions"><button className="button secondary" type="button" onClick={() => setCreating(false)}>Cancel</button><button className="button" type="submit">Create Residency</button></div></form></div></section></div> : null}</section>;
 }
 
 function ResidencyOverview({ residency, pending, onNavigate }: { residency: typeof residencies[number]; pending: number; onNavigate: (view: View) => void }) {
@@ -211,8 +222,8 @@ function CompanyCalendar({ bookings, dayparts }: { bookings: typeof initialBooki
   return <div className="calendar-page"><header className="page-header calendar-page-header calendar-command-bar"><div className="calendar-title"><p className="eyebrow">HFY company</p><h1>Calendar</h1></div><div className="calendar-command-controls"><div className="field calendar-filter"><label>Residency calendar</label><select aria-label="Residency calendar" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All residencies</option>{residencies.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div><div className="calendar-month-cluster"><div className="calendar-needs-summary clear"><strong>{events.length}</strong><span>scheduled slots shown</span></div><div className="month-navigation"><button className="calendar-arrow" type="button" aria-label="Previous month" onClick={() => setMonthKey((value) => shiftMonthKey(value, -1))}>←</button><h2>{monthLabel(monthKey)}</h2><button className="calendar-arrow" type="button" aria-label="Next month" onClick={() => setMonthKey((value) => shiftMonthKey(value, 1))}>→</button></div></div></div></header><MonthCalendar compact monthKey={monthKey} events={events} ariaLabel="HFY company programming calendar" /></div>;
 }
 
-function CompanySettings({ onOpen }: { onOpen: (id: string) => void }) {
-  return <><header className="page-header"><div><p className="eyebrow">HFY company</p><h1>Admin settings</h1><p className="subhead">Company-wide access, residency creation, and shared operating defaults.</p></div></header><section className="grid residency-grid"><article className="card residency-card"><div><p className="eyebrow">Residencies</p><h2>{residencies.length} active programs</h2></div><p className="muted">Create a residency or open an existing program to manage its specific setup.</p><div className="stacked-links">{residencies.map((item) => <button className="preview-link" type="button" onClick={() => onOpen(item.id)} key={item.id}>{item.name} →</button>)}</div></article><article className="card residency-card"><div><p className="eyebrow">Team access</p><h2>1 internal operator</h2></div><p className="muted">The current workspace is for HFY operators. Additional role-based logins can be designed later.</p><button className="button secondary" type="button">Manage access</button></article></section></>;
+function CompanySettings() {
+  return <><header className="page-header card"><div><p className="eyebrow">HFY company</p><h1>Company Invoices</h1><p className="subhead">Manage the company identity and sender details used on client Invoices.</p></div></header><section className="card invoice-settings-form"><div className="invoice-settings-heading"><div><p className="eyebrow">Invoice branding</p><h2>HFY sender details</h2></div></div><div className="invoice-settings-section"><div className="form-grid two"><div className="field"><label>Company name</label><input defaultValue="Hear For You" /></div><div className="field"><label>Billing email</label><input defaultValue="billing@hearforyou.group" /></div></div><div className="field"><label>Billing address</label><textarea rows={3} /></div><div className="field"><label>Company logo</label><input type="file" /></div></div><div className="invoice-form-footer"><button className="button" type="button">Save invoice branding</button></div></section></>;
 }
 
 function Calendar({ residency, shifts: residencyShiftRows, bookings: bookingRows, dayparts, onUpdate }: { residency: typeof residencies[number]; shifts: typeof shifts; bookings: typeof initialBookings; dayparts: PreviewDaypart[]; onUpdate: (id: string, status: BookingStatus) => void }) {
@@ -545,10 +556,12 @@ function Setup({ residency, dayparts, onDaypartsChange, defaultTalentRate, onDef
   const [savedRate, setSavedRate] = useState(defaultTalentRate);
   const [clientRate, setClientRate] = useState("150.00");
   const [approvedIds, setApprovedIds] = useState(() => new Set(artists.filter((artist) => artist.approved.includes(residency.id)).map((artist) => artist.id)));
+  const [publicLink, setPublicLink] = useState("");
   return <><header className="page-header card"><div><p className="eyebrow">{residency.name} · Preview</p><h1>Residency setup</h1><p className="subhead">Program details, standing hours, rate defaults, approved artists, and client contacts for this Residency.</p></div></header><PreviewDaypartManager dayparts={dayparts} onChange={onDaypartsChange} /><section className="residency-setup-grid">
     <form className="card residency-profile-editor" onSubmit={(event) => event.preventDefault()}><div><p className="eyebrow">Residency profile</p><h2>Program details</h2><p className="subhead">The operating identity and internal context for this Residency.</p></div><div className="residency-profile-fields"><div className="field"><label>Residency name</label><input defaultValue={residency.name} /></div><div className="field"><label>City / State</label><input defaultValue={residency.location} /></div><div className="field"><label>Timezone</label><input defaultValue="America/Los_Angeles" /></div><div className="field"><label>Service tier</label><select defaultValue="operations_only"><option value="operations_only">Operations Only</option><option value="complete">Complete</option></select></div><div className="field wide"><label>Internal notes</label><textarea rows={3} placeholder="Operating context or internal reminders" /></div></div><button className="button" type="submit">Save Residency profile</button></form>
     <form className="card residency-rate-editor" onSubmit={(event) => { event.preventDefault(); setSavedRate(defaultTalentRate); }}><div><p className="eyebrow">Default rates</p><h2>Talent and client</h2><p className="subhead">Fallback hourly rates for new calendar work.</p></div><div className="residency-rate-fields"><div className="field"><label>Talent rate ($/hr)</label><input type="number" min="0" step="0.01" value={defaultTalentRate} onChange={(event) => onDefaultTalentRateChange(event.target.value)} /><small>Used after Assignment and Daypart overrides.</small></div><div className="field"><label>Client rate ($/hr)</label><input type="number" min="0" step="0.01" value={clientRate} onChange={(event) => setClientRate(event.target.value)} /><small>Used when a Shift has no override.</small></div></div>{savedRate === defaultTalentRate ? <p className="privacy-note">Rate changes apply to new work only.</p> : <p className="draft-notice">Save these defaults before leaving Setup.</p>}<button className="button" type="submit">Save default rates</button></form>
     <section className="card approved-dj-manager"><div className="setup-card-heading"><div><p className="eyebrow">Approved DJs</p><h2>Residency artist list</h2><p className="subhead">Checked artists are available when scheduling this Residency.</p></div><strong>{approvedIds.size} approved</strong></div><label className="approved-dj-search"><span>Search artists</span><input type="search" placeholder="Artist name or market" /></label><div className="approved-dj-list">{artists.map((artist) => <label className="approved-dj-row" key={artist.id}><input type="checkbox" checked={approvedIds.has(artist.id)} onChange={() => setApprovedIds((current) => { const next = new Set(current); if (next.has(artist.id)) next.delete(artist.id); else next.add(artist.id); return next; })} /><span><strong>{artist.name}</strong><small>{artist.market}</small></span></label>)}</div><div className="setup-card-actions"><span>Existing bookings are never removed.</span><button className="button" type="button">Save approved DJs</button></div></section>
     <section className="card residency-contacts-manager"><div className="setup-card-heading"><div><p className="eyebrow">Contacts &amp; access</p><h2>Residency team</h2><p className="subhead">Keep operational contacts here. Login access is optional and invited deliberately.</p></div><button className="button secondary" type="button">+ Add contact</button></div><div className="residency-contacts-layout"><div className="residency-contact-list"><article className="selected"><button type="button"><span><strong>Ace Manager</strong><small>General Manager</small></span><span><small>Contact only</small><em>Primary</em></span></button><div><span className="contact-invite-status">not invited</span></div></article></div><form className="residency-contact-form" onSubmit={(event) => event.preventDefault()}><div className="setup-form-heading"><strong>Edit contact</strong><span>Saving does not send an invitation.</span></div><div className="row"><div className="field"><label>Name</label><input defaultValue="Ace Manager" /></div><div className="field"><label>Title / role</label><input defaultValue="General Manager" /></div></div><div className="row"><div className="field"><label>Email</label><input type="email" placeholder="manager@example.com" /></div><div className="field"><label>Phone</label><input placeholder="Phone number" /></div></div><div className="field"><label>Login access</label><select defaultValue="none"><option value="none">No login — contact only</option><option value="manager">Residency Manager — client-safe overview and calendar</option><option value="calendar_viewer">Calendar Viewer — read-only calendar</option></select><small>Client accounts never receive rates, payouts, invoices, or internal data.</small></div><label className="checkbox-row"><input type="checkbox" defaultChecked /> Primary day-to-day contact</label><div className="setup-card-actions"><span>Invite from the saved list when ready.</span><button className="button" type="submit">Save contact</button></div></form></div></section>
+    <article className="card residency-setup-card public-calendar-link-card"><div><p className="eyebrow">Calendar sharing</p><h2>Public calendar link</h2><p className="subhead">A read-only link exposing only Instagram handles and scheduled date/time.</p></div><div className="public-calendar-boundary"><strong>{publicLink ? "An active link exists" : "No public link yet"}</strong><span>The token never expires. Regenerating it immediately revokes the previous link.</span></div>{publicLink ? <div className="public-calendar-copy"><label>New link</label><div><input readOnly value={publicLink} /><button className="button secondary" type="button">Copy</button></div><small>Preview token only. Nothing here is saved.</small></div> : null}<button className={publicLink ? "button secondary" : "button"} type="button" onClick={() => setPublicLink(`https://hfy.app/share/calendar/${crypto.randomUUID().replaceAll("-", "")}`)}>{publicLink ? "Regenerate link" : "Create public link"}</button></article>
   </section></>;
 }

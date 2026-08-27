@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatMoney } from "@/components/format";
 import { PrivateValue } from "@/components/privacy-mode";
 import { getDashboardData } from "@/data/internal";
+import { CreateResidencyModal } from "./create-residency-modal";
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
   const { residency: residencyId } = await searchParams;
@@ -53,8 +54,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <p className="subhead">See every residency at once, then open one to work inside that program.</p>
         </div>
       </header>
+      <section className="active-residencies-section">
+        <div className="section-heading active-residencies-heading"><div><p className="eyebrow">Operations</p><h2>Active Residencies</h2><p className="subhead">Open a program or create the next Residency from this company workspace.</p></div><CreateResidencyModal /></div>
       {data.length ? (
-        <section className="grid residency-grid">
+        <div className="active-residencies-grid">
           {data.map((residency) => (
             <Link className="card residency-card residency-card-button" href={`/app?residency=${residency.id}`} aria-label={`Open ${residency.name} residency`} key={residency.id}>
               <div className="residency-card-top">
@@ -73,8 +76,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <span className="card-link">Open residency →</span>
             </Link>
           ))}
-        </section>
+        </div>
       ) : <div className="card empty">No new-system Residencies yet. Ace remains operationally in Airtable; a separate parity sandbox can be added in staging.</div>}
+      </section>
     </>
   );
 }

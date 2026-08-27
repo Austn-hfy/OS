@@ -13,6 +13,7 @@ import {
   talentPaymentProfiles,
   residencyTalent,
   residencyContacts,
+  publicCalendarLinks,
 } from "@/db/schema";
 import {
   calculateBillableAmountCents,
@@ -414,7 +415,7 @@ export async function getInvoiceWorkspace(residencyId: string) {
 
 export async function getSetupData() {
   const database = getDb();
-  const [residencyRows, talentRows, approvals, contacts, invoiceBranding] = await Promise.all([
+  const [residencyRows, talentRows, approvals, contacts, calendarLinks, invoiceBranding] = await Promise.all([
     database.select({
       id: residencies.id,
       name: residencies.name,
@@ -439,9 +440,11 @@ export async function getSetupData() {
       isPrimary: residencyContacts.isPrimary,
       active: residencyContacts.active,
     }).from(residencyContacts).where(eq(residencyContacts.active, true)).orderBy(asc(residencyContacts.name)),
+    database.select({ residencyId: publicCalendarLinks.residencyId }).from(publicCalendarLinks),
     getInvoiceBrandingSettings(),
   ]);
-  return { residencies: residencyRows, talent: talentRows, approvals, contacts, invoiceBranding };
+  const linkedResidencies = new Set(calendarLinks.map((link) => link.residencyId));
+  return { residencies: residencyRows.map((residency) => ({ ...residency, hasPublicCalendarLink: linkedResidencies.has(residency.id) })), talent: talentRows, approvals, contacts, invoiceBranding };
 }
 
 export async function getPipelineLeads() {

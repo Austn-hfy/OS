@@ -38,6 +38,7 @@ beforeAll(async () => {
   const paymentCleanup = await readFile(new URL("../drizzle/0012_married_butterfly.sql", import.meta.url), "utf8");
   const artistArchive = await readFile(new URL("../drizzle/0013_exotic_scourge.sql", import.meta.url), "utf8");
   const residencyAccess = await readFile(new URL("../drizzle/0014_glamorous_owl.sql", import.meta.url), "utf8");
+  const publicCalendars = await readFile(new URL("../drizzle/0015_superb_norrin_radd.sql", import.meta.url), "utf8");
   await database.exec(initial.replaceAll("--> statement-breakpoint", ""));
   await database.exec(onboarding);
   await database.exec(rowSecurity.replaceAll("--> statement-breakpoint", ""));
@@ -53,6 +54,7 @@ beforeAll(async () => {
   await database.exec(paymentCleanup.replaceAll("--> statement-breakpoint", ""));
   await database.exec(artistArchive.replaceAll("--> statement-breakpoint", ""));
   await database.exec(residencyAccess.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(publicCalendars.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -122,6 +124,23 @@ describe("database replacements for Airtable audit formulas", () => {
     `);
     expect(contact.rows[0]).toEqual({ access_role: "calendar_viewer", is_primary: true });
     expect(membership.rows[0]?.access_role).toBe("calendar_viewer");
+  });
+
+  it("rotates one hashed public calendar token per Residency and invalidates the old hash", async () => {
+    const oldHash = "a".repeat(64);
+    const newHash = "b".repeat(64);
+    await database.exec(`
+      INSERT INTO public_calendar_links (residency_id, token_hash, rotated_by_user_id)
+      VALUES ('${ids.residencyA}', '${oldHash}', '${ids.admin}');
+      INSERT INTO public_calendar_links (residency_id, token_hash, rotated_by_user_id)
+      VALUES ('${ids.residencyA}', '${newHash}', '${ids.admin}')
+      ON CONFLICT (residency_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, rotated_at = now();
+    `);
+    const oldResult = await database.query(`SELECT residency_id FROM public_calendar_links WHERE token_hash = '${oldHash}';`);
+    const newResult = await database.query(`SELECT residency_id FROM public_calendar_links WHERE token_hash = '${newHash}';`);
+    expect(oldResult.rows).toEqual([]);
+    expect(newResult.rows).toHaveLength(1);
+    await expect(database.exec(`UPDATE public_calendar_links SET token_hash = 'plaintext-token' WHERE residency_id = '${ids.residencyA}';`)).rejects.toThrow();
   });
 
   it("requires exactly one valid Shift parent", async () => {

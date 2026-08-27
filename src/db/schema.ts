@@ -146,6 +146,17 @@ export const residencies = pgTable("residencies", {
   check("residencies_billing_cycle_valid", sql`${table.billingCycleStartWeekday} >= 0 AND ${table.billingCycleStartWeekday} <= 6 AND ${table.billingCycleLengthDays} >= 1 AND ${table.billingCycleLengthDays} <= 31`),
 ]);
 
+export const publicCalendarLinks = pgTable("public_calendar_links", {
+  residencyId: uuid("residency_id").primaryKey().references(() => residencies.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  rotatedByUserId: uuid("rotated_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  rotatedAt: timestamp("rotated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("public_calendar_links_token_hash_unique").on(table.tokenHash),
+  check("public_calendar_links_token_hash_valid", sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+]);
+
 export const dayparts = pgTable("dayparts", {
   id: uuid("id").primaryKey().defaultRandom(),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
@@ -475,6 +486,7 @@ export const auditLog = pgTable("audit_log", {
 
 export type User = typeof users.$inferSelect;
 export type Residency = typeof residencies.$inferSelect;
+export type PublicCalendarLink = typeof publicCalendarLinks.$inferSelect;
 export type Daypart = typeof dayparts.$inferSelect;
 export type DaypartDayRule = typeof daypartDayRules.$inferSelect;
 export type Talent = typeof talent.$inferSelect;

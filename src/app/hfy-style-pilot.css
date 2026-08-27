@@ -474,6 +474,32 @@
   background: var(--hfy-action-soft);
   box-shadow: inset 3px 0 var(--hfy-action-strong), inset 0 1px rgba(255, 255, 255, 0.65);
 }
+.hfy-style-system .day-parts-nav-toggle {
+  color: var(--hfy-muted);
+}
+.hfy-style-system .day-parts-nav-toggle:hover,
+.hfy-style-system .day-parts-nav.expanded .day-parts-nav-toggle {
+  color: var(--hfy-action-ink);
+  background: rgba(255,255,255,.38);
+}
+.hfy-style-system .day-parts-nav-list { border-left-color: var(--hfy-line); }
+.hfy-style-system .day-parts-nav-list button { color: var(--hfy-muted); }
+.hfy-style-system .day-parts-nav-list button:hover,
+.hfy-style-system .day-parts-nav-list button.active { color: var(--hfy-action-ink); background: var(--hfy-action-soft); }
+.hfy-style-system .preview-nav .day-parts-nav-toggle {
+  min-height: 30px;
+  padding: 5px 9px;
+  border-radius: 9px;
+  font-size: 10px;
+  text-transform: none;
+}
+.hfy-style-system .preview-nav .day-parts-nav-list button {
+  min-height: 29px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 9px;
+  text-transform: none;
+}
 .hfy-style-system .sidebar-footer { color: var(--hfy-muted); font-size: 11px; }
 .hfy-style-system .sidebar-footer .button { min-height: 36px; margin-top: 8px; padding: 7px 12px; font-size: 10px; }
 .hfy-style-system .privacy-mode-toggle {
