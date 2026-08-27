@@ -532,6 +532,8 @@ tr:last-child td { border-bottom: 0; }
 .login-panel { display: grid; place-items: center; padding: 32px; }
 .login-form { width: min(420px, 100%); display: grid; gap: 18px; }
 .login-form h2 { font-size: 38px; }
+.login-mode-switch { appearance: none; justify-self: center; border: 0; padding: 4px; color: var(--forest); background: transparent; font-size: 12px; font-weight: 750; }
+.login-mode-switch:hover { text-decoration: underline; text-underline-offset: 3px; }
 .error { color: var(--danger); background: #fae9e5; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
 .success { color: #225b3c; background: #e2f1e6; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
 .invoice-approval-form { display: grid; gap: 7px; min-width: 210px; }
