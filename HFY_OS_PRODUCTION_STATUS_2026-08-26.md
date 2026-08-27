@@ -195,15 +195,14 @@ Reference: https://vercel.com/docs/cron-jobs/manage-cron-jobs
 
 ## Production data state
 
-After the controlled Invoice acceptance fixture was approved, production contained:
+After the controlled Invoice acceptance proof was completed and the owner explicitly approved cleanup, production contains:
 
-- Operations Residencies: 1 controlled test Residency
+- Operations Residencies: 0
 - Pipeline Leads: 0
-- Artists: 1 synthetic acceptance-test Artist
-- Invoices: 1 controlled Approved Invoice
-- Invoices with stored PDFs: 1
-- Approved Invoices: 1
-- Sent or Paid Invoices: 0
+- Artists: 0
+- Invoices: 0
+- Invoice PDFs in Storage: 0
+- Synthetic acceptance-test records: 0
 
 Ace remains outside this production database and continues operating in Airtable, as planned.
 
@@ -213,10 +212,9 @@ The next work should **not** be framed as building invoice PDF generation from s
 
 Recommended order:
 
-1. Obtain fresh approval before deleting or archiving the controlled Invoice acceptance fixture.
-2. Design a separate export/backup plan for Supabase Storage objects before real hotel documents become irreplaceable.
-3. Keep the acceptance-test Residency auto-send disabled. Run a controlled invoice-delivery/idempotency test only after explicitly selecting a safe recipient and authorizing the send.
-4. Add full Residency-scoped RLS policies during the planned Phase 2 hardening pass.
+1. Design a separate export/backup plan for Supabase Storage objects before real hotel documents become irreplaceable.
+2. Run a controlled invoice-delivery/idempotency test only after explicitly selecting a safe recipient and authorizing the send.
+3. Add full Residency-scoped RLS policies during the planned Phase 2 hardening pass.
 
 ## Priority judgment
 
@@ -258,14 +256,14 @@ Completed after Claude's review:
 - Confirmed the immutable PDF path, source hash, SHA-256, 45,560-byte size, canonical snapshot, version, timestamp, generating user, Storage object, and approval audit entry.
 - Confirmed the earlier failure Attention item is resolved, auto-send remains disabled, Invoice Delivery count is zero, and Resend was not called for the Invoice.
 - Confirmed the Approved Invoice exposes only Download PDF in the production UI; the server-side approval path also rejects any non-Draft Invoice.
+- After explicit owner approval, deleted the exact synthetic Client Account, Residency, Artist, four Shifts, four Assignments, Invoice, resolved Attention item, three fixture audit rows, and stored PDF.
+- Re-ran production verification and confirmed zero matching database records and zero matching Storage objects; the live Overview again shows no new-system Residencies.
 
 Still requiring fresh user approval:
 
-- Delete or archive the controlled Invoice acceptance fixture.
 - Enable or test Invoice delivery through Resend with a specifically approved safe recipient.
 
 ## Current review questions
 
-1. Should the controlled Invoice acceptance fixture now be deleted or archived?
-2. What Storage-object backup/export cadence should be adopted before real hotel documents become irreplaceable?
-3. When a controlled delivery test is authorized, which safe recipient should receive it?
+1. What Storage-object backup/export cadence should be adopted before real hotel documents become irreplaceable?
+2. When a controlled delivery test is authorized, which safe recipient should receive it?
