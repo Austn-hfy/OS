@@ -13,10 +13,6 @@ const nextConfig: NextConfig = {
       "./node_modules/playwright-core/browsers.json",
       "./node_modules/@sparticuz/chromium/bin/**/*",
     ],
-    "/api/internal/invoice-acceptance": [
-      "./node_modules/playwright-core/browsers.json",
-      "./node_modules/@sparticuz/chromium/bin/**/*",
-    ],
   },
   experimental: {
     serverActions: {

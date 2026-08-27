@@ -132,7 +132,7 @@ async function recordInvoicePdfFailure(invoiceId: string, error: unknown) {
   });
 }
 
-export async function renderDraftInvoicePdf(invoiceId: string) {
+async function renderDraftInvoicePdf(invoiceId: string) {
   const { source, snapshot } = await buildInvoiceSnapshot(invoiceId);
   const sourceHash = invoiceSourceHash(snapshot);
   const logoDataUrl = await loadInvoiceLogoDataUrl(snapshot.issuer.logo);
