@@ -132,17 +132,27 @@ async function recordInvoicePdfFailure(invoiceId: string, error: unknown) {
   });
 }
 
+export async function renderDraftInvoicePdf(invoiceId: string) {
+  const { source, snapshot } = await buildInvoiceSnapshot(invoiceId);
+  const sourceHash = invoiceSourceHash(snapshot);
+  const logoDataUrl = await loadInvoiceLogoDataUrl(snapshot.issuer.logo);
+  const pdf = await renderHtmlToPdf(renderInvoiceHtml(snapshot, { logoDataUrl }));
+  if (pdf.length <= 0 || pdf.length > MAX_INVOICE_PDF_BYTES || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") {
+    throw new Error("Native Invoice PDF generation returned an invalid document.");
+  }
+  return {
+    source,
+    snapshot,
+    sourceHash,
+    pdf,
+    pdfSha256: createHash("sha256").update(pdf).digest("hex"),
+  };
+}
+
 export async function approveInvoice(actor: InternalActor, invoiceId: string) {
   let uploadedStoragePath: string | null = null;
   try {
-    const { source, snapshot } = await buildInvoiceSnapshot(invoiceId);
-    const sourceHash = invoiceSourceHash(snapshot);
-    const logoDataUrl = await loadInvoiceLogoDataUrl(snapshot.issuer.logo);
-    const pdf = await renderHtmlToPdf(renderInvoiceHtml(snapshot, { logoDataUrl }));
-    if (pdf.length <= 0 || pdf.length > MAX_INVOICE_PDF_BYTES || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") {
-      throw new Error("Native Invoice PDF generation returned an invalid document.");
-    }
-    const pdfSha256 = createHash("sha256").update(pdf).digest("hex");
+    const { source, snapshot, sourceHash, pdf, pdfSha256 } = await renderDraftInvoicePdf(invoiceId);
     const storagePath = `${source.residencyId}/${source.id}/v${source.version}/${sourceHash.slice(0, 16)}-${randomUUID()}.pdf`;
     const supabase = createSupabaseAdminClient();
     const upload = await supabase.storage.from("invoice-pdfs").upload(storagePath, pdf, {

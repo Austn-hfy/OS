@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { invoices, residencies, users } from "@/db/schema";
-import { approveInvoice } from "@/services/invoices";
+import { approveInvoice, renderDraftInvoicePdf } from "@/services/invoices";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -48,6 +48,19 @@ export async function POST(request: Request) {
   }
   if (candidate.invoiceStatus !== "draft") {
     return Response.json({ error: "Controlled acceptance Invoice is no longer a Draft." }, { status: 409 });
+  }
+
+  if (request.headers.get("x-hfy-acceptance-mode") === "render") {
+    const rendered = await renderDraftInvoicePdf(candidate.invoiceId);
+    return new Response(new Uint8Array(rendered.pdf), {
+      headers: {
+        "Content-Disposition": `attachment; filename="${candidate.invoiceNumber}.pdf"`,
+        "Content-Type": "application/pdf",
+        "X-HFY-PDF-Byte-Size": String(rendered.pdf.length),
+        "X-HFY-PDF-SHA-256": rendered.pdfSha256,
+        "X-HFY-PDF-Source-Hash": rendered.sourceHash,
+      },
+    });
   }
 
   const [owner] = await database.select({
