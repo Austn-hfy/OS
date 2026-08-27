@@ -37,7 +37,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </section>
         <section className="workspace-shortcuts">
           <Link className="card workspace-shortcut" href={`/app/calendar?residency=${selected.id}`}><span>01</span><strong>Calendar</strong><small>Shifts and confirmations</small></Link>
-          <Link className="card workspace-shortcut" href={`/app/talent?residency=${selected.id}`}><span>02</span><strong>Artist Lookup</strong><small>Search artist records and bookings</small></Link>
+          <Link className="card workspace-shortcut" href={`/app/payouts?residency=${selected.id}`}><span>02</span><strong>Payouts</strong><small>Residency-specific artist payments</small></Link>
           <Link className="card workspace-shortcut" href={`/app/invoices?residency=${selected.id}`}><span>03</span><strong>Invoices</strong><small>Billing and delivery</small></Link>
         </section>
       </>

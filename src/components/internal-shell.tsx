@@ -23,7 +23,6 @@ export function InternalShell({ actor, residencies, initialPrivacyMode, children
   ] : inResidency ? [
     ["Overview", `/app${suffix}`],
     ["Calendar", `/app/calendar${suffix}`],
-    ["Artist Lookup", `/app/talent${suffix}`],
     ["Payouts", `/app/payouts${suffix}`],
     ["Invoices", `/app/invoices${suffix}`],
     ["Setup", `/app/setup${suffix}`],
