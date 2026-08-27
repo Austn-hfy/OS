@@ -7,9 +7,9 @@
 
 ## Executive result
 
-The production UI is visually coherent and the primary company pages fit inside a 1280 × 720 screen without horizontal clipping. Calendar, Artist Lookup, Pipeline, Payouts, Invoices, login, password recovery, and artist onboarding all rendered. One functional production defect was found on Admin settings; its cause is confirmed and a local fix is complete. The remaining findings below are either activation blockers already tracked elsewhere or presentation/product decisions that were deliberately not changed without approval.
+The production UI is visually coherent and the primary company pages fit inside a 1280 × 720 screen without horizontal clipping. Calendar, Artist Lookup, Pipeline, Payouts, Invoices, login, password recovery, and artist onboarding all rendered. One functional production defect was found on Admin settings and was fixed, deployed, and re-tested during the same session. The remaining findings below are either activation blockers already tracked elsewhere or presentation/product decisions that were deliberately not changed without approval.
 
-## Functional defect found and fixed locally
+## Functional defect found and resolved
 
 ### Admin settings returns HTTP 500
 
@@ -18,7 +18,7 @@ The production UI is visually coherent and the primary company pages fit inside 
 - **Cause:** the shared server-action module statically imported the native Invoice PDF service. Admin settings loaded the entire Playwright runtime even though the route was not approving an Invoice.
 - **Fix:** Invoice approval and retry now dynamically load the Invoice service only when those actions actually run.
 - **Local verification:** type-check, lint, all automated tests, and the production Webpack build pass.
-- **Still required:** push and deploy the local fix, then re-open `/app/setup` in production and confirm HTTP 200. GitHub currently requires an owner identity-verification step before this Mac can add its repository-specific publishing key.
+- **Production resolution:** deployed in revision `2e009ae`; `/app/setup` was re-opened in production and confirmed to render successfully.
 
 ## Findings intentionally not changed
 
@@ -30,7 +30,7 @@ The production UI is visually coherent and the primary company pages fit inside 
 
 Why this matters now:
 
-- Storage backups are not operational until the encrypted workflow is pushed, its secrets are installed, and a manual run passes.
+- Storage backups are now operational. The remaining risk is public, unauthenticated file intake rather than absence of recovery coverage.
 - An unshared public URL can still be discovered or abused.
 - The page copy says it collects “booking and payment details,” but the current form collects contact/profile details and an optional W-9, not payment instructions.
 
@@ -85,7 +85,7 @@ All nine Pipeline tabs fit, but several labels and zero-count badges become very
 | `/app` | Pass | Clean company Overview; stale empty-state copy noted above. |
 | `/app/calendar` | Pass | Full month fits at 1280 × 720 without page scrolling; empty company state is clear. |
 | `/app/talent` | Pass | Left-list/right-detail layout is stable; empty-copy issue noted above. |
-| `/app/setup` | Fail in production / fixed locally | Static Playwright dependency caused HTTP 500. |
+| `/app/setup` | Pass after remediation | Static Playwright dependency caused HTTP 500; revision `2e009ae` fixed and production verification passed. |
 | `/app/leads` | Pass | Pipeline foundation works; tabs are crowded at 1280 px. |
 | `/app/payouts` | Pass | Full-width filters/list and empty state render cleanly. |
 | `/app/invoices` | Pass | Company monitoring table and empty state render cleanly. |
@@ -103,11 +103,10 @@ All nine Pipeline tabs fit, but several labels and zero-count badges become very
 
 ## Friday demo readiness gate
 
-Before calling the app demo-ready:
+Session-end demo-readiness status:
 
-1. Push/deploy the Admin settings packaging fix.
-2. Confirm `/app/setup` returns 200 in production.
-3. Activate and prove the encrypted Storage backup before any real W-9 or Invoice PDF enters Storage.
-4. Import and spot-check the Airtable roster after authenticating the correct Airtable account/token.
-5. Let the owner create Ace and test Daypart/calendar setup as planned; do not pre-populate it.
-
+1. **Done:** Admin settings packaging fix pushed and deployed.
+2. **Done:** `/app/setup` returns successfully in production.
+3. **Done:** encrypted Storage backup passed once empty and again with 36 real W-9 objects; the second artifact is 16.5 MB.
+4. **Done:** all 44 Airtable artists imported and compared back to Airtable; live UI spot checks passed.
+5. **Owner task:** create Ace and test Daypart/calendar setup as planned; Codex did not pre-populate it.
