@@ -135,13 +135,19 @@ export async function getCalendarData(residencyId?: string, range?: { from: stri
 
 export async function getTalentDirectory(residencyId?: string) {
   const database = getDb();
-  if (!residencyId) return database.select().from(talent).orderBy(desc(talent.priority), asc(talent.stageName));
+  if (!residencyId) return database.select().from(talent)
+    .where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt)))
+    .orderBy(desc(talent.priority), asc(talent.stageName));
   const approvals = await database.select({ talentId: residencyTalent.talentId })
     .from(residencyTalent)
     .where(and(eq(residencyTalent.residencyId, residencyId), eq(residencyTalent.active, true)));
   if (!approvals.length) return [];
   return database.select().from(talent)
-    .where(inArray(talent.id, approvals.map((item) => item.talentId)))
+    .where(and(
+      inArray(talent.id, approvals.map((item) => item.talentId)),
+      eq(talent.talentStatus, "active"),
+      isNull(talent.archivedAt),
+    ))
     .orderBy(desc(talent.priority), asc(talent.stageName));
 }
 
@@ -397,7 +403,7 @@ export async function getSetupData() {
   const database = getDb();
   const [residencyRows, talentRows, approvals, invoiceBranding] = await Promise.all([
     database.select({ id: residencies.id, name: residencies.name, timezone: residencies.timezone, defaultTalentRateCents: residencies.defaultTalentRateCents }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name)),
-    database.select({ id: talent.id, stageName: talent.stageName }).from(talent).where(eq(talent.talentStatus, "active")).orderBy(asc(talent.stageName)),
+    database.select({ id: talent.id, stageName: talent.stageName }).from(talent).where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
     database.select({ residencyId: residencyTalent.residencyId, talentId: residencyTalent.talentId }).from(residencyTalent).where(eq(residencyTalent.active, true)),
     getInvoiceBrandingSettings(),
   ]);

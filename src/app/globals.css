@@ -566,21 +566,44 @@ tr:last-child td { border-bottom: 0; }
 .privacy-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
 
 .artist-lookup-page-header { margin-bottom: 22px; }
-.artist-lookup-shell { min-height: 680px; display: grid; grid-template-columns: minmax(270px, 330px) minmax(0, 1fr); align-items: start; gap: 18px; }
+.artist-lookup-shell { min-height: 680px; display: grid; grid-template-columns: minmax(390px, 440px) minmax(0, 1fr); align-items: start; gap: 18px; }
 .artist-roster-panel, .artist-detail-panel { border: 1px solid var(--line); border-radius: 22px; background: rgba(251,251,251,.88); box-shadow: var(--shadow); overflow: hidden; }
-.artist-roster-panel { position: sticky; top: 20px; max-height: calc(100dvh - 40px); display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
+.artist-roster-panel { position: sticky; top: 20px; max-height: calc(100dvh - 40px); display: flex; flex-direction: column; }
+.artist-roster-toolbar { display: grid; gap: 11px; padding: 17px; }
+.artist-roster-toolbar-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.artist-roster-toolbar-heading .eyebrow { margin: 0 0 3px; font-size: 8px; }
+.artist-roster-toolbar-heading > div > strong { font-size: 16px; }
+.artist-roster-toolbar-heading .button { min-height: 34px; padding: 7px 10px; font-size: 9px; }
 .artist-search-field { display: grid; gap: 7px; padding: 17px 17px 12px; }
+.artist-roster-toolbar .artist-search-field { padding: 0; }
 .artist-search-field > label { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .artist-search-field > div { position: relative; }
-.artist-search-field > div > span { position: absolute; z-index: 1; top: 50%; left: 13px; color: var(--muted); font-size: 19px; transform: translateY(-53%); pointer-events: none; }
-.artist-search-field input { min-height: 42px; padding-left: 38px; border-radius: 12px; }
+.artist-search-field > div > span { position: absolute; z-index: 1; top: 50%; left: 14px; width: 17px; height: 17px; color: var(--muted); transform: translateY(-50%); pointer-events: none; }
+.artist-search-field > div > span svg { width: 100%; height: 100%; overflow: visible; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 1.8; }
+.artist-search-field input { min-height: 42px; padding-left: 42px; padding-right: 34px; border-radius: 12px; }
+.artist-roster-tabs { overflow-x: auto; }
+.artist-roster-tabs > div { min-width: max-content; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 13px; background: rgba(235,239,242,.72); }
+.artist-roster-tabs button { appearance: none; min-height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; font-size: 9px; font-weight: 750; }
+.artist-roster-tabs button strong { min-width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; background: rgba(24,24,24,.07); font-size: 8px; }
+.artist-roster-tabs button.active { color: var(--ink); background: rgba(255,255,255,.86); box-shadow: 0 4px 12px rgba(7,26,49,.08), inset 0 -2px var(--forest); }
+.artist-roster-sort { display: flex; align-items: end; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 10px; }
+.artist-roster-sort > span { padding-bottom: 9px; }
+.artist-roster-sort > span strong { color: var(--ink); font-size: 16px; }
+.artist-roster-sort label { display: grid; gap: 4px; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.artist-roster-sort select { min-width: 132px; min-height: 36px; padding: 7px 28px 7px 10px; border-radius: 10px; font-size: 10px; }
 .artist-roster-count { display: flex; align-items: baseline; gap: 5px; padding: 0 17px 12px; color: var(--muted); }
 .artist-roster-count strong { color: var(--ink); font-family: "Plus Jakarta Sans", sans-serif; font-size: 16px; }
 .artist-roster-count span { font-size: 10px; }
 .artist-roster-list { min-height: 0; overflow-y: auto; border-top: 1px solid var(--line); overscroll-behavior: contain; }
-.artist-roster-row { appearance: none; width: 100%; display: grid; gap: 5px; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line); color: var(--ink); background: transparent; text-align: left; }
+.artist-roster-row-wrap { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: stretch; border-bottom: 1px solid var(--line); }
+.artist-roster-row { appearance: none; width: 100%; min-width: 0; display: grid; gap: 5px; padding: 14px 16px 14px 4px; border: 0; color: var(--ink); background: transparent; text-align: left; }
 .artist-roster-row:hover { background: rgba(39,131,220,.055); }
-.artist-roster-row.selected { background: #eaf3ff; box-shadow: inset 3px 0 0 var(--forest); }
+.artist-roster-row-wrap.selected { background: #eaf3ff; box-shadow: inset 3px 0 0 var(--forest); }
+.artist-roster-select { position: relative; display: grid; place-items: center; cursor: pointer; }
+.artist-roster-select input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.artist-roster-select > span { width: 16px; height: 16px; display: grid; place-items: center; border: 1px solid rgba(48,68,84,.28); border-radius: 5px; background: rgba(255,255,255,.82); }
+.artist-roster-select input:checked + span { border-color: var(--forest); background: var(--forest); box-shadow: inset 0 0 0 3px white; }
+.artist-roster-select input:focus-visible + span { outline: 3px solid rgba(2,116,222,.18); outline-offset: 2px; }
 .artist-roster-row-heading { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .artist-roster-row-heading > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: "Plus Jakarta Sans", sans-serif; font-size: 14px; }
 .artist-roster-row-heading .status { padding: 4px 7px; font-size: 8px; }
@@ -590,7 +613,20 @@ tr:last-child td { border-bottom: 0; }
 .artist-roster-flags small { padding: 4px 6px; border-radius: 999px; color: #565656; background: #e9e9e9; font-size: 8px; font-weight: 700; }
 .artist-roster-flags small.approved { color: #1f684c; background: #dcebe5; }
 .artist-roster-flags small.not-approved { color: #76501c; background: #f5ead7; }
+.artist-owed-chip { flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; color: #9a3f35; background: #fae5e1; font-size: 8px; font-weight: 800; }
+.artist-bulk-toolbar { display: grid; gap: 8px; padding: 11px 14px; border-top: 1px solid var(--line); background: #eaf3ff; }
+.artist-bulk-toolbar > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.artist-bulk-toolbar > div:first-child strong { font-size: 11px; }
+.artist-bulk-toolbar button { appearance: none; min-height: 30px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: rgba(255,255,255,.84); font-size: 8px; font-weight: 750; }
+.artist-bulk-toolbar > div:first-child button { min-height: auto; padding: 0; border: 0; color: var(--forest); background: transparent; }
+.artist-bulk-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+.artist-bulk-residency { flex: 1 0 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; }
+.artist-bulk-residency select { min-width: 0; min-height: 32px; padding: 6px 28px 6px 8px; border-radius: 9px; font-size: 8px; }
+.artist-roster-message { margin: 0; border-radius: 0; font-size: 10px; }
 .artist-list-empty { padding: 28px 18px; font-size: 12px; }
+.artist-list-empty p { margin: 0 0 8px; }
+.artist-list-empty > div { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--muted); font-size: 9px; }
+.artist-list-empty button { appearance: none; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--forest); background: white; font-size: 8px; font-weight: 750; }
 .artist-detail-panel { min-height: 680px; padding: 24px; }
 .artist-detail-empty { min-height: 630px; display: grid; place-content: center; justify-items: center; padding: 40px; text-align: center; }
 .artist-detail-empty > span { width: 54px; height: 54px; display: grid; place-items: center; margin-bottom: 15px; border-radius: 16px; color: white; background: linear-gradient(145deg, #318fe7, #0264c1); font-weight: 800; }
@@ -602,6 +638,13 @@ tr:last-child td { border-bottom: 0; }
 .artist-detail-header p:not(.eyebrow) { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 .artist-detail-actions { display: flex; align-items: center; gap: 9px; }
 .artist-detail-actions .button { padding: 9px 14px; font-size: 11px; }
+.artist-archived-status { padding: 6px 9px; border-radius: 999px; color: #76501c; background: #f5ead7; font-size: 9px; font-weight: 800; }
+.artist-residency-access { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 17px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 15px; background: rgba(39,131,220,.045); }
+.artist-residency-access .eyebrow { margin: 0 0 7px; font-size: 8px; }
+.artist-residency-access .button { flex: 0 0 auto; min-height: 36px; padding: 8px 11px; font-size: 9px; }
+.artist-residency-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.artist-residency-chips span { padding: 6px 8px; border: 1px solid rgba(2,116,222,.16); border-radius: 999px; color: var(--forest); background: rgba(255,255,255,.72); font-size: 9px; font-weight: 750; }
+.artist-residency-chips small { color: var(--muted); font-size: 10px; }
 .artist-owed-total { display: grid; gap: 4px; margin: 18px 0; padding: 20px 22px; border-radius: 19px; color: white; background: linear-gradient(135deg, #071a31, #0e3c68); box-shadow: 0 16px 38px rgba(7,26,49,.16); }
 .artist-owed-total > span { color: rgba(255,255,255,.62); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .artist-owed-total > strong { font-family: "Plus Jakarta Sans", sans-serif; font-size: clamp(34px, 5vw, 52px); letter-spacing: -.055em; }
@@ -658,6 +701,19 @@ tr:last-child td { border-bottom: 0; }
 .artist-editor-grid .wide { grid-column: 1 / -1; }
 .artist-editor-grid label span { font-weight: 500; }
 .artist-editor-actions { display: flex; justify-content: flex-end; gap: 9px; padding: 15px 24px; border-top: 1px solid var(--line); background: rgba(255,255,255,.94); }
+.artist-create-drawer { width: min(620px, 100%); }
+.artist-residency-drawer { width: min(520px, 100%); }
+.artist-residency-options { display: grid; gap: 8px; }
+.artist-residency-options > label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 11px; padding: 13px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.68); cursor: pointer; }
+.artist-residency-options input { width: 17px; height: 17px; min-height: 0; }
+.artist-residency-options label > span { min-width: 0; display: grid; gap: 3px; }
+.artist-residency-options strong { font-size: 12px; }
+.artist-residency-options small { color: var(--muted); font-size: 9px; }
+.artist-record-controls { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(235,239,242,.54); }
+.artist-record-controls .eyebrow { margin: 0 0 5px; font-size: 8px; }
+.artist-record-controls h3 { font-size: 14px; }
+.artist-record-controls p:not(.eyebrow) { max-width: 580px; margin: 5px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.artist-record-controls .button { flex: 0 0 auto; min-height: 36px; padding: 8px 11px; font-size: 9px; }
 
 .payout-page-header { margin-bottom: 22px; }
 .payout-page-header h1 { margin-bottom: 9px; }
@@ -838,6 +894,11 @@ tr:last-child td { border-bottom: 0; }
   .artist-roster-panel { position: static; max-height: 440px; }
   .artist-detail-panel { min-height: 560px; padding: 18px; }
   .artist-detail-empty { min-height: 500px; }
+  .artist-roster-toolbar-heading, .artist-residency-access, .artist-record-controls { align-items: stretch; flex-direction: column; }
+  .artist-roster-toolbar-heading .button, .artist-residency-access .button, .artist-record-controls .button { width: 100%; }
+  .artist-roster-sort { align-items: stretch; flex-direction: column; }
+  .artist-roster-sort > span { padding-bottom: 0; }
+  .artist-roster-sort select { width: 100%; }
   .artist-booking-layout, .artist-detail-info-grid { grid-template-columns: 1fr; }
   .artist-editor-drawer { width: 100%; }
   .artist-editor-heading, .artist-editor-scroll, .artist-editor-actions { padding-inline: 18px; }

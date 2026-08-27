@@ -1,12 +1,26 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import { updateArtistAction, type ResidencyActionState } from "@/app/app/actions";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  bulkUpdateArtistsAction,
+  createArtistLookupAction,
+  updateArtistAction,
+  updateArtistResidenciesAction,
+  type ArtistRosterOperation,
+  type ResidencyActionState,
+} from "@/app/app/actions";
 import { Status } from "@/components/format";
-import type { getArtistLookupData } from "@/data/internal";
+import type { getArtistLookupData, getResidencyList } from "@/data/internal";
+import {
+  artistRosterCounts,
+  filterAndSortArtistRoster,
+  type ArtistRosterSort,
+  type ArtistRosterView,
+} from "@/domain/artist-roster";
 import { monthGrid, monthLabel, shiftMonthKey } from "@/lib/calendar";
 
 type ArtistRow = Awaited<ReturnType<typeof getArtistLookupData>>[number];
+type ResidencyRow = Awaited<ReturnType<typeof getResidencyList>>[number];
 const initialActionState: ResidencyActionState = { status: "idle", message: "" };
 const weekdayLabels = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -40,49 +54,149 @@ function ArtistBookingCalendar({ artistId, bookings }: { artistId: string; booki
   </div>;
 }
 
-export function ArtistLookup({ artists, residencyName }: { artists: ArtistRow[]; residencyName?: string }) {
+export function ArtistLookup({ artists, residencies }: { artists: ArtistRow[]; residencies: ResidencyRow[] }) {
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<ArtistRosterView>("active");
+  const [sort, setSort] = useState<ArtistRosterSort>("name_asc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [managingResidencies, setManagingResidencies] = useState(false);
+  const [residencySelection, setResidencySelection] = useState<Set<string>>(new Set());
+  const [bulkResidencyId, setBulkResidencyId] = useState(residencies[0]?.id ?? "");
+  const [rosterState, setRosterState] = useState<ResidencyActionState>(initialActionState);
+  const [rosterPending, startRosterTransition] = useTransition();
   const selected = artists.find((artist) => artist.id === selectedId) ?? null;
-  const filteredArtists = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return normalized ? artists.filter((artist) => artist.stageName.toLowerCase().includes(normalized) || artist.fullName.toLowerCase().includes(normalized)) : artists;
-  }, [artists, query]);
+  const counts = useMemo(() => artistRosterCounts(artists), [artists]);
+  const filteredArtists = useMemo(() => filterAndSortArtistRoster(artists, view, query, sort), [artists, query, sort, view]);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const searchMatchesOutsideView = useMemo(() => normalizedQuery ? artists.filter((artist) => (
+    artist.stageName.toLocaleLowerCase().includes(normalizedQuery)
+    || artist.fullName.toLocaleLowerCase().includes(normalizedQuery)
+  ) && !filteredArtists.some((visible) => visible.id === artist.id)) : [], [artists, filteredArtists, normalizedQuery]);
+
   const saveArtist = async (previous: ResidencyActionState, formData: FormData) => {
     const result = await updateArtistAction(previous, formData);
     if (result.status === "success") setEditing(false);
     return result;
   };
-  const [state, formAction, pending] = useActionState(saveArtist, initialActionState);
+  const saveNewArtist = async (previous: ResidencyActionState, formData: FormData) => {
+    const result = await createArtistLookupAction(previous, formData);
+    if (result.status === "success") setCreating(false);
+    return result;
+  };
+  const [editState, editAction, editPending] = useActionState(saveArtist, initialActionState);
+  const [createState, createAction, createPending] = useActionState(saveNewArtist, initialActionState);
 
   useEffect(() => {
-    if (!editing) return;
+    if (!editing && !creating && !managingResidencies) return;
     const priorOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setEditing(false); };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setEditing(false);
+      setCreating(false);
+      setManagingResidencies(false);
+    };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = priorOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [editing]);
+  }, [creating, editing, managingResidencies]);
+
+  function changeView(nextView: ArtistRosterView) {
+    setView(nextView);
+    setSort(nextView === "owed" ? "owed_desc" : "name_asc");
+    setSelectedId(null);
+    setSelectedIds(new Set());
+    setRosterState(initialActionState);
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function confirmSensitiveChange(operation: ArtistRosterOperation, ids: string[]) {
+    if (operation !== "inactive" && operation !== "archive") return true;
+    const affected = artists.filter((artist) => ids.includes(artist.id));
+    const upcoming = affected.reduce((sum, artist) => sum + artist.upcomingBookings.length, 0);
+    const owed = affected.reduce((sum, artist) => sum + artist.totalOutstandingOwedCents, 0);
+    if (!upcoming && !owed && operation === "inactive") return true;
+    const details = [upcoming ? `${upcoming} upcoming booking${upcoming === 1 ? "" : "s"}` : "", owed ? `${currency(owed)} outstanding` : ""].filter(Boolean).join(" and ");
+    return window.confirm(`${operation === "archive" ? "Archive" : "Set Inactive"} ${affected.length} artist${affected.length === 1 ? "" : "s"}?${details ? ` They currently have ${details}.` : ""} Existing bookings, payouts, and history will be preserved.`);
+  }
+
+  function runBulk(operation: ArtistRosterOperation, ids = [...selectedIds], residencyId?: string) {
+    if (!ids.length || !confirmSensitiveChange(operation, ids)) return;
+    startRosterTransition(async () => {
+      const result = await bulkUpdateArtistsAction({ talentIds: ids, operation, residencyId });
+      setRosterState(result);
+      if (result.status === "success") {
+        setSelectedIds(new Set());
+        if (operation !== "add_to_residency") setSelectedId(null);
+      }
+    });
+  }
+
+  function openResidencyManager() {
+    if (!selected) return;
+    setResidencySelection(new Set(selected.approvedResidencies.map((residency) => residency.id)));
+    setRosterState(initialActionState);
+    setManagingResidencies(true);
+  }
+
+  function saveResidencies() {
+    if (!selected) return;
+    const removedIds = selected.approvedResidencies.map((residency) => residency.id).filter((id) => !residencySelection.has(id));
+    const affectedBookings = selected.upcomingBookings.filter((booking) => removedIds.includes(booking.residencyId));
+    if (affectedBookings.length && !window.confirm(`${selected.stageName} has ${affectedBookings.length} upcoming booking${affectedBookings.length === 1 ? "" : "s"} in the Residency access being removed. The bookings will remain, but this artist will no longer appear for new selections. Continue?`)) return;
+    startRosterTransition(async () => {
+      const result = await updateArtistResidenciesAction({ talentId: selected.id, residencyIds: [...residencySelection] });
+      setRosterState(result);
+      if (result.status === "success") setManagingResidencies(false);
+    });
+  }
+
+  const tabs: Array<{ id: ArtistRosterView; label: string }> = [
+    { id: "active", label: "Active" },
+    { id: "owed", label: "Owed" },
+    { id: "inactive", label: "Inactive" },
+    { id: "archived", label: "Archived" },
+  ];
 
   return <div className="artist-lookup-shell">
     <aside className="artist-roster-panel">
-      <div className="artist-search-field"><label htmlFor="artist-lookup-search">Search artists</label><div><span aria-hidden="true">⌕</span><input id="artist-lookup-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by artist name" /></div></div>
-      <div className="artist-roster-count"><strong>{filteredArtists.length}</strong><span>{filteredArtists.length === 1 ? "artist" : "artists"}</span></div>
-      <div className="artist-roster-list">{filteredArtists.map((artist) => <button className={`artist-roster-row ${selectedId === artist.id ? "selected" : ""}`} type="button" onClick={() => { setSelectedId(artist.id); setEditing(false); }} key={artist.id}>
-        <span className="artist-roster-row-heading"><strong>{artist.stageName}</strong><Status value={artist.talentStatus} /></span>
-        <span className="artist-roster-meta">{artist.homeMarket || "Market not set"}</span>
-        <span className="artist-roster-genres">{artist.genres.join(" · ") || "Genres not set"}</span>
-        <span className="artist-roster-flags"><small>{artist.rosterStatus === "ready" ? "Roster ready" : "Needs review"}</small>{artist.approvedForCurrentResidency === null ? <small>{artist.approvedResidencies.length} Residency list{artist.approvedResidencies.length === 1 ? "" : "s"}</small> : <small className={artist.approvedForCurrentResidency ? "approved" : "not-approved"}>{artist.approvedForCurrentResidency ? `Approved for ${residencyName}` : `Not approved for ${residencyName}`}</small>}</span>
-      </button>)}{!filteredArtists.length ? <div className="empty artist-list-empty">No artists match “{query}”.</div> : null}</div>
+      <div className="artist-roster-toolbar">
+        <div className="artist-roster-toolbar-heading"><div><p className="eyebrow">Shared roster</p><strong>Find an artist</strong></div><button className="button secondary" type="button" onClick={() => setCreating(true)}>+ New Artist</button></div>
+        <div className="artist-search-field"><label htmlFor="artist-lookup-search">Search artists</label><div><span aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg></span><input id="artist-lookup-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by artist name" /></div></div>
+        <div className="artist-roster-tabs" role="tablist" aria-label="Artist status"><div>{tabs.map((tab) => <button className={view === tab.id ? "active" : ""} type="button" role="tab" aria-selected={view === tab.id} onClick={() => changeView(tab.id)} key={tab.id}><span>{tab.label}</span><strong>{counts[tab.id]}</strong></button>)}</div></div>
+        <div className="artist-roster-sort"><span><strong>{filteredArtists.length}</strong> {filteredArtists.length === 1 ? "artist" : "artists"}</span><label>Sort<select value={sort} onChange={(event) => setSort(event.target.value as ArtistRosterSort)}><option value="name_asc">Name A–Z</option><option value="name_desc">Name Z–A</option><option value="owed_desc">Amount owed</option><option value="booking_asc">Next booking</option></select></label></div>
+      </div>
+
+      {selectedIds.size ? <div className="artist-bulk-toolbar" aria-live="polite"><div><strong>{selectedIds.size} selected</strong><button type="button" onClick={() => setSelectedIds(new Set())}>Clear</button></div><div className="artist-bulk-actions">{view === "archived" ? <button type="button" onClick={() => runBulk("restore")} disabled={rosterPending}>Restore</button> : <><button type="button" onClick={() => runBulk("active")} disabled={rosterPending}>Set Active</button><button type="button" onClick={() => runBulk("inactive")} disabled={rosterPending}>Set Inactive</button><button type="button" onClick={() => runBulk("archive")} disabled={rosterPending}>Archive</button>{residencies.length ? <span className="artist-bulk-residency"><select aria-label="Residency for selected artists" value={bulkResidencyId} onChange={(event) => setBulkResidencyId(event.target.value)}>{residencies.map((residency) => <option value={residency.id} key={residency.id}>{residency.name}</option>)}</select><button type="button" onClick={() => runBulk("add_to_residency", [...selectedIds], bulkResidencyId)} disabled={rosterPending || !bulkResidencyId}>Add to Residency</button></span> : null}</>}</div></div> : null}
+      {rosterState.status !== "idle" ? <p className={`artist-roster-message ${rosterState.status === "error" ? "error" : "success"}`} aria-live="polite">{rosterState.message}</p> : null}
+
+      <div className="artist-roster-list">{filteredArtists.map((artist) => <div className={`artist-roster-row-wrap ${selectedId === artist.id ? "selected" : ""}`} key={artist.id}>
+        <label className="artist-roster-select"><input type="checkbox" checked={selectedIds.has(artist.id)} onChange={() => toggleSelected(artist.id)} aria-label={`Select ${artist.stageName}`} /><span aria-hidden="true" /></label>
+        <button className="artist-roster-row" type="button" onClick={() => { setSelectedId(artist.id); setEditing(false); }}>
+          <span className="artist-roster-row-heading"><strong>{artist.stageName}</strong>{artist.totalOutstandingOwedCents > 0 ? <small className="artist-owed-chip">Owed {currency(artist.totalOutstandingOwedCents)}</small> : null}</span>
+          {artist.homeMarket ? <span className="artist-roster-meta">{artist.homeMarket}</span> : null}
+        </button>
+      </div>)}{!filteredArtists.length ? <div className="empty artist-list-empty"><p>No {view} artists match{query ? ` “${query}”` : ""}.</p>{searchMatchesOutsideView.length ? <div><span>{searchMatchesOutsideView.length} match{searchMatchesOutsideView.length === 1 ? " exists" : "es exist"} in another view.</span>{searchMatchesOutsideView.some((artist) => artist.archivedAt) ? <button type="button" onClick={() => changeView("archived")}>Search Archived</button> : null}{searchMatchesOutsideView.some((artist) => !artist.archivedAt && artist.talentStatus === "inactive") ? <button type="button" onClick={() => changeView("inactive")}>Search Inactive</button> : null}</div> : null}</div> : null}</div>
     </aside>
 
     <section className="artist-detail-panel">
-      {!selected ? <div className="artist-detail-empty"><span>HFY</span><h2>Select an artist</h2><p>Choose someone from the roster to see what they are owed, upcoming bookings, contact information, and payment details.</p></div> : <>
-        <header className="artist-detail-header"><div><p className="eyebrow">Artist record</p><h2>{selected.stageName}</h2>{selected.fullName ? <p>{selected.fullName}</p> : null}</div><div className="artist-detail-actions"><Status value={selected.talentStatus} /><button className="button secondary" type="button" onClick={() => setEditing(true)}>Edit Artist</button></div></header>
+      {!selected ? <div className="artist-detail-empty"><span>HFY</span><h2>Select an artist</h2><p>Choose someone from the roster to see what they are owed, upcoming bookings, Residency access, contact information, and payment details.</p></div> : <>
+        <header className="artist-detail-header"><div><p className="eyebrow">Artist record</p><h2>{selected.stageName}</h2>{selected.fullName ? <p>{selected.fullName}</p> : null}</div><div className="artist-detail-actions">{selected.archivedAt ? <span className="artist-archived-status">Archived</span> : <Status value={selected.talentStatus} />}<button className="button secondary" type="button" onClick={() => setEditing(true)}>Edit Artist</button></div></header>
+
+        <section className="artist-residency-access"><div><p className="eyebrow">Residency access</p><div className="artist-residency-chips">{selected.approvedResidencies.length ? selected.approvedResidencies.map((residency) => <span key={residency.id}>{residency.name}</span>) : <small>Not currently available in any Residency.</small>}</div></div><button className="button secondary" type="button" onClick={openResidencyManager}>{selected.approvedResidencies.length ? "Manage Residencies" : "Add to Residency"}</button></section>
 
         <section className="artist-owed-total"><span>Total outstanding owed</span><strong>{currency(selected.totalOutstandingOwedCents)}</strong><small>{selected.outstandingAssignments.length ? `${selected.outstandingAssignments.length} HFY OS unpaid Assignment${selected.outstandingAssignments.length === 1 ? "" : "s"}` : "No HFY OS ready-to-pay Assignments"}{selected.legacyOutstandingOwedCents ? ` · Includes ${currency(selected.legacyOutstandingOwedCents)} imported from Airtable` : ""}</small></section>
 
@@ -95,10 +209,11 @@ export function ArtistLookup({ artists, residencyName }: { artists: ArtistRow[];
           <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Payment details</p><h3>{selected.paymentProfile?.paymentMethod || "Not configured"}</h3></div></div><dl className="artist-definition-list"><div><dt>Zelle email</dt><dd>{selected.paymentProfile?.zelleEmail || "—"}</dd></div><div><dt>Zelle phone</dt><dd>{selected.paymentProfile?.zellePhone || "—"}</dd></div><div><dt>ACH account</dt><dd>{selected.paymentProfile?.lastFour ? `Ending in ${selected.paymentProfile.lastFour}` : "—"}</dd></div><div><dt>W-9</dt><dd>{selected.hasW9 ? "On file" : "Not on file"}</dd></div></dl></section>
         </div>
         {selected.airtableImportedAt ? <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Historical snapshot</p><h3>Airtable record</h3></div></div><dl className="artist-definition-list"><div><dt>Total earnings (all time)</dt><dd>{currency(selected.legacyTotalEarningsCents)}</dd></div><div><dt>Airtable roster status</dt><dd>{selected.airtableRosterStatusLabel || "Blank"}</dd></div><div><dt>Airtable talent status</dt><dd>{selected.airtableTalentStatusLabel || "Blank"}</dd></div><div><dt>Imported</dt><dd>{new Date(selected.airtableImportedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</dd></div><div><dt>Upcoming-bookings snapshot</dt><dd>{selected.legacyUpcomingBookings || "None recorded at import"}</dd></div></dl></section> : null}
+        <section className="artist-record-controls"><div><p className="eyebrow">Record controls</p><h3>{selected.archivedAt ? "Restore this artist" : "Archive this artist"}</h3><p>{selected.archivedAt ? "Restoring returns the artist to Inactive so you can review them before making them bookable." : "Archiving removes the artist from standard lookup and future booking selections without deleting history."}</p></div><button className="button secondary" type="button" onClick={() => runBulk(selected.archivedAt ? "restore" : "archive", [selected.id])} disabled={rosterPending}>{selected.archivedAt ? "Restore Artist" : "Archive Artist"}</button></section>
       </>}
     </section>
 
-    {editing && selected ? <div className="artist-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setEditing(false); }}><aside className="artist-editor-drawer" role="dialog" aria-modal="true" aria-labelledby="artist-editor-title"><form action={formAction} className="artist-editor-form">
+    {editing && selected ? <div className="artist-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setEditing(false); }}><aside className="artist-editor-drawer" role="dialog" aria-modal="true" aria-labelledby="artist-editor-title"><form action={editAction} className="artist-editor-form">
       <input name="talentId" type="hidden" value={selected.id} />
       <header className="artist-editor-heading"><div><p className="eyebrow">Full Talent record</p><h2 id="artist-editor-title">Edit {selected.stageName}</h2></div><button className="quick-modal-close" type="button" aria-label="Close artist editor" onClick={() => setEditing(false)}>×</button></header>
       <div className="artist-editor-scroll">
@@ -106,9 +221,21 @@ export function ArtistLookup({ artists, residencyName }: { artists: ArtistRow[];
         <section><h3>Roster</h3><div className="artist-editor-grid"><div className="field wide"><label>Genres <span>comma separated</span></label><input name="genres" defaultValue={selected.genres.join(", ")} /></div><div className="field"><label>Priority</label><input name="priority" type="number" min="1" max="5" defaultValue={selected.priority ?? ""} /></div><div className="field"><label>Roster status</label><select name="rosterStatus" defaultValue={selected.rosterStatus}><option value="needs_review">Needs review</option><option value="ready">Ready</option></select></div><div className="field"><label>Talent status</label><select name="talentStatus" defaultValue={selected.talentStatus}><option value="active">Active</option><option value="inactive">Inactive</option></select></div><div className="field wide"><label>Talent notes</label><textarea name="talentNotes" rows={4} defaultValue={selected.talentNotes} /></div></div></section>
         <section><h3>Payment information</h3><div className="artist-editor-grid"><div className="field"><label>Payment method</label><input name="paymentMethod" defaultValue={selected.paymentProfile?.paymentMethod ?? ""} placeholder="Zelle, ACH, check…" /></div><div className="field"><label>Zelle email</label><input name="zelleEmail" type="email" defaultValue={selected.paymentProfile?.zelleEmail ?? ""} /></div><div className="field"><label>Zelle phone</label><input name="zellePhone" defaultValue={selected.paymentProfile?.zellePhone ?? ""} /></div><div className="field"><label>ACH last four</label><input name="lastFour" inputMode="numeric" maxLength={4} pattern="[0-9]{4}" defaultValue={selected.paymentProfile?.lastFour ?? ""} /></div></div><p className="privacy-note">Full routing and account numbers remain encrypted and are never displayed in this interface.</p></section>
         <section><h3>Record status</h3><dl className="artist-definition-list"><div><dt>W-9</dt><dd>{selected.hasW9 ? "On file" : "Not on file"}</dd></div><div><dt>Documents</dt><dd>{selected.documentCount}</dd></div><div><dt>Approved Residency lists</dt><dd>{selected.approvedResidencies.map((residency) => residency.name).join(", ") || "None"}</dd></div></dl></section>
-        {state.status !== "idle" ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}
+        {editState.status !== "idle" ? <p className={editState.status === "error" ? "error" : "success"} aria-live="polite">{editState.message}</p> : null}
       </div>
-      <footer className="artist-editor-actions"><button className="button secondary" type="button" onClick={() => setEditing(false)}>Cancel</button><button className="button" type="submit" disabled={pending}>{pending ? "Saving…" : "Save Artist"}</button></footer>
+      <footer className="artist-editor-actions"><button className="button secondary" type="button" onClick={() => setEditing(false)}>Cancel</button><button className="button" type="submit" disabled={editPending}>{editPending ? "Saving…" : "Save Artist"}</button></footer>
     </form></aside></div> : null}
+
+    {creating ? <div className="artist-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setCreating(false); }}><aside className="artist-editor-drawer artist-create-drawer" role="dialog" aria-modal="true" aria-labelledby="artist-create-title"><form action={createAction} className="artist-editor-form">
+      <header className="artist-editor-heading"><div><p className="eyebrow">Shared roster</p><h2 id="artist-create-title">New Artist</h2></div><button className="quick-modal-close" type="button" aria-label="Close new artist form" onClick={() => setCreating(false)}>×</button></header>
+      <div className="artist-editor-scroll"><section><h3>Identity and contact</h3><div className="artist-editor-grid"><div className="field"><label>Stage name</label><input name="stageName" required autoFocus /></div><div className="field"><label>Full name</label><input name="fullName" /></div><div className="field"><label>Email</label><input name="email" type="email" /></div><div className="field"><label>Phone</label><input name="phone" /></div><div className="field"><label>Home market</label><input name="homeMarket" /></div><div className="field"><label>Priority</label><input name="priority" type="number" min="1" max="5" defaultValue="3" /></div><div className="field wide"><label>Genres <span>comma separated</span></label><input name="genres" /></div></div></section>{createState.status !== "idle" ? <p className={createState.status === "error" ? "error" : "success"} aria-live="polite">{createState.message}</p> : null}</div>
+      <footer className="artist-editor-actions"><button className="button secondary" type="button" onClick={() => setCreating(false)}>Cancel</button><button className="button" type="submit" disabled={createPending}>{createPending ? "Adding…" : "Add Artist"}</button></footer>
+    </form></aside></div> : null}
+
+    {managingResidencies && selected ? <div className="artist-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setManagingResidencies(false); }}><aside className="artist-editor-drawer artist-residency-drawer" role="dialog" aria-modal="true" aria-labelledby="artist-residency-title"><div className="artist-editor-form">
+      <header className="artist-editor-heading"><div><p className="eyebrow">Residency access</p><h2 id="artist-residency-title">{selected.stageName}</h2><p>Choose where this artist should appear for new bookings.</p></div><button className="quick-modal-close" type="button" aria-label="Close Residency access" onClick={() => setManagingResidencies(false)}>×</button></header>
+      <div className="artist-editor-scroll"><div className="artist-residency-options">{residencies.map((residency) => { const bookingCount = selected.upcomingBookings.filter((booking) => booking.residencyId === residency.id).length; return <label key={residency.id}><input type="checkbox" checked={residencySelection.has(residency.id)} onChange={() => setResidencySelection((current) => { const next = new Set(current); if (next.has(residency.id)) next.delete(residency.id); else next.add(residency.id); return next; })} /><span><strong>{residency.name}</strong><small>{residency.cityState || "Location not set"}{bookingCount ? ` · ${bookingCount} upcoming booking${bookingCount === 1 ? "" : "s"}` : ""}</small></span></label>; })}{!residencies.length ? <p className="artist-section-empty">No active Residencies are available yet.</p> : null}</div>{rosterState.status === "error" ? <p className="error" aria-live="polite">{rosterState.message}</p> : null}<p className="privacy-note">Removing access never deletes existing bookings, payout history, or invoices.</p></div>
+      <footer className="artist-editor-actions"><button className="button secondary" type="button" onClick={() => setManagingResidencies(false)}>Cancel</button><button className="button" type="button" onClick={saveResidencies} disabled={rosterPending}>{rosterPending ? "Saving…" : "Save Residency Access"}</button></footer>
+    </div></aside></div> : null}
   </div>;
 }

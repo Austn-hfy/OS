@@ -807,11 +807,16 @@
 .hfy-style-system .artist-lookup-shell { gap: var(--hfy-space-4); }
 .hfy-style-system .artist-roster-panel { border-radius: var(--hfy-radius-card); }
 .hfy-style-system .artist-search-field { padding: var(--hfy-space-4) var(--hfy-space-4) var(--hfy-space-3); }
+.hfy-style-system .artist-roster-toolbar .artist-search-field { padding: 0; }
 .hfy-style-system .artist-search-field input { background: rgba(251, 252, 253, 0.86); }
+.hfy-style-system .artist-roster-tabs > div { border-color: var(--hfy-line); background: rgba(216, 225, 231, 0.5); }
+.hfy-style-system .artist-roster-tabs button { color: var(--hfy-muted); }
+.hfy-style-system .artist-roster-tabs button.active { color: var(--hfy-action-ink); background: rgba(251, 252, 253, 0.9); box-shadow: inset 0 -2px var(--hfy-action-strong), inset 0 1px var(--hfy-inset-highlight); }
+.hfy-style-system .artist-roster-sort select { background: rgba(251, 252, 253, 0.9); }
 .hfy-style-system .artist-roster-list { border-top-color: var(--hfy-line); }
-.hfy-style-system .artist-roster-row { border-bottom-color: var(--hfy-line); }
+.hfy-style-system .artist-roster-row-wrap { border-bottom-color: var(--hfy-line); }
 .hfy-style-system .artist-roster-row:hover { background: rgba(139, 199, 241, 0.09); }
-.hfy-style-system .artist-roster-row.selected { color: var(--hfy-action-ink); background: var(--hfy-action-soft); box-shadow: inset 3px 0 var(--hfy-action-strong); }
+.hfy-style-system .artist-roster-row-wrap.selected { color: var(--hfy-action-ink); background: var(--hfy-action-soft); box-shadow: inset 3px 0 var(--hfy-action-strong); }
 .hfy-style-system .artist-roster-row-heading > strong { font-family: var(--hfy-font-sans); font-size: 13px; }
 .hfy-style-system .artist-roster-flags small { color: var(--hfy-label); background: var(--hfy-slate-surface); }
 .hfy-style-system .artist-roster-flags small.approved { color: var(--hfy-success); background: var(--hfy-success-soft); }
@@ -825,6 +830,8 @@
 }
 .hfy-style-system .artist-detail-header { border-bottom-color: var(--hfy-line); }
 .hfy-style-system .artist-detail-header h2 { font-size: clamp(27px, 3.2vw, 39px); }
+.hfy-style-system .artist-residency-access { border-color: var(--hfy-line); background: rgba(139, 199, 241, 0.08); }
+.hfy-style-system .artist-residency-chips span { border-color: rgba(52, 127, 187, 0.18); color: var(--hfy-action-ink); background: rgba(251, 252, 253, 0.76); }
 .hfy-style-system .artist-owed-total { border-radius: var(--hfy-radius-card); }
 .hfy-style-system .artist-owed-total > strong { font-size: clamp(32px, 4.8vw, 48px); }
 .hfy-style-system .artist-detail-section { border-top-color: var(--hfy-line); }
@@ -835,6 +842,12 @@
 .hfy-style-system .artist-mini-day.booked { color: var(--hfy-action-ink); background: var(--hfy-action); box-shadow: 0 4px 9px rgba(52, 127, 187, 0.15); }
 .hfy-style-system .artist-mini-day > span { background: var(--hfy-ink-soft); }
 .hfy-style-system .artist-definition-list > div { border-bottom-color: var(--hfy-line); }
+.hfy-style-system .artist-bulk-toolbar { border-color: var(--hfy-line); background: var(--hfy-action-soft); }
+.hfy-style-system .artist-bulk-toolbar button { border-color: var(--hfy-line); color: var(--hfy-ink-soft); background: rgba(251, 252, 253, 0.86); }
+.hfy-style-system .artist-roster-select input:checked + span { border-color: var(--hfy-action-strong); background: var(--hfy-action-strong); }
+.hfy-style-system .artist-owed-chip { color: var(--hfy-error); background: var(--hfy-error-soft); }
+.hfy-style-system .artist-record-controls,
+.hfy-style-system .artist-residency-options > label { border-color: var(--hfy-line); background: var(--hfy-surface-nested); }
 
 /* Payouts */
 .hfy-style-system .payout-page-header { margin-bottom: var(--hfy-space-6); }

@@ -16,6 +16,7 @@ import { createResidencyDateBooking } from "@/services/residency-bookings";
 import { createShift } from "@/services/shifts";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
+export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_residency";
 
 function centsFromDollars(value: FormDataEntryValue | null): number {
   const amount = Number(value);
@@ -264,6 +265,15 @@ export async function createTalentAction(formData: FormData) {
   revalidatePath("/app/setup");
 }
 
+export async function createArtistLookupAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    await createTalentAction(formData);
+    return { status: "success", message: `${String(formData.get("stageName") ?? "Artist")} added to the shared roster.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to add this artist." };
+  }
+}
+
 export async function updateArtistAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
   try {
     const actor = await requireInternalActor();
@@ -335,6 +345,143 @@ export async function updateArtistAction(_previous: ResidencyActionState, formDa
     return { status: "success", message: `${parsed.stageName} saved.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to save this artist." };
+  }
+}
+
+export async function bulkUpdateArtistsAction(input: {
+  talentIds: string[];
+  operation: ArtistRosterOperation;
+  residencyId?: string;
+}): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      talentIds: z.array(z.uuid()).min(1).max(250).transform((ids) => [...new Set(ids)]),
+      operation: z.enum(["active", "inactive", "archive", "restore", "add_to_residency"]),
+      residencyId: z.uuid().optional(),
+    }).parse(input);
+    const database = getDb();
+    const artistRows = await database.select({ id: talent.id, stageName: talent.stageName, archivedAt: talent.archivedAt })
+      .from(talent)
+      .where(inArray(talent.id, parsed.talentIds));
+    if (artistRows.length !== parsed.talentIds.length) throw new Error("One or more artists could not be found.");
+
+    let residencyName = "";
+    if (parsed.operation === "add_to_residency") {
+      if (!parsed.residencyId) throw new Error("Choose a Residency first.");
+      const [residency] = await database.select({ id: residencies.id, name: residencies.name })
+        .from(residencies)
+        .where(and(eq(residencies.id, parsed.residencyId), eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
+        .limit(1);
+      if (!residency) throw new Error("Residency not found.");
+      if (artistRows.some((artist) => artist.archivedAt)) throw new Error("Restore archived artists before adding them to a Residency.");
+      residencyName = residency.name;
+    }
+
+    await database.transaction(async (tx) => {
+      if (parsed.operation === "active") {
+        await tx.update(talent).set({ talentStatus: "active", archivedAt: null, updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
+      } else if (parsed.operation === "inactive") {
+        await tx.update(talent).set({ talentStatus: "inactive", updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
+      } else if (parsed.operation === "archive") {
+        await tx.update(talent).set({ talentStatus: "inactive", archivedAt: new Date(), updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
+        await tx.update(residencyTalent).set({ active: false }).where(inArray(residencyTalent.talentId, parsed.talentIds));
+      } else if (parsed.operation === "restore") {
+        await tx.update(talent).set({ talentStatus: "inactive", archivedAt: null, updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
+      } else if (parsed.residencyId) {
+        await tx.insert(residencyTalent).values(parsed.talentIds.map((talentId) => ({
+          residencyId: parsed.residencyId!,
+          talentId,
+          approvedByUserId: actor.userId,
+          active: true,
+        }))).onConflictDoUpdate({
+          target: [residencyTalent.residencyId, residencyTalent.talentId],
+          set: { active: true, approvedByUserId: actor.userId },
+        });
+      }
+
+      await tx.insert(auditLog).values(parsed.talentIds.map((talentId) => ({
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: `talent_${parsed.operation}`,
+        entityType: "talent",
+        entityId: talentId,
+        residencyId: parsed.operation === "add_to_residency" ? parsed.residencyId : null,
+        details: { operation: parsed.operation, residencyName: residencyName || undefined },
+      })));
+    });
+
+    revalidatePath("/app/talent");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/setup");
+    const count = parsed.talentIds.length;
+    const subject = `${count} artist${count === 1 ? "" : "s"}`;
+    const message = parsed.operation === "add_to_residency"
+      ? `${subject} added to ${residencyName}.`
+      : parsed.operation === "active"
+        ? `${subject} set to Active.`
+        : parsed.operation === "inactive"
+          ? `${subject} set to Inactive.`
+          : parsed.operation === "archive"
+            ? `${subject} archived.`
+            : `${subject} restored as Inactive.`;
+    return { status: "success", message };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update the selected artists." };
+  }
+}
+
+export async function updateArtistResidenciesAction(input: {
+  talentId: string;
+  residencyIds: string[];
+}): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      talentId: z.uuid(),
+      residencyIds: z.array(z.uuid()).max(250).transform((ids) => [...new Set(ids)]),
+    }).parse(input);
+    const database = getDb();
+    const [artist] = await database.select({ id: talent.id, stageName: talent.stageName, archivedAt: talent.archivedAt })
+      .from(talent)
+      .where(eq(talent.id, parsed.talentId))
+      .limit(1);
+    if (!artist) throw new Error("Artist not found.");
+    if (artist.archivedAt && parsed.residencyIds.length) throw new Error("Restore this artist before adding Residency access.");
+
+    const validResidencies = parsed.residencyIds.length ? await database.select({ id: residencies.id })
+      .from(residencies)
+      .where(and(inArray(residencies.id, parsed.residencyIds), eq(residencies.active, true), eq(residencies.operatingMode, "operations"))) : [];
+    if (validResidencies.length !== parsed.residencyIds.length) throw new Error("One or more Residencies could not be found.");
+
+    await database.transaction(async (tx) => {
+      await tx.update(residencyTalent).set({ active: false }).where(eq(residencyTalent.talentId, parsed.talentId));
+      if (parsed.residencyIds.length) {
+        await tx.insert(residencyTalent).values(parsed.residencyIds.map((residencyId) => ({
+          residencyId,
+          talentId: parsed.talentId,
+          approvedByUserId: actor.userId,
+          active: true,
+        }))).onConflictDoUpdate({
+          target: [residencyTalent.residencyId, residencyTalent.talentId],
+          set: { active: true, approvedByUserId: actor.userId },
+        });
+      }
+      await tx.insert(auditLog).values({
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "talent_residencies_updated",
+        entityType: "talent",
+        entityId: parsed.talentId,
+        details: { residencyIds: parsed.residencyIds },
+      });
+    });
+    revalidatePath("/app/talent");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/setup");
+    return { status: "success", message: `${artist.stageName}'s Residency access was saved.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update Residency access." };
   }
 }
 

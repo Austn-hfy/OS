@@ -200,6 +200,7 @@ export const talent = pgTable("talent", {
   instagramHandle: text("instagram_handle").notNull().default(""),
   rosterStatus: rosterStatus("roster_status").notNull().default("needs_review"),
   talentStatus: talentStatus("talent_status").notNull().default("active"),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
   homeMarket: text("home_market").notNull().default(""),
   genres: text("genres").array().notNull().default(sql`'{}'::text[]`),
   priority: integer("priority"),
@@ -215,6 +216,7 @@ export const talent = pgTable("talent", {
 }, (table) => [
   uniqueIndex("talent_airtable_record_id_unique").on(table.airtableRecordId),
   index("talent_stage_name_idx").on(table.stageName),
+  index("talent_visibility_idx").on(table.archivedAt, table.talentStatus),
   check("talent_legacy_financials_nonnegative", sql`${table.legacyOutstandingOwedCents} >= 0 AND ${table.legacyTotalEarningsCents} >= 0`),
   check("talent_priority_range", sql`${table.priority} IS NULL OR (${table.priority} >= 1 AND ${table.priority} <= 5)`),
 ]);
