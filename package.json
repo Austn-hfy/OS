@@ -23,6 +23,7 @@
     "storage:export": "tsx scripts/export-storage.ts",
     "storage:verify": "tsx scripts/verify-storage-export.ts",
     "storage:restore": "tsx scripts/restore-storage.ts",
+    "talent:import-airtable": "tsx scripts/import-airtable-talent.ts",
     "pdf:sample": "tsx scripts/render-sample-invoice.ts"
   },
   "dependencies": {

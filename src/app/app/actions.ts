@@ -12,7 +12,6 @@ import { requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
 import { saveDaypart } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
-import { approveInvoice, sendApprovedInvoice } from "@/services/invoices";
 import { createResidencyDateBooking } from "@/services/residency-bookings";
 import { createShift } from "@/services/shifts";
 
@@ -752,6 +751,7 @@ export async function changeAssignmentPaidDateAction(_previous: ResidencyActionS
 export async function approveInvoiceAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
   try {
     const actor = await requireInternalActor();
+    const { approveInvoice } = await import("@/services/invoices");
     const result = await approveInvoice(actor, z.uuid().parse(formData.get("invoiceId")));
     revalidatePath("/app/invoices");
     revalidatePath("/app");
@@ -766,6 +766,7 @@ export async function approveInvoiceAction(_previous: ResidencyActionState, form
 export async function retryInvoiceSendAction(formData: FormData) {
   await requireInternalActor();
   try {
+    const { sendApprovedInvoice } = await import("@/services/invoices");
     await sendApprovedInvoice(z.uuid().parse(formData.get("invoiceId")));
   } catch {
     // The service writes an Attention item that is visible to the operator.

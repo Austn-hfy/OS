@@ -221,11 +221,13 @@ export async function getArtistLookupData(residencyId?: string) {
     const approvedResidencies = approvalRows.filter((approval) => approval.talentId === artist.id);
     const paymentProfile = paymentRows.find((profile) => profile.talentId === artist.id);
     const documents = documentRows.filter((document) => document.talentId === artist.id);
+    const liveOutstandingOwedCents = outstandingAssignments.reduce((sum, assignment) => sum + assignment.amountCents, 0);
     return {
       ...artist,
       approvedForCurrentResidency: residencyId ? approvedResidencies.some((approval) => approval.residencyId === residencyId) : null,
       approvedResidencies: approvedResidencies.map((approval) => ({ id: approval.residencyId, name: approval.residencyName })),
-      totalOutstandingOwedCents: outstandingAssignments.reduce((sum, assignment) => sum + assignment.amountCents, 0),
+      liveOutstandingOwedCents,
+      totalOutstandingOwedCents: liveOutstandingOwedCents + artist.legacyOutstandingOwedCents,
       outstandingAssignments,
       upcomingBookings,
       paymentProfile: paymentProfile ? {

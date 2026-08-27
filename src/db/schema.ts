@@ -192,6 +192,7 @@ export const residencyMemberships = pgTable("residency_memberships", {
 
 export const talent = pgTable("talent", {
   id: uuid("id").primaryKey().defaultRandom(),
+  airtableRecordId: text("airtable_record_id"),
   stageName: text("stage_name").notNull(),
   fullName: text("full_name").notNull().default(""),
   email: text("email").notNull().default(""),
@@ -203,9 +204,16 @@ export const talent = pgTable("talent", {
   genres: text("genres").array().notNull().default(sql`'{}'::text[]`),
   priority: integer("priority"),
   talentNotes: text("talent_notes").notNull().default(""),
+  legacyOutstandingOwedCents: integer("legacy_outstanding_owed_cents").notNull().default(0),
+  legacyTotalEarningsCents: integer("legacy_total_earnings_cents").notNull().default(0),
+  legacyOwedFrom: text("legacy_owed_from").notNull().default(""),
+  legacyUpcomingBookings: text("legacy_upcoming_bookings").notNull().default(""),
+  airtableImportedAt: timestamp("airtable_imported_at", { withTimezone: true }),
   ...timestamps,
 }, (table) => [
+  uniqueIndex("talent_airtable_record_id_unique").on(table.airtableRecordId),
   index("talent_stage_name_idx").on(table.stageName),
+  check("talent_legacy_financials_nonnegative", sql`${table.legacyOutstandingOwedCents} >= 0 AND ${table.legacyTotalEarningsCents} >= 0`),
   check("talent_priority_range", sql`${table.priority} IS NULL OR (${table.priority} >= 1 AND ${table.priority} <= 5)`),
 ]);
 
