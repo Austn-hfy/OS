@@ -17,7 +17,7 @@ export function ResidencyRateEditor({
 }) {
   const [state, action, pending] = useActionState(updateResidencyRatesAction, initialState);
 
-  return <form action={action} className="card selection-form residency-rate-editor">
+  return <form action={action} className="card residency-rate-editor">
     <input name="residencyId" type="hidden" value={residencyId} />
     <div><p className="eyebrow">Default rates</p><h2>Talent and client</h2><p className="subhead">Fallback hourly rates for new calendar work.</p></div>
     <div className="residency-rate-fields">

@@ -16,7 +16,7 @@ export function ResidencyProfileEditor({ residency }: {
   };
 }) {
   const [state, action, pending] = useActionState(updateResidencyProfileAction, initialState);
-  return <form action={action} className="card selection-form residency-profile-editor">
+  return <form action={action} className="card residency-profile-editor">
     <input name="residencyId" type="hidden" value={residency.id} />
     <div><p className="eyebrow">Residency profile</p><h2>Program details</h2><p className="subhead">The operating identity and internal context for this Residency.</p></div>
     <div className="residency-profile-fields">

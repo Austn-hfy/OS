@@ -1,6 +1,5 @@
 import { getSetupData } from "@/data/internal";
 import { getDaypartsForResidency } from "@/services/dayparts";
-import { PublicCalendarLinkManager } from "@/components/public-calendar-link-manager";
 import { DaypartManager } from "./daypart-manager";
 import { InvoiceBrandingSettings } from "./invoice-branding-settings";
 import { ApprovedDjManager } from "./approved-dj-manager";
@@ -29,7 +28,6 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
           <ResidencyRateEditor residencyId={selected.id} defaultTalentRateCents={selected.defaultTalentRateCents} clientHourlyRateCents={selected.clientHourlyRateCents} />
           <ApprovedDjManager residencyId={selected.id} artists={data.talent} approvedTalentIds={data.approvals.filter((approval) => approval.residencyId === selected.id).map((approval) => approval.talentId)} />
           <ResidencyContactsManager residencyId={selected.id} contacts={data.contacts.filter((contact) => contact.residencyId === selected.id)} />
-          <PublicCalendarLinkManager residencyId={selected.id} hasLink={selected.hasPublicCalendarLink} />
         </> : null}
 
       </section>
