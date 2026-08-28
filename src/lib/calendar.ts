@@ -1,5 +1,14 @@
 const MONTH_KEY = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
+export type CalendarTone = "blue" | "navy" | "sky" | "orange";
+
+export function calendarToneForSlot(name: string, fallback: CalendarTone = "navy"): CalendarTone {
+  const normalizedName = name.toLowerCase();
+  if (normalizedName.includes("pool")) return "blue";
+  if (normalizedName.includes("amigo")) return "orange";
+  return fallback;
+}
+
 export function currentMonthKey(date = new Date()): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }

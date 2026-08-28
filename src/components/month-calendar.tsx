@@ -2,7 +2,9 @@
 
 import type { CSSProperties } from "react";
 import type { SlotSchedulingStatus } from "@/domain/dayparts";
-import { monthGrid } from "@/lib/calendar";
+import { monthGrid, type CalendarTone } from "@/lib/calendar";
+
+export { calendarToneForSlot } from "@/lib/calendar";
 
 export type MonthCalendarEvent = {
   id: string;
@@ -15,14 +17,7 @@ export type MonthCalendarEvent = {
   schedulingStatus?: SlotSchedulingStatus;
 };
 
-export type MonthCalendarTone = "blue" | "navy" | "sky" | "orange";
-
-export function calendarToneForSlot(name: string, fallback: MonthCalendarTone = "navy"): MonthCalendarTone {
-  const normalizedName = name.toLowerCase();
-  if (normalizedName.includes("pool")) return "blue";
-  if (normalizedName.includes("amigo")) return "orange";
-  return fallback;
-}
+export type MonthCalendarTone = CalendarTone;
 
 const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

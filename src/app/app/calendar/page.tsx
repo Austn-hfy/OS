@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatTimeInput } from "@/components/format";
-import { MonthCalendar, calendarToneForSlot, type MonthCalendarEvent } from "@/components/month-calendar";
+import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { CalendarShareButton } from "@/components/calendar-share-button";
 import { getCalendarData, getDashboardData, getScheduleOccurrenceData, hasPublicCalendarLink } from "@/data/internal";
-import { monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
+import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
 import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { getActiveTalentLookup, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar } from "./residency-calendar";
