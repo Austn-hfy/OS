@@ -26,7 +26,7 @@ type EditorDraft = {
   name: string;
   room: string;
   color: string;
-  type: DaypartType;
+  type: DaypartType | null;
   billingMode: DaypartBillingMode;
   defaultTalentRate: string;
   activeUntil: string;
@@ -57,7 +57,7 @@ function blankDraft(options: { room?: string; weekday?: number; startMinute?: nu
     name: "",
     room: options.room ?? "",
     color: options.color ?? colorPresets[0],
-    type: "dj_artist",
+    type: null,
     billingMode: "billed_by_hfy",
     defaultTalentRate: "",
     activeUntil: "",
@@ -132,6 +132,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
 
   const payload = useMemo(() => {
     if (!draft) return "";
+    if (!draft.type) return "";
     return JSON.stringify({
       id: draft.id,
       residencyId,
@@ -256,7 +257,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                   key={daypart.id}
                 >
                   <strong>{daypart.name}</strong>
-                  <span>{formatLocalMinute(rule.startMinute)}–{formatLocalMinute(rule.endMinute)} · {daypart.billingMode === "tracking_only" || daypart.type === "house_activity" ? "Tracking only" : rule.defaultDjCount ? `${rule.defaultDjCount} talent target` : "Billed by HFY"}</span>
+                  <span>{formatLocalMinute(rule.startMinute)}–{formatLocalMinute(rule.endMinute)} · {daypart.type === "house_activity" ? "House activity" : daypart.billingMode === "tracking_only" ? "Tracking only" : rule.defaultDjCount ? `${rule.defaultDjCount} talent target` : "Billed by HFY"}</span>
                 </button>;
               })}
             </div>;
@@ -271,7 +272,8 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
               <input name="payload" type="hidden" value={payload} />
               <div className="daypart-editor-heading"><div><p className="eyebrow">{draft.id ? "Edit Daypart" : "New Daypart"}</p><h2 id="daypart-editor-title">{draft.id ? draft.name : "Add standing hours"}</h2></div><button className="quick-modal-close" type="button" aria-label="Close Daypart editor" onClick={() => setDraft(null)}>×</button></div>
               <div className="daypart-editor-scroll">
-                <div className="field"><label>Type</label><div className="daypart-type-options"><button className={draft.type === "dj_artist" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "dj_artist", billingMode: draft.billingMode || "billed_by_hfy" })}><strong>DJ / Artist</strong><small>Select registered talent from the roster and track their scheduled hours.</small></button><button className={draft.type === "house_activity" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "house_activity", billingMode: "tracking_only", defaultTalentRate: "", rules: draft.rules.map((rule) => ({ ...rule, defaultDjCount: "0" })) })}><strong>House Activity</strong><small>Schedule an activity such as Movie Night or Bingo without talent or financial records.</small></button></div></div>
+                <div className="field"><label>Type</label><div className="daypart-type-options"><button className={draft.type === "dj_artist" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "dj_artist", billingMode: "billed_by_hfy" })}><strong>DJ / Artist</strong><small>Select registered talent from the roster and track their scheduled hours.</small></button><button className={draft.type === "house_activity" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "house_activity", billingMode: "tracking_only", defaultTalentRate: "", rules: draft.rules.map((rule) => ({ ...rule, defaultDjCount: "0" })) })}><strong>House Activity</strong><small>Schedule an activity, optional host, or registered talent without financial records.</small></button></div></div>
+                {draft.type ? <>
                 {draft.type === "dj_artist" ? <div className="field"><label>Billing</label><div className="daypart-type-options"><button className={draft.billingMode === "billed_by_hfy" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "billed_by_hfy" })}><strong>Billed by HFY</strong><small>Creates the client billing record. Registered talent also receives an Assignment and Payout.</small></button><button className={draft.billingMode === "tracking_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "tracking_only", defaultTalentRate: "" })}><strong>Tracking only</strong><small>Keeps the registered artist on the calendar and in booking history without money records.</small></button></div></div> : null}
                 <div className="row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /></div><div className="field"><label>Room / space</label><input value={draft.room} onChange={(event) => setDraft({ ...draft, room: event.target.value })} placeholder="Amigo Room" required /></div></div>
                 <div className="daypart-definition-row">
@@ -291,10 +293,11 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                 </div>
                 {draft.type === "dj_artist" ? <p className="privacy-note">Talent count is optional. Leave it at 0 when the number of registered artists changes by date.</p> : <p className="privacy-note">House Activities never create Artist, Assignment, Payout, or Invoice records.</p>}
                 {draft.id ? <div className="daypart-danger-zone"><div><strong>Remove Daypart</strong><small>Unused Dayparts are deleted. Anything with scheduled or historical records is archived so its history stays intact.</small></div><button className="remove-dj-button" type="button" disabled={removePending} onClick={removeCurrentDaypart}>{removePending ? "Removing…" : "Delete / archive Daypart"}</button></div> : null}
+                </> : <div className="card empty daypart-type-gate">Choose DJ / Artist or House Activity to continue.</div>}
                 {state.status === "error" ? <p className="error" aria-live="polite">{state.message}</p> : null}
                 {removeState.status === "error" ? <p className="error" aria-live="polite">{removeState.message}</p> : null}
               </div>
-              <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button><button className="button" disabled={pending} type="submit">{pending ? "Saving…" : "Save Daypart"}</button></div>
+              <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button>{draft.type ? <button className="button" disabled={pending} type="submit">{pending ? "Saving…" : "Save Daypart"}</button> : null}</div>
             </form>
           </aside>
         </div>
