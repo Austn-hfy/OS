@@ -8,6 +8,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -151,12 +152,14 @@ export const residencies = pgTable("residencies", {
 export const publicCalendarLinks = pgTable("public_calendar_links", {
   residencyId: uuid("residency_id").primaryKey().references(() => residencies.id, { onDelete: "cascade" }),
   tokenHash: text("token_hash").notNull(),
+  scope: text("scope").$type<"all" | "selected">().notNull().default("all"),
   rotatedByUserId: uuid("rotated_by_user_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   rotatedAt: timestamp("rotated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("public_calendar_links_token_hash_unique").on(table.tokenHash),
   check("public_calendar_links_token_hash_valid", sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+  check("public_calendar_links_scope_valid", sql`${table.scope} IN ('all', 'selected')`),
 ]);
 
 export const dayparts = pgTable("dayparts", {
@@ -184,6 +187,15 @@ export const dayparts = pgTable("dayparts", {
     OR
     (${table.type} = 'dj_artist' AND ${table.billingMode} = 'billed_by_hfy')
   `),
+]);
+
+export const publicCalendarLinkDayparts = pgTable("public_calendar_link_dayparts", {
+  residencyId: uuid("residency_id").notNull().references(() => publicCalendarLinks.residencyId, { onDelete: "cascade" }),
+  daypartId: uuid("daypart_id").notNull().references(() => dayparts.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.residencyId, table.daypartId] }),
+  index("public_calendar_link_dayparts_daypart_idx").on(table.daypartId),
 ]);
 
 export const daypartDayRules = pgTable("daypart_day_rules", {

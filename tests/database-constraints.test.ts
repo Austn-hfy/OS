@@ -39,6 +39,8 @@ beforeAll(async () => {
   const artistArchive = await readFile(new URL("../drizzle/0013_exotic_scourge.sql", import.meta.url), "utf8");
   const residencyAccess = await readFile(new URL("../drizzle/0014_glamorous_owl.sql", import.meta.url), "utf8");
   const publicCalendars = await readFile(new URL("../drizzle/0015_superb_norrin_radd.sql", import.meta.url), "utf8");
+  const daypartTypes = await readFile(new URL("../drizzle/0016_daypart_types_and_schedule_occurrences.sql", import.meta.url), "utf8");
+  const publicCalendarScopes = await readFile(new URL("../drizzle/0017_cold_silhouette.sql", import.meta.url), "utf8");
   await database.exec(initial.replaceAll("--> statement-breakpoint", ""));
   await database.exec(onboarding);
   await database.exec(rowSecurity.replaceAll("--> statement-breakpoint", ""));
@@ -55,6 +57,8 @@ beforeAll(async () => {
   await database.exec(artistArchive.replaceAll("--> statement-breakpoint", ""));
   await database.exec(residencyAccess.replaceAll("--> statement-breakpoint", ""));
   await database.exec(publicCalendars.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(daypartTypes.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(publicCalendarScopes.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -141,6 +145,22 @@ describe("database replacements for Airtable audit formulas", () => {
     expect(oldResult.rows).toEqual([]);
     expect(newResult.rows).toHaveLength(1);
     await expect(database.exec(`UPDATE public_calendar_links SET token_hash = 'plaintext-token' WHERE residency_id = '${ids.residencyA}';`)).rejects.toThrow();
+  });
+
+  it("stores an explicit Daypart allow-list for a scoped public calendar", async () => {
+    await database.exec(`
+      UPDATE public_calendar_links SET scope = 'selected' WHERE residency_id = '${ids.residencyA}';
+      INSERT INTO public_calendar_link_dayparts (residency_id, daypart_id)
+      VALUES ('${ids.residencyA}', '${ids.daypartA}');
+    `);
+    const result = await database.query<{ scope: string; daypart_id: string }>(`
+      SELECT l.scope, d.daypart_id
+      FROM public_calendar_links l
+      JOIN public_calendar_link_dayparts d ON d.residency_id = l.residency_id
+      WHERE l.residency_id = '${ids.residencyA}';
+    `);
+    expect(result.rows).toEqual([{ scope: "selected", daypart_id: ids.daypartA }]);
+    await expect(database.exec(`UPDATE public_calendar_links SET scope = 'private' WHERE residency_id = '${ids.residencyA}';`)).rejects.toThrow();
   });
 
   it("requires exactly one valid Shift parent", async () => {

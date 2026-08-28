@@ -14,6 +14,7 @@ import {
   talentPaymentProfiles,
   residencyTalent,
   residencyContacts,
+  publicCalendarLinkDayparts,
   publicCalendarLinks,
   scheduleOccurrences,
   scheduleOccurrenceTalent,
@@ -44,12 +45,28 @@ export const getResidencyList = cache(async function getResidencyList() {
   }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name));
 });
 
-export async function hasPublicCalendarLink(residencyId: string) {
-  const [link] = await getDb().select({ residencyId: publicCalendarLinks.residencyId })
+export type PublicCalendarLinkSettings = {
+  hasLink: boolean;
+  scope: "all" | "selected";
+  daypartIds: string[];
+};
+
+export async function getPublicCalendarLinkSettings(residencyId: string): Promise<PublicCalendarLinkSettings> {
+  const rows = await getDb().select({
+    residencyId: publicCalendarLinks.residencyId,
+    scope: publicCalendarLinks.scope,
+    daypartId: publicCalendarLinkDayparts.daypartId,
+  })
     .from(publicCalendarLinks)
+    .leftJoin(publicCalendarLinkDayparts, eq(publicCalendarLinks.residencyId, publicCalendarLinkDayparts.residencyId))
     .where(eq(publicCalendarLinks.residencyId, residencyId))
-    .limit(1);
-  return Boolean(link);
+    .orderBy(asc(publicCalendarLinkDayparts.daypartId));
+  if (!rows.length) return { hasLink: false, scope: "all", daypartIds: [] };
+  return {
+    hasLink: true,
+    scope: rows[0].scope,
+    daypartIds: rows.flatMap((row) => row.daypartId ? [row.daypartId] : []),
+  };
 }
 
 export async function getDashboardData() {

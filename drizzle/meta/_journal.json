@@ -120,6 +120,13 @@
       "when": 1787882494987,
       "tag": "0016_daypart_types_and_schedule_occurrences",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787905537618,
+      "tag": "0017_cold_silhouette",
+      "breakpoints": true
     }
   ]
 }

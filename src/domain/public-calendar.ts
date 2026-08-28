@@ -28,6 +28,7 @@ export type PublicCalendarEntry = Readonly<{
 }>;
 
 export type PublicCalendarResponse = Readonly<{ entries: PublicCalendarEntry[] }>;
+export type PublicCalendarScope = "all" | "selected";
 
 export function issuePublicCalendarToken() {
   const token = randomBytes(32).toString("base64url");
@@ -37,6 +38,11 @@ export function issuePublicCalendarToken() {
 export function hashPublicCalendarToken(token: string): string {
   if (!tokenPattern.test(token)) throw new Error("Invalid public calendar token.");
   return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+/** A second, query-independent guard for a scoped public calendar. */
+export function publicCalendarDaypartAllowed(scope: PublicCalendarScope, allowedDaypartIds: ReadonlySet<string>, daypartId: string | null): boolean {
+  return scope === "all" || (daypartId !== null && allowedDaypartIds.has(daypartId));
 }
 
 function localTime(value: Date, timezone: string) {

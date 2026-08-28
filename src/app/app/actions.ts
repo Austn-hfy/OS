@@ -5,7 +5,7 @@ import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAccounts, invoiceLineItems, invoices, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
+import { assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { requireInternalActor } from "@/lib/auth";
@@ -103,7 +103,12 @@ export async function createResidencyAction(_previous: ResidencyActionState, for
 export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLinkActionState, formData: FormData): Promise<PublicCalendarLinkActionState> {
   try {
     const actor = await requireInternalActor();
-    const residencyId = z.uuid().parse(formData.get("residencyId"));
+    const { residencyId, scope } = z.object({
+      residencyId: z.uuid(),
+      scope: z.enum(["all", "selected"]),
+    }).parse(Object.fromEntries(formData));
+    const selectedDaypartIds = z.array(z.uuid()).max(100).parse([...new Set(formData.getAll("daypartIds").map(String))]);
+    if (scope === "selected" && !selectedDaypartIds.length) throw new Error("Select at least one Daypart for this link.");
     const { token, tokenHash } = issuePublicCalendarToken();
     const database = getDb();
     await database.transaction(async (tx) => {
@@ -114,14 +119,28 @@ export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLi
       )).limit(1);
       if (!residency) throw new Error("Residency not found.");
 
+      if (scope === "selected") {
+        const allowedDayparts = await tx.select({ id: dayparts.id }).from(dayparts).where(and(
+          eq(dayparts.residencyId, residencyId),
+          eq(dayparts.active, true),
+          inArray(dayparts.id, selectedDaypartIds),
+        ));
+        if (allowedDayparts.length !== selectedDaypartIds.length) throw new Error("One or more selected Dayparts are unavailable for this Residency.");
+      }
+
       await tx.insert(publicCalendarLinks).values({
         residencyId,
         tokenHash,
+        scope,
         rotatedByUserId: actor.userId,
       }).onConflictDoUpdate({
         target: publicCalendarLinks.residencyId,
-        set: { tokenHash, rotatedByUserId: actor.userId, rotatedAt: new Date() },
+        set: { tokenHash, scope, rotatedByUserId: actor.userId, rotatedAt: new Date() },
       });
+      await tx.delete(publicCalendarLinkDayparts).where(eq(publicCalendarLinkDayparts.residencyId, residencyId));
+      if (scope === "selected") {
+        await tx.insert(publicCalendarLinkDayparts).values(selectedDaypartIds.map((daypartId) => ({ residencyId, daypartId })));
+      }
       await tx.insert(auditLog).values({
         residencyId,
         actorUserId: actor.userId,
@@ -129,7 +148,7 @@ export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLi
         action: "public_calendar_link_rotated",
         entityType: "residency",
         entityId: residencyId,
-        details: { residencyName: residency.name },
+        details: { residencyName: residency.name, scope, daypartIds: scope === "selected" ? selectedDaypartIds : [] },
       });
     });
     revalidatePath("/app/calendar");

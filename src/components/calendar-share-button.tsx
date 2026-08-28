@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { PublicCalendarLinkManager } from "@/components/public-calendar-link-manager";
+import type { PublicCalendarLinkSettings } from "@/data/internal";
 
-export function CalendarShareButton({ residencyId, residencyName, hasLink }: { residencyId: string; residencyName: string; hasLink: boolean }) {
+type ShareableDaypart = { id: string; name: string; room: string; color: string };
+
+export function CalendarShareButton({ residencyId, residencyName, linkSettings, dayparts }: { residencyId: string; residencyName: string; linkSettings: PublicCalendarLinkSettings; dayparts: ShareableDaypart[] }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -29,7 +32,7 @@ export function CalendarShareButton({ residencyId, residencyName, hasLink }: { r
           <button className="quick-modal-close" type="button" aria-label="Close share calendar" onClick={() => setOpen(false)}>×</button>
         </header>
         <div className="quick-modal-body">
-          <PublicCalendarLinkManager compact residencyId={residencyId} hasLink={hasLink} />
+          <PublicCalendarLinkManager compact residencyId={residencyId} linkSettings={linkSettings} dayparts={dayparts} />
         </div>
       </section>
     </div> : null}

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { formatTimeInput } from "@/components/format";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { CalendarShareButton } from "@/components/calendar-share-button";
-import { getCalendarData, getResidencyList, getScheduleOccurrenceData, hasPublicCalendarLink } from "@/data/internal";
+import { getCalendarData, getPublicCalendarLinkSettings, getResidencyList, getScheduleOccurrenceData } from "@/data/internal";
 import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
 import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { getActiveTalentLookup, getDaypartsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
@@ -21,11 +21,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     const range = monthRange(monthKey);
     const calendarResidency = residencyList.find((item) => item.id === params.calendarResidency);
     const visibleResidencies = calendarResidency ? [calendarResidency] : residencyList;
-    const [calendar, occurrences, visibleDayparts, calendarHasPublicLink] = await Promise.all([
+    const [calendar, occurrences, visibleDayparts, calendarLinkSettings] = await Promise.all([
       getCalendarData(calendarResidency?.id, range),
       getScheduleOccurrenceData(calendarResidency?.id, range),
       getDaypartsForResidencies(visibleResidencies.map((residency) => residency.id)),
-      calendarResidency ? hasPublicCalendarLink(calendarResidency.id) : Promise.resolve(false),
+      calendarResidency ? getPublicCalendarLinkSettings(calendarResidency.id) : Promise.resolve({ hasLink: false, scope: "all" as const, daypartIds: [] }),
     ]);
     const tones: MonthCalendarEvent["tone"][] = ["blue", "navy", "sky"];
     const savedShiftEvents = calendar.map((shift) => {
@@ -102,7 +102,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <div className="field calendar-filter"><label htmlFor="calendar-residency">Residency calendar</label><select id="calendar-residency" name="calendarResidency" defaultValue={calendarResidency?.id ?? ""}><option value="">All residencies</option>{residencyList.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div>
             <button className="button secondary" type="submit">View</button>
           </form>
-          {calendarResidency ? <CalendarShareButton residencyId={calendarResidency.id} residencyName={calendarResidency.name} hasLink={calendarHasPublicLink} /> : null}
+          {calendarResidency ? <CalendarShareButton residencyId={calendarResidency.id} residencyName={calendarResidency.name} linkSettings={calendarLinkSettings} dayparts={visibleDayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} /> : null}
           <div className="calendar-month-cluster"><div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs coverage" : "slots need coverage"}</span></div><div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link></div></div>
         </div></header>
         <MonthCalendar compact monthKey={monthKey} events={events} ariaLabel="HFY company programming calendar" />
@@ -112,12 +112,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   const monthKey = normalizeMonthKey(params.month);
   const range = monthRange(monthKey);
-  const [calendar, occurrences, dayparts, talent, calendarHasPublicLink] = await Promise.all([
+  const [calendar, occurrences, dayparts, talent, calendarLinkSettings] = await Promise.all([
     getCalendarData(workspaceResidency.id, range),
     getScheduleOccurrenceData(workspaceResidency.id, range),
     getDaypartsForResidency(workspaceResidency.id),
     getActiveTalentLookup(workspaceResidency.id),
-    hasPublicCalendarLink(workspaceResidency.id),
+    getPublicCalendarLinkSettings(workspaceResidency.id),
   ]);
   const realEvents = calendar.map((shift) => {
     const activeAssignments = shift.assignments.filter((assignment) => assignment.bookingStatus !== "cancelled");
@@ -226,7 +226,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <div className="calendar-page">
       <ResidencyCalendar
-        residency={{ id: workspaceResidency.id, name: workspaceResidency.name, timezone: workspaceResidency.timezone, defaultTalentRateCents: workspaceResidency.defaultTalentRateCents, clientHourlyRateCents: workspaceResidency.clientHourlyRateCents, hasPublicCalendarLink: calendarHasPublicLink }}
+        residency={{ id: workspaceResidency.id, name: workspaceResidency.name, timezone: workspaceResidency.timezone, defaultTalentRateCents: workspaceResidency.defaultTalentRateCents, clientHourlyRateCents: workspaceResidency.clientHourlyRateCents, calendarLinkSettings }}
         monthKey={monthKey}
         events={events}
         dayparts={dayparts.map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })) }))}

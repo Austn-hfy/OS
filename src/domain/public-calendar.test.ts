@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { enforcePublicCalendarResponse, hashPublicCalendarToken, issuePublicCalendarToken, projectPublicCalendarRows } from "./public-calendar";
+import { enforcePublicCalendarResponse, hashPublicCalendarToken, issuePublicCalendarToken, projectPublicCalendarRows, publicCalendarDaypartAllowed } from "./public-calendar";
 
 describe("public calendar trust boundary", () => {
   it("issues a high-entropy bearer token and stores only its SHA-256 hash", () => {
@@ -33,6 +33,15 @@ describe("public calendar trust boundary", () => {
       endTime: "3:00 PM",
     }]);
     expect(JSON.stringify(entries)).not.toMatch(/Private Person|private@example|555-0100|9000|27000|never public/);
+  });
+
+  it("fails closed when a public link is limited to selected Dayparts", () => {
+    const allowed = new Set(["pool"]);
+    expect(publicCalendarDaypartAllowed("all", allowed, "amigo")).toBe(true);
+    expect(publicCalendarDaypartAllowed("selected", allowed, "pool")).toBe(true);
+    expect(publicCalendarDaypartAllowed("selected", allowed, "amigo")).toBe(false);
+    expect(publicCalendarDaypartAllowed("selected", allowed, null)).toBe(false);
+    expect(publicCalendarDaypartAllowed("selected", new Set(), "pool")).toBe(false);
   });
 
   it("re-applies the same exact allow-list at the response boundary", () => {
