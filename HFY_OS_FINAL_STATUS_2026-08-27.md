@@ -45,7 +45,7 @@ The synthetic Residency, Artist, Shifts, Assignments, Invoice, and PDF used by t
 | Pipeline mode / Leads | Built and deployed | Operations/Pipeline navigation, ordered status tabs, counts, new Lead, editable detail, notes, and in-place Won conversion foundation are present. Meetings, Rundown, and Proposal actions remain out of scope. |
 | Artist Lookup | Complete and populated | Left-list/right-detail experience is live with all 44 Airtable artists, outstanding amount, owed-from detail, bookings/calendar, contact, payment summary, W-9 state, and edit action. |
 | Hotel portal | Intentionally absent | The separate portal concept was explicitly abandoned for now. `/hotel` redirects to login. |
-| Preview | Intentionally disabled in production | `/preview` returns 404 because `HFY_DEMO_MODE` is not enabled. |
+| Preview | Retired and removed | The `/preview` route, its hard-coded sample data, and the `HFY_DEMO_MODE` redirect were removed. Local development now runs the real application only. |
 
 ## 3. Airtable Talent roster import
 
@@ -183,13 +183,13 @@ Findings deliberately reported rather than cosmetically changed:
 3. The clean-slate Artist Lookup state says `No artists match “”.` With the real roster present, this is not visible in normal use.
 4. Pipeline's nine status tabs are crowded at 1280 px.
 5. Company-wide Payouts and Invoices routes work directly but are not linked from company navigation; intended information architecture still needs a decision.
-6. `/preview` is intentionally disabled in production.
+6. The obsolete `/preview` demonstration and its fake data have been removed from the application.
 
 Source sweep result:
 
 - no Meridian or Shoreline production records/copy;
 - no TODO/FIXME/XXX/HACK markers in production application code;
-- no fake Talent emails/data outside gated preview fixtures and tests;
+- no fake Talent emails/data in the application;
 - no Ace Residency or operational history created during this session.
 
 ## 7. Verification and deployment evidence

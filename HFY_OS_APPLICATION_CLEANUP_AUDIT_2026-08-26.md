@@ -70,11 +70,11 @@ All nine Pipeline tabs fit, but several labels and zero-count badges become very
 - Keep hidden and treat these as residency-only screens, or
 - Add company-wide Payouts and Invoices navigation for cross-residency operations.
 
-### 6. Production preview route is intentionally disabled
+### 6. Production preview route was retired
 
 **Severity: informational**
 
-`/preview` returns 404 because `HFY_DEMO_MODE` is not enabled in production. This is correct for the real environment. Friday’s demo should use real authenticated HFY OS, not the sample-data preview.
+The obsolete `/preview` demonstration, its hard-coded sample data, and the `HFY_DEMO_MODE` redirect were removed. The real authenticated HFY OS is now the only application experience in both local development and production.
 
 ## Pages reviewed
 
@@ -91,13 +91,13 @@ All nine Pipeline tabs fit, but several labels and zero-count badges become very
 | `/app/invoices` | Pass | Company monitoring table and empty state render cleanly. |
 | `/join` | Pass with exposure noted | Public W-9 intake needs a deliberate launch posture. |
 | `/hotel` | Pass | Correctly redirects to `/login`; no separate hotel portal remains. |
-| `/preview` | Intentional 404 | Demo mode is disabled in production. |
+| `/preview` | Removed | No page exists at this route. |
 
 ## Source-level sweep
 
 - No Meridian or Shoreline production records/copy found.
-- No `TODO`, `FIXME`, `XXX`, `HACK`, fake email addresses, or sample Talent data found outside the gated preview and automated tests.
-- Ace-specific sample data remains inside the gated local preview only; it is not reachable in production without `HFY_DEMO_MODE=1`.
+- No `TODO`, `FIXME`, `XXX`, `HACK`, fake email addresses, or sample Talent data found in the production application.
+- The former Ace-specific local preview data has been removed from the application.
 - Internal module names still use `airtable-parity` and `parity_reconciliation`; these describe the tested business-rule source and are not user-facing placeholders.
 - Invoice client PDFs remain separated from internal talent cost and gross-margin data.
 
