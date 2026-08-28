@@ -501,7 +501,7 @@ tr:last-child td { border-bottom: 0; }
 .week-toggle { appearance: none; min-height: 38px; border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--muted); font-size: 12px; font-weight: 800; }
 .week-toggle[aria-pressed="true"] { color: white; background: var(--forest); border-color: var(--forest); }
 .week-rule-fields { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; }
-.week-rule-fields input { width: 100%; min-width: 0; min-height: 34px; height: 34px; padding: 5px 7px; }
+.week-rule-fields :is(input, select) { width: 100%; min-width: 0; min-height: 34px; height: 34px; padding: 5px 7px; }
 .week-rule-fields .field { gap: 3px; }
 .week-rule-fields .field label { font-size: 9px; }
 .daypart-editor-actions, .booking-submit { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }

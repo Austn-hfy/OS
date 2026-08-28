@@ -36,6 +36,23 @@ type EditorDraft = {
 
 const initialActionState: ResidencyActionState = { status: "idle", message: "" };
 const colorPresets = ["#2783DC", "#E98332", "#7A65D1", "#2E9E79", "#D04F75", "#D6A11D", "#244C76"];
+const timeOptions = Array.from({ length: 48 }, (_, index) => {
+  const minute = index * 30;
+  return { value: minuteToClock(minute), label: formatLocalMinute(minute) };
+});
+
+function optionalDjCount(value: string): number | null {
+  const count = Number(value);
+  return Number.isInteger(count) && count > 0 ? count : null;
+}
+
+function TimeSelect({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const customValue = value && !timeOptions.some((option) => option.value === value) ? value : null;
+  return <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} required>
+    {customValue ? <option value={customValue}>{formatLocalMinute(clockToMinute(customValue))}</option> : null}
+    {timeOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+  </select>;
+}
 
 function centsFromOptionalDollars(value: string): number | null {
   if (!value.trim()) return null;
@@ -58,8 +75,8 @@ function blankDraft(options: { room?: string; weekday?: number; startMinute?: nu
     active: true,
     sortOrder: 0,
     rules: weekdayNames.map((_, weekday) => weekday === options.weekday
-      ? { enabled: true, start: minuteToClock(startMinute), end: minuteToClock(endMinute), defaultDjCount: "1" }
-      : { enabled: false, start: "", end: "", defaultDjCount: "1" }),
+      ? { enabled: true, start: minuteToClock(startMinute), end: minuteToClock(endMinute), defaultDjCount: "0" }
+      : { enabled: false, start: "", end: "", defaultDjCount: "0" }),
   };
 }
 
@@ -78,8 +95,8 @@ function draftFromDaypart(daypart: DaypartRow): EditorDraft {
     rules: weekdayNames.map((_, weekday) => {
       const rule = daypart.rules.find((item) => item.weekday === weekday);
       return rule
-        ? { enabled: true, start: minuteToClock(rule.startMinute), end: minuteToClock(rule.endMinute), defaultDjCount: String(rule.defaultDjCount ?? 1) }
-        : { enabled: false, start: "", end: "", defaultDjCount: "1" };
+        ? { enabled: true, start: minuteToClock(rule.startMinute), end: minuteToClock(rule.endMinute), defaultDjCount: String(rule.defaultDjCount ?? 0) }
+        : { enabled: false, start: "", end: "", defaultDjCount: "0" };
     }),
   };
 }
@@ -139,7 +156,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
       rules: draft.rules.flatMap((rule, weekday) => {
         if (!rule.enabled || !rule.start || !rule.end) return [];
         const startMinute = clockToMinute(rule.start);
-        return [{ weekday, startMinute, endMinute: resolveEndMinute(startMinute, rule.end), defaultDjCount: draft.type === "dj_artist" ? Number(rule.defaultDjCount) : null }];
+        return [{ weekday, startMinute, endMinute: resolveEndMinute(startMinute, rule.end), defaultDjCount: draft.type === "dj_artist" ? optionalDjCount(rule.defaultDjCount) : null }];
       }),
     });
   }, [draft, residencyId]);
@@ -149,6 +166,18 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
       ...current,
       rules: current.rules.map((rule, index) => index === weekday ? { ...rule, ...next } : rule),
     } : current);
+  }
+
+  function toggleRule(weekday: number) {
+    setDraft((current) => {
+      if (!current) return current;
+      const rule = current.rules[weekday];
+      const source = current.rules.find((item) => item.enabled && item.start && item.end);
+      const next = rule.enabled
+        ? { ...rule, enabled: false, start: "", end: "" }
+        : { ...rule, enabled: true, start: source?.start ?? "18:00", end: source?.end ?? "21:00" };
+      return { ...current, rules: current.rules.map((item, index) => index === weekday ? next : item) };
+    });
   }
 
   function applyToAllSelected() {
@@ -212,7 +241,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                   key={daypart.id}
                 >
                   <strong>{daypart.name}</strong>
-                  <span>{formatLocalMinute(rule.startMinute)}–{formatLocalMinute(rule.endMinute)} · {daypart.type === "house_activity" ? "House activity" : daypart.billingMode === "tracking_only" ? "Tracking only" : `${rule.defaultDjCount ?? 1} DJ target`}</span>
+                  <span>{formatLocalMinute(rule.startMinute)}–{formatLocalMinute(rule.endMinute)} · {daypart.type === "house_activity" ? "House activity" : daypart.billingMode === "tracking_only" ? "Tracking only" : rule.defaultDjCount ? `${rule.defaultDjCount} DJ target` : "No DJ target"}</span>
                 </button>;
               })}
             </div>;
@@ -236,16 +265,16 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                   <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this Daypart continues indefinitely.</small></div>
                 </div>
                 <label className="checkbox-row"><input checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} type="checkbox" /> Active Daypart</label>
-                <div className="week-rule-intro"><div><strong>Weekly hours</strong><small>Select every day this Daypart runs. Each day can keep different hours.</small></div><button className="button secondary" type="button" onClick={applyToAllSelected}>Use first hours for selected days</button></div>
+                <div className="week-rule-intro"><div><strong>Weekly hours</strong><small>Select every day this Daypart runs. Each day can keep different hours.</small></div><button className="button secondary" type="button" title="Copy the first selected day’s start and end times to the other selected days" onClick={applyToAllSelected}>Sync times to selected days</button></div>
                 <div className="week-rule-grid">
                   {draft.rules.map((rule, weekday) => (
                     <div className={`week-rule ${rule.enabled ? "enabled" : ""}`} key={weekdayNames[weekday]}>
-                      <button className="week-toggle" type="button" aria-pressed={rule.enabled} onClick={() => updateRule(weekday, { enabled: !rule.enabled, start: "", end: "" })}>{weekdayNames[weekday].slice(0, 3)}</button>
-                      {rule.enabled ? <div className="week-rule-fields"><div className="field"><label>Start</label><input type="time" value={rule.start} onChange={(event) => updateRule(weekday, { start: event.target.value })} required /></div><div className="field"><label>End</label><input type="time" value={rule.end} onChange={(event) => updateRule(weekday, { end: event.target.value })} required /></div>{draft.type === "dj_artist" ? <div className="field"><label>DJ count</label><input type="number" min="1" max="20" value={rule.defaultDjCount} onChange={(event) => updateRule(weekday, { defaultDjCount: event.target.value })} required /></div> : null}</div> : <p>Off</p>}
+                      <button className="week-toggle" type="button" aria-pressed={rule.enabled} onClick={() => toggleRule(weekday)}>{weekdayNames[weekday].slice(0, 3)}</button>
+                      {rule.enabled ? <div className="week-rule-fields"><div className="field"><label>Start</label><TimeSelect label={`${weekdayNames[weekday]} start time`} value={rule.start} onChange={(start) => updateRule(weekday, { start })} /></div><div className="field"><label>End</label><TimeSelect label={`${weekdayNames[weekday]} end time`} value={rule.end} onChange={(end) => updateRule(weekday, { end })} /></div>{draft.type === "dj_artist" ? <div className="field"><label>DJ count <span>optional</span></label><input type="number" min="0" max="20" value={rule.defaultDjCount} onChange={(event) => updateRule(weekday, { defaultDjCount: event.target.value })} /></div> : null}</div> : <p>Off</p>}
                     </div>
                   ))}
                 </div>
-                {draft.type === "dj_artist" ? <p className="privacy-note">DJ count is a planning target, not a hard limit. You can still schedule one artist or several; individual hours determine coverage{draft.billingMode === "billed_by_hfy" ? " and pay" : ""}.</p> : null}
+                {draft.type === "dj_artist" ? <p className="privacy-note">DJ count is optional. Leave it at 0 for no target; you can still schedule one artist or several, and individual hours determine coverage{draft.billingMode === "billed_by_hfy" ? " and pay" : ""}.</p> : null}
                 {state.status === "error" ? <p className="error" aria-live="polite">{state.message}</p> : null}
               </div>
               <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button><button className="button" disabled={pending} type="submit">{pending ? "Saving…" : "Save Daypart"}</button></div>

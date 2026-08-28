@@ -163,7 +163,7 @@ export function validateDaypartRules(rules: DaypartRuleInput[], type: DaypartTyp
     weekdays.add(rule.weekday);
     if (!Number.isInteger(rule.startMinute) || rule.startMinute < 0 || rule.startMinute >= 1440) throw new Error(`${weekdayNames[rule.weekday]} needs a valid start time.`);
     if (!Number.isInteger(rule.endMinute) || rule.endMinute <= rule.startMinute || rule.endMinute > rule.startMinute + 1440) throw new Error(`${weekdayNames[rule.weekday]} needs a valid end time.`);
-    const defaultDjCount = type === "house_activity" ? null : rule.defaultDjCount ?? 1;
+    const defaultDjCount = type === "house_activity" ? null : rule.defaultDjCount ?? null;
     if (defaultDjCount !== null && (!Number.isInteger(defaultDjCount) || defaultDjCount < 1 || defaultDjCount > 20)) {
       throw new Error(`${weekdayNames[rule.weekday]} needs a DJ count between 1 and 20.`);
     }

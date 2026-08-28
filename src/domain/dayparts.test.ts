@@ -25,6 +25,11 @@ describe("Daypart weekly rules", () => {
     expect(validateDaypartRules([{ weekday: 5, startMinute: 720, endMinute: 900, defaultDjCount: 8 }], "house_activity"))
       .toEqual([{ weekday: 5, startMinute: 720, endMinute: 900, defaultDjCount: null }]);
   });
+
+  it("keeps the DJ planning target optional", () => {
+    expect(validateDaypartRules([{ weekday: 5, startMinute: 720, endMinute: 900, defaultDjCount: null }]))
+      .toEqual([{ weekday: 5, startMinute: 720, endMinute: 900, defaultDjCount: null }]);
+  });
   it("matches Friday dates without depending on a server timezone", () => {
     expect(weekdayForDate("2026-09-04")).toBe(5);
   });
