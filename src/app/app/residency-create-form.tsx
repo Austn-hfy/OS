@@ -33,8 +33,10 @@ export function ResidencyCreateForm({ onCreated, onCancel }: { onCreated?: () =>
   }, [onCreated, router, state.status]);
 
   return <form action={action} className="residency-create-form">
-    <ResidencyCreateFields />
-    {state.message ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}
+    <div className="residency-create-scroll">
+      <ResidencyCreateFields />
+      {state.message ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}
+    </div>
     <div className="residency-create-actions">{onCancel ? <button className="button secondary" type="button" onClick={onCancel}>Cancel</button> : null}<button className="button" disabled={pending} type="submit">{pending ? "Creating…" : "Create Residency"}</button></div>
   </form>;
 }

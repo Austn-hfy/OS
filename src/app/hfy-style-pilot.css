@@ -796,6 +796,10 @@
   background: rgba(36, 50, 61, 0.44);
   backdrop-filter: blur(8px) saturate(90%);
 }
+.hfy-style-system .residency-create-backdrop {
+  background: rgba(35, 48, 58, 0.5);
+  backdrop-filter: blur(15px) saturate(78%);
+}
 .hfy-style-system :is(.quick-modal, .daypart-drawer, .artist-editor-drawer, .payout-detail-drawer) {
   border-color: rgba(255, 255, 255, 0.62);
   background:
@@ -805,6 +809,12 @@
   backdrop-filter: blur(22px) saturate(116%);
 }
 .hfy-style-system .quick-modal { border-radius: var(--hfy-radius-feature); }
+.hfy-style-system .residency-create-modal {
+  background:
+    linear-gradient(145deg, rgba(250, 252, 253, 0.985), rgba(229, 236, 240, 0.975)),
+    var(--hfy-surface-strong);
+  box-shadow: 0 34px 100px rgba(25, 38, 48, 0.34), inset 0 1px rgba(255, 255, 255, 0.8);
+}
 .hfy-style-system :is(.quick-modal-header, .daypart-drawer .daypart-editor-heading, .artist-editor-heading, .payout-detail-drawer-heading) { border-bottom-color: var(--hfy-line); }
 .hfy-style-system .quick-modal-close {
   border-color: var(--hfy-line);

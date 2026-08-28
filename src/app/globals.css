@@ -343,10 +343,12 @@ h3 { margin: 0; font-family: "Plus Jakarta Sans", Inter, sans-serif; font-size: 
 .active-residencies-heading { align-items: end; }
 .active-residencies-heading .subhead { max-width: 700px; }
 .active-residencies-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-.residency-create-modal { width: min(840px, 100%); }
+.residency-create-backdrop { padding: 22px; }
+.residency-create-modal { width: min(820px, calc(100vw - 44px)); max-height: min(780px, calc(100dvh - 44px)); }
 .residency-create-modal .quick-modal-header p:last-child { margin: 6px 0 0; color: var(--muted); }
-.residency-create-form { display: grid; gap: 14px; }
-.residency-create-actions { position: sticky; bottom: -22px; display: flex; justify-content: flex-end; gap: 8px; margin: 4px -24px -22px; padding: 15px 24px 20px; border-top: 1px solid var(--line); background: rgba(251,251,251,.96); backdrop-filter: blur(10px); }
+.residency-create-form { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.residency-create-scroll { min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 14px; padding: 18px 24px 22px; overscroll-behavior: contain; }
+.residency-create-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 15px 24px 18px; border-top: 1px solid var(--line); background: rgba(251,251,251,.96); backdrop-filter: blur(10px); }
 .residency-card { display: grid; gap: 24px; min-height: 280px; }
 .residency-card-button { width: 100%; color: var(--ink); text-align: left; font: inherit; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
 .residency-card-button:hover { transform: translateY(-4px); border-color: rgba(2,116,222,.28); box-shadow: 0 24px 65px rgba(7,26,49,.12); }
