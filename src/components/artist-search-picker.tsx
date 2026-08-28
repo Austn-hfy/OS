@@ -13,15 +13,17 @@ export function ArtistSearchPicker({
   excludedIds = [],
   label = "Add DJ",
   resultActionLabel = "Select",
+  initiallyOpen = false,
   onSelect,
 }: {
   artists: ArtistSearchOption[];
   excludedIds?: string[];
   label?: string;
   resultActionLabel?: string;
+  initiallyOpen?: boolean;
   onSelect: (artistId: string) => void | Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const [query, setQuery] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const results = useMemo(() => {

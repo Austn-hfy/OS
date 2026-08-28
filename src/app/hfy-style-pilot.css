@@ -833,6 +833,13 @@
   background: linear-gradient(145deg, var(--hfy-coral-soft), rgba(251, 252, 253, 0.9));
 }
 .hfy-style-system .quick-add-choice-card > span { color: var(--hfy-action-strong); }
+.hfy-style-system .quick-selected-daypart,
+.hfy-style-system .quick-shift-options {
+  border-color: var(--hfy-line);
+  background: rgba(251, 252, 253, 0.78);
+}
+.hfy-style-system .quick-selected-daypart { border-left-color: var(--daypart-color, var(--hfy-action)); }
+.hfy-style-system .quick-assignment-time-intro button { color: var(--hfy-action-strong); }
 .hfy-style-system .quick-time-choice { background: var(--hfy-surface-nested); }
 .hfy-style-system .quick-time-choice button.active { color: var(--hfy-action-ink); background: rgba(251, 252, 253, 0.94); box-shadow: 0 3px 10px rgba(48, 65, 78, 0.08); }
 .hfy-style-system .quick-time-summary,

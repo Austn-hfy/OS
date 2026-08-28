@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useState, type CSSProperties, type 
 import { saveDaypartAction, type ResidencyActionState } from "@/app/app/actions";
 import { clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, weekdayNames, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
 import { SensitiveInput } from "@/components/privacy-mode";
+import { TimeSelect } from "@/components/time-select";
 
 export type DaypartRow = {
   id: string;
@@ -36,22 +37,10 @@ type EditorDraft = {
 
 const initialActionState: ResidencyActionState = { status: "idle", message: "" };
 const colorPresets = ["#2783DC", "#E98332", "#7A65D1", "#2E9E79", "#D04F75", "#D6A11D", "#244C76"];
-const timeOptions = Array.from({ length: 48 }, (_, index) => {
-  const minute = index * 30;
-  return { value: minuteToClock(minute), label: formatLocalMinute(minute) };
-});
 
 function optionalDjCount(value: string): number | null {
   const count = Number(value);
   return Number.isInteger(count) && count > 0 ? count : null;
-}
-
-function TimeSelect({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  const customValue = value && !timeOptions.some((option) => option.value === value) ? value : null;
-  return <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} required>
-    {customValue ? <option value={customValue}>{formatLocalMinute(clockToMinute(customValue))}</option> : null}
-    {timeOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
-  </select>;
 }
 
 function centsFromOptionalDollars(value: string): number | null {
@@ -270,7 +259,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                   {draft.rules.map((rule, weekday) => (
                     <div className={`week-rule ${rule.enabled ? "enabled" : ""}`} key={weekdayNames[weekday]}>
                       <button className="week-toggle" type="button" aria-pressed={rule.enabled} onClick={() => toggleRule(weekday)}>{weekdayNames[weekday].slice(0, 3)}</button>
-                      {rule.enabled ? <div className="week-rule-fields"><div className="field"><label>Start</label><TimeSelect label={`${weekdayNames[weekday]} start time`} value={rule.start} onChange={(start) => updateRule(weekday, { start })} /></div><div className="field"><label>End</label><TimeSelect label={`${weekdayNames[weekday]} end time`} value={rule.end} onChange={(end) => updateRule(weekday, { end })} /></div>{draft.type === "dj_artist" ? <div className="field"><label>DJ count <span>optional</span></label><input type="number" min="0" max="20" value={rule.defaultDjCount} onChange={(event) => updateRule(weekday, { defaultDjCount: event.target.value })} /></div> : null}</div> : <p>Off</p>}
+                      {rule.enabled ? <div className="week-rule-fields"><div className="field"><label>Start</label><TimeSelect ariaLabel={`${weekdayNames[weekday]} start time`} value={rule.start} onChange={(start) => updateRule(weekday, { start })} required /></div><div className="field"><label>End</label><TimeSelect ariaLabel={`${weekdayNames[weekday]} end time`} value={rule.end} onChange={(end) => updateRule(weekday, { end })} required /></div>{draft.type === "dj_artist" ? <div className="field"><label>DJ count <span>optional</span></label><input type="number" min="0" max="20" value={rule.defaultDjCount} onChange={(event) => updateRule(weekday, { defaultDjCount: event.target.value })} /></div> : null}</div> : <p>Off</p>}
                     </div>
                   ))}
                 </div>

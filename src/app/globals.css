@@ -578,7 +578,7 @@ tr:last-child td { border-bottom: 0; }
 .quick-modal-close { appearance: none; width: 34px; height: 34px; flex: 0 0 34px; border: 1px solid var(--line); border-radius: 50%; background: white; color: var(--ink); font-size: 22px; line-height: 1; }
 .quick-modal-body { min-height: 0; overflow-y: auto; display: grid; gap: 12px; padding: 18px 24px 22px; overscroll-behavior: contain; }
 .quick-book-form { display: grid; gap: 15px; }
-.quick-slot-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.quick-slot-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 9px; }
 .quick-add-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .quick-add-choice-card { appearance: none; min-height: 145px; display: grid; align-content: center; gap: 7px; padding: 20px; border: 1px solid rgba(39,131,220,.25); border-radius: 18px; color: var(--ink); background: linear-gradient(145deg, rgba(39,131,220,.1), white); text-align: left; }
 .quick-add-choice-card.one-time { border-color: rgba(122,101,209,.28); background: linear-gradient(145deg, rgba(122,101,209,.12), white); }
@@ -594,6 +594,16 @@ tr:last-child td { border-bottom: 0; }
 .quick-slot-option span { display: grid; gap: 3px; }
 .quick-slot-option strong { font-size: 13px; }
 .quick-slot-option small { color: var(--muted); font-size: 10px; }
+.quick-selected-daypart { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--daypart-color, var(--forest)) 26%, var(--line)); border-left: 5px solid var(--daypart-color, var(--forest)); border-radius: 15px; background: color-mix(in srgb, var(--daypart-color, var(--forest)) 7%, white); }
+.quick-selected-daypart > div { display: grid; gap: 2px; }
+.quick-selected-daypart span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.quick-selected-daypart strong { font-size: 14px; }
+.quick-selected-daypart small { color: var(--muted); font-size: 10px; }
+.quick-selected-window { justify-items: end; text-align: right; }
+.quick-shift-options { border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.55); }
+.quick-shift-options summary { padding: 10px 12px; color: var(--muted); cursor: pointer; font-size: 10px; font-weight: 750; }
+.quick-shift-options[open] summary { border-bottom: 1px solid var(--line); }
+.quick-shift-options .quick-time-fields { padding: 11px 12px 12px; }
 .quick-time-choice { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 13px; background: #e8eaed; }
 .quick-time-choice button { appearance: none; border: 0; border-radius: 10px; padding: 9px; color: var(--muted); background: transparent; font-size: 11px; font-weight: 750; }
 .quick-time-choice button.active { color: var(--ink); background: white; box-shadow: 0 3px 10px rgba(7,26,49,.08); }
@@ -619,9 +629,14 @@ tr:last-child td { border-bottom: 0; }
 .quick-assignment-card.confirmed .quick-assignment-card-heading small { color: #1f684c; }
 .quick-assignment-card-heading button, .artist-picker-cancel { appearance: none; border: 0; padding: 2px; color: var(--muted); background: transparent; font-size: 10px; font-weight: 700; }
 .quick-card-actions { display: flex; align-items: center; gap: 10px; }
+.quick-assignment-time-intro { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 2px; }
+.quick-assignment-time-intro > div { display: grid; gap: 2px; }
+.quick-assignment-time-intro strong { font-size: 11px; }
+.quick-assignment-time-intro small { color: var(--muted); font-size: 9px; }
+.quick-assignment-time-intro button { appearance: none; border: 0; padding: 3px; color: var(--forest); background: transparent; font-size: 9px; font-weight: 800; }
 .quick-dj-time-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-.quick-dj-time-fields input { min-height: 40px; }
-.quick-dj-time-fields input:disabled { color: var(--ink); background: rgba(255,255,255,.5); opacity: 1; }
+.quick-dj-time-fields :is(input, select) { min-height: 40px; }
+.quick-dj-time-fields :is(input, select):disabled { color: var(--ink); background: rgba(255,255,255,.5); opacity: 1; }
 .quick-confirm-dj { justify-self: end; padding: 9px 16px !important; font-size: 11px !important; }
 .quick-add-dj { width: max-content; padding: 9px 14px !important; font-size: 11px !important; }
 .artist-picker { display: grid; gap: 8px; padding: 11px; border: 1px solid rgba(2,116,222,.22); border-radius: 15px; background: #f4f8fe; }
