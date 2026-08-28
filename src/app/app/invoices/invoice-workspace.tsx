@@ -2,7 +2,8 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createResidencyInvoiceAction, retryInvoiceSendAction, updateResidencyInvoiceSettingsAction, type ResidencyActionState } from "../actions";
+import { createResidencyInvoiceAction, updateResidencyInvoiceSettingsAction, type ResidencyActionState } from "../actions";
+import { retryInvoiceSendAction } from "./actions";
 import { InvoiceApprovalButton } from "./invoice-approval-button";
 import { PrivateValue, PrivacyPdfLink, SensitiveInput } from "@/components/privacy-mode";
 

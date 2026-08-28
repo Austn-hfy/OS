@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { formatTimeInput } from "@/components/format";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { CalendarShareButton } from "@/components/calendar-share-button";
-import { getCalendarData, getDashboardData, getScheduleOccurrenceData, hasPublicCalendarLink } from "@/data/internal";
+import { getCalendarData, getResidencyList, getScheduleOccurrenceData, hasPublicCalendarLink } from "@/data/internal";
 import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
 import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { getActiveTalentLookup, getDaypartsForResidency } from "@/services/dayparts";
@@ -12,7 +12,7 @@ import { viewAsResidencyId } from "@/lib/view-as";
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ residency?: string; calendarResidency?: string; month?: string }> }) {
   const params = await searchParams;
-  const [residencyList, previewResidencyId] = await Promise.all([getDashboardData(), viewAsResidencyId()]);
+  const [residencyList, previewResidencyId] = await Promise.all([getResidencyList(), viewAsResidencyId()]);
   if (previewResidencyId && params.residency !== previewResidencyId) redirect(`/app/calendar?residency=${previewResidencyId}`);
   const workspaceResidency = residencyList.find((item) => item.id === params.residency);
 

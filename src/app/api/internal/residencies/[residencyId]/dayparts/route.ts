@@ -7,9 +7,12 @@ import { getDaypartsForResidency } from "@/services/dayparts";
 export async function GET(_request: Request, { params }: { params: Promise<{ residencyId: string }> }) {
   await requireInternalActor();
   const residencyId = z.uuid().parse((await params).residencyId);
-  const residency = (await getResidencyList()).find((item) => item.id === residencyId);
+  const [residencyList, dayparts] = await Promise.all([
+    getResidencyList(),
+    getDaypartsForResidency(residencyId),
+  ]);
+  const residency = residencyList.find((item) => item.id === residencyId);
   if (!residency) return NextResponse.json({ error: "Residency not found." }, { status: 404 });
-  const dayparts = await getDaypartsForResidency(residencyId);
   return NextResponse.json({
     dayparts: dayparts.map((daypart) => ({
       id: daypart.id,

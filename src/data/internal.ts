@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { cache } from "react";
 import { getDb } from "@/db/client";
 import {
   assignments,
@@ -31,14 +32,17 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export async function getResidencyList() {
+export const getResidencyList = cache(async function getResidencyList() {
   return getDb().select({
     id: residencies.id,
     name: residencies.name,
     cityState: residencies.cityState,
     tier: residencies.tier,
+    timezone: residencies.timezone,
+    defaultTalentRateCents: residencies.defaultTalentRateCents,
+    clientHourlyRateCents: residencies.clientHourlyRateCents,
   }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name));
-}
+});
 
 export async function hasPublicCalendarLink(residencyId: string) {
   const [link] = await getDb().select({ residencyId: publicCalendarLinks.residencyId })
@@ -51,7 +55,7 @@ export async function hasPublicCalendarLink(residencyId: string) {
 export async function getDashboardData() {
   const database = getDb();
   const [residencyRows, shiftRows, assignmentRows, invoiceRows, attentionRows] = await Promise.all([
-    database.select().from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name)),
+    getResidencyList(),
     database.select({ id: shifts.id, residencyId: shifts.residencyId, serviceDate: shifts.serviceDate })
       .from(shifts).where(gte(shifts.serviceDate, todayUtc())),
     database.select({

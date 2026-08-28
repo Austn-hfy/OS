@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { approveInvoiceAction, type ResidencyActionState } from "../actions";
+import type { ResidencyActionState } from "../actions";
+import { approveInvoiceAction } from "./actions";
 
 const initialState: ResidencyActionState = { status: "idle", message: "" };
 

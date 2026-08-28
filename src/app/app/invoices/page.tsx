@@ -1,7 +1,7 @@
 import { formatDate, formatMoney, Status } from "@/components/format";
 import { PrivateValue, PrivacyPdfLink } from "@/components/privacy-mode";
 import { getInvoices, getInvoiceWorkspace, getResidencyList } from "@/data/internal";
-import { retryInvoiceSendAction } from "../actions";
+import { retryInvoiceSendAction } from "./actions";
 import { InvoiceApprovalButton } from "./invoice-approval-button";
 import { InvoiceWorkspace } from "./invoice-workspace";
 
