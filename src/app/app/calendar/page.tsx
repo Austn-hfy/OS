@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { formatTimeInput } from "@/components/format";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { CalendarShareButton } from "@/components/calendar-share-button";
+import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { getCalendarData, getPublicCalendarLinkSettings, getResidencyList, getScheduleOccurrenceData } from "@/data/internal";
 import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
 import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
@@ -36,8 +37,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         .filter((assignment) => assignment.talentId && ["confirmed", "completed"].includes(assignment.bookingStatus))
         .map((assignment) => resolveAssignmentMinutes(shiftStartMinute, shiftEndMinute, formatTimeInput(assignment.startsAt, shift.residencyTimezone), formatTimeInput(assignment.endsAt, shift.residencyTimezone)))
         .filter((window) => window.withinShift);
-      const schedulingStatus = slotSchedulingStatus(shiftStartMinute, shiftEndMinute, coverage);
-      const statusLabel = schedulingStatus === "empty" ? "Needs coverage" : schedulingStatus === "partial" ? "Partially covered" : `${activeAssignments.length} DJ${activeAssignments.length === 1 ? "" : "s"}`;
+      const assignmentStatus = slotSchedulingStatus(shiftStartMinute, shiftEndMinute, coverage);
+      const schedulingStatus = assignmentStatus === "empty" && (shift.programDetails || shift.manualHostName) ? "filled" : assignmentStatus;
+      const statusLabel = schedulingStatus === "empty" ? "Needs scheduling" : schedulingStatus === "partial" ? "Partially scheduled" : activeAssignments.length ? `${activeAssignments.length} talent` : "Scheduled";
       return {
         id: shift.id,
         date: shift.serviceDate,
@@ -57,7 +59,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         date: occurrence.serviceDate,
         title: calendarResidency ? occurrence.name : `${occurrence.name} · ${occurrence.residencyName}`,
         time: `${formatCompactMinuteRange(startMinute, resolveEndMinute(startMinute, formatTimeInput(occurrence.endsAt, occurrence.residencyTimezone)))} · Scheduled`,
-        residencyName: occurrence.assignments.map((assignment) => assignment.talentName).join(" + ") || "House activity",
+        residencyName: occurrence.assignments.map((assignment) => assignment.talentName).join(" + ") || occurrence.manualHostName || occurrence.programDetails || "Scheduled activity",
         color: occurrence.color,
         tone: "blue" as const,
         schedulingStatus: "filled" as const,
@@ -77,7 +79,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       id: slot.id,
       date: slot.date,
       title: calendarResidency ? slot.name : `${slot.name} · ${residency.name}`,
-      time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · ${slot.type === "house_activity" ? "Not scheduled" : "Open"}`,
+      time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · Needs scheduling`,
       residencyName: residency.name,
       color: slot.color,
       tone: calendarToneForSlot(slot.room, tones[Math.max(0, residencyList.findIndex((item) => item.id === residency.id)) % tones.length]),
@@ -103,8 +105,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <button className="button secondary" type="submit">View</button>
           </form>
           {calendarResidency ? <CalendarShareButton residencyId={calendarResidency.id} residencyName={calendarResidency.name} linkSettings={calendarLinkSettings} dayparts={visibleDayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} /> : null}
-          <div className="calendar-month-cluster"><div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs coverage" : "slots need coverage"}</span></div><div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link></div></div>
+          <div className="calendar-month-cluster"><div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div><div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link></div></div>
         </div></header>
+        <CalendarStatusLegend />
         <MonthCalendar compact monthKey={monthKey} events={events} ariaLabel="HFY company programming calendar" />
       </div>
     );
@@ -132,18 +135,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       .filter((assignment) => assignment.talentId && ["confirmed", "completed"].includes(assignment.bookingStatus))
       .map((assignment) => resolveAssignmentMinutes(shiftStartMinute, shiftEndMinute, formatTimeInput(assignment.startsAt, workspaceResidency.timezone), formatTimeInput(assignment.endsAt, workspaceResidency.timezone)))
       .filter((window) => window.withinShift);
-    const schedulingStatus = slotSchedulingStatus(shiftStartMinute, shiftEndMinute, coverageWindows);
+    const assignmentStatus = slotSchedulingStatus(shiftStartMinute, shiftEndMinute, coverageWindows);
+    const schedulingStatus = assignmentStatus === "empty" && (shift.programDetails || shift.manualHostName) ? "filled" : assignmentStatus;
     const schedulingLabel = schedulingStatus === "empty"
-      ? "Needs coverage"
+      ? "Needs scheduling"
       : schedulingStatus === "partial"
-        ? "Partially covered"
-        : `${activeAssignments.length} DJ${activeAssignments.length === 1 ? "" : "s"}`;
+        ? "Partially scheduled"
+        : activeAssignments.length ? `${activeAssignments.length} talent` : "Scheduled";
     return {
     id: shift.id,
     date: shift.serviceDate,
     title: matchedDaypart?.name ?? shift.name,
     time: `${formatCompactMinuteRange(shiftStartMinute, shiftEndMinute)} · ${schedulingLabel}`,
-    residencyName: artistNames.length ? artistNames.join(" + ") : shift.name,
+    residencyName: artistNames.length ? artistNames.join(" + ") : shift.manualHostName || shift.programDetails || shift.name,
     color: matchedDaypart?.color ?? shift.daypartColor ?? shift.shiftCalendarColor ?? undefined,
     tone: calendarToneForSlot(shift.room, daypartTones[Math.max(0, daypartIndex) % daypartTones.length]),
     daypartId: shift.daypartId,
@@ -153,6 +157,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     recordType: "financial_shift" as const,
     daypartType: "dj_artist" as const,
     billingMode: "billed_by_hfy" as const,
+    programDetails: shift.programDetails,
+    manualHostName: shift.manualHostName,
     schedulingStatus,
     assignments: activeAssignments.map((assignment) => ({
       id: assignment.id,
@@ -176,7 +182,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       date: occurrence.serviceDate,
       title: occurrence.name,
       time: `${formatCompactMinuteRange(shiftStartMinute, shiftEndMinute)} · Scheduled`,
-      residencyName: occurrence.assignments.map((assignment) => assignment.talentName).join(" + ") || "House activity",
+      residencyName: occurrence.assignments.map((assignment) => assignment.talentName).join(" + ") || occurrence.manualHostName || occurrence.programDetails || "Scheduled activity",
       color: occurrence.color,
       daypartId: occurrence.daypartId,
       shiftStartMinute,
@@ -185,6 +191,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       recordType: "nonfinancial_occurrence" as const,
       daypartType: occurrence.type,
       billingMode: occurrence.billingMode,
+      programDetails: occurrence.programDetails,
+      manualHostName: occurrence.manualHostName,
       schedulingStatus: "filled" as const,
       assignments: occurrence.assignments.map((assignment) => ({
         id: assignment.id,
@@ -208,7 +216,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     id: slot.id,
     date: slot.date,
     title: slot.name,
-    time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · ${slot.type === "house_activity" ? "Not scheduled" : "Open"}`,
+    time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · Needs scheduling`,
     residencyName: "Projected from Setup",
     color: slot.color,
     daypartId: slot.daypartId,
@@ -218,6 +226,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     recordType: "projected" as const,
     daypartType: slot.type,
     billingMode: slot.billingMode,
+    programDetails: "",
+    manualHostName: "",
     defaultDjCount: slot.defaultDjCount,
     schedulingStatus: "empty" as const,
     assignments: [],

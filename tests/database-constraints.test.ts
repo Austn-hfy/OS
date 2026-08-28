@@ -41,6 +41,7 @@ beforeAll(async () => {
   const publicCalendars = await readFile(new URL("../drizzle/0015_superb_norrin_radd.sql", import.meta.url), "utf8");
   const daypartTypes = await readFile(new URL("../drizzle/0016_daypart_types_and_schedule_occurrences.sql", import.meta.url), "utf8");
   const publicCalendarScopes = await readFile(new URL("../drizzle/0017_cold_silhouette.sql", import.meta.url), "utf8");
+  const flexibleDayparts = await readFile(new URL("../drizzle/0018_flashy_frightful_four.sql", import.meta.url), "utf8");
   await database.exec(initial.replaceAll("--> statement-breakpoint", ""));
   await database.exec(onboarding);
   await database.exec(rowSecurity.replaceAll("--> statement-breakpoint", ""));
@@ -59,6 +60,7 @@ beforeAll(async () => {
   await database.exec(publicCalendars.replaceAll("--> statement-breakpoint", ""));
   await database.exec(daypartTypes.replaceAll("--> statement-breakpoint", ""));
   await database.exec(publicCalendarScopes.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(flexibleDayparts.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),

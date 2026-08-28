@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
-import { saveDaypartAction, type ResidencyActionState } from "@/app/app/actions";
+import { removeDaypartAction, saveDaypartAction, type ResidencyActionState } from "@/app/app/actions";
 import { clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, weekdayNames, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
@@ -26,7 +26,6 @@ type EditorDraft = {
   name: string;
   room: string;
   color: string;
-  type: DaypartType;
   billingMode: DaypartBillingMode;
   defaultTalentRate: string;
   activeUntil: string;
@@ -57,7 +56,6 @@ function blankDraft(options: { room?: string; weekday?: number; startMinute?: nu
     name: "",
     room: options.room ?? "",
     color: options.color ?? colorPresets[0],
-    type: "dj_artist",
     billingMode: "billed_by_hfy",
     defaultTalentRate: "",
     activeUntil: "",
@@ -75,8 +73,7 @@ function draftFromDaypart(daypart: DaypartRow): EditorDraft {
     name: daypart.name,
     room: daypart.room,
     color: daypart.color,
-    type: daypart.type,
-    billingMode: daypart.billingMode ?? "billed_by_hfy",
+    billingMode: daypart.type === "house_activity" ? "tracking_only" : daypart.billingMode ?? "billed_by_hfy",
     defaultTalentRate: daypart.defaultTalentRateCents === null ? "" : (daypart.defaultTalentRateCents / 100).toFixed(2),
     activeUntil: daypart.activeUntil ?? "",
     active: daypart.active,
@@ -103,6 +100,8 @@ function displayRange(dayparts: DaypartRow[]) {
 
 export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = false }: { residencyId: string; dayparts: DaypartRow[]; onSaved?: () => void; readOnly?: boolean }) {
   const [draft, setDraft] = useState<EditorDraft | null>(null);
+  const [removePending, setRemovePending] = useState(false);
+  const [removeState, setRemoveState] = useState<ResidencyActionState>(initialActionState);
   const submitDaypart = async (previous: ResidencyActionState, formData: FormData) => {
     const result = await saveDaypartAction(previous, formData);
     if (result.status === "success") {
@@ -136,16 +135,15 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
       name: draft.name,
       room: draft.room,
       color: draft.color,
-      type: draft.type,
-      billingMode: draft.type === "dj_artist" ? draft.billingMode : null,
-      defaultTalentRateCents: draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? centsFromOptionalDollars(draft.defaultTalentRate) : null,
+      billingMode: draft.billingMode,
+      defaultTalentRateCents: draft.billingMode === "billed_by_hfy" ? centsFromOptionalDollars(draft.defaultTalentRate) : null,
       activeUntil: draft.activeUntil || null,
       active: draft.active,
       sortOrder: draft.sortOrder,
       rules: draft.rules.flatMap((rule, weekday) => {
         if (!rule.enabled || !rule.start || !rule.end) return [];
         const startMinute = clockToMinute(rule.start);
-        return [{ weekday, startMinute, endMinute: resolveEndMinute(startMinute, rule.end), defaultDjCount: draft.type === "dj_artist" ? optionalDjCount(rule.defaultDjCount) : null }];
+        return [{ weekday, startMinute, endMinute: resolveEndMinute(startMinute, rule.end), defaultDjCount: optionalDjCount(rule.defaultDjCount) }];
       }),
     });
   }, [draft, residencyId]);
@@ -192,6 +190,23 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
     setDraft(blankDraft({ room, weekday, startMinute, color: nextColor }));
   }
 
+  async function removeCurrentDaypart() {
+    if (!draft?.id) return;
+    const confirmed = window.confirm("Remove this Daypart? If it has any scheduled or historical records, HFY OS will archive it and preserve that history. Otherwise it will be permanently deleted.");
+    if (!confirmed) return;
+    const formData = new FormData();
+    formData.set("residencyId", residencyId);
+    formData.set("daypartId", draft.id);
+    setRemovePending(true);
+    const result = await removeDaypartAction(formData);
+    setRemovePending(false);
+    setRemoveState(result);
+    if (result.status === "success") {
+      setDraft(null);
+      onSaved?.();
+    }
+  }
+
   return (
     <section className="daypart-manager">
       <div className="section-heading"><div><p className="eyebrow">Standing schedule</p><h2>Weekly Daypart grid</h2><p className="subhead">Every colored block projects onto the calendar until it is scheduled.</p></div>{readOnly ? null : <button className="button" type="button" onClick={() => setDraft(blankDraft({ color: colorPresets[dayparts.length % colorPresets.length] }))}>+ Add Daypart</button>}</div>
@@ -230,7 +245,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                   key={daypart.id}
                 >
                   <strong>{daypart.name}</strong>
-                  <span>{formatLocalMinute(rule.startMinute)}–{formatLocalMinute(rule.endMinute)} · {daypart.type === "house_activity" ? "House activity" : daypart.billingMode === "tracking_only" ? "Tracking only" : rule.defaultDjCount ? `${rule.defaultDjCount} DJ target` : "No DJ target"}</span>
+                  <span>{formatLocalMinute(rule.startMinute)}–{formatLocalMinute(rule.endMinute)} · {daypart.billingMode === "tracking_only" || daypart.type === "house_activity" ? "Tracking only" : rule.defaultDjCount ? `${rule.defaultDjCount} talent target` : "Billed by HFY"}</span>
                 </button>;
               })}
             </div>;
@@ -245,12 +260,11 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
               <input name="payload" type="hidden" value={payload} />
               <div className="daypart-editor-heading"><div><p className="eyebrow">{draft.id ? "Edit Daypart" : "New Daypart"}</p><h2 id="daypart-editor-title">{draft.id ? draft.name : "Add standing hours"}</h2></div><button className="quick-modal-close" type="button" aria-label="Close Daypart editor" onClick={() => setDraft(null)}>×</button></div>
               <div className="daypart-editor-scroll">
-                <div className="field"><label>Type</label><div className="daypart-type-options"><button className={draft.type === "dj_artist" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "dj_artist" })}><strong>DJ / Artist</strong><small>Assign artists and choose whether HFY bills the slot.</small></button><button className={draft.type === "house_activity" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "house_activity", defaultTalentRate: "" })}><strong>House Activity</strong><small>Track a scheduled activity without an artist or financial records.</small></button></div></div>
+                <div className="field"><label>How is this Daypart handled?</label><div className="daypart-type-options"><button className={draft.billingMode === "billed_by_hfy" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "billed_by_hfy" })}><strong>Billed by HFY</strong><small>Creates the client billing record. Registered talent also receives an Assignment and Payout.</small></button><button className={draft.billingMode === "tracking_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "tracking_only", defaultTalentRate: "" })}><strong>Tracking only</strong><small>Calendar only. Program details and optional talent or a host can still be added.</small></button></div></div>
                 <div className="row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /></div><div className="field"><label>Room / space</label><input value={draft.room} onChange={(event) => setDraft({ ...draft, room: event.target.value })} placeholder="Amigo Room" required /></div></div>
-                {draft.type === "dj_artist" ? <div className="field"><label>Billing</label><div className="daypart-type-options"><button className={draft.billingMode === "billed_by_hfy" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "billed_by_hfy" })}><strong>Billed by HFY</strong><small>Creates the existing Shift, Assignment, Payout, and Invoice records.</small></button><button className={draft.billingMode === "tracking_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "tracking_only", defaultTalentRate: "" })}><strong>Tracking only — not billed by HFY</strong><small>Keeps the artist on the calendar and in booking history without money records.</small></button></div></div> : null}
                 <div className="daypart-definition-row">
                   <div className="field daypart-color-field"><label>Calendar color</label><div className="daypart-color-control"><input aria-label="Daypart color" type="color" value={draft.color} onChange={(event) => setDraft({ ...draft, color: event.target.value.toUpperCase() })} /><strong>{draft.color}</strong></div><div className="daypart-color-presets">{colorPresets.map((color) => <button aria-label={`Use ${color}`} className={draft.color === color ? "active" : ""} type="button" style={{ background: color }} onClick={() => setDraft({ ...draft, color })} key={color} />)}</div></div>
-                  {draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? <div className="field"><label>Default talent rate ($/hr) <span>optional</span></label><SensitiveInput type="number" min="0" step="0.01" value={draft.defaultTalentRate} onChange={(event) => setDraft({ ...draft, defaultTalentRate: event.target.value })} placeholder="Uses Residency default" /></div> : null}
+                  {draft.billingMode === "billed_by_hfy" ? <div className="field"><label>Default talent rate ($/hr) <span>optional</span></label><SensitiveInput type="number" min="0" step="0.01" value={draft.defaultTalentRate} onChange={(event) => setDraft({ ...draft, defaultTalentRate: event.target.value })} placeholder="Uses Residency default" /></div> : null}
                   <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this Daypart continues indefinitely.</small></div>
                 </div>
                 <label className="checkbox-row"><input checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} type="checkbox" /> Active Daypart</label>
@@ -259,12 +273,14 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                   {draft.rules.map((rule, weekday) => (
                     <div className={`week-rule ${rule.enabled ? "enabled" : ""}`} key={weekdayNames[weekday]}>
                       <button className="week-toggle" type="button" aria-pressed={rule.enabled} onClick={() => toggleRule(weekday)}>{weekdayNames[weekday].slice(0, 3)}</button>
-                      {rule.enabled ? <div className="week-rule-fields"><div className="field"><label>Start</label><TimeSelect ariaLabel={`${weekdayNames[weekday]} start time`} value={rule.start} onChange={(start) => updateRule(weekday, { start })} required /></div><div className="field"><label>End</label><TimeSelect ariaLabel={`${weekdayNames[weekday]} end time`} value={rule.end} onChange={(end) => updateRule(weekday, { end })} required /></div>{draft.type === "dj_artist" ? <div className="field"><label>DJ count <span>optional</span></label><input type="number" min="0" max="20" value={rule.defaultDjCount} onChange={(event) => updateRule(weekday, { defaultDjCount: event.target.value })} /></div> : null}</div> : <p>Off</p>}
+                      {rule.enabled ? <div className="week-rule-fields"><div className="field"><label>Start</label><TimeSelect ariaLabel={`${weekdayNames[weekday]} start time`} value={rule.start} onChange={(start) => updateRule(weekday, { start })} required /></div><div className="field"><label>End</label><TimeSelect ariaLabel={`${weekdayNames[weekday]} end time`} value={rule.end} onChange={(end) => updateRule(weekday, { end })} required /></div><div className="field"><label>Talent count <span>optional</span></label><input type="number" min="0" max="20" value={rule.defaultDjCount} onChange={(event) => updateRule(weekday, { defaultDjCount: event.target.value })} /></div></div> : <p>Off</p>}
                     </div>
                   ))}
                 </div>
-                {draft.type === "dj_artist" ? <p className="privacy-note">DJ count is optional. Leave it at 0 for no target; you can still schedule one artist or several, and individual hours determine coverage{draft.billingMode === "billed_by_hfy" ? " and pay" : ""}.</p> : null}
+                <p className="privacy-note">Talent count is optional. Leave it at 0 when the Daypart may have no talent, a typed-in host, or a changing number of registered artists.</p>
+                {draft.id ? <div className="daypart-danger-zone"><div><strong>Remove Daypart</strong><small>Unused Dayparts are deleted. Anything with scheduled or historical records is archived so its history stays intact.</small></div><button className="remove-dj-button" type="button" disabled={removePending} onClick={removeCurrentDaypart}>{removePending ? "Removing…" : "Delete / archive Daypart"}</button></div> : null}
                 {state.status === "error" ? <p className="error" aria-live="polite">{state.message}</p> : null}
+                {removeState.status === "error" ? <p className="error" aria-live="polite">{removeState.message}</p> : null}
               </div>
               <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button><button className="button" disabled={pending} type="submit">{pending ? "Saving…" : "Save Daypart"}</button></div>
             </form>

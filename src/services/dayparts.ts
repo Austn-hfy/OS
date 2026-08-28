@@ -45,22 +45,21 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
   const name = input.name.trim();
   const room = input.room.trim();
   const color = input.color.trim().toUpperCase();
-  const billingMode = input.type === "house_activity" ? null : input.billingMode ?? "billed_by_hfy";
-  const defaultTalentRateCents = input.type === "dj_artist" && billingMode === "billed_by_hfy"
+  const billingMode = input.billingMode ?? "billed_by_hfy";
+  const defaultTalentRateCents = billingMode === "billed_by_hfy"
     ? input.defaultTalentRateCents ?? null
     : null;
   const activeUntil = input.activeUntil || null;
   if (!name || !room) throw new Error("Daypart name and room are required.");
   if (!/^#[0-9A-F]{6}$/.test(color)) throw new Error("Choose a valid Daypart color.");
-  if (input.type !== "dj_artist" && input.type !== "house_activity") throw new Error("Choose a valid Daypart type.");
-  if (input.type === "dj_artist" && billingMode !== "billed_by_hfy" && billingMode !== "tracking_only") {
-    throw new Error("Choose how this DJ / Artist Daypart is billed.");
+  if (billingMode !== "billed_by_hfy" && billingMode !== "tracking_only") {
+    throw new Error("Choose how this Daypart is handled.");
   }
   if (defaultTalentRateCents !== null && (!Number.isInteger(defaultTalentRateCents) || defaultTalentRateCents < 0)) {
     throw new Error("Daypart talent rate must be blank or a nonnegative amount.");
   }
   if (activeUntil) weekdayForDate(activeUntil);
-  const rules = validateDaypartRules(input.rules, input.type);
+  const rules = validateDaypartRules(input.rules);
   const database = getDb();
 
   return database.transaction(async (tx) => {
@@ -77,7 +76,7 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
         name,
         room,
         color,
-        type: input.type,
+        type: "dj_artist",
         billingMode,
         defaultTalentRateCents,
         activeUntil,
@@ -92,7 +91,7 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
         name,
         room,
         color,
-        type: input.type,
+        type: "dj_artist",
         billingMode,
         defaultTalentRateCents,
         activeUntil,
@@ -110,9 +109,45 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
       action: input.id ? "daypart_updated" : "daypart_created",
       entityType: "daypart",
       entityId: daypartId,
-      details: { name, room, color, type: input.type, billingMode, defaultTalentRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
+      details: { name, room, color, billingMode, defaultTalentRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
     });
     return { id: daypartId };
+  });
+}
+
+export async function removeDaypart(actor: InternalActor, residencyId: string, daypartId: string) {
+  const database = getDb();
+  return database.transaction(async (tx) => {
+    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name }).from(dayparts)
+      .innerJoin(residencies, eq(dayparts.residencyId, residencies.id))
+      .where(and(
+        eq(dayparts.id, daypartId),
+        eq(dayparts.residencyId, residencyId),
+        eq(residencies.active, true),
+        eq(residencies.operatingMode, "operations"),
+      )).limit(1);
+    if (!daypart) throw new Error("Daypart not found in this Residency.");
+
+    const [shiftUsage, occurrenceUsage] = await Promise.all([
+      tx.select({ id: shifts.id }).from(shifts).where(eq(shifts.daypartId, daypartId)).limit(1),
+      tx.select({ id: scheduleOccurrences.id }).from(scheduleOccurrences).where(eq(scheduleOccurrences.daypartId, daypartId)).limit(1),
+    ]);
+    const archived = Boolean(shiftUsage.length || occurrenceUsage.length);
+    if (archived) {
+      await tx.update(dayparts).set({ active: false, updatedAt: new Date() }).where(eq(dayparts.id, daypartId));
+    } else {
+      await tx.delete(dayparts).where(eq(dayparts.id, daypartId));
+    }
+    await tx.insert(auditLog).values({
+      residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: archived ? "daypart_archived" : "daypart_deleted",
+      entityType: "daypart",
+      entityId: daypartId,
+      details: { name: daypart.name, historicalRecordsPreserved: archived },
+    });
+    return { mode: archived ? "archived" as const : "deleted" as const };
   });
 }
 

@@ -760,14 +760,14 @@
 }
 .hfy-style-system .calendar-event { transition: transform var(--hfy-motion), filter var(--hfy-motion); }
 .hfy-style-system .calendar-event.schedule-empty {
-  color: #90363d;
-  background: color-mix(in srgb, var(--hfy-error) 8%, white);
-  box-shadow: inset 0 0 0 1px rgba(183, 75, 82, 0.34), 0 0 7px rgba(183, 75, 82, 0.18);
+  color: #102334;
+  background: color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 64%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 66%, transparent);
 }
 .hfy-style-system .calendar-event.schedule-partial {
-  color: #7f4b20;
-  background: color-mix(in srgb, var(--hfy-warning) 9%, white);
-  box-shadow: inset 0 0 0 1px rgba(183, 100, 39, 0.26);
+  color: #173044;
+  background: color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 36%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 42%, transparent);
 }
 .hfy-style-system .calendar-more-events { color: var(--hfy-action-strong); }
 
@@ -1125,7 +1125,7 @@
 }
 
 .hfy-style-system .calendar-main .calendar-event.schedule-empty {
-  background: rgba(255, 247, 247, 0.96);
+  background: color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 64%, white);
 }
 
 @media (max-width: 900px) {

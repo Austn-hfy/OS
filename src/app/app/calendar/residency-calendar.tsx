@@ -5,6 +5,7 @@ import { useActionState, useEffect, useMemo, useState, type CSSProperties } from
 import { addCalendarAssignmentAction, bookResidencyDateAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, type ResidencyActionState } from "@/app/app/actions";
 import { ArtistSearchPicker } from "@/components/artist-search-picker";
 import { CalendarShareButton } from "@/components/calendar-share-button";
+import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { Status } from "@/components/format";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
@@ -36,6 +37,8 @@ type ResidencyEvent = MonthCalendarEvent & {
   daypartType: DaypartType;
   billingMode: DaypartBillingMode | null;
   defaultDjCount?: number | null;
+  programDetails: string;
+  manualHostName: string;
   assignments: CalendarAssignment[];
 };
 
@@ -60,7 +63,7 @@ type ResidencyCalendarProps = {
 };
 
 type SlotDraft = { id: string; talentId: string; start: string; end: string; confirmed: boolean; compensationType: "hourly" | "fixed" | "na"; rateOverride: string; fixedFee: string };
-type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; name: string; room: string; color: string; type: DaypartType; billingMode: DaypartBillingMode | null; defaultTalentRateCents: number | null; defaultDjCount: number | null; existing: boolean; start: string; end: string; clientRateOverride: string; slots: SlotDraft[] };
+type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; name: string; room: string; color: string; type: DaypartType; billingMode: DaypartBillingMode | null; defaultTalentRateCents: number | null; defaultDjCount: number | null; existing: boolean; start: string; end: string; clientRateOverride: string; programDetails: string; manualHostName: string; slots: SlotDraft[] };
 type ReplacementDraft = { assignmentId: string; talentId: string; start: string; end: string };
 type ModalState = { type: "add"; date: string } | { type: "edit"; eventId: string } | null;
 type StatusFilter = "needs" | "all" | "filled";
@@ -173,6 +176,8 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
         start,
         end,
         clientRateOverride: "",
+        programDetails: "",
+        manualHostName: "",
         slots: [],
       }];
     });
@@ -192,6 +197,8 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
       start: "18:00",
       end: "21:00",
       clientRateOverride: "",
+      programDetails: "",
+      manualHostName: "",
       slots: [],
     });
     setSuggestions(nextSuggestions);
@@ -288,8 +295,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
 
   const assignmentWarning = useMemo(() => {
     if (!activeSuggestion || activeSuggestion.existing) return "";
-    if (activeSuggestion.type === "house_activity") return "";
-    if (!activeSuggestion.slots.length) return `Add at least one DJ to the ${activeSuggestion.name} slot.`;
+    if (!activeSuggestion.slots.length) return "";
     try {
       const shiftStartMinute = clockToMinute(activeSuggestion.start);
       const shiftEndMinute = resolveEndMinute(shiftStartMinute, activeSuggestion.end);
@@ -300,19 +306,19 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
         slot.end,
       ));
       if (windows.some((window) => !window.withinShift)) {
-        return `The ${activeSuggestion.name} slot is only ${formatLocalMinute(shiftStartMinute)}–${formatLocalMinute(shiftEndMinute)}. Please adjust DJ times.`;
+        return `The ${activeSuggestion.name} slot is only ${formatLocalMinute(shiftStartMinute)}–${formatLocalMinute(shiftEndMinute)}. Please adjust talent times.`;
       }
       if (hasOverlappingAssignmentMinutes(windows)) {
-        return `DJ times overlap in the ${activeSuggestion.name} slot. Adjust the times before adding this DJ.`;
+        return `Talent times overlap in the ${activeSuggestion.name} slot. Adjust the times before adding this artist.`;
       }
       const unfinished = activeSuggestion.slots.find((slot) => !slot.confirmed);
       if (unfinished) {
         const artist = talent.find((item) => item.id === unfinished.talentId);
-        return `Finish adding ${artist?.stageName ?? "this DJ"}: confirm their hours before saving the ${activeSuggestion.name} slot.`;
+        return `Finish adding ${artist?.stageName ?? "this artist"}: confirm their hours before saving the ${activeSuggestion.name} slot.`;
       }
       return "";
     } catch {
-      return "Choose valid DJ start and end times.";
+      return "Choose valid talent start and end times.";
     }
   }, [activeSuggestion, talent]);
 
@@ -344,7 +350,9 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           startMinute,
           endMinute,
           clientRateOverrideCents: dollarsToCents(activeSuggestion.clientRateOverride),
-          assignments: activeSuggestion.type === "house_activity" ? [] : activeSuggestion.slots.filter((slot) => slot.confirmed).map((slot) => {
+          programDetails: activeSuggestion.programDetails,
+          manualHostName: activeSuggestion.manualHostName,
+          assignments: activeSuggestion.slots.filter((slot) => slot.confirmed).map((slot) => {
             const assignment = resolveAssignmentMinutes(startMinute, endMinute, slot.start, slot.end);
             return {
               talentId: slot.talentId,
@@ -468,22 +476,23 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
         <div className="calendar-title"><p className="eyebrow">{residency.name}</p><h1>Calendar</h1></div>
         <div className="calendar-command-controls">
           <div className="calendar-view-filters">
-          <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="needs">Needs coverage</option><option value="all">All slots</option><option value="filled">Scheduled</option></select></div>
+          <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="needs">Needs scheduling</option><option value="all">All slots</option><option value="filled">Scheduled</option></select></div>
           <div className="field"><label htmlFor="calendar-daypart-filter">Daypart</label><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></div>
           </div>
           <CalendarShareButton residencyId={residency.id} residencyName={residency.name} linkSettings={residency.calendarLinkSettings} dayparts={dayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} />
           <div className="calendar-month-cluster">
-            <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs coverage" : "slots need coverage"}</span></div>
+            <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div>
             <div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={previousHref}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={nextHref}>→</Link></div>
           </div>
         </div>
       </header>
+      <CalendarStatusLegend />
       <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={openDate} onEventClick={openEvent} />
 
       {modal ? <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }}>
         <section className={`quick-modal ${modal.type === "edit" ? "quick-modal-edit" : ""}`} role="dialog" aria-modal="true" aria-labelledby="quick-modal-title">
           <header className="quick-modal-header">
-            <div><p className="eyebrow">{modal.type === "add" ? `${weekdayNames[weekdayForDate(modal.date)]}, ${modal.date}` : editingEvent?.date}</p><h2 id="quick-modal-title">{modal.type === "add" ? activeSuggestion?.type === "house_activity" ? "Schedule house activity" : "Assign DJ" : editingEvent?.daypartType === "house_activity" ? `Scheduled · ${editingEvent.title}` : `Manage DJs · ${editingEvent?.title ?? "Slot"}`}</h2></div>
+            <div><p className="eyebrow">{modal.type === "add" ? `${weekdayNames[weekdayForDate(modal.date)]}, ${modal.date}` : editingEvent?.date}</p><h2 id="quick-modal-title">{modal.type === "add" ? "Schedule Daypart" : `Manage · ${editingEvent?.title ?? "Slot"}`}</h2></div>
             <button className="quick-modal-close" type="button" aria-label="Close popup" onClick={() => setModal(null)}>×</button>
           </header>
 
@@ -501,33 +510,36 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                   {!activeSuggestion.oneTime ? <div className="quick-selected-daypart" style={{ "--daypart-color": activeSuggestion.color } as CSSProperties}><div><span>Selected Daypart</span><strong>{activeSuggestion.name}</strong><small>{activeSuggestion.room}</small></div><div className="quick-selected-window"><span>Recommended window</span><strong>{formatLocalMinute(clockToMinute(activeSuggestion.start))}–{formatLocalMinute(resolveEndMinute(clockToMinute(activeSuggestion.start), activeSuggestion.end))}</strong></div></div> : <div className="quick-time-fields"><div className="field"><label>Slot starts</label><TimeSelect ariaLabel="One-time slot start time" value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Slot ends</label><TimeSelect ariaLabel="One-time slot end time" value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div>}
                   {!activeSuggestion.oneTime ? <details className="quick-shift-options"><summary>Change this slot&apos;s overall window</summary><div className="quick-time-fields"><div className="field"><label>Slot starts</label><TimeSelect ariaLabel={`${activeSuggestion.name} slot start time`} value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Slot ends</label><TimeSelect ariaLabel={`${activeSuggestion.name} slot end time`} value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div></details> : null}
 
-                  {activeSuggestion.type === "dj_artist" ? <><div className="quick-assignment-heading"><div><strong>{activeSuggestion.slots.length ? "DJ assignments" : "Choose a DJ"}</strong><small>{activeSuggestion.slots.length ? "Add another DJ if needed; individual hours cannot overlap." : "Search and select the artist first. You’ll choose their exact play time next."}</small></div></div>
-                  {!activeSuggestion.slots.length ? <ArtistSearchPicker artists={artistOptions} excludedIds={[]} label="Search and select a DJ" initiallyOpen onSelect={addArtist} /> : null}
+                  <div className="quick-program-fields"><div className="field"><label>Program / activity details <span>optional</span></label><input value={activeSuggestion.programDetails} onChange={(event) => updateSuggestion({ programDetails: event.target.value })} placeholder="Movie title, theme, or event detail" /></div><div className="field"><label>Host / guest name <span>optional</span></label><input value={activeSuggestion.manualHostName} onChange={(event) => updateSuggestion({ manualHostName: event.target.value })} placeholder="Employee or outside host" /><small>Typed names stay on this calendar entry and are never added to Artist Lookup or payouts.</small></div></div>
+
+                  <><div className="quick-assignment-heading"><div><strong>{activeSuggestion.slots.length ? "Registered talent" : "Registered talent (optional)"}</strong><small>{activeSuggestion.slots.length ? "Add another artist if needed; individual hours cannot overlap." : "Choose from Artist Lookup only when this person should have booking history."}</small></div></div>
+                  {!activeSuggestion.slots.length ? <ArtistSearchPicker artists={artistOptions} excludedIds={[]} label="Search Artist Lookup" initiallyOpen={false} onSelect={addArtist} /> : null}
                   <div className="quick-assignment-list">{activeSuggestion.slots.map((slot, slotIndex) => {
                     const artist = talent.find((item) => item.id === slot.talentId);
                     return <div className={`quick-assignment-card ${slot.confirmed ? "confirmed" : "draft"}`} key={slot.id}>
-                      <div className="quick-assignment-card-heading"><div><span>DJ {slotIndex + 1}</span><strong>{artist?.stageName ?? "DJ"}</strong><small>{slot.confirmed ? "✓ Added" : "Finish this DJ"}</small></div><div className="quick-card-actions">{slot.confirmed ? <button type="button" onClick={() => updateSlot(slotIndex, { confirmed: false })}>Edit</button> : null}<button type="button" onClick={() => removeArtist(slot.id)}>Remove</button></div></div>
-                      {!slot.confirmed ? <div className="quick-assignment-time-intro"><div><strong>Choose play time</strong><small>Recommended: {formatLocalMinute(clockToMinute(activeSuggestion.start))}–{formatLocalMinute(resolveEndMinute(clockToMinute(activeSuggestion.start), activeSuggestion.end))}</small></div><button type="button" onClick={() => updateSlot(slotIndex, { start: activeSuggestion.start, end: activeSuggestion.end })}>Use recommended</button></div> : null}
-                      <div className="quick-dj-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel={`${artist?.stageName ?? `DJ ${slotIndex + 1}`} start time`} value={slot.start} disabled={slot.confirmed} onChange={(value) => updateSlot(slotIndex, { start: value })} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel={`${artist?.stageName ?? `DJ ${slotIndex + 1}`} end time`} value={slot.end} disabled={slot.confirmed} onChange={(value) => updateSlot(slotIndex, { end: value })} stepMinutes={15} required /></div></div>
-                      {!slot.confirmed ? <button className="button quick-confirm-dj" type="button" disabled={draftTimeInvalid} onClick={() => confirmArtist(slot.id)}>Add DJ</button> : null}
+                      <div className="quick-assignment-card-heading"><div><span>Talent {slotIndex + 1}</span><strong>{artist?.stageName ?? "Artist"}</strong><small>{slot.confirmed ? "✓ Added" : "Finish this artist"}</small></div><div className="quick-card-actions">{slot.confirmed ? <button type="button" onClick={() => updateSlot(slotIndex, { confirmed: false })}>Edit</button> : null}<button type="button" onClick={() => removeArtist(slot.id)}>Remove</button></div></div>
+                      {!slot.confirmed ? <div className="quick-assignment-time-intro"><div><strong>Choose appearance time</strong><small>Recommended: {formatLocalMinute(clockToMinute(activeSuggestion.start))}–{formatLocalMinute(resolveEndMinute(clockToMinute(activeSuggestion.start), activeSuggestion.end))}</small></div><button type="button" onClick={() => updateSlot(slotIndex, { start: activeSuggestion.start, end: activeSuggestion.end })}>Use recommended</button></div> : null}
+                      <div className="quick-dj-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel={`${artist?.stageName ?? `Talent ${slotIndex + 1}`} start time`} value={slot.start} disabled={slot.confirmed} onChange={(value) => updateSlot(slotIndex, { start: value })} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel={`${artist?.stageName ?? `Talent ${slotIndex + 1}`} end time`} value={slot.end} disabled={slot.confirmed} onChange={(value) => updateSlot(slotIndex, { end: value })} stepMinutes={15} required /></div></div>
+                      {!slot.confirmed ? <button className="button quick-confirm-dj" type="button" disabled={draftTimeInvalid} onClick={() => confirmArtist(slot.id)}>Add talent</button> : null}
                     </div>;
                   })}</div>
-                  {activeSuggestion.slots.length && !activeSuggestion.slots.some((slot) => !slot.confirmed) ? <ArtistSearchPicker artists={artistOptions} excludedIds={activeSuggestion.slots.map((slot) => slot.talentId)} label="Add another DJ" onSelect={addArtist} /> : null}
-                  {assignmentWarning && activeSuggestion.slots.length ? <p className={assignmentWarning.startsWith("Finish adding") ? "draft-notice" : "error"} aria-live="polite">{assignmentWarning}</p> : null}
+                  {activeSuggestion.slots.length && !activeSuggestion.slots.some((slot) => !slot.confirmed) ? <ArtistSearchPicker artists={artistOptions} excludedIds={activeSuggestion.slots.map((slot) => slot.talentId)} label="Add another registered artist" onSelect={addArtist} /> : null}
+                  {assignmentWarning ? <p className={assignmentWarning.startsWith("Finish adding") ? "draft-notice" : "error"} aria-live="polite">{assignmentWarning}</p> : null}
 
-                  {!previewMode && activeSuggestion.billingMode === "billed_by_hfy" ? <details className="quick-more"><summary>Pay and billing options</summary><div className="quick-more-fields"><div className="field"><label>Client rate override</label><SensitiveInput type="number" min="0" step="0.01" value={activeSuggestion.clientRateOverride} onChange={(event) => updateSuggestion({ clientRateOverride: event.target.value })} placeholder={`Default $${(residency.clientHourlyRateCents / 100).toFixed(0)}/hr`} /></div>{activeSuggestion.slots.map((slot, slotIndex) => <div className="quick-slot-details" key={slot.id}><strong>DJ {slotIndex + 1}</strong><div className="field"><label>Compensation</label><select value={slot.compensationType} onChange={(event) => updateSlot(slotIndex, { compensationType: event.target.value as SlotDraft["compensationType"] })}><option value="hourly">Hourly</option><option value="fixed">Fixed fee</option><option value="na">N/A</option></select></div><div className="field"><label>{slot.compensationType === "fixed" ? "Fixed fee" : "Talent rate override"}</label><SensitiveInput type="number" min="0" step="0.01" value={slot.compensationType === "fixed" ? slot.fixedFee : slot.rateOverride} onChange={(event) => updateSlot(slotIndex, slot.compensationType === "fixed" ? { fixedFee: event.target.value } : { rateOverride: event.target.value })} placeholder={slot.compensationType === "hourly" ? `${activeSuggestion.defaultTalentRateCents === null ? "Residency" : "Daypart"} default $${((activeSuggestion.defaultTalentRateCents ?? residency.defaultTalentRateCents) / 100).toFixed(0)}/hr` : undefined} /></div></div>)}</div></details> : activeSuggestion.billingMode === "tracking_only" ? <p className="privacy-note">Tracking only — this booking will appear on the calendar and in the artist&apos;s booking history, with no payout or invoice records.</p> : null}</> : <div className="quick-house-activity"><strong>Ready to schedule</strong><p>This activity will be marked on the calendar without an artist, rate, payout, or invoice record.</p></div>}
+                  {!previewMode && activeSuggestion.billingMode === "billed_by_hfy" ? <details className="quick-more"><summary>Pay and billing options</summary><div className="quick-more-fields"><div className="field"><label>Client rate override</label><SensitiveInput type="number" min="0" step="0.01" value={activeSuggestion.clientRateOverride} onChange={(event) => updateSuggestion({ clientRateOverride: event.target.value })} placeholder={`Default $${(residency.clientHourlyRateCents / 100).toFixed(0)}/hr`} /></div>{activeSuggestion.slots.map((slot, slotIndex) => <div className="quick-slot-details" key={slot.id}><strong>Talent {slotIndex + 1}</strong><div className="field"><label>Compensation</label><select value={slot.compensationType} onChange={(event) => updateSlot(slotIndex, { compensationType: event.target.value as SlotDraft["compensationType"] })}><option value="hourly">Hourly</option><option value="fixed">Fixed fee</option><option value="na">N/A</option></select></div><div className="field"><label>{slot.compensationType === "fixed" ? "Fixed fee" : "Talent rate override"}</label><SensitiveInput type="number" min="0" step="0.01" value={slot.compensationType === "fixed" ? slot.fixedFee : slot.rateOverride} onChange={(event) => updateSlot(slotIndex, slot.compensationType === "fixed" ? { fixedFee: event.target.value } : { rateOverride: event.target.value })} placeholder={slot.compensationType === "hourly" ? `${activeSuggestion.defaultTalentRateCents === null ? "Residency" : "Daypart"} default $${((activeSuggestion.defaultTalentRateCents ?? residency.defaultTalentRateCents) / 100).toFixed(0)}/hr` : undefined} /></div></div>)}</div></details> : activeSuggestion.billingMode === "tracking_only" ? <p className="privacy-note">Tracking only — registered artists appear in booking history, but no payout or invoice records are created. Typed hosts stay informational only.</p> : null}</>
                 </> : null}
 
                 {state.status === "error" ? <p className="error" aria-live="polite">{state.message}</p> : null}
-                <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => { setDirectDaypartSelection(false); setAddMode("choose"); }}>Back</button><span>{activeSuggestion?.type === "house_activity" ? "Confirm this activity?" : "All DJs added?"}</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button><button className="button" type="submit" disabled={pending || !activeSuggestion || activeSuggestion.existing || !activeSuggestion.name.trim() || !activeSuggestion.room.trim() || Boolean(assignmentWarning)}>{pending ? "Saving…" : activeSuggestion?.type === "house_activity" ? "Mark scheduled" : `Save ${activeSuggestion?.name || "music"} slot`}</button></footer>
+                <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => { setDirectDaypartSelection(false); setAddMode("choose"); }}>Back</button><span>Ready to schedule?</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button><button className="button" type="submit" disabled={pending || !activeSuggestion || activeSuggestion.existing || !activeSuggestion.name.trim() || !activeSuggestion.room.trim() || Boolean(assignmentWarning)}>{pending ? "Saving…" : activeSuggestion?.billingMode === "tracking_only" && !activeSuggestion.slots.length ? "Mark scheduled" : `Save ${activeSuggestion?.name || "Daypart"}`}</button></footer>
               </form>
             ) : editingEvent ? editingEvent.recordType === "nonfinancial_occurrence" ? <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
-              <div className="quick-house-activity"><strong>{editingEvent.daypartType === "house_activity" ? "House activity scheduled" : "Tracking-only booking scheduled"}</strong><p>{editingEvent.daypartType === "house_activity" ? "No artist or financial records were created." : "This artist booking is tracked without payout or invoice records."}</p></div>
+              <div className="quick-house-activity"><strong>Tracking-only Daypart scheduled</strong><p>No payout or invoice records were created.</p>{editingEvent.programDetails ? <p><strong>Program:</strong> {editingEvent.programDetails}</p> : null}{editingEvent.manualHostName ? <p><strong>Host:</strong> {editingEvent.manualHostName}</p> : null}</div>
               {editingEvent.assignments.length ? <div className="quick-reschedule-list">{editingEvent.assignments.map((assignment, index) => <div className="quick-reschedule-row" key={assignment.id}><div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div></div>)}</div> : null}
               <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
             </> : <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
+              {editingEvent.programDetails || editingEvent.manualHostName ? <div className="quick-program-fields">{editingEvent.programDetails ? <div><span>Program / activity</span><strong>{editingEvent.programDetails}</strong></div> : null}{editingEvent.manualHostName ? <div><span>Host / guest</span><strong>{editingEvent.manualHostName}</strong></div> : null}</div> : null}
               <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours{previewMode ? "." : " because those hours determine pay."}</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft)} onClick={startAddingAssignment}>+ Add another DJ</button></div>
               {newAssignmentDraft ? <section className="replacement-editor new-assignment-editor">
                 <div className="replacement-step"><span>1</span><div><strong>Choose the DJ</strong><small>Only artists approved for this Residency appear here.</small></div></div>

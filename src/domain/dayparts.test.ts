@@ -15,15 +15,15 @@ import {
 } from "./dayparts";
 
 describe("Daypart weekly rules", () => {
-  it("routes billed, tracking-only, and House Activity slots to separate record chains", () => {
+  it("routes billed and tracking-only Dayparts to separate record chains", () => {
     expect(daypartBookingRecordKind("dj_artist", "billed_by_hfy")).toBe("financial_shift");
     expect(daypartBookingRecordKind("dj_artist", "tracking_only")).toBe("tracking_occurrence");
-    expect(daypartBookingRecordKind("house_activity", null)).toBe("house_occurrence");
+    expect(daypartBookingRecordKind("house_activity", null)).toBe("tracking_occurrence");
   });
 
-  it("removes DJ-count semantics from House Activity rules", () => {
-    expect(validateDaypartRules([{ weekday: 5, startMinute: 720, endMinute: 900, defaultDjCount: 8 }], "house_activity"))
-      .toEqual([{ weekday: 5, startMinute: 720, endMinute: 900, defaultDjCount: null }]);
+  it("keeps optional talent planning independent from billing mode", () => {
+    expect(validateDaypartRules([{ weekday: 5, startMinute: 720, endMinute: 900, defaultDjCount: 8 }]))
+      .toEqual([{ weekday: 5, startMinute: 720, endMinute: 900, defaultDjCount: 8 }]);
   });
 
   it("keeps the DJ planning target optional", () => {

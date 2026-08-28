@@ -10,7 +10,7 @@ import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
-import { saveDaypart } from "@/services/dayparts";
+import { removeDaypart, saveDaypart } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
 import { addAssignmentToShift, createResidencyDateBooking } from "@/services/residency-bookings";
 import { createShift } from "@/services/shifts";
@@ -979,8 +979,7 @@ const daypartPayloadSchema = z.object({
   name: z.string().trim().min(1),
   room: z.string().trim().min(1),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-  type: z.enum(["dj_artist", "house_activity"]),
-  billingMode: z.enum(["billed_by_hfy", "tracking_only"]).nullable(),
+  billingMode: z.enum(["billed_by_hfy", "tracking_only"]),
   defaultTalentRateCents: z.number().int().min(0).nullable().optional(),
   activeUntil: z.iso.date().nullable().optional(),
   active: z.boolean(),
@@ -992,13 +991,7 @@ const daypartPayloadSchema = z.object({
     defaultDjCount: z.number().int().min(1).max(20).nullable(),
   })).min(1),
 }).superRefine((daypart, context) => {
-  if (daypart.type === "house_activity" && (daypart.billingMode !== null || daypart.defaultTalentRateCents != null)) {
-    context.addIssue({ code: "custom", message: "House Activities cannot include billing or talent-rate fields." });
-  }
-  if (daypart.type === "dj_artist" && daypart.billingMode === null) {
-    context.addIssue({ code: "custom", message: "Choose how this DJ / Artist Daypart is billed." });
-  }
-  if (daypart.type === "dj_artist" && daypart.billingMode === "tracking_only" && daypart.defaultTalentRateCents != null) {
+  if (daypart.billingMode === "tracking_only" && daypart.defaultTalentRateCents != null) {
     context.addIssue({ code: "custom", message: "Tracking-only Dayparts cannot include a talent rate." });
   }
 });
@@ -1008,12 +1001,31 @@ export async function saveDaypartAction(_previous: ResidencyActionState, formDat
     const actor = await requireInternalActor();
     const raw = z.string().min(2).parse(formData.get("payload"));
     const parsed = daypartPayloadSchema.parse(JSON.parse(raw));
-    await saveDaypart(actor, parsed);
+    await saveDaypart(actor, { ...parsed, type: "dj_artist" });
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
     return { status: "success", message: `${parsed.name} saved.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to save this Daypart." };
+  }
+}
+
+export async function removeDaypartAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({ residencyId: z.uuid(), daypartId: z.uuid() }).parse(Object.fromEntries(formData));
+    const result = await removeDaypart(actor, parsed.residencyId, parsed.daypartId);
+    revalidatePath("/app/setup");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app");
+    return {
+      status: "success",
+      message: result.mode === "archived"
+        ? "Daypart archived. Existing calendar and financial history was preserved."
+        : "Unused Daypart permanently deleted.",
+    };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to remove this Daypart." };
   }
 }
 
@@ -1103,6 +1115,8 @@ const residencyBookingPayloadSchema = z.object({
     name: z.string().trim().min(1).optional(),
     room: z.string().trim().min(1).optional(),
     calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+    programDetails: z.string().trim().max(500).optional().default(""),
+    manualHostName: z.string().trim().max(160).optional().default(""),
     startMinute: z.number().int().min(0).max(1439),
     endMinute: z.number().int().min(1).max(2879),
     clientRateOverrideCents: z.number().int().min(0).nullable().optional(),

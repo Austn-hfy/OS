@@ -130,6 +130,8 @@ export async function getCalendarData(residencyId?: string, range?: { from: stri
     invoiceId: shifts.invoiceId,
     invoiceLinkIssue: shifts.invoiceLinkIssue,
     invoiceLinkNote: shifts.invoiceLinkNote,
+    programDetails: shifts.programDetails,
+    manualHostName: shifts.manualHostName,
   }).from(shifts)
     .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
     .leftJoin(dayparts, eq(shifts.daypartId, dayparts.id))
@@ -185,6 +187,8 @@ export async function getScheduleOccurrenceData(residencyId?: string, range?: { 
     color: scheduleOccurrences.color,
     type: scheduleOccurrences.type,
     billingMode: dayparts.billingMode,
+    programDetails: scheduleOccurrences.programDetails,
+    manualHostName: scheduleOccurrences.manualHostName,
     serviceDate: scheduleOccurrences.serviceDate,
     startsAt: scheduleOccurrences.startsAt,
     endsAt: scheduleOccurrences.endsAt,

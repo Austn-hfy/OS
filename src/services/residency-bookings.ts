@@ -23,6 +23,8 @@ export type DaypartBookingInput = {
   startMinute: number;
   endMinute: number;
   clientRateOverrideCents?: number | null;
+  programDetails?: string;
+  manualHostName?: string;
   assignments: BookingAssignmentInput[];
 };
 
@@ -92,7 +94,7 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
         eq(residencyTalent.residencyId, residency.id),
         eq(residencyTalent.active, true),
       )) : [];
-    if (talentRows.length !== talentIds.length) throw new Error("One or more selected DJs are not active on this Residency's approved list.");
+    if (talentRows.length !== talentIds.length) throw new Error("One or more selected artists are not active on this Residency's approved list.");
 
     const createdShiftIds: string[] = [];
     const createdOccurrenceIds: string[] = [];
@@ -118,44 +120,17 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
       const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.startMinute), residency.timezone);
       const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.endMinute), residency.timezone);
       const recordKind = daypartBookingRecordKind(rule.type, rule.billingMode);
-
-      if (recordKind === "house_occurrence") {
-        if (requested.assignments.length) throw new Error("House Activities cannot contain DJ assignments.");
-        const [occurrence] = await tx.insert(scheduleOccurrences).values({
-          residencyId: residency.id,
-          daypartId: rule.daypartId!,
-          serviceDate: input.serviceDate,
-          name: rule.name,
-          room: rule.room,
-          color: rule.color.toUpperCase(),
-          type: "house_activity",
-          startsAt,
-          endsAt,
-          createdByUserId: actor.userId,
-        }).returning({ id: scheduleOccurrences.id });
-        createdOccurrenceIds.push(occurrence.id);
-        await tx.insert(auditLog).values({
-          residencyId: residency.id,
-          actorUserId: actor.userId,
-          actorLabel: actor.email,
-          action: "house_activity_scheduled",
-          entityType: "schedule_occurrence",
-          entityId: occurrence.id,
-          details: { daypartId: rule.daypartId, serviceDate: input.serviceDate },
-        });
-        continue;
-      }
-
-      if (!requested.assignments.length) throw new Error("Each selected DJ / Artist Daypart needs at least one DJ.");
+      const programDetails = requested.programDetails?.trim() ?? "";
+      const manualHostName = requested.manualHostName?.trim() ?? "";
       const assignmentWindows = requested.assignments.map((assignment) => ({
         startMinute: assignment.startsAtMinute ?? requested.startMinute,
         endMinute: assignment.endsAtMinute ?? requested.endMinute,
       }));
       if (assignmentWindows.some((window) => window.startMinute < requested.startMinute || window.endMinute > requested.endMinute || window.endMinute <= window.startMinute)) {
-        throw new Error("Every DJ must remain inside the Daypart hours.");
+        throw new Error("Every artist must remain inside the Daypart hours.");
       }
       if (hasOverlappingAssignmentMinutes(assignmentWindows)) {
-        throw new Error("DJ times cannot overlap within the same Daypart.");
+        throw new Error("Artist times cannot overlap within the same Daypart.");
       }
 
       for (let index = 0; index < requested.assignments.length; index += 1) {
@@ -188,6 +163,8 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
           room: rule.room,
           color: rule.color.toUpperCase(),
           type: "dj_artist",
+          programDetails,
+          manualHostName,
           startsAt,
           endsAt,
           createdByUserId: actor.userId,
@@ -195,7 +172,7 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
         createdOccurrenceIds.push(occurrence.id);
         for (let index = 0; index < requested.assignments.length; index += 1) {
           const talentId = requested.assignments[index].talentId;
-          if (!talentId) throw new Error("Tracking-only Dayparts require a selected artist.");
+          if (!talentId) continue;
           await tx.insert(scheduleOccurrenceTalent).values({
             occurrenceId: occurrence.id,
             talentId,
@@ -210,7 +187,7 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
           action: "tracking_only_booking_created",
           entityType: "schedule_occurrence",
           entityId: occurrence.id,
-          details: { daypartId: rule.daypartId, serviceDate: input.serviceDate, talentIds: requested.assignments.map((item) => item.talentId) },
+          details: { daypartId: rule.daypartId, serviceDate: input.serviceDate, programDetails, manualHostName, talentIds: requested.assignments.map((item) => item.talentId) },
         });
         continue;
       }
@@ -236,6 +213,8 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
         calendarColor: requested.daypartId ? null : rule.color.toUpperCase(),
         startsAt,
         endsAt,
+        programDetails,
+        manualHostName,
         clientRateOverrideCents: requested.clientRateOverrideCents ?? null,
         clientRateCents: resolveRateCents(requested.clientRateOverrideCents, residency.clientHourlyRateCents),
         billingStatus: "pending",
@@ -303,7 +282,7 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
         action: requested.daypartId ? "daypart_shift_created" : "one_time_shift_created",
         entityType: "shift",
         entityId: shift.id,
-        details: { daypartId: rule.daypartId, serviceDate: input.serviceDate, calendarColor: requested.daypartId ? null : rule.color, invoiceLinkIssue: coveringInvoices.length !== 1 },
+        details: { daypartId: rule.daypartId, serviceDate: input.serviceDate, programDetails, manualHostName, calendarColor: requested.daypartId ? null : rule.color, invoiceLinkIssue: coveringInvoices.length !== 1 },
       });
     }
     return { shiftIds: createdShiftIds, occurrenceIds: createdOccurrenceIds };

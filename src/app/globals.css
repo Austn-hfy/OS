@@ -231,6 +231,11 @@ h3 { margin: 0; font-family: "Plus Jakarta Sans", Inter, sans-serif; font-size: 
 .quick-house-activity { display: grid; gap: 6px; padding: 16px; border: 1px solid rgba(46,158,121,.22); border-radius: 15px; background: rgba(232,247,241,.72); }
 .quick-house-activity strong { color: #27664e; font-size: 12px; }
 .quick-house-activity p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.quick-program-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; padding: 13px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.56); }
+.quick-program-fields .field small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.daypart-danger-zone { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 18px; padding: 16px; border: 1px solid rgba(183,67,55,.2); border-radius: 15px; background: rgba(250,233,229,.46); }
+.daypart-danger-zone > div { display: grid; gap: 4px; }
+.daypart-danger-zone small { max-width: 520px; color: var(--muted); font-size: 9px; line-height: 1.45; }
 
 /* Residency Invoice workspace */
 .invoice-workspace { display: grid; gap: 18px; }
@@ -427,9 +432,16 @@ tr:last-child td { border-bottom: 0; }
 .calendar-event.sky { color: #164f83; background: #dcecff; border-left-color: #78a8e8; }
 .calendar-event.orange { color: #83400f; background: #ffead7; border-left-color: #e98332; }
 .calendar-event.custom-color { color: #1b1b1b; background: color-mix(in srgb, var(--daypart-color) 19%, white); border-left-color: var(--daypart-color); }
-.calendar-event.schedule-empty { color: #8a1f2d; background: #fff0f2; border-left-color: var(--daypart-color, #d9485f); box-shadow: inset 0 0 0 1px rgba(211,50,75,.38), 0 0 8px rgba(211,50,75,.22); }
-.calendar-event.schedule-partial { color: #70420d; background: #fff5dc; border-left-color: var(--daypart-color, #e3a12c); box-shadow: inset 0 0 0 1px rgba(211,139,28,.34); }
-.calendar-event.schedule-filled { color: #18231f; background: color-mix(in srgb, var(--daypart-color, #2e9e79) 18%, white); border-left-color: var(--daypart-color, #2e9e79); }
+.calendar-event.schedule-empty { color: #102334; background: color-mix(in srgb, var(--daypart-color, #2783dc) 64%, white); border-left-color: var(--daypart-color, #2783dc); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #2783dc) 66%, transparent); }
+.calendar-event.schedule-partial { color: #173044; background: color-mix(in srgb, var(--daypart-color, #2783dc) 36%, white); border-left-color: var(--daypart-color, #2783dc); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #2783dc) 42%, transparent); }
+.calendar-event.schedule-filled { color: #263746; background: color-mix(in srgb, var(--daypart-color, #2783dc) 14%, white); border-left-color: var(--daypart-color, #2783dc); }
+.calendar-event.schedule-filled .calendar-event-line::after { content: "✓"; margin-left: auto; color: var(--daypart-color, #2783dc); font-size: 8px; font-weight: 900; }
+.calendar-status-legend { min-height: 28px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin: -2px 2px 7px; color: var(--muted); font-size: 9px; font-weight: 700; }
+.calendar-status-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.calendar-status-legend i { width: 16px; height: 8px; display: inline-block; border-left: 3px solid #2783dc; border-radius: 3px; background: color-mix(in srgb, #2783dc 64%, white); }
+.calendar-status-legend i.partial { background: color-mix(in srgb, #2783dc 36%, white); }
+.calendar-status-legend i.scheduled { background: color-mix(in srgb, #2783dc 14%, white); }
+.calendar-status-legend i.scheduled::after { content: "✓"; position: relative; left: 6px; top: -4px; color: #2783dc; font-style: normal; font-size: 7px; }
 .calendar-event strong, .calendar-event span, .calendar-event small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-event-line { min-width: 0; display: flex; align-items: baseline; gap: 4px; }
 .calendar-event-line strong { flex: 0 1 auto; font-size: 9px; }

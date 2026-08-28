@@ -181,8 +181,6 @@ export const dayparts = pgTable("dayparts", {
   check("dayparts_color_valid", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),
   check("dayparts_rate_nonnegative", sql`${table.defaultTalentRateCents} IS NULL OR ${table.defaultTalentRateCents} >= 0`),
   check("dayparts_type_fields_valid", sql`
-    (${table.type} = 'house_activity' AND ${table.billingMode} IS NULL AND ${table.defaultTalentRateCents} IS NULL)
-    OR
     (${table.type} = 'dj_artist' AND ${table.billingMode} = 'tracking_only' AND ${table.defaultTalentRateCents} IS NULL)
     OR
     (${table.type} = 'dj_artist' AND ${table.billingMode} = 'billed_by_hfy')
@@ -224,6 +222,8 @@ export const scheduleOccurrences = pgTable("schedule_occurrences", {
   room: text("room").notNull(),
   color: text("color").notNull(),
   type: daypartType("type").notNull(),
+  programDetails: text("program_details").notNull().default(""),
+  manualHostName: text("manual_host_name").notNull().default(""),
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
   endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
   createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
@@ -412,6 +412,8 @@ export const shifts = pgTable("shifts", {
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
   endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
   notes: text("notes").notNull().default(""),
+  programDetails: text("program_details").notNull().default(""),
+  manualHostName: text("manual_host_name").notNull().default(""),
   clientRateOverrideCents: integer("client_rate_override_cents"),
   clientRateCents: integer("client_rate_cents").notNull(),
   billingStatus: billingStatus("billing_status").notNull().default("pending"),
