@@ -20,13 +20,11 @@ export function getDb(): Database {
 
   const sqlClient = globalForDatabase.hfySql ?? postgres(databaseUrl(), {
     prepare: false,
-    max: process.env.NODE_ENV === "production" ? 10 : 2,
+    max: 2,
   });
   const database = drizzle(sqlClient, { schema });
 
-  if (process.env.NODE_ENV !== "production") {
-    globalForDatabase.hfySql = sqlClient;
-    globalForDatabase.hfyDb = database;
-  }
+  globalForDatabase.hfySql = sqlClient;
+  globalForDatabase.hfyDb = database;
   return database;
 }
