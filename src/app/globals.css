@@ -493,13 +493,13 @@ tr:last-child td { border-bottom: 0; }
 .week-rule-intro > div { display: grid; gap: 3px; }
 .week-rule-intro small { color: var(--muted); }
 .week-rule-grid { display: grid; grid-template-columns: repeat(7, minmax(128px, 1fr)); align-items: start; gap: 8px; }
-.week-rule { min-width: 0; min-height: 128px; display: grid; grid-template-rows: auto 1fr; align-items: start; gap: 6px; padding: 7px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.48); }
+.week-rule { min-width: 0; min-height: 230px; display: grid; grid-template-rows: auto 1fr; align-items: start; gap: 8px; padding: 7px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.48); }
 .week-rule.enabled { border-color: rgba(2,116,222,.24); background: #f5f9ff; }
 .week-rule > p { align-self: center; color: var(--muted); margin: 0; text-align: center; font-size: 12px; }
 .week-toggle { appearance: none; min-height: 38px; border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--muted); font-size: 12px; font-weight: 800; }
 .week-toggle[aria-pressed="true"] { color: white; background: var(--forest); border-color: var(--forest); }
-.week-rule-fields { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; }
-.week-rule-fields input { min-height: 32px; height: 32px; padding: 5px 7px; }
+.week-rule-fields { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; }
+.week-rule-fields input { width: 100%; min-width: 0; min-height: 34px; height: 34px; padding: 5px 7px; }
 .week-rule-fields .field { gap: 3px; }
 .week-rule-fields .field label { font-size: 9px; }
 .daypart-editor-actions, .booking-submit { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
