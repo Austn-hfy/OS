@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
+import { useActionState, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { removeDaypartAction, saveDaypartAction, type ResidencyActionState } from "@/app/app/actions";
 import { clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, weekdayNames, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
 import { SensitiveInput } from "@/components/privacy-mode";
@@ -49,9 +49,9 @@ function centsFromOptionalDollars(value: string): number | null {
   return Math.round(amount * 100);
 }
 
-function blankDraft(options: { room?: string; weekday?: number; startMinute?: number; color?: string } = {}): EditorDraft {
+function blankDraft(options: { room?: string; weekday?: number; startMinute?: number; endMinute?: number; color?: string } = {}): EditorDraft {
   const startMinute = options.startMinute ?? 1080;
-  const endMinute = startMinute + 180;
+  const endMinute = options.endMinute ?? startMinute + 180;
   return {
     name: "",
     room: options.room ?? "",
@@ -181,13 +181,20 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
     });
   }
 
-  function addFromGrid(room: string, weekday: number, event: MouseEvent<HTMLButtonElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
-    const clickedMinute = Math.round((range.start + ratio * rangeMinutes) / 30) * 30;
-    const startMinute = Math.min(clickedMinute, range.end - 60);
+  function addFromGrid(room: string, weekday: number) {
+    const roomRule = dayparts
+      .filter((daypart) => daypart.room === room)
+      .flatMap((daypart) => daypart.rules)
+      .find((rule) => rule.weekday === weekday)
+      ?? dayparts.find((daypart) => daypart.room === room)?.rules[0];
     const nextColor = colorPresets[dayparts.length % colorPresets.length];
-    setDraft(blankDraft({ room, weekday, startMinute, color: nextColor }));
+    setDraft(blankDraft({
+      room,
+      weekday,
+      startMinute: roomRule?.startMinute,
+      endMinute: roomRule?.endMinute,
+      color: nextColor,
+    }));
   }
 
   async function removeCurrentDaypart() {
@@ -223,7 +230,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
               return rule ? [{ daypart, rule }] : [];
             });
             return <div className="daypart-week-cell" key={`${room}-${weekdayName}`}>
-              {readOnly ? null : <button className="daypart-week-add" type="button" aria-label={`Add a Daypart in ${room} on ${weekdayName}`} onClick={(event) => addFromGrid(room, weekday, event)}><span>+</span></button>}
+              {readOnly ? null : <button className="daypart-week-add" type="button" aria-label={`Add a Daypart in ${room} on ${weekdayName}`} onClick={() => addFromGrid(room, weekday)}><span>+</span></button>}
               {blocks.map(({ daypart, rule }) => {
                 const top = Math.max(0, ((rule.startMinute - range.start) / rangeMinutes) * 100);
                 const bottom = Math.min(100, ((rule.endMinute - range.start) / rangeMinutes) * 100);

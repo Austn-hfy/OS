@@ -105,9 +105,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <button className="button secondary" type="submit">View</button>
           </form>
           {calendarResidency ? <CalendarShareButton residencyId={calendarResidency.id} residencyName={calendarResidency.name} linkSettings={calendarLinkSettings} dayparts={visibleDayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} /> : null}
+          <CalendarStatusLegend />
           <div className="calendar-month-cluster"><div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div><div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link></div></div>
         </div></header>
-        <CalendarStatusLegend />
         <MonthCalendar compact monthKey={monthKey} events={events} ariaLabel="HFY company programming calendar" />
       </div>
     );

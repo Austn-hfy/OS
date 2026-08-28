@@ -1006,7 +1006,10 @@ export async function saveDaypartAction(_previous: ResidencyActionState, formDat
     revalidatePath("/app/calendar");
     return { status: "success", message: `${parsed.name} saved.` };
   } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to save this Daypart." };
+    const message = error instanceof Error && !error.message.startsWith("Failed query:")
+      ? error.message
+      : "Unable to save this Daypart. Please try again.";
+    return { status: "error", message };
   }
 }
 

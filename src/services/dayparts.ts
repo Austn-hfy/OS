@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { auditLog, daypartDayRules, dayparts, residencies, residencyTalent, scheduleOccurrences, shifts, talent } from "@/db/schema";
 import { validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartType } from "@/domain/dayparts";
@@ -66,6 +66,14 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
     const [residency] = await tx.select({ id: residencies.id }).from(residencies)
       .where(and(eq(residencies.id, input.residencyId), eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).limit(1);
     if (!residency) throw new Error("Residency not found.");
+
+    const duplicateNameWhere = input.id
+      ? and(eq(dayparts.residencyId, residency.id), sql`lower(${dayparts.name}) = lower(${name})`, ne(dayparts.id, input.id))
+      : and(eq(dayparts.residencyId, residency.id), sql`lower(${dayparts.name}) = lower(${name})`);
+    const [duplicateName] = await tx.select({ id: dayparts.id }).from(dayparts).where(duplicateNameWhere).limit(1);
+    if (duplicateName) {
+      throw new Error(`A Daypart named “${name}” already exists in this Residency. Open that Daypart to edit it.`);
+    }
 
     let daypartId = input.id;
     if (daypartId) {

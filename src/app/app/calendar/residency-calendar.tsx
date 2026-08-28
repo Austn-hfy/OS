@@ -130,7 +130,9 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     meta: [artist.homeMarket, artist.genres.join(" ")].filter(Boolean).join(" · "),
   })), [talent]);
 
-  const activeSuggestion = suggestions.find((item) => item.daypartId === activeDaypartId) ?? suggestions[0];
+  const activeSuggestion = activeDaypartId
+    ? suggestions.find((item) => item.daypartId === activeDaypartId)
+    : undefined;
   const editingEvent = modal?.type === "edit" ? events.find((event) => event.id === modal.eventId) : undefined;
   const needsDjCount = events.filter((event) => event.schedulingStatus === "empty" || event.schedulingStatus === "partial").length;
   const filteredEvents = events.filter((event) => {
@@ -203,10 +205,8 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     });
     setSuggestions(nextSuggestions);
     const preferred = nextSuggestions.find((item) => item.daypartId === preferredDaypartId);
-    const firstAvailable = nextSuggestions.find((item) => !item.existing && !item.oneTime);
-    const initial = preferred ?? firstAvailable ?? nextSuggestions.find((item) => item.oneTime)!;
-    setActiveDaypartId(initial.daypartId);
-    setAddMode(preferred ? "daypart" : "choose");
+    setActiveDaypartId(preferred?.daypartId ?? "");
+    setAddMode("daypart");
     setDirectDaypartSelection(Boolean(preferred));
     setReplacementDraft(null);
     setNewAssignmentDraft(null);
@@ -480,13 +480,13 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           <div className="field"><label htmlFor="calendar-daypart-filter">Daypart</label><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></div>
           </div>
           <CalendarShareButton residencyId={residency.id} residencyName={residency.name} linkSettings={residency.calendarLinkSettings} dayparts={dayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} />
+          <CalendarStatusLegend />
           <div className="calendar-month-cluster">
             <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div>
             <div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={previousHref}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={nextHref}>→</Link></div>
           </div>
         </div>
       </header>
-      <CalendarStatusLegend />
       <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={openDate} onEventClick={openEvent} />
 
       {modal ? <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }}>
@@ -503,7 +503,10 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                 <button className="quick-add-choice-card one-time" type="button" onClick={() => { const next = suggestions.find((suggestion) => suggestion.oneTime); if (next) chooseSuggestion(next); }}><span>One-time</span><strong>Create a one-time slot</strong><small>Add something unique to this date without creating a recurring rule.</small></button>
               </div> : <form action={formAction} className="quick-book-form">
                 <input name="payload" type="hidden" value={payload} />
-                {addMode === "daypart" && !directDaypartSelection ? <div className="quick-slot-picker" role="group" aria-label="Choose Daypart">{suggestions.filter((suggestion) => !suggestion.oneTime).map((suggestion) => <button className={`quick-slot-option ${activeSuggestion?.daypartId === suggestion.daypartId ? "active" : ""}`} style={{ "--daypart-color": suggestion.color } as CSSProperties} type="button" onClick={() => chooseSuggestion(suggestion)} key={suggestion.daypartId}><span><strong>{suggestion.name}</strong><small>{suggestion.recurringToday ? `${suggestion.room} · ${formatLocalMinute(clockToMinute(suggestion.start))}–${formatLocalMinute(resolveEndMinute(clockToMinute(suggestion.start), suggestion.end))}` : `${suggestion.room} · not normally scheduled this day`}</small></span>{suggestion.existing ? <Status value="scheduled" /> : null}</button>)}</div> : null}
+                {addMode === "daypart" && !directDaypartSelection ? <>
+                  <div className="quick-slot-picker" role="group" aria-label="Choose Daypart">{suggestions.filter((suggestion) => !suggestion.oneTime).map((suggestion) => <button className={`quick-slot-option ${activeSuggestion?.daypartId === suggestion.daypartId ? "active" : ""}`} style={{ "--daypart-color": suggestion.color } as CSSProperties} type="button" onClick={() => chooseSuggestion(suggestion)} key={suggestion.daypartId}><span><strong>{suggestion.name}</strong><small>{suggestion.recurringToday ? `${suggestion.room} · ${formatLocalMinute(clockToMinute(suggestion.start))}–${formatLocalMinute(resolveEndMinute(clockToMinute(suggestion.start), suggestion.end))}` : `${suggestion.room} · not normally scheduled this day`}</small></span>{suggestion.existing ? <Status value="scheduled" /> : null}</button>)}</div>
+                  {!activeSuggestion ? <div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => { const next = suggestions.find((suggestion) => suggestion.oneTime); if (next) chooseSuggestion(next); }}>+ Create one-time slot</button><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button></div> : null}
+                </> : null}
 
                 {activeSuggestion?.existing ? <div className="quick-existing"><p>This slot is already scheduled.</p><button className="button" type="button" onClick={() => openExistingDaypart(activeSuggestion.daypartId, modal.date)}>View scheduled slot</button></div> : activeSuggestion ? <>
                   {activeSuggestion.oneTime ? <div className="quick-one-time-fields"><div className="field"><label>Slot name</label><input value={activeSuggestion.name} onChange={(event) => updateSuggestion({ name: event.target.value })} placeholder="Movie Night" required /></div><div className="field"><label>Room / space</label><input value={activeSuggestion.room} onChange={(event) => updateSuggestion({ room: event.target.value })} placeholder="Pool" required /></div><div className="field"><label>Calendar color</label><div className="daypart-color-control"><input aria-label="One-time slot color" type="color" value={activeSuggestion.color} onChange={(event) => updateSuggestion({ color: event.target.value.toUpperCase() })} /><strong>{activeSuggestion.color}</strong></div></div></div> : null}
@@ -530,7 +533,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                 </> : null}
 
                 {state.status === "error" ? <p className="error" aria-live="polite">{state.message}</p> : null}
-                <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => { setDirectDaypartSelection(false); setAddMode("choose"); }}>Back</button><span>Ready to schedule?</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button><button className="button" type="submit" disabled={pending || !activeSuggestion || activeSuggestion.existing || !activeSuggestion.name.trim() || !activeSuggestion.room.trim() || Boolean(assignmentWarning)}>{pending ? "Saving…" : activeSuggestion?.billingMode === "tracking_only" && !activeSuggestion.slots.length ? "Mark scheduled" : `Save ${activeSuggestion?.name || "Daypart"}`}</button></footer>
+                {activeSuggestion ? <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => { setActiveDaypartId(""); setDirectDaypartSelection(false); setAddMode("daypart"); }}>Back</button><span>Ready to schedule?</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button><button className="button" type="submit" disabled={pending || activeSuggestion.existing || !activeSuggestion.name.trim() || !activeSuggestion.room.trim() || Boolean(assignmentWarning)}>{pending ? "Saving…" : activeSuggestion.billingMode === "tracking_only" && !activeSuggestion.slots.length ? "Mark scheduled" : `Save ${activeSuggestion.name || "Daypart"}`}</button></footer> : null}
               </form>
             ) : editingEvent ? editingEvent.recordType === "nonfinancial_occurrence" ? <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
