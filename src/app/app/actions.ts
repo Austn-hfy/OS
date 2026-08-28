@@ -8,7 +8,7 @@ import { getDb } from "@/db/client";
 import { assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
-import { requireInternalActor } from "@/lib/auth";
+import { requireActorForResidency, requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
 import { removeDaypart, saveDaypart } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
@@ -29,6 +29,25 @@ function centsFromDollars(value: FormDataEntryValue | null): number {
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+async function requireManagerForAssignment(assignmentId: string) {
+  const [row] = await getDb().select({ residencyId: shifts.residencyId })
+    .from(assignments)
+    .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+    .where(eq(assignments.id, assignmentId))
+    .limit(1);
+  if (!row) throw new Error("Assignment not found.");
+  return requireActorForResidency(row.residencyId, { manager: true });
+}
+
+async function requireManagerForShift(shiftId: string) {
+  const [row] = await getDb().select({ residencyId: shifts.residencyId })
+    .from(shifts)
+    .where(eq(shifts.id, shiftId))
+    .limit(1);
+  if (!row) throw new Error("Shift not found.");
+  return requireActorForResidency(row.residencyId, { manager: true });
 }
 
 export async function updateInvoiceBrandingAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
@@ -102,11 +121,11 @@ export async function createResidencyAction(_previous: ResidencyActionState, for
 
 export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLinkActionState, formData: FormData): Promise<PublicCalendarLinkActionState> {
   try {
-    const actor = await requireInternalActor();
     const { residencyId, scope } = z.object({
       residencyId: z.uuid(),
       scope: z.enum(["all", "selected"]),
     }).parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(residencyId, { manager: true });
     const selectedDaypartIds = z.array(z.uuid()).max(100).parse([...new Set(formData.getAll("daypartIds").map(String))]);
     if (scope === "selected" && !selectedDaypartIds.length) throw new Error("Select at least one Daypart for this link.");
     const { token, tokenHash } = issuePublicCalendarToken();
@@ -979,7 +998,8 @@ const daypartPayloadSchema = z.object({
   name: z.string().trim().min(1),
   room: z.string().trim().min(1),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-  billingMode: z.enum(["billed_by_hfy", "tracking_only"]),
+  type: z.enum(["dj_artist", "house_activity"]),
+  billingMode: z.enum(["billed_by_hfy", "tracking_only"]).nullable(),
   defaultTalentRateCents: z.number().int().min(0).nullable().optional(),
   activeUntil: z.iso.date().nullable().optional(),
   active: z.boolean(),
@@ -991,6 +1011,12 @@ const daypartPayloadSchema = z.object({
     defaultDjCount: z.number().int().min(1).max(20).nullable(),
   })).min(1),
 }).superRefine((daypart, context) => {
+  if (daypart.type === "house_activity" && daypart.billingMode !== null) {
+    context.addIssue({ code: "custom", message: "House Activities do not have a billing mode." });
+  }
+  if (daypart.type === "dj_artist" && daypart.billingMode === null) {
+    context.addIssue({ code: "custom", message: "Choose how this DJ / Artist Daypart is billed." });
+  }
   if (daypart.billingMode === "tracking_only" && daypart.defaultTalentRateCents != null) {
     context.addIssue({ code: "custom", message: "Tracking-only Dayparts cannot include a talent rate." });
   }
@@ -998,12 +1024,26 @@ const daypartPayloadSchema = z.object({
 
 export async function saveDaypartAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
   try {
-    const actor = await requireInternalActor();
     const raw = z.string().min(2).parse(formData.get("payload"));
     const parsed = daypartPayloadSchema.parse(JSON.parse(raw));
-    await saveDaypart(actor, { ...parsed, type: "dj_artist" });
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    let protectedPayload = parsed;
+    if (actor.kind === "residency") {
+      const [existing] = parsed.id ? await getDb().select({ defaultTalentRateCents: dayparts.defaultTalentRateCents })
+        .from(dayparts)
+        .where(and(eq(dayparts.id, parsed.id), eq(dayparts.residencyId, parsed.residencyId)))
+        .limit(1) : [];
+      protectedPayload = {
+        ...parsed,
+        defaultTalentRateCents: parsed.type === "dj_artist" && parsed.billingMode === "billed_by_hfy"
+          ? existing?.defaultTalentRateCents ?? null
+          : null,
+      };
+    }
+    await saveDaypart(actor, protectedPayload);
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
+    revalidatePath("/residency/calendar");
     return { status: "success", message: `${parsed.name} saved.` };
   } catch (error) {
     const message = error instanceof Error && !error.message.startsWith("Failed query:")
@@ -1015,12 +1055,13 @@ export async function saveDaypartAction(_previous: ResidencyActionState, formDat
 
 export async function removeDaypartAction(formData: FormData): Promise<ResidencyActionState> {
   try {
-    const actor = await requireInternalActor();
     const parsed = z.object({ residencyId: z.uuid(), daypartId: z.uuid() }).parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
     const result = await removeDaypart(actor, parsed.residencyId, parsed.daypartId);
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
     revalidatePath("/app");
+    revalidatePath("/residency/calendar");
     return {
       status: "success",
       message: result.mode === "archived"
@@ -1103,6 +1144,7 @@ export async function updateResidencyProfileAction(_previous: ResidencyActionSta
       details: { name: parsed.name, cityState: parsed.cityState, timezone: parsed.timezone, tier: parsed.tier },
     });
     revalidatePath("/app");
+    revalidatePath("/residency/calendar");
     revalidatePath("/app/setup");
     return { status: "success", message: "Residency profile saved." };
   } catch (error) {
@@ -1118,6 +1160,7 @@ const residencyBookingPayloadSchema = z.object({
     name: z.string().trim().min(1).optional(),
     room: z.string().trim().min(1).optional(),
     calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+    notes: z.string().trim().max(2_000).optional().default(""),
     programDetails: z.string().trim().max(500).optional().default(""),
     manualHostName: z.string().trim().max(160).optional().default(""),
     startMinute: z.number().int().min(0).max(1439),
@@ -1140,14 +1183,29 @@ const residencyBookingPayloadSchema = z.object({
 
 export async function bookResidencyDateAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
   try {
-    const actor = await requireInternalActor();
     const raw = z.string().min(2).parse(formData.get("payload"));
     const parsed = residencyBookingPayloadSchema.parse(JSON.parse(raw));
-    const created = await createResidencyDateBooking(actor, parsed);
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    const protectedPayload = actor.kind === "residency" ? {
+      ...parsed,
+      dayparts: parsed.dayparts.map((slot) => ({
+        ...slot,
+        clientRateOverrideCents: null,
+        assignments: slot.assignments.map((assignment) => ({
+          ...assignment,
+          compensationType: "hourly" as const,
+          talentRateOverrideCents: null,
+          fixedFeeCents: null,
+        })),
+      })),
+    } : parsed;
+    const created = await createResidencyDateBooking(actor, protectedPayload);
     revalidatePath("/app/calendar");
     revalidatePath("/app/payouts");
     revalidatePath("/app/invoices");
     revalidatePath("/app");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/payouts");
     const count = created.shiftIds.length + created.occurrenceIds.length;
     return { status: "success", message: `${count} calendar slot${count === 1 ? "" : "s"} scheduled.` };
   } catch (error) {
@@ -1167,8 +1225,8 @@ export async function transitionAssignmentAction(formData: FormData) {
 }
 
 export async function replaceAssignmentTalentAction(formData: FormData) {
-  const actor = await requireInternalActor();
   const parsed = z.object({ assignmentId: z.uuid(), talentId: z.uuid() }).parse(Object.fromEntries(formData));
+  const actor = await requireManagerForAssignment(parsed.assignmentId);
   await replaceAssignmentTalent(actor, parsed.assignmentId, parsed.talentId);
   revalidatePath("/app/calendar");
   revalidatePath("/app/payouts");
@@ -1176,13 +1234,13 @@ export async function replaceAssignmentTalentAction(formData: FormData) {
 
 export async function rescheduleAssignmentAction(formData: FormData): Promise<ResidencyActionState> {
   try {
-    const actor = await requireInternalActor();
     const parsed = z.object({
       assignmentId: z.uuid(),
       talentId: z.uuid(),
       startsAtMinute: z.coerce.number().int().min(0).max(2879),
       endsAtMinute: z.coerce.number().int().min(1).max(2879),
     }).parse(Object.fromEntries(formData));
+    const actor = await requireManagerForAssignment(parsed.assignmentId);
     await rescheduleAssignment(actor, parsed.assignmentId, parsed);
     revalidatePath("/app/calendar");
     revalidatePath("/app/payouts");
@@ -1194,8 +1252,8 @@ export async function rescheduleAssignmentAction(formData: FormData): Promise<Re
 
 export async function removeCalendarAssignmentAction(formData: FormData): Promise<ResidencyActionState> {
   try {
-    const actor = await requireInternalActor();
     const assignmentId = z.uuid().parse(formData.get("assignmentId"));
+    const actor = await requireManagerForAssignment(assignmentId);
     await transitionAssignment(actor, assignmentId, "cancelled");
     revalidatePath("/app/calendar");
     revalidatePath("/app/payouts");
@@ -1207,7 +1265,6 @@ export async function removeCalendarAssignmentAction(formData: FormData): Promis
 
 export async function addCalendarAssignmentAction(formData: FormData): Promise<ResidencyActionState> {
   try {
-    const actor = await requireInternalActor();
     const parsed = z.object({
       shiftId: z.uuid(),
       talentId: z.uuid(),
@@ -1217,14 +1274,15 @@ export async function addCalendarAssignmentAction(formData: FormData): Promise<R
       talentRateOverride: z.string(),
       fixedFee: z.string(),
     }).parse(Object.fromEntries(formData));
+    const actor = await requireManagerForShift(parsed.shiftId);
     await addAssignmentToShift(actor, {
       shiftId: parsed.shiftId,
       talentId: parsed.talentId,
       startsAtMinute: parsed.startsAtMinute,
       endsAtMinute: parsed.endsAtMinute,
-      compensationType: parsed.compensationType,
-      talentRateOverrideCents: parsed.talentRateOverride.trim() ? centsFromDollars(parsed.talentRateOverride) : null,
-      fixedFeeCents: parsed.fixedFee.trim() ? centsFromDollars(parsed.fixedFee) : null,
+      compensationType: actor.kind === "residency" ? "hourly" : parsed.compensationType,
+      talentRateOverrideCents: actor.kind === "residency" ? null : parsed.talentRateOverride.trim() ? centsFromDollars(parsed.talentRateOverride) : null,
+      fixedFeeCents: actor.kind === "residency" ? null : parsed.fixedFee.trim() ? centsFromDollars(parsed.fixedFee) : null,
     });
     revalidatePath("/app/calendar");
     revalidatePath("/app/payouts");

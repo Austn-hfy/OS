@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getResidencyList } from "@/data/internal";
-import { requireInternalActor } from "@/lib/auth";
+import { getDb } from "@/db/client";
+import { residencies } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
+import { requireActorForResidency } from "@/lib/auth";
 import { getDaypartsForResidency } from "@/services/dayparts";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ residencyId: string }> }) {
-  await requireInternalActor();
   const residencyId = z.uuid().parse((await params).residencyId);
-  const [residencyList, dayparts] = await Promise.all([
-    getResidencyList(),
+  const actor = await requireActorForResidency(residencyId);
+  const [residencyRows, dayparts] = await Promise.all([
+    getDb().select({ id: residencies.id }).from(residencies).where(and(eq(residencies.id, residencyId), eq(residencies.active, true))).limit(1),
     getDaypartsForResidency(residencyId),
   ]);
-  const residency = residencyList.find((item) => item.id === residencyId);
-  if (!residency) return NextResponse.json({ error: "Residency not found." }, { status: 404 });
+  if (!residencyRows[0]) return NextResponse.json({ error: "Residency not found." }, { status: 404 });
   return NextResponse.json({
     dayparts: dayparts.map((daypart) => ({
       id: daypart.id,
@@ -21,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ res
       color: daypart.color,
       type: daypart.type,
       billingMode: daypart.billingMode,
-      defaultTalentRateCents: daypart.defaultTalentRateCents,
+      defaultTalentRateCents: actor.kind === "internal" ? daypart.defaultTalentRateCents : null,
       activeUntil: daypart.activeUntil,
       active: daypart.active,
       sortOrder: daypart.sortOrder,

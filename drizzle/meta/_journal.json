@@ -134,6 +134,13 @@
       "when": 1787908989028,
       "tag": "0018_flashy_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1787948744461,
+      "tag": "0019_sudden_lucky_pierre",
+      "breakpoints": true
     }
   ]
 }

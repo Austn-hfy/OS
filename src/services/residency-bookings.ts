@@ -1,10 +1,10 @@
 import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, dayparts, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, dayparts, invoices, residencies, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
 import { daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
-import type { InternalActor } from "@/lib/auth";
+import type { AuditActor } from "@/lib/auth";
 
 export type BookingAssignmentInput = {
   talentId?: string | null;
@@ -23,6 +23,7 @@ export type DaypartBookingInput = {
   startMinute: number;
   endMinute: number;
   clientRateOverrideCents?: number | null;
+  notes?: string;
   programDetails?: string;
   manualHostName?: string;
   assignments: BookingAssignmentInput[];
@@ -41,7 +42,7 @@ export type AddShiftAssignmentInput = BookingAssignmentInput & {
   endsAtMinute: number;
 };
 
-export async function createResidencyDateBooking(actor: InternalActor, input: CreateResidencyDateBookingInput) {
+export async function createResidencyDateBooking(actor: AuditActor, input: CreateResidencyDateBookingInput) {
   if (!input.dayparts.length) throw new Error("Choose at least one Daypart to book.");
   const requestedIds = input.dayparts.map((item) => item.daypartId).filter((id): id is string => Boolean(id));
   if (new Set(requestedIds).size !== requestedIds.length) throw new Error("Each Daypart can be booked only once per date.");
@@ -87,14 +88,13 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
 
     const talentIds = [...new Set(input.dayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
     const talentRows = talentIds.length ? await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
-      .innerJoin(residencyTalent, eq(residencyTalent.talentId, talent.id))
       .where(and(
         inArray(talent.id, talentIds),
         eq(talent.talentStatus, "active"),
-        eq(residencyTalent.residencyId, residency.id),
-        eq(residencyTalent.active, true),
+        isNull(talent.archivedAt),
+        or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residency.id)),
       )) : [];
-    if (talentRows.length !== talentIds.length) throw new Error("One or more selected artists are not active on this Residency's approved list.");
+    if (talentRows.length !== talentIds.length) throw new Error("One or more selected artists are unavailable to this Residency.");
 
     const createdShiftIds: string[] = [];
     const createdOccurrenceIds: string[] = [];
@@ -120,6 +120,7 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
       const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.startMinute), residency.timezone);
       const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.endMinute), residency.timezone);
       const recordKind = daypartBookingRecordKind(rule.type, rule.billingMode);
+      const notes = requested.notes?.trim() ?? "";
       const programDetails = requested.programDetails?.trim() ?? "";
       const manualHostName = requested.manualHostName?.trim() ?? "";
       const assignmentWindows = requested.assignments.map((assignment) => ({
@@ -162,7 +163,8 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
           name: rule.name,
           room: rule.room,
           color: rule.color.toUpperCase(),
-          type: "dj_artist",
+          type: rule.type,
+          notes,
           programDetails,
           manualHostName,
           startsAt,
@@ -213,6 +215,7 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
         calendarColor: requested.daypartId ? null : rule.color.toUpperCase(),
         startsAt,
         endsAt,
+        notes,
         programDetails,
         manualHostName,
         clientRateOverrideCents: requested.clientRateOverrideCents ?? null,
@@ -289,7 +292,7 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
   });
 }
 
-export async function addAssignmentToShift(actor: InternalActor, input: AddShiftAssignmentInput) {
+export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAssignmentInput) {
   return getDb().transaction(async (tx) => {
     const [shift] = await tx.select({
       id: shifts.id,
@@ -309,15 +312,14 @@ export async function addAssignmentToShift(actor: InternalActor, input: AddShift
     if (!shift) throw new Error("Shift not found.");
 
     const [selectedTalent] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
-      .innerJoin(residencyTalent, eq(residencyTalent.talentId, talent.id))
       .where(and(
         eq(talent.id, input.talentId),
         eq(talent.talentStatus, "active"),
-        eq(residencyTalent.residencyId, shift.residencyId),
-        eq(residencyTalent.active, true),
+        isNull(talent.archivedAt),
+        or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, shift.residencyId)),
       ))
       .limit(1);
-    if (!selectedTalent) throw new Error("This DJ is not active on the Residency's approved list.");
+    if (!selectedTalent) throw new Error("This DJ is unavailable to this Residency.");
 
     if (!Number.isInteger(input.startsAtMinute) || !Number.isInteger(input.endsAtMinute) || input.endsAtMinute <= input.startsAtMinute) {
       throw new Error("Choose valid DJ hours.");

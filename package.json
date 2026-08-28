@@ -25,6 +25,7 @@
     "storage:restore": "tsx scripts/restore-storage.ts",
     "talent:import-airtable": "tsx scripts/import-airtable-talent.ts",
     "talent:verify-airtable": "tsx scripts/verify-airtable-talent-import.ts",
+    "security:verify-ace": "tsx scripts/verify-ace-rls.ts",
     "pdf:sample": "tsx scripts/render-sample-invoice.ts"
   },
   "dependencies": {

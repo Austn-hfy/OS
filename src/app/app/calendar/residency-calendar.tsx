@@ -15,7 +15,7 @@ import { monthLabel, shiftMonthKey } from "@/lib/calendar";
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
 
-type CalendarAssignment = {
+export type CalendarAssignment = {
   id: string;
   talentId: string | null;
   talentName: string | null;
@@ -28,7 +28,7 @@ type CalendarAssignment = {
   payoutStatus: string;
 };
 
-type ResidencyEvent = MonthCalendarEvent & {
+export type ResidencyEvent = MonthCalendarEvent & {
   daypartId: string | null;
   shiftStartMinute: number;
   shiftEndMinute: number;
@@ -60,10 +60,12 @@ type ResidencyCalendarProps = {
   }>;
   talent: Array<{ id: string; stageName: string; homeMarket: string; genres: string[]; priority: number | null }>;
   previewMode?: boolean;
+  calendarBasePath?: string;
+  canManage?: boolean;
 };
 
 type SlotDraft = { id: string; talentId: string; start: string; end: string; confirmed: boolean; compensationType: "hourly" | "fixed" | "na"; rateOverride: string; fixedFee: string };
-type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; name: string; room: string; color: string; type: DaypartType; billingMode: DaypartBillingMode | null; defaultTalentRateCents: number | null; defaultDjCount: number | null; existing: boolean; start: string; end: string; clientRateOverride: string; programDetails: string; manualHostName: string; slots: SlotDraft[] };
+type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; name: string; room: string; color: string; type: DaypartType; billingMode: DaypartBillingMode | null; defaultTalentRateCents: number | null; defaultDjCount: number | null; existing: boolean; start: string; end: string; clientRateOverride: string; notes: string; programDetails: string; manualHostName: string; slots: SlotDraft[] };
 type ReplacementDraft = { assignmentId: string; talentId: string; start: string; end: string };
 type ModalState = { type: "add"; date: string } | { type: "edit"; eventId: string } | null;
 type StatusFilter = "needs" | "all" | "filled";
@@ -80,7 +82,7 @@ function emptySlot(talentId: string, start: string, end: string): SlotDraft {
   return { id: crypto.randomUUID(), talentId, start, end, confirmed: false, compensationType: "hourly", rateOverride: "", fixedFee: "" };
 }
 
-export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, previewMode = false }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, previewMode = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
   const [modal, setModal] = useState<ModalState>(null);
   const [suggestions, setSuggestions] = useState<SuggestionDraft[]>([]);
   const [activeDaypartId, setActiveDaypartId] = useState("");
@@ -178,6 +180,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
         start,
         end,
         clientRateOverride: "",
+        notes: "",
         programDetails: "",
         manualHostName: "",
         slots: [],
@@ -199,6 +202,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
       start: "18:00",
       end: "21:00",
       clientRateOverride: "",
+      notes: "",
       programDetails: "",
       manualHostName: "",
       slots: [],
@@ -350,9 +354,10 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           startMinute,
           endMinute,
           clientRateOverrideCents: dollarsToCents(activeSuggestion.clientRateOverride),
+          notes: activeSuggestion.notes,
           programDetails: activeSuggestion.programDetails,
           manualHostName: activeSuggestion.manualHostName,
-          assignments: activeSuggestion.slots.filter((slot) => slot.confirmed).map((slot) => {
+          assignments: (activeSuggestion.type === "house_activity" ? [] : activeSuggestion.slots.filter((slot) => slot.confirmed)).map((slot) => {
             const assignment = resolveAssignmentMinutes(startMinute, endMinute, slot.start, slot.end);
             return {
               talentId: slot.talentId,
@@ -467,8 +472,11 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     if (replacementDraft?.assignmentId === assignmentId) setReplacementDraft(null);
   }
 
-  const previousHref = `/app/calendar?residency=${residency.id}&month=${shiftMonthKey(monthKey, -1)}`;
-  const nextHref = `/app/calendar?residency=${residency.id}&month=${shiftMonthKey(monthKey, 1)}`;
+  const monthHref = (target: string) => calendarBasePath === "/app/calendar"
+    ? `${calendarBasePath}?residency=${residency.id}&month=${target}`
+    : `${calendarBasePath}?month=${target}`;
+  const previousHref = monthHref(shiftMonthKey(monthKey, -1));
+  const nextHref = monthHref(shiftMonthKey(monthKey, 1));
 
   return (
     <>
@@ -479,7 +487,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="needs">Needs scheduling</option><option value="all">All slots</option><option value="filled">Scheduled</option></select></div>
           <div className="field"><label htmlFor="calendar-daypart-filter">Daypart</label><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></div>
           </div>
-          <CalendarShareButton residencyId={residency.id} residencyName={residency.name} linkSettings={residency.calendarLinkSettings} dayparts={dayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} />
+          {canManage ? <CalendarShareButton residencyId={residency.id} residencyName={residency.name} linkSettings={residency.calendarLinkSettings} dayparts={dayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} /> : null}
           <CalendarStatusLegend />
           <div className="calendar-month-cluster">
             <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div>
@@ -487,7 +495,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           </div>
         </div>
       </header>
-      <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={openDate} onEventClick={openEvent} />
+      <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />
 
       {modal ? <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }}>
         <section className={`quick-modal ${modal.type === "edit" ? "quick-modal-edit" : ""}`} role="dialog" aria-modal="true" aria-labelledby="quick-modal-title">
@@ -513,10 +521,10 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                   {!activeSuggestion.oneTime ? <div className="quick-selected-daypart" style={{ "--daypart-color": activeSuggestion.color } as CSSProperties}><div><span>Selected Daypart</span><strong>{activeSuggestion.name}</strong><small>{activeSuggestion.room}</small></div><div className="quick-selected-window"><span>Recommended window</span><strong>{formatLocalMinute(clockToMinute(activeSuggestion.start))}–{formatLocalMinute(resolveEndMinute(clockToMinute(activeSuggestion.start), activeSuggestion.end))}</strong></div></div> : <div className="quick-time-fields"><div className="field"><label>Slot starts</label><TimeSelect ariaLabel="One-time slot start time" value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Slot ends</label><TimeSelect ariaLabel="One-time slot end time" value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div>}
                   {!activeSuggestion.oneTime ? <details className="quick-shift-options"><summary>Change this slot&apos;s overall window</summary><div className="quick-time-fields"><div className="field"><label>Slot starts</label><TimeSelect ariaLabel={`${activeSuggestion.name} slot start time`} value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Slot ends</label><TimeSelect ariaLabel={`${activeSuggestion.name} slot end time`} value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div></details> : null}
 
-                  <div className="quick-program-fields"><div className="field"><label>Program / activity details <span>optional</span></label><input value={activeSuggestion.programDetails} onChange={(event) => updateSuggestion({ programDetails: event.target.value })} placeholder="Movie title, theme, or event detail" /></div><div className="field"><label>Host / guest name <span>optional</span></label><input value={activeSuggestion.manualHostName} onChange={(event) => updateSuggestion({ manualHostName: event.target.value })} placeholder="Employee or outside host" /><small>Typed names stay on this calendar entry and are never added to Artist Lookup or payouts.</small></div></div>
+                  {activeSuggestion.type === "house_activity" ? <div className="quick-program-fields"><div className="field"><label>Program / activity details <span>optional</span></label><input value={activeSuggestion.programDetails} onChange={(event) => updateSuggestion({ programDetails: event.target.value })} placeholder="Movie title, theme, or event detail" /></div><div className="field"><label>Host / guest name <span>optional</span></label><input value={activeSuggestion.manualHostName} onChange={(event) => updateSuggestion({ manualHostName: event.target.value })} placeholder="Employee or outside host" /><small>Typed names remain informational and never become Artist, Assignment, Payout, or Invoice records.</small></div></div> : <div className="field quick-booking-notes"><label>Notes <span>optional</span></label><textarea value={activeSuggestion.notes} onChange={(event) => updateSuggestion({ notes: event.target.value })} placeholder="Anything the team should know about this booking" /></div>}
 
-                  <><div className="quick-assignment-heading"><div><strong>{activeSuggestion.slots.length ? "Registered talent" : "Registered talent (optional)"}</strong><small>{activeSuggestion.slots.length ? "Add another artist if needed; individual hours cannot overlap." : "Choose from Artist Lookup only when this person should have booking history."}</small></div></div>
-                  {!activeSuggestion.slots.length ? <ArtistSearchPicker artists={artistOptions} excludedIds={[]} label="Search Artist Lookup" initiallyOpen={false} onSelect={addArtist} /> : null}
+                  {activeSuggestion.type === "dj_artist" ? <><div className="quick-assignment-heading"><div><strong>{activeSuggestion.slots.length ? "DJs" : "Add DJ"}</strong><small>Only registered artists from this Residency&apos;s client-safe roster appear here.</small></div></div>
+                  {!activeSuggestion.slots.length ? <ArtistSearchPicker artists={artistOptions} excludedIds={[]} label="Add DJ" initiallyOpen={false} onSelect={addArtist} /> : null}
                   <div className="quick-assignment-list">{activeSuggestion.slots.map((slot, slotIndex) => {
                     const artist = talent.find((item) => item.id === slot.talentId);
                     return <div className={`quick-assignment-card ${slot.confirmed ? "confirmed" : "draft"}`} key={slot.id}>
@@ -529,7 +537,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                   {activeSuggestion.slots.length && !activeSuggestion.slots.some((slot) => !slot.confirmed) ? <ArtistSearchPicker artists={artistOptions} excludedIds={activeSuggestion.slots.map((slot) => slot.talentId)} label="Add another registered artist" onSelect={addArtist} /> : null}
                   {assignmentWarning ? <p className={assignmentWarning.startsWith("Finish adding") ? "draft-notice" : "error"} aria-live="polite">{assignmentWarning}</p> : null}
 
-                  {!previewMode && activeSuggestion.billingMode === "billed_by_hfy" ? <details className="quick-more"><summary>Pay and billing options</summary><div className="quick-more-fields"><div className="field"><label>Client rate override</label><SensitiveInput type="number" min="0" step="0.01" value={activeSuggestion.clientRateOverride} onChange={(event) => updateSuggestion({ clientRateOverride: event.target.value })} placeholder={`Default $${(residency.clientHourlyRateCents / 100).toFixed(0)}/hr`} /></div>{activeSuggestion.slots.map((slot, slotIndex) => <div className="quick-slot-details" key={slot.id}><strong>Talent {slotIndex + 1}</strong><div className="field"><label>Compensation</label><select value={slot.compensationType} onChange={(event) => updateSlot(slotIndex, { compensationType: event.target.value as SlotDraft["compensationType"] })}><option value="hourly">Hourly</option><option value="fixed">Fixed fee</option><option value="na">N/A</option></select></div><div className="field"><label>{slot.compensationType === "fixed" ? "Fixed fee" : "Talent rate override"}</label><SensitiveInput type="number" min="0" step="0.01" value={slot.compensationType === "fixed" ? slot.fixedFee : slot.rateOverride} onChange={(event) => updateSlot(slotIndex, slot.compensationType === "fixed" ? { fixedFee: event.target.value } : { rateOverride: event.target.value })} placeholder={slot.compensationType === "hourly" ? `${activeSuggestion.defaultTalentRateCents === null ? "Residency" : "Daypart"} default $${((activeSuggestion.defaultTalentRateCents ?? residency.defaultTalentRateCents) / 100).toFixed(0)}/hr` : undefined} /></div></div>)}</div></details> : activeSuggestion.billingMode === "tracking_only" ? <p className="privacy-note">Tracking only — registered artists appear in booking history, but no payout or invoice records are created. Typed hosts stay informational only.</p> : null}</>
+                  {!previewMode && activeSuggestion.billingMode === "billed_by_hfy" ? <details className="quick-more"><summary>Pay and billing options</summary><div className="quick-more-fields"><div className="field"><label>Client rate override</label><SensitiveInput type="number" min="0" step="0.01" value={activeSuggestion.clientRateOverride} onChange={(event) => updateSuggestion({ clientRateOverride: event.target.value })} placeholder={`Default $${((residency.clientHourlyRateCents ?? 0) / 100).toFixed(0)}/hr`} /></div>{activeSuggestion.slots.map((slot, slotIndex) => <div className="quick-slot-details" key={slot.id}><strong>Talent {slotIndex + 1}</strong><div className="field"><label>Compensation</label><select value={slot.compensationType} onChange={(event) => updateSlot(slotIndex, { compensationType: event.target.value as SlotDraft["compensationType"] })}><option value="hourly">Hourly</option><option value="fixed">Fixed fee</option><option value="na">N/A</option></select></div><div className="field"><label>{slot.compensationType === "fixed" ? "Fixed fee" : "Talent rate override"}</label><SensitiveInput type="number" min="0" step="0.01" value={slot.compensationType === "fixed" ? slot.fixedFee : slot.rateOverride} onChange={(event) => updateSlot(slotIndex, slot.compensationType === "fixed" ? { fixedFee: event.target.value } : { rateOverride: event.target.value })} placeholder={slot.compensationType === "hourly" ? `${activeSuggestion.defaultTalentRateCents === null ? "Residency" : "Daypart"} default $${((activeSuggestion.defaultTalentRateCents ?? residency.defaultTalentRateCents ?? 0) / 100).toFixed(0)}/hr` : undefined} /></div></div>)}</div></details> : activeSuggestion.billingMode === "tracking_only" ? <p className="privacy-note">Tracking only — the selected artist appears in booking history, but no payout or invoice records are created.</p> : null}</> : null}
                 </> : null}
 
                 {state.status === "error" ? <p className="error" aria-live="polite">{state.message}</p> : null}

@@ -1,8 +1,8 @@
 import { and, asc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { auditLog, daypartDayRules, dayparts, residencies, residencyTalent, scheduleOccurrences, shifts, talent } from "@/db/schema";
+import { auditLog, daypartDayRules, dayparts, residencies, scheduleOccurrences, shifts, talent } from "@/db/schema";
 import { validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartType } from "@/domain/dayparts";
-import type { InternalActor } from "@/lib/auth";
+import type { AuditActor } from "@/lib/auth";
 
 export type SaveDaypartInput = {
   id?: string;
@@ -41,18 +41,18 @@ export async function getDaypartsForResidencies(residencyIds: string[]) {
   }));
 }
 
-export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput) {
+export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
   const name = input.name.trim();
   const room = input.room.trim();
   const color = input.color.trim().toUpperCase();
-  const billingMode = input.billingMode ?? "billed_by_hfy";
-  const defaultTalentRateCents = billingMode === "billed_by_hfy"
+  const billingMode = input.type === "house_activity" ? null : input.billingMode;
+  const defaultTalentRateCents = input.type === "dj_artist" && billingMode === "billed_by_hfy"
     ? input.defaultTalentRateCents ?? null
     : null;
   const activeUntil = input.activeUntil || null;
   if (!name || !room) throw new Error("Daypart name and room are required.");
   if (!/^#[0-9A-F]{6}$/.test(color)) throw new Error("Choose a valid Daypart color.");
-  if (billingMode !== "billed_by_hfy" && billingMode !== "tracking_only") {
+  if (input.type === "dj_artist" && billingMode !== "billed_by_hfy" && billingMode !== "tracking_only") {
     throw new Error("Choose how this Daypart is handled.");
   }
   if (defaultTalentRateCents !== null && (!Number.isInteger(defaultTalentRateCents) || defaultTalentRateCents < 0)) {
@@ -84,7 +84,7 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
         name,
         room,
         color,
-        type: "dj_artist",
+        type: input.type,
         billingMode,
         defaultTalentRateCents,
         activeUntil,
@@ -99,7 +99,7 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
         name,
         room,
         color,
-        type: "dj_artist",
+        type: input.type,
         billingMode,
         defaultTalentRateCents,
         activeUntil,
@@ -117,13 +117,13 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
       action: input.id ? "daypart_updated" : "daypart_created",
       entityType: "daypart",
       entityId: daypartId,
-      details: { name, room, color, billingMode, defaultTalentRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
+      details: { name, room, color, type: input.type, billingMode, defaultTalentRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
     });
     return { id: daypartId };
   });
 }
 
-export async function removeDaypart(actor: InternalActor, residencyId: string, daypartId: string) {
+export async function removeDaypart(actor: AuditActor, residencyId: string, daypartId: string) {
   const database = getDb();
   return database.transaction(async (tx) => {
     const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name }).from(dayparts)
@@ -221,12 +221,12 @@ export async function getActiveTalentLookup(residencyId?: string) {
     homeMarket: talent.homeMarket,
     genres: talent.genres,
     priority: talent.priority,
-  }).from(residencyTalent)
-    .innerJoin(talent, eq(residencyTalent.talentId, talent.id))
+    instagramHandle: talent.instagramHandle,
+  }).from(talent)
     .where(and(
-      eq(residencyTalent.residencyId, residencyId),
-      eq(residencyTalent.active, true),
       eq(talent.talentStatus, "active"),
+      isNull(talent.archivedAt),
+      or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residencyId)),
     ))
     .orderBy(asc(talent.stageName));
 }

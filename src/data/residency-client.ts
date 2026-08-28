@@ -1,8 +1,9 @@
 import "server-only";
 
-import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, dayparts, shifts, talent } from "@/db/schema";
+import { projectClientSafeRoster } from "@/domain/client-safe-talent";
 
 export async function getResidencyClientCalendar(residencyId: string, range: { from: string; to: string }) {
   const database = getDb();
@@ -57,4 +58,46 @@ export async function getResidencyClientOverview(residencyId: string) {
     gte(shifts.serviceDate, today),
   )).orderBy(asc(shifts.serviceDate));
   return { upcomingServiceCount: rows.length, nextServiceDate: rows[0]?.serviceDate ?? null };
+}
+
+export async function getResidencyClientSafeRoster(residencyId: string) {
+  const rows = await getDb().select({
+    id: talent.id,
+    stageName: talent.stageName,
+    homeMarket: talent.homeMarket,
+    genres: talent.genres,
+    instagramHandle: talent.instagramHandle,
+  }).from(talent)
+    .where(and(
+      eq(talent.talentStatus, "active"),
+      isNull(talent.archivedAt),
+      or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residencyId)),
+    ))
+    .orderBy(asc(talent.stageName));
+  return projectClientSafeRoster(rows);
+}
+
+export async function getResidencyClientPayoutStatus(residencyId: string) {
+  const rows = await getDb().select({
+    id: assignments.id,
+    artist: talent.stageName,
+    serviceDate: shifts.serviceDate,
+    startsAt: assignments.startsAt,
+    endsAt: assignments.endsAt,
+    payoutStatus: assignments.payoutStatus,
+    paidAt: assignments.paidAt,
+  }).from(assignments)
+    .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+    .leftJoin(talent, eq(assignments.talentId, talent.id))
+    .where(and(eq(shifts.residencyId, residencyId), inArray(assignments.bookingStatus, ["confirmed", "completed"])))
+    .orderBy(asc(shifts.serviceDate), asc(assignments.startsAt));
+  return rows.map((row) => ({
+    id: row.id,
+    artist: row.artist ?? "Unassigned",
+    serviceDate: row.serviceDate,
+    startsAt: row.startsAt.toISOString(),
+    endsAt: row.endsAt.toISOString(),
+    status: row.payoutStatus === "paid" ? "Paid" as const : "Pending" as const,
+    paidAt: row.paidAt?.toISOString() ?? null,
+  }));
 }

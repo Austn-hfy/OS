@@ -4,7 +4,7 @@ import { assignments, auditLog, residencies, shifts, talent } from "@/db/schema"
 import { calculateCompensationCents, isPaymentEligible, nextPayoutStatus } from "@/domain/airtable-parity";
 import { localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
-import type { InternalActor } from "@/lib/auth";
+import type { AuditActor } from "@/lib/auth";
 
 const transitions: Record<string, string[]> = {
   open: ["offered", "confirmed", "cancelled"],
@@ -16,7 +16,7 @@ const transitions: Record<string, string[]> = {
 };
 
 export async function transitionAssignment(
-  actor: InternalActor,
+  actor: AuditActor,
   assignmentId: string,
   targetStatus: "open" | "offered" | "confirmed" | "completed" | "cancelled",
 ) {
@@ -73,7 +73,7 @@ export async function transitionAssignment(
 }
 
 export async function markAssignmentPaid(
-  actor: InternalActor,
+  actor: AuditActor,
   assignmentId: string,
   payment: { paidAt: Date; paidAmountCents: number; paymentReference: string },
 ) {
@@ -106,7 +106,7 @@ export async function markAssignmentPaid(
   });
 }
 
-export async function changeAssignmentPaidDate(actor: InternalActor, assignmentId: string, paidAt: Date) {
+export async function changeAssignmentPaidDate(actor: AuditActor, assignmentId: string, paidAt: Date) {
   return getDb().transaction(async (tx) => {
     const [current] = await tx.select({
       id: assignments.id,
@@ -128,7 +128,7 @@ export async function changeAssignmentPaidDate(actor: InternalActor, assignmentI
   });
 }
 
-export async function replaceAssignmentTalent(actor: InternalActor, assignmentId: string, talentId: string) {
+export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: string, talentId: string) {
   return getDb().transaction(async (tx) => {
     const [current] = await tx.select({
       id: assignments.id,
@@ -178,7 +178,7 @@ export async function replaceAssignmentTalent(actor: InternalActor, assignmentId
 }
 
 export async function rescheduleAssignment(
-  actor: InternalActor,
+  actor: AuditActor,
   assignmentId: string,
   input: { talentId: string; startsAtMinute: number; endsAtMinute: number },
 ) {

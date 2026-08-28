@@ -181,6 +181,8 @@ export const dayparts = pgTable("dayparts", {
   check("dayparts_color_valid", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),
   check("dayparts_rate_nonnegative", sql`${table.defaultTalentRateCents} IS NULL OR ${table.defaultTalentRateCents} >= 0`),
   check("dayparts_type_fields_valid", sql`
+    (${table.type} = 'house_activity' AND ${table.billingMode} IS NULL AND ${table.defaultTalentRateCents} IS NULL)
+    OR
     (${table.type} = 'dj_artist' AND ${table.billingMode} = 'tracking_only' AND ${table.defaultTalentRateCents} IS NULL)
     OR
     (${table.type} = 'dj_artist' AND ${table.billingMode} = 'billed_by_hfy')
@@ -222,6 +224,7 @@ export const scheduleOccurrences = pgTable("schedule_occurrences", {
   room: text("room").notNull(),
   color: text("color").notNull(),
   type: daypartType("type").notNull(),
+  notes: text("notes").notNull().default(""),
   programDetails: text("program_details").notNull().default(""),
   manualHostName: text("manual_host_name").notNull().default(""),
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
@@ -291,6 +294,7 @@ export const talent = pgTable("talent", {
   email: text("email").notNull().default(""),
   phone: text("phone").notNull().default(""),
   instagramHandle: text("instagram_handle").notNull().default(""),
+  exclusiveResidencyId: uuid("exclusive_residency_id").references(() => residencies.id, { onDelete: "set null" }),
   rosterStatus: rosterStatus("roster_status").notNull().default("needs_review"),
   talentStatus: talentStatus("talent_status").notNull().default("active"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -309,6 +313,7 @@ export const talent = pgTable("talent", {
 }, (table) => [
   uniqueIndex("talent_airtable_record_id_unique").on(table.airtableRecordId),
   index("talent_stage_name_idx").on(table.stageName),
+  index("talent_exclusive_residency_idx").on(table.exclusiveResidencyId),
   index("talent_visibility_idx").on(table.archivedAt, table.talentStatus),
   check("talent_legacy_financials_nonnegative", sql`${table.legacyOutstandingOwedCents} >= 0 AND ${table.legacyTotalEarningsCents} >= 0`),
   check("talent_priority_range", sql`${table.priority} IS NULL OR (${table.priority} >= 1 AND ${table.priority} <= 5)`),

@@ -187,6 +187,7 @@ export async function getScheduleOccurrenceData(residencyId?: string, range?: { 
     color: scheduleOccurrences.color,
     type: scheduleOccurrences.type,
     billingMode: dayparts.billingMode,
+    notes: scheduleOccurrences.notes,
     programDetails: scheduleOccurrences.programDetails,
     manualHostName: scheduleOccurrences.manualHostName,
     serviceDate: scheduleOccurrences.serviceDate,

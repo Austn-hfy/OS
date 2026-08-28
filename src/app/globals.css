@@ -104,7 +104,7 @@ button { cursor: pointer; }
 .day-parts-panel .daypart-manager > .section-heading { margin-top: 0; }
 .public-calendar-link-card { align-content: start; gap: 18px; }
 .public-calendar-link-compact { display: grid; }
-.calendar-share-modal { width: min(620px, 100%); }
+.calendar-share-modal { width: min(720px, calc(100vw - 32px)); }
 .calendar-share-modal .quick-modal-header p:last-child { margin: 6px 0 0; color: var(--muted); }
 .calendar-share-button { min-height: 36px; padding-block: 7px; white-space: nowrap; }
 .public-calendar-boundary { display: grid; gap: 4px; padding: 14px; border: 1px solid rgba(52,127,187,.2); border-radius: 16px; background: rgba(217,237,250,.45); }
@@ -118,17 +118,32 @@ button { cursor: pointer; }
 .public-calendar-scope-form { display: grid; gap: 14px; }
 .public-calendar-scope-form fieldset { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
 .public-calendar-scope-form legend { grid-column: 1 / -1; margin-bottom: 7px; color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
-.public-calendar-scope-form fieldset > label { min-width: 0; display: flex; align-items: flex-start; gap: 9px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.58); cursor: pointer; }
+.public-calendar-scope-form fieldset > label { min-width: 0; display: grid; grid-template-columns: 18px minmax(0,1fr); align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.58); cursor: pointer; }
 .public-calendar-scope-form fieldset > label.selected { border-color: rgba(39,131,220,.4); background: rgba(217,237,250,.64); box-shadow: inset 0 0 0 1px rgba(39,131,220,.08); }
-.public-calendar-scope-form input { flex: 0 0 auto; }
+.public-calendar-scope-form input[type="radio"] { width: 18px; height: 18px; min-height: 18px; margin: 1px 0 0; padding: 0; }
 .public-calendar-scope-form label > span:last-child { min-width: 0; display: grid; gap: 3px; }
-.public-calendar-scope-form label strong { color: var(--dark); font-size: 11px; }
-.public-calendar-scope-form label small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.public-calendar-scope-form label strong { color: var(--dark); font-size: 11px; overflow-wrap: anywhere; }
+.public-calendar-scope-form label small { color: var(--muted); font-size: 9px; line-height: 1.4; overflow-wrap: anywhere; }
 .public-calendar-dayparts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 10px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.42); }
 .public-calendar-dayparts > label { min-width: 0; display: grid; grid-template-columns: auto auto minmax(0,1fr); align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid transparent; border-radius: 11px; cursor: pointer; }
 .public-calendar-dayparts > label.selected { border-color: rgba(39,131,220,.26); background: rgba(217,237,250,.56); }
 .public-calendar-daypart-color { width: 9px; height: 28px; border-radius: 999px; }
 .public-calendar-page { width: min(880px, calc(100% - 32px)); min-height: 100dvh; display: grid; align-content: start; gap: 22px; margin: 0 auto; padding: 48px 0 34px; }
+.client-nav-item { display: grid; }
+.client-dayparts-button { appearance: none; margin: -4px 12px 2px 24px; padding: 5px 10px; border: 0; border-left: 1px solid var(--line); color: var(--muted); background: transparent; text-align: left; font-size: 10px; font-weight: 700; cursor: pointer; }
+.client-dayparts-button:hover { color: var(--forest); }
+.client-safe-roster-boundary { display: grid; gap: 4px; margin-bottom: 14px; padding: 14px 18px; border-color: rgba(52,127,187,.2); background: rgba(217,237,250,.5); }
+.client-safe-roster-boundary strong { color: var(--dark); }
+.client-safe-roster-boundary span { color: var(--muted); font-size: 11px; }
+.client-safe-roster { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+.client-safe-talent-card { display: grid; gap: 16px; }
+.client-safe-talent-card h2 { margin: 0 0 3px; font-size: 20px; }
+.client-safe-talent-card p { margin: 0; color: var(--muted); }
+.client-safe-talent-card dl { display: grid; gap: 10px; margin: 0; }
+.client-safe-talent-card dl > div { display: grid; gap: 2px; }
+.client-safe-talent-card dt { color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.client-safe-talent-card dd { margin: 0; color: var(--dark); font-size: 11px; }
+.client-payout-table table { min-width: 650px; }
 .public-calendar-header { display: flex; align-items: flex-start; gap: 18px; padding: 28px; border: 1px solid rgba(255,255,255,.74); border-radius: 28px; background: rgba(249,251,252,.84); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
 .public-calendar-header .brand-mark { width: 48px; height: 48px; flex: 0 0 48px; }
 .public-calendar-header h1 { margin: 6px 0 8px; font-size: clamp(34px, 7vw, 54px); }
