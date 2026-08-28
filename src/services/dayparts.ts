@@ -20,15 +20,20 @@ export type SaveDaypartInput = {
 };
 
 export async function getDaypartsForResidency(residencyId: string) {
+  return (await getDaypartsForResidencies([residencyId])).filter((daypart) => daypart.residencyId === residencyId);
+}
+
+export async function getDaypartsForResidencies(residencyIds: string[]) {
+  if (!residencyIds.length) return [];
   const database = getDb();
   const [partRows, ruleRows] = await Promise.all([
     database.select().from(dayparts)
-      .where(eq(dayparts.residencyId, residencyId))
-      .orderBy(asc(dayparts.sortOrder), asc(dayparts.name)),
+      .where(inArray(dayparts.residencyId, residencyIds))
+      .orderBy(asc(dayparts.residencyId), asc(dayparts.sortOrder), asc(dayparts.name)),
     database.select().from(daypartDayRules)
       .innerJoin(dayparts, eq(daypartDayRules.daypartId, dayparts.id))
-      .where(eq(dayparts.residencyId, residencyId))
-      .orderBy(asc(daypartDayRules.weekday)),
+      .where(inArray(dayparts.residencyId, residencyIds))
+      .orderBy(asc(dayparts.residencyId), asc(daypartDayRules.weekday)),
   ]);
   return partRows.map((daypart) => ({
     ...daypart,

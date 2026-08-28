@@ -6,7 +6,7 @@ import { CalendarShareButton } from "@/components/calendar-share-button";
 import { getCalendarData, getResidencyList, getScheduleOccurrenceData, hasPublicCalendarLink } from "@/data/internal";
 import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
 import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
-import { getActiveTalentLookup, getDaypartsForResidency } from "@/services/dayparts";
+import { getActiveTalentLookup, getDaypartsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar } from "./residency-calendar";
 import { viewAsResidencyId } from "@/lib/view-as";
 
@@ -18,14 +18,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   if (!workspaceResidency) {
     const monthKey = normalizeMonthKey(params.month);
+    const range = monthRange(monthKey);
     const calendarResidency = residencyList.find((item) => item.id === params.calendarResidency);
-    const [calendar, occurrences, calendarHasPublicLink] = await Promise.all([
-      getCalendarData(calendarResidency?.id, monthRange(monthKey)),
-      getScheduleOccurrenceData(calendarResidency?.id, monthRange(monthKey)),
+    const visibleResidencies = calendarResidency ? [calendarResidency] : residencyList;
+    const [calendar, occurrences, visibleDayparts, calendarHasPublicLink] = await Promise.all([
+      getCalendarData(calendarResidency?.id, range),
+      getScheduleOccurrenceData(calendarResidency?.id, range),
+      getDaypartsForResidencies(visibleResidencies.map((residency) => residency.id)),
       calendarResidency ? hasPublicCalendarLink(calendarResidency.id) : Promise.resolve(false),
     ]);
     const tones: MonthCalendarEvent["tone"][] = ["blue", "navy", "sky"];
-    const events: MonthCalendarEvent[] = calendar.map((shift) => {
+    const savedShiftEvents = calendar.map((shift) => {
       const activeAssignments = shift.assignments.filter((assignment) => assignment.bookingStatus !== "cancelled");
       const shiftStartMinute = clockToMinute(formatTimeInput(shift.startsAt, shift.residencyTimezone));
       const shiftEndMinute = resolveEndMinute(shiftStartMinute, formatTimeInput(shift.endsAt, shift.residencyTimezone));
@@ -44,17 +47,45 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         color: shift.daypartColor ?? shift.shiftCalendarColor ?? undefined,
         tone: calendarToneForSlot(shift.room, tones[Math.max(0, residencyList.findIndex((item) => item.id === shift.residencyId)) % tones.length]),
         schedulingStatus,
+        startMinute: shiftStartMinute,
       };
-    }).concat(occurrences.map((occurrence) => ({
-      id: occurrence.id,
-      date: occurrence.serviceDate,
-      title: calendarResidency ? occurrence.name : `${occurrence.name} · ${occurrence.residencyName}`,
-      time: `${formatCompactMinuteRange(clockToMinute(formatTimeInput(occurrence.startsAt, occurrence.residencyTimezone)), resolveEndMinute(clockToMinute(formatTimeInput(occurrence.startsAt, occurrence.residencyTimezone)), formatTimeInput(occurrence.endsAt, occurrence.residencyTimezone)))} · Scheduled`,
-      residencyName: occurrence.assignments.map((assignment) => assignment.talentName).join(" + ") || "House activity",
-      color: occurrence.color,
-      tone: "blue" as const,
-      schedulingStatus: "filled" as const,
+    });
+    const savedOccurrenceEvents = occurrences.map((occurrence) => {
+      const startMinute = clockToMinute(formatTimeInput(occurrence.startsAt, occurrence.residencyTimezone));
+      return {
+        id: occurrence.id,
+        date: occurrence.serviceDate,
+        title: calendarResidency ? occurrence.name : `${occurrence.name} · ${occurrence.residencyName}`,
+        time: `${formatCompactMinuteRange(startMinute, resolveEndMinute(startMinute, formatTimeInput(occurrence.endsAt, occurrence.residencyTimezone)))} · Scheduled`,
+        residencyName: occurrence.assignments.map((assignment) => assignment.talentName).join(" + ") || "House activity",
+        color: occurrence.color,
+        tone: "blue" as const,
+        schedulingStatus: "filled" as const,
+        startMinute,
+      };
+    });
+    const existingDaypartDates = new Set([
+      ...calendar.flatMap((shift) => shift.daypartId ? [`${shift.daypartId}:${shift.serviceDate}`] : []),
+      ...occurrences.map((occurrence) => `${occurrence.daypartId}:${occurrence.serviceDate}`),
+    ]);
+    const projectedEvents = visibleResidencies.flatMap((residency) => projectDaypartSlots(
+      visibleDayparts.filter((daypart) => daypart.residencyId === residency.id),
+      range.from,
+      range.to,
+      existingDaypartDates,
+    ).map((slot) => ({
+      id: slot.id,
+      date: slot.date,
+      title: calendarResidency ? slot.name : `${slot.name} · ${residency.name}`,
+      time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · ${slot.type === "house_activity" ? "Not scheduled" : "Open"}`,
+      residencyName: residency.name,
+      color: slot.color,
+      tone: calendarToneForSlot(slot.room, tones[Math.max(0, residencyList.findIndex((item) => item.id === residency.id)) % tones.length]),
+      schedulingStatus: "empty" as const,
+      startMinute: slot.startMinute,
     })));
+    const events: MonthCalendarEvent[] = [...savedShiftEvents, ...savedOccurrenceEvents, ...projectedEvents]
+      .sort((left, right) => left.date.localeCompare(right.date) || left.startMinute - right.startMinute);
     const needsDjCount = events.filter((event) => event.schedulingStatus === "empty" || event.schedulingStatus === "partial").length;
 
     function monthHref(target: string) {
