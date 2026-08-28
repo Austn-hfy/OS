@@ -149,6 +149,16 @@ button { cursor: pointer; }
 .sensitive-input-mask { position: absolute; z-index: 2; inset: 0; display: flex; align-items: center; padding: 0 13px; border-radius: inherit; color: var(--hfy-ink-soft, #344656); background: rgba(247,249,250,.78); pointer-events: auto; cursor: not-allowed; font-weight: 750; letter-spacing: .12em; }
 .privacy-mode-active input[name="defaultTalentRate"], .privacy-mode-active input[name="clientHourlyRate"] { -webkit-text-security: disc; caret-color: transparent; pointer-events: none; user-select: none; }
 .main { min-width: 0; padding: 46px clamp(24px, 4.5vw, 72px) 72px; }
+.view-as-control { position: fixed; z-index: 37; top: 14px; right: 18px; }
+.view-as-control form { display: flex; align-items: center; gap: 7px; padding: 6px; border: 1px solid rgba(255,255,255,.78); border-radius: 14px; background: rgba(249,251,252,.88); box-shadow: 0 12px 30px rgba(7,26,49,.1); backdrop-filter: blur(16px); }
+.view-as-control label { padding-left: 6px; color: var(--dark); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.view-as-control select { min-height: 34px; width: 160px; padding: 6px 28px 6px 10px; border-radius: 9px; font-size: 10px; }
+.view-as-control .button { min-height: 34px; padding: 7px 12px; font-size: 10px; }
+.view-as-banner { flex: 0 0 auto; position: relative; z-index: 36; min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 14px; margin: -24px calc(-1 * clamp(24px, 4.5vw, 72px)) 12px; padding: 10px 18px; color: #fff; background: linear-gradient(100deg, #0b2847, #1678cf); box-shadow: 0 10px 28px rgba(7,26,49,.18); }
+.view-as-banner strong { font-family: "Plus Jakarta Sans", sans-serif; font-size: 13px; }
+.view-as-banner button { appearance: none; border: 1px solid rgba(255,255,255,.42); border-radius: 999px; color: white; background: rgba(255,255,255,.12); padding: 6px 11px; font-size: 10px; font-weight: 750; }
+.preview-context { cursor: default; }
+.view-as-main > .calendar-page { min-height: 0; flex: 1; }
 .main.calendar-main { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; padding-top: 24px; padding-bottom: 24px; }
 .calendar-main > .calendar-page { flex: 1; }
 .calendar-page { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
@@ -199,6 +209,15 @@ h3 { margin: 0; font-family: "Plus Jakarta Sans", Inter, sans-serif; font-size: 
 .button.secondary { color: var(--ink); background: rgba(255,255,255,.72); border: 1px solid var(--line); box-shadow: none; }
 .button.lime { color: white; background: linear-gradient(100deg, #1b79d5, #77a7e8); border-color: transparent; }
 .button:disabled { opacity: .55; cursor: wait; }
+.daypart-type-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+.daypart-type-options button { appearance: none; min-height: 72px; display: grid; align-content: center; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; color: var(--dark); background: rgba(255,255,255,.68); text-align: left; }
+.daypart-type-options button.active { border-color: rgba(2,116,222,.42); background: rgba(207,232,249,.68); box-shadow: inset 3px 0 0 #2783dc; }
+.daypart-type-options strong, .daypart-type-options small { display: block; }
+.daypart-type-options strong { font-size: 12px; }
+.daypart-type-options small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.quick-house-activity { display: grid; gap: 6px; padding: 16px; border: 1px solid rgba(46,158,121,.22); border-radius: 15px; background: rgba(232,247,241,.72); }
+.quick-house-activity strong { color: #27664e; font-size: 12px; }
+.quick-house-activity p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 
 /* Residency Invoice workspace */
 .invoice-workspace { display: grid; gap: 18px; }
@@ -479,7 +498,7 @@ tr:last-child td { border-bottom: 0; }
 .week-rule > p { align-self: center; color: var(--muted); margin: 0; text-align: center; font-size: 12px; }
 .week-toggle { appearance: none; min-height: 38px; border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--muted); font-size: 12px; font-weight: 800; }
 .week-toggle[aria-pressed="true"] { color: white; background: var(--forest); border-color: var(--forest); }
-.week-rule-fields { display: grid; grid-template-columns: 1fr; gap: 4px; }
+.week-rule-fields { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; }
 .week-rule-fields input { min-height: 32px; height: 32px; padding: 5px 7px; }
 .week-rule-fields .field { gap: 3px; }
 .week-rule-fields .field label { font-size: 9px; }

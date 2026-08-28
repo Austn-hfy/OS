@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { InternalActor } from "@/lib/auth";
 import { signOut } from "@/app/actions";
 import { PrivacyModeIndicator, PrivacyModeProvider, PrivacyModeToggle } from "@/components/privacy-mode";
 import { DayPartsPanel } from "@/components/day-parts-panel";
+import { enterViewAsAction, exitViewAsAction } from "@/app/app/view-as-actions";
 
 type ResidencyOption = { id: string; name: string; cityState: string | null; tier: string };
 
-export function InternalShell({ actor, residencies, initialPrivacyMode, children }: { actor: InternalActor; residencies: ResidencyOption[]; initialPrivacyMode: boolean; children: React.ReactNode }) {
+export function InternalShell({ actor, residencies, initialPrivacyMode, viewAsResidency, children }: { actor: InternalActor; residencies: ResidencyOption[]; initialPrivacyMode: boolean; viewAsResidency: ResidencyOption | null; children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [daypartsExpanded, setDaypartsExpanded] = useState(false);
@@ -42,6 +44,45 @@ export function InternalShell({ actor, residencies, initialPrivacyMode, children
   }
 
   const panelResidency = residencies.find((item) => item.id === daypartsResidencyId);
+
+  const previewRouteIsReady = Boolean(viewAsResidency)
+    && pathname === "/app/calendar"
+    && searchParams.get("residency") === viewAsResidency?.id;
+  useEffect(() => {
+    if (!viewAsResidency || previewRouteIsReady) return;
+    router.replace(`/app/calendar?residency=${viewAsResidency.id}`);
+  }, [previewRouteIsReady, router, viewAsResidency]);
+
+  if (viewAsResidency) {
+    return (
+      <PrivacyModeProvider initialEnabled>
+        <div className="shell view-as-shell">
+          <aside className="sidebar">
+            <Link className="brand" href={`/app/calendar?residency=${viewAsResidency.id}`}>
+              <span className="brand-mark">HFY</span>
+              <span className="brand-copy"><strong>HFY OS</strong><span>Residency preview</span></span>
+            </Link>
+            <div className="context-switcher preview-context"><span><small>Residency workspace</small><strong>{viewAsResidency.name}</strong></span></div>
+            <div className="sidebar-context"><span>Hotel operator view</span><p>Financial and company information is hidden.</p></div>
+            <nav className="nav">
+              <p className="nav-label">Residency</p>
+              <div className="nav-entry"><Link className="active" href={`/app/calendar?residency=${viewAsResidency.id}`}>Calendar</Link>
+                <div className={`day-parts-nav ${daypartsResidencyId ? "expanded" : ""}`}>
+                  <button className="day-parts-nav-toggle" type="button" aria-expanded={Boolean(daypartsResidencyId)} onClick={() => setDaypartsResidencyId((current) => current ? null : viewAsResidency.id)}><span>Day Parts</span><span aria-hidden="true">⌄</span></button>
+                </div>
+              </div>
+            </nav>
+            <div className="sidebar-footer"><form action={exitViewAsAction}><button className="button secondary" type="submit">Exit preview</button></form></div>
+          </aside>
+          <main className="main calendar-main view-as-main">
+            <div className="view-as-banner" role="status"><strong>Viewing as: {viewAsResidency.name}</strong><form action={exitViewAsAction}><button type="submit">Exit preview</button></form></div>
+            {previewRouteIsReady ? children : <div className="card empty">Opening {viewAsResidency.name} calendar…</div>}
+          </main>
+          {panelResidency ? <DayPartsPanel key={panelResidency.id} residencyId={panelResidency.id} residencyName={panelResidency.name} readOnly onClose={() => setDaypartsResidencyId(null)} /> : null}
+        </div>
+      </PrivacyModeProvider>
+    );
+  }
 
   return (
     <PrivacyModeProvider initialEnabled={initialPrivacyMode}>
@@ -99,7 +140,7 @@ export function InternalShell({ actor, residencies, initialPrivacyMode, children
           <form action={signOut}><button className="button secondary" type="submit">Sign out</button></form>
         </div>
       </aside>
-      <main className={`main ${pathname === "/app/calendar" ? "calendar-main" : ""}`}><PrivacyModeIndicator />{children}</main>
+      <main className={`main ${pathname === "/app/calendar" ? "calendar-main" : ""}`}><div className="view-as-control"><form action={enterViewAsAction}><label htmlFor="view-as-residency">View As</label><select id="view-as-residency" name="residencyId" defaultValue=""><option value="" disabled>Select a Residency</option>{residencies.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><button className="button secondary" type="submit">Preview</button></form></div><PrivacyModeIndicator />{children}</main>
       {panelResidency ? <DayPartsPanel key={panelResidency.id} residencyId={panelResidency.id} residencyName={panelResidency.name} onClose={() => { setDaypartsResidencyId(null); if (inResidency) setDaypartsExpanded(false); }} /> : null}
     </div>
     </PrivacyModeProvider>

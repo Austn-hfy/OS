@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, inArray, isNull, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { auditLog, daypartDayRules, dayparts, residencies, residencyTalent, shifts, talent } from "@/db/schema";
-import { validateDaypartRules, weekdayForDate, type DaypartRuleInput } from "@/domain/dayparts";
+import { auditLog, daypartDayRules, dayparts, residencies, residencyTalent, scheduleOccurrences, shifts, talent } from "@/db/schema";
+import { validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartType } from "@/domain/dayparts";
 import type { InternalActor } from "@/lib/auth";
 
 export type SaveDaypartInput = {
@@ -10,6 +10,8 @@ export type SaveDaypartInput = {
   name: string;
   room: string;
   color: string;
+  type: DaypartType;
+  billingMode: DaypartBillingMode | null;
   defaultTalentRateCents?: number | null;
   activeUntil?: string | null;
   active: boolean;
@@ -38,15 +40,22 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
   const name = input.name.trim();
   const room = input.room.trim();
   const color = input.color.trim().toUpperCase();
-  const defaultTalentRateCents = input.defaultTalentRateCents ?? null;
+  const billingMode = input.type === "house_activity" ? null : input.billingMode ?? "billed_by_hfy";
+  const defaultTalentRateCents = input.type === "dj_artist" && billingMode === "billed_by_hfy"
+    ? input.defaultTalentRateCents ?? null
+    : null;
   const activeUntil = input.activeUntil || null;
   if (!name || !room) throw new Error("Daypart name and room are required.");
   if (!/^#[0-9A-F]{6}$/.test(color)) throw new Error("Choose a valid Daypart color.");
+  if (input.type !== "dj_artist" && input.type !== "house_activity") throw new Error("Choose a valid Daypart type.");
+  if (input.type === "dj_artist" && billingMode !== "billed_by_hfy" && billingMode !== "tracking_only") {
+    throw new Error("Choose how this DJ / Artist Daypart is billed.");
+  }
   if (defaultTalentRateCents !== null && (!Number.isInteger(defaultTalentRateCents) || defaultTalentRateCents < 0)) {
     throw new Error("Daypart talent rate must be blank or a nonnegative amount.");
   }
   if (activeUntil) weekdayForDate(activeUntil);
-  const rules = validateDaypartRules(input.rules);
+  const rules = validateDaypartRules(input.rules, input.type);
   const database = getDb();
 
   return database.transaction(async (tx) => {
@@ -63,6 +72,8 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
         name,
         room,
         color,
+        type: input.type,
+        billingMode,
         defaultTalentRateCents,
         activeUntil,
         active: input.active,
@@ -76,6 +87,8 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
         name,
         room,
         color,
+        type: input.type,
+        billingMode,
         defaultTalentRateCents,
         activeUntil,
         active: input.active,
@@ -92,7 +105,7 @@ export async function saveDaypart(actor: InternalActor, input: SaveDaypartInput)
       action: input.id ? "daypart_updated" : "daypart_created",
       entityType: "daypart",
       entityId: daypartId,
-      details: { name, room, color, defaultTalentRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
+      details: { name, room, color, type: input.type, billingMode, defaultTalentRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
     });
     return { id: daypartId };
   });
@@ -106,6 +119,8 @@ export async function getDaypartSuggestions(residencyId: string, serviceDate: st
     name: dayparts.name,
     room: dayparts.room,
     color: dayparts.color,
+    type: dayparts.type,
+    billingMode: dayparts.billingMode,
     defaultTalentRateCents: dayparts.defaultTalentRateCents,
     activeUntil: dayparts.activeUntil,
     startMinute: daypartDayRules.startMinute,
@@ -122,15 +137,24 @@ export async function getDaypartSuggestions(residencyId: string, serviceDate: st
     .orderBy(asc(dayparts.sortOrder), asc(dayparts.name));
 
   if (!rows.length) return [];
-  const existing = await database.select({ daypartId: shifts.daypartId, shiftId: shifts.id }).from(shifts)
-    .where(and(
-      eq(shifts.residencyId, residencyId),
-      eq(shifts.serviceDate, serviceDate),
-      inArray(shifts.daypartId, rows.map((row) => row.daypartId)),
-    ));
+  const [existingShifts, existingOccurrences] = await Promise.all([
+    database.select({ daypartId: shifts.daypartId, recordId: shifts.id }).from(shifts)
+      .where(and(
+        eq(shifts.residencyId, residencyId),
+        eq(shifts.serviceDate, serviceDate),
+        inArray(shifts.daypartId, rows.map((row) => row.daypartId)),
+      )),
+    database.select({ daypartId: scheduleOccurrences.daypartId, recordId: scheduleOccurrences.id }).from(scheduleOccurrences)
+      .where(and(
+        eq(scheduleOccurrences.residencyId, residencyId),
+        eq(scheduleOccurrences.serviceDate, serviceDate),
+        inArray(scheduleOccurrences.daypartId, rows.map((row) => row.daypartId)),
+      )),
+  ]);
+  const existing = [...existingShifts, ...existingOccurrences];
   return rows.map((row) => ({
     ...row,
-    existingShiftId: existing.find((shift) => shift.daypartId === row.daypartId)?.shiftId ?? null,
+    existingRecordId: existing.find((record) => record.daypartId === row.daypartId)?.recordId ?? null,
   }));
 }
 

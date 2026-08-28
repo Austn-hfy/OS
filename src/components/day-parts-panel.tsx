@@ -9,7 +9,7 @@ async function requestDayparts(residencyId: string) {
   return (await response.json() as { dayparts: DaypartRow[] }).dayparts;
 }
 
-export function DayPartsPanel({ residencyId, residencyName, onClose }: { residencyId: string; residencyName: string; onClose: () => void }) {
+export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = false }: { residencyId: string; residencyName: string; onClose: () => void; readOnly?: boolean }) {
   const [dayparts, setDayparts] = useState<DaypartRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -47,9 +47,9 @@ export function DayPartsPanel({ residencyId, residencyName, onClose }: { residen
 
   return <div className="day-parts-panel-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
     <aside className="day-parts-panel" role="dialog" aria-modal="true" aria-labelledby="day-parts-panel-title">
-      <header className="day-parts-panel-header"><div><p className="eyebrow">{residencyName}</p><h2 id="day-parts-panel-title">Day Parts</h2><p>Review and edit the standing weekly schedule without leaving the calendar.</p></div><button className="quick-modal-close" type="button" aria-label="Close Day Parts" onClick={onClose}>×</button></header>
+      <header className="day-parts-panel-header"><div><p className="eyebrow">{residencyName}</p><h2 id="day-parts-panel-title">Day Parts</h2><p>{readOnly ? "Standing weekly schedule for this Residency." : "Review and edit the standing weekly schedule without leaving the calendar."}</p></div><button className="quick-modal-close" type="button" aria-label="Close Day Parts" onClick={onClose}>×</button></header>
       <div className="day-parts-panel-scroll">
-        {loading ? <div className="card empty">Loading Day Parts…</div> : error ? <div className="card empty error">{error}<button className="button secondary" type="button" onClick={() => void load()}>Try again</button></div> : <DaypartManager residencyId={residencyId} dayparts={dayparts} onSaved={() => void load()} />}
+        {loading ? <div className="card empty">Loading Day Parts…</div> : error ? <div className="card empty error">{error}<button className="button secondary" type="button" onClick={() => void load()}>Try again</button></div> : <DaypartManager residencyId={residencyId} dayparts={dayparts} onSaved={() => void load()} readOnly={readOnly} />}
       </div>
     </aside>
   </div>;

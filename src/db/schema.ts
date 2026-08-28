@@ -59,6 +59,8 @@ export const invoiceLineType = pgEnum("invoice_line_type", [
 ]);
 export const attentionStatus = pgEnum("attention_status", ["open", "resolved"]);
 export const automationStatus = pgEnum("automation_status", ["running", "succeeded", "failed", "skipped"]);
+export const daypartType = pgEnum("daypart_type", ["dj_artist", "house_activity"]);
+export const daypartBillingMode = pgEnum("daypart_billing_mode", ["billed_by_hfy", "tracking_only"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -163,6 +165,8 @@ export const dayparts = pgTable("dayparts", {
   name: text("name").notNull(),
   room: text("room").notNull(),
   color: text("color").notNull().default("#2783DC"),
+  type: daypartType("type").notNull().default("dj_artist"),
+  billingMode: daypartBillingMode("billing_mode").default("billed_by_hfy"),
   defaultTalentRateCents: integer("default_talent_rate_cents"),
   activeUntil: date("active_until", { mode: "string" }),
   active: boolean("active").notNull().default(true),
@@ -173,6 +177,13 @@ export const dayparts = pgTable("dayparts", {
   index("dayparts_residency_active_idx").on(table.residencyId, table.active, table.sortOrder),
   check("dayparts_color_valid", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),
   check("dayparts_rate_nonnegative", sql`${table.defaultTalentRateCents} IS NULL OR ${table.defaultTalentRateCents} >= 0`),
+  check("dayparts_type_fields_valid", sql`
+    (${table.type} = 'house_activity' AND ${table.billingMode} IS NULL AND ${table.defaultTalentRateCents} IS NULL)
+    OR
+    (${table.type} = 'dj_artist' AND ${table.billingMode} = 'tracking_only' AND ${table.defaultTalentRateCents} IS NULL)
+    OR
+    (${table.type} = 'dj_artist' AND ${table.billingMode} = 'billed_by_hfy')
+  `),
 ]);
 
 export const daypartDayRules = pgTable("daypart_day_rules", {
@@ -181,7 +192,7 @@ export const daypartDayRules = pgTable("daypart_day_rules", {
   weekday: integer("weekday").notNull(),
   startMinute: integer("start_minute").notNull(),
   endMinute: integer("end_minute").notNull(),
-  defaultDjCount: integer("default_dj_count").notNull().default(1),
+  defaultDjCount: integer("default_dj_count"),
   ...timestamps,
 }, (table) => [
   uniqueIndex("daypart_day_rules_daypart_weekday_unique").on(table.daypartId, table.weekday),
@@ -189,7 +200,41 @@ export const daypartDayRules = pgTable("daypart_day_rules", {
   check("daypart_day_rules_weekday_valid", sql`${table.weekday} >= 0 AND ${table.weekday} <= 6`),
   check("daypart_day_rules_start_valid", sql`${table.startMinute} >= 0 AND ${table.startMinute} < 1440`),
   check("daypart_day_rules_end_valid", sql`${table.endMinute} > ${table.startMinute} AND ${table.endMinute} <= ${table.startMinute} + 1440`),
-  check("daypart_day_rules_dj_count_valid", sql`${table.defaultDjCount} > 0 AND ${table.defaultDjCount} <= 20`),
+  check("daypart_day_rules_dj_count_valid", sql`${table.defaultDjCount} IS NULL OR (${table.defaultDjCount} > 0 AND ${table.defaultDjCount} <= 20)`),
+]);
+
+export const scheduleOccurrences = pgTable("schedule_occurrences", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  daypartId: uuid("daypart_id").notNull().references(() => dayparts.id, { onDelete: "restrict" }),
+  serviceDate: date("service_date", { mode: "string" }).notNull(),
+  name: text("name").notNull(),
+  room: text("room").notNull(),
+  color: text("color").notNull(),
+  type: daypartType("type").notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("schedule_occurrences_daypart_date_unique").on(table.daypartId, table.serviceDate),
+  index("schedule_occurrences_residency_date_idx").on(table.residencyId, table.serviceDate),
+  check("schedule_occurrences_time_valid", sql`${table.endsAt} > ${table.startsAt}`),
+  check("schedule_occurrences_color_valid", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),
+]);
+
+export const scheduleOccurrenceTalent = pgTable("schedule_occurrence_talent", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  occurrenceId: uuid("occurrence_id").notNull().references(() => scheduleOccurrences.id, { onDelete: "cascade" }),
+  talentId: uuid("talent_id").notNull().references(() => talent.id, { onDelete: "restrict" }),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("schedule_occurrence_talent_occurrence_idx").on(table.occurrenceId),
+  index("schedule_occurrence_talent_talent_time_idx").on(table.talentId, table.startsAt, table.endsAt),
+  uniqueIndex("schedule_occurrence_talent_unique").on(table.occurrenceId, table.talentId, table.startsAt),
+  check("schedule_occurrence_talent_time_valid", sql`${table.endsAt} > ${table.startsAt}`),
 ]);
 
 export const residencyMemberships = pgTable("residency_memberships", {
@@ -489,6 +534,8 @@ export type Residency = typeof residencies.$inferSelect;
 export type PublicCalendarLink = typeof publicCalendarLinks.$inferSelect;
 export type Daypart = typeof dayparts.$inferSelect;
 export type DaypartDayRule = typeof daypartDayRules.$inferSelect;
+export type ScheduleOccurrence = typeof scheduleOccurrences.$inferSelect;
+export type ScheduleOccurrenceTalent = typeof scheduleOccurrenceTalent.$inferSelect;
 export type Talent = typeof talent.$inferSelect;
 export type Shift = typeof shifts.$inferSelect;
 export type Assignment = typeof assignments.$inferSelect;

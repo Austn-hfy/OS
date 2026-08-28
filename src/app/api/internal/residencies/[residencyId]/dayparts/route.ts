@@ -16,6 +16,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ res
       name: daypart.name,
       room: daypart.room,
       color: daypart.color,
+      type: daypart.type,
+      billingMode: daypart.billingMode,
       defaultTalentRateCents: daypart.defaultTalentRateCents,
       activeUntil: daypart.activeUntil,
       active: daypart.active,
@@ -24,6 +26,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ res
         weekday: rule.weekday,
         startMinute: rule.startMinute,
         endMinute: rule.endMinute,
+        defaultDjCount: rule.defaultDjCount,
       })),
     })),
   }, { headers: { "Cache-Control": "private, no-store" } });

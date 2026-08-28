@@ -1,8 +1,8 @@
 import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, dayparts, invoices, residencies, residencyTalent, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, dayparts, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
-import { hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
+import { daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import type { InternalActor } from "@/lib/auth";
 
@@ -57,6 +57,8 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
       name: dayparts.name,
       room: dayparts.room,
       color: dayparts.color,
+      type: dayparts.type,
+      billingMode: dayparts.billingMode,
       defaultTalentRateCents: dayparts.defaultTalentRateCents,
     }).from(dayparts)
       .where(and(
@@ -67,12 +69,19 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
       )) : [];
     if (ruleRows.length !== requestedIds.length) throw new Error("One or more Dayparts are not active on this date.");
 
-    const existing = requestedIds.length ? await tx.select({ id: shifts.id }).from(shifts).where(and(
-      eq(shifts.residencyId, residency.id),
-      eq(shifts.serviceDate, input.serviceDate),
-      inArray(shifts.daypartId, requestedIds),
-    )).limit(1) : [];
-    if (existing.length) throw new Error("One of these Dayparts already has a Shift on this date.");
+    const [existingShifts, existingOccurrences] = requestedIds.length ? await Promise.all([
+      tx.select({ id: shifts.id }).from(shifts).where(and(
+        eq(shifts.residencyId, residency.id),
+        eq(shifts.serviceDate, input.serviceDate),
+        inArray(shifts.daypartId, requestedIds),
+      )).limit(1),
+      tx.select({ id: scheduleOccurrences.id }).from(scheduleOccurrences).where(and(
+        eq(scheduleOccurrences.residencyId, residency.id),
+        eq(scheduleOccurrences.serviceDate, input.serviceDate),
+        inArray(scheduleOccurrences.daypartId, requestedIds),
+      )).limit(1),
+    ]) : [[], []];
+    if (existingShifts.length || existingOccurrences.length) throw new Error("One of these Dayparts is already scheduled on this date.");
 
     const talentIds = [...new Set(input.dayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
     const talentRows = talentIds.length ? await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
@@ -86,21 +95,11 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
     if (talentRows.length !== talentIds.length) throw new Error("One or more selected DJs are not active on this Residency's approved list.");
 
     const createdShiftIds: string[] = [];
+    const createdOccurrenceIds: string[] = [];
     for (const requested of input.dayparts) {
       if (!Number.isInteger(requested.startMinute) || requested.startMinute < 0 || requested.startMinute >= 1440
         || !Number.isInteger(requested.endMinute) || requested.endMinute <= requested.startMinute || requested.endMinute > requested.startMinute + 1440) {
         throw new Error("Choose valid Daypart hours.");
-      }
-      if (!requested.assignments.length) throw new Error("Each selected Daypart needs at least one DJ slot.");
-      const assignmentWindows = requested.assignments.map((assignment) => ({
-        startMinute: assignment.startsAtMinute ?? requested.startMinute,
-        endMinute: assignment.endsAtMinute ?? requested.endMinute,
-      }));
-      if (assignmentWindows.some((window) => window.startMinute < requested.startMinute || window.endMinute > requested.endMinute || window.endMinute <= window.startMinute)) {
-        throw new Error("Every Assignment must remain inside its Daypart Shift.");
-      }
-      if (hasOverlappingAssignmentMinutes(assignmentWindows)) {
-        throw new Error("DJ times cannot overlap within the same Daypart Shift.");
       }
       const rule = requested.daypartId
         ? ruleRows.find((item) => item.daypartId === requested.daypartId)!
@@ -109,6 +108,8 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
             name: requested.name?.trim() ?? "",
             room: requested.room?.trim() ?? "",
             color: requested.calendarColor ?? "#2783DC",
+            type: "dj_artist" as const,
+            billingMode: "billed_by_hfy" as const,
             defaultTalentRateCents: null,
           };
       if (!rule.name || !rule.room || !/^#[0-9A-Fa-f]{6}$/.test(rule.color)) {
@@ -116,6 +117,104 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
       }
       const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.startMinute), residency.timezone);
       const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.endMinute), residency.timezone);
+      const recordKind = daypartBookingRecordKind(rule.type, rule.billingMode);
+
+      if (recordKind === "house_occurrence") {
+        if (requested.assignments.length) throw new Error("House Activities cannot contain DJ assignments.");
+        const [occurrence] = await tx.insert(scheduleOccurrences).values({
+          residencyId: residency.id,
+          daypartId: rule.daypartId!,
+          serviceDate: input.serviceDate,
+          name: rule.name,
+          room: rule.room,
+          color: rule.color.toUpperCase(),
+          type: "house_activity",
+          startsAt,
+          endsAt,
+          createdByUserId: actor.userId,
+        }).returning({ id: scheduleOccurrences.id });
+        createdOccurrenceIds.push(occurrence.id);
+        await tx.insert(auditLog).values({
+          residencyId: residency.id,
+          actorUserId: actor.userId,
+          actorLabel: actor.email,
+          action: "house_activity_scheduled",
+          entityType: "schedule_occurrence",
+          entityId: occurrence.id,
+          details: { daypartId: rule.daypartId, serviceDate: input.serviceDate },
+        });
+        continue;
+      }
+
+      if (!requested.assignments.length) throw new Error("Each selected DJ / Artist Daypart needs at least one DJ.");
+      const assignmentWindows = requested.assignments.map((assignment) => ({
+        startMinute: assignment.startsAtMinute ?? requested.startMinute,
+        endMinute: assignment.endsAtMinute ?? requested.endMinute,
+      }));
+      if (assignmentWindows.some((window) => window.startMinute < requested.startMinute || window.endMinute > requested.endMinute || window.endMinute <= window.startMinute)) {
+        throw new Error("Every DJ must remain inside the Daypart hours.");
+      }
+      if (hasOverlappingAssignmentMinutes(assignmentWindows)) {
+        throw new Error("DJ times cannot overlap within the same Daypart.");
+      }
+
+      for (let index = 0; index < requested.assignments.length; index += 1) {
+        const selectedTalent = requested.assignments[index].talentId ? talentRows.find((item) => item.id === requested.assignments[index].talentId) : null;
+        if (!selectedTalent) continue;
+        const assignmentStartsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentWindows[index].startMinute), residency.timezone);
+        const assignmentEndsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentWindows[index].endMinute), residency.timezone);
+        const [financialConflict, trackingConflict] = await Promise.all([
+          tx.select({ id: assignments.id }).from(assignments).where(and(
+            eq(assignments.talentId, selectedTalent.id),
+            inArray(assignments.bookingStatus, ["pending_hfy_confirmation", "offered", "confirmed"]),
+            lt(assignments.startsAt, assignmentEndsAt),
+            gt(assignments.endsAt, assignmentStartsAt),
+          )).limit(1),
+          tx.select({ id: scheduleOccurrenceTalent.id }).from(scheduleOccurrenceTalent).where(and(
+            eq(scheduleOccurrenceTalent.talentId, selectedTalent.id),
+            lt(scheduleOccurrenceTalent.startsAt, assignmentEndsAt),
+            gt(scheduleOccurrenceTalent.endsAt, assignmentStartsAt),
+          )).limit(1),
+        ]);
+        if (financialConflict.length || trackingConflict.length) throw new Error(`${selectedTalent.stageName} already has an overlapping active booking.`);
+      }
+
+      if (recordKind === "tracking_occurrence") {
+        const [occurrence] = await tx.insert(scheduleOccurrences).values({
+          residencyId: residency.id,
+          daypartId: rule.daypartId!,
+          serviceDate: input.serviceDate,
+          name: rule.name,
+          room: rule.room,
+          color: rule.color.toUpperCase(),
+          type: "dj_artist",
+          startsAt,
+          endsAt,
+          createdByUserId: actor.userId,
+        }).returning({ id: scheduleOccurrences.id });
+        createdOccurrenceIds.push(occurrence.id);
+        for (let index = 0; index < requested.assignments.length; index += 1) {
+          const talentId = requested.assignments[index].talentId;
+          if (!talentId) throw new Error("Tracking-only Dayparts require a selected artist.");
+          await tx.insert(scheduleOccurrenceTalent).values({
+            occurrenceId: occurrence.id,
+            talentId,
+            startsAt: zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentWindows[index].startMinute), residency.timezone),
+            endsAt: zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentWindows[index].endMinute), residency.timezone),
+          });
+        }
+        await tx.insert(auditLog).values({
+          residencyId: residency.id,
+          actorUserId: actor.userId,
+          actorLabel: actor.email,
+          action: "tracking_only_booking_created",
+          entityType: "schedule_occurrence",
+          entityId: occurrence.id,
+          details: { daypartId: rule.daypartId, serviceDate: input.serviceDate, talentIds: requested.assignments.map((item) => item.talentId) },
+        });
+        continue;
+      }
+
       const coveringInvoices = await tx.select({ id: invoices.id }).from(invoices).where(and(
         eq(invoices.residencyId, residency.id),
         lte(invoices.billingPeriodStart, input.serviceDate),
@@ -158,15 +257,6 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
           residency.defaultTalentRateCents,
         );
         const fixedFeeCents = compensationType === "fixed" ? assignmentInput.fixedFeeCents ?? 0 : null;
-        if (selectedTalent) {
-          const conflict = await tx.select({ id: assignments.id }).from(assignments).where(and(
-            eq(assignments.talentId, selectedTalent.id),
-            inArray(assignments.bookingStatus, ["pending_hfy_confirmation", "offered", "confirmed"]),
-            lt(assignments.startsAt, assignmentEndsAt),
-            gt(assignments.endsAt, assignmentStartsAt),
-          )).limit(1);
-          if (conflict.length) throw new Error(`${selectedTalent.stageName} already has an overlapping active booking.`);
-        }
         const totalCompensationCents = calculateCompensationCents({
           compensationType,
           startsAt: assignmentStartsAt,
@@ -216,7 +306,7 @@ export async function createResidencyDateBooking(actor: InternalActor, input: Cr
         details: { daypartId: rule.daypartId, serviceDate: input.serviceDate, calendarColor: requested.daypartId ? null : rule.color, invoiceLinkIssue: coveringInvoices.length !== 1 },
       });
     }
-    return { shiftIds: createdShiftIds };
+    return { shiftIds: createdShiftIds, occurrenceIds: createdOccurrenceIds };
   });
 }
 

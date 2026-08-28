@@ -14,6 +14,8 @@ import {
   residencyTalent,
   residencyContacts,
   publicCalendarLinks,
+  scheduleOccurrences,
+  scheduleOccurrenceTalent,
 } from "@/db/schema";
 import {
   calculateBillableAmountCents,
@@ -143,6 +145,52 @@ export async function getCalendarData(residencyId?: string, range?: { from: stri
   }));
 }
 
+export async function getScheduleOccurrenceData(residencyId?: string, range?: { from: string; to: string }) {
+  const database = getDb();
+  const dateWhere = range
+    ? and(gte(scheduleOccurrences.serviceDate, range.from), lte(scheduleOccurrences.serviceDate, range.to))
+    : gte(scheduleOccurrences.serviceDate, todayUtc());
+  const occurrenceWhere = residencyId
+    ? and(eq(scheduleOccurrences.residencyId, residencyId), dateWhere)
+    : dateWhere;
+  const occurrenceRows = await database.select({
+    id: scheduleOccurrences.id,
+    residencyId: scheduleOccurrences.residencyId,
+    daypartId: scheduleOccurrences.daypartId,
+    residencyName: residencies.name,
+    residencyTimezone: residencies.timezone,
+    name: scheduleOccurrences.name,
+    room: scheduleOccurrences.room,
+    color: scheduleOccurrences.color,
+    type: scheduleOccurrences.type,
+    billingMode: dayparts.billingMode,
+    serviceDate: scheduleOccurrences.serviceDate,
+    startsAt: scheduleOccurrences.startsAt,
+    endsAt: scheduleOccurrences.endsAt,
+  }).from(scheduleOccurrences)
+    .innerJoin(residencies, eq(scheduleOccurrences.residencyId, residencies.id))
+    .innerJoin(dayparts, eq(scheduleOccurrences.daypartId, dayparts.id))
+    .where(occurrenceWhere)
+    .orderBy(asc(scheduleOccurrences.startsAt));
+  const occurrenceIds = occurrenceRows.map((row) => row.id);
+  const talentRows = occurrenceIds.length ? await database.select({
+    id: scheduleOccurrenceTalent.id,
+    occurrenceId: scheduleOccurrenceTalent.occurrenceId,
+    talentId: scheduleOccurrenceTalent.talentId,
+    talentName: talent.stageName,
+    startsAt: scheduleOccurrenceTalent.startsAt,
+    endsAt: scheduleOccurrenceTalent.endsAt,
+  }).from(scheduleOccurrenceTalent)
+    .innerJoin(talent, eq(scheduleOccurrenceTalent.talentId, talent.id))
+    .where(inArray(scheduleOccurrenceTalent.occurrenceId, occurrenceIds))
+    .orderBy(asc(scheduleOccurrenceTalent.startsAt)) : [];
+
+  return occurrenceRows.map((occurrence) => ({
+    ...occurrence,
+    assignments: talentRows.filter((row) => row.occurrenceId === occurrence.id),
+  }));
+}
+
 export async function getTalentDirectory(residencyId?: string) {
   const database = getDb();
   if (!residencyId) return database.select().from(talent)
@@ -177,7 +225,7 @@ export async function getArtistLookupData(residencyId?: string) {
   const artistIds = artistRows.map((artist) => artist.id);
   if (!artistIds.length) return [];
 
-  const [paymentRows, approvalRows, assignmentRows, documentRows] = await Promise.all([
+  const [paymentRows, approvalRows, assignmentRows, trackingRows, documentRows] = await Promise.all([
     database.select().from(talentPaymentProfiles).where(inArray(talentPaymentProfiles.talentId, artistIds)),
     database.select({
       talentId: residencyTalent.talentId,
@@ -210,6 +258,26 @@ export async function getArtistLookupData(residencyId?: string) {
         or(eq(assignments.payoutStatus, "ready_to_pay"), gte(shifts.serviceDate, todayUtc())),
       ))
       .orderBy(asc(shifts.serviceDate), asc(assignments.startsAt)),
+    database.select({
+      id: scheduleOccurrenceTalent.id,
+      talentId: scheduleOccurrenceTalent.talentId,
+      startsAt: scheduleOccurrenceTalent.startsAt,
+      endsAt: scheduleOccurrenceTalent.endsAt,
+      shiftName: scheduleOccurrences.name,
+      serviceDate: scheduleOccurrences.serviceDate,
+      room: scheduleOccurrences.room,
+      residencyId: residencies.id,
+      residencyName: residencies.name,
+      residencyTimezone: residencies.timezone,
+    }).from(scheduleOccurrenceTalent)
+      .innerJoin(scheduleOccurrences, eq(scheduleOccurrenceTalent.occurrenceId, scheduleOccurrences.id))
+      .innerJoin(residencies, eq(scheduleOccurrences.residencyId, residencies.id))
+      .where(and(
+        inArray(scheduleOccurrenceTalent.talentId, artistIds),
+        residencyId ? eq(scheduleOccurrences.residencyId, residencyId) : undefined,
+        gte(scheduleOccurrences.serviceDate, todayUtc()),
+      ))
+      .orderBy(asc(scheduleOccurrences.serviceDate), asc(scheduleOccurrenceTalent.startsAt)),
     database.select({ talentId: talentDocuments.talentId, kind: talentDocuments.kind })
       .from(talentDocuments)
       .where(inArray(talentDocuments.talentId, artistIds)),
@@ -244,7 +312,21 @@ export async function getArtistLookupData(residencyId?: string) {
         startsAt: assignment.startsAt.toISOString(),
         endsAt: assignment.endsAt.toISOString(),
         bookingStatus: assignment.bookingStatus,
-      }));
+      })).concat(trackingRows
+        .filter((booking) => booking.talentId === artist.id)
+        .map((booking) => ({
+          id: booking.id,
+          residencyId: booking.residencyId,
+          residencyName: booking.residencyName,
+          residencyTimezone: booking.residencyTimezone,
+          shiftName: booking.shiftName,
+          room: booking.room,
+          serviceDate: booking.serviceDate,
+          startsAt: booking.startsAt.toISOString(),
+          endsAt: booking.endsAt.toISOString(),
+          bookingStatus: "confirmed",
+        })))
+      .sort((left, right) => left.serviceDate.localeCompare(right.serviceDate) || left.startsAt.localeCompare(right.startsAt));
     const approvedResidencies = approvalRows.filter((approval) => approval.talentId === artist.id);
     const paymentProfile = paymentRows.find((profile) => profile.talentId === artist.id);
     const documents = documentRows.filter((document) => document.talentId === artist.id);

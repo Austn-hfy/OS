@@ -12,3 +12,5 @@ output/
 .DS_Store
 drizzle/meta/_journal.json.bak
 .storage-backup/
+.vercel
+.env*

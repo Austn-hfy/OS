@@ -960,6 +960,8 @@ const daypartPayloadSchema = z.object({
   name: z.string().trim().min(1),
   room: z.string().trim().min(1),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  type: z.enum(["dj_artist", "house_activity"]),
+  billingMode: z.enum(["billed_by_hfy", "tracking_only"]).nullable(),
   defaultTalentRateCents: z.number().int().min(0).nullable().optional(),
   activeUntil: z.iso.date().nullable().optional(),
   active: z.boolean(),
@@ -968,7 +970,18 @@ const daypartPayloadSchema = z.object({
     weekday: z.number().int().min(0).max(6),
     startMinute: z.number().int().min(0).max(1439),
     endMinute: z.number().int().min(1).max(2879),
+    defaultDjCount: z.number().int().min(1).max(20).nullable(),
   })).min(1),
+}).superRefine((daypart, context) => {
+  if (daypart.type === "house_activity" && (daypart.billingMode !== null || daypart.defaultTalentRateCents != null)) {
+    context.addIssue({ code: "custom", message: "House Activities cannot include billing or talent-rate fields." });
+  }
+  if (daypart.type === "dj_artist" && daypart.billingMode === null) {
+    context.addIssue({ code: "custom", message: "Choose how this DJ / Artist Daypart is billed." });
+  }
+  if (daypart.type === "dj_artist" && daypart.billingMode === "tracking_only" && daypart.defaultTalentRateCents != null) {
+    context.addIssue({ code: "custom", message: "Tracking-only Dayparts cannot include a talent rate." });
+  }
 });
 
 export async function saveDaypartAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
@@ -976,7 +989,7 @@ export async function saveDaypartAction(_previous: ResidencyActionState, formDat
     const actor = await requireInternalActor();
     const raw = z.string().min(2).parse(formData.get("payload"));
     const parsed = daypartPayloadSchema.parse(JSON.parse(raw));
-    await saveDaypart(actor, { ...parsed, rules: parsed.rules.map((rule) => ({ ...rule, defaultDjCount: 1 })) });
+    await saveDaypart(actor, parsed);
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
     return { status: "success", message: `${parsed.name} saved.` };
@@ -1081,7 +1094,7 @@ const residencyBookingPayloadSchema = z.object({
       compensationType: z.enum(["hourly", "fixed", "na"]).optional(),
       talentRateOverrideCents: z.number().int().min(0).nullable().optional(),
       fixedFeeCents: z.number().int().min(0).nullable().optional(),
-    })).min(1),
+    })),
   }).superRefine((slot, context) => {
     if (slot.daypartId === null && (!slot.name || !slot.room || !slot.calendarColor)) {
       context.addIssue({ code: "custom", message: "A one-time slot needs a name, room, and calendar color." });
@@ -1099,7 +1112,8 @@ export async function bookResidencyDateAction(_previous: ResidencyActionState, f
     revalidatePath("/app/payouts");
     revalidatePath("/app/invoices");
     revalidatePath("/app");
-    return { status: "success", message: `${created.shiftIds.length} Shift${created.shiftIds.length === 1 ? "" : "s"} created and linked.` };
+    const count = created.shiftIds.length + created.occurrenceIds.length;
+    return { status: "success", message: `${count} calendar slot${count === 1 ? "" : "s"} scheduled.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to book this date." };
   }

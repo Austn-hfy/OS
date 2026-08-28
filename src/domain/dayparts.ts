@@ -6,15 +6,25 @@ export type DaypartRuleInput = {
   weekday: number;
   startMinute: number;
   endMinute: number;
-  /** @deprecated Dayparts define hours, never a required artist headcount. */
-  defaultDjCount?: number;
+  defaultDjCount?: number | null;
 };
+
+export type DaypartType = "dj_artist" | "house_activity";
+export type DaypartBillingMode = "billed_by_hfy" | "tracking_only";
+export type DaypartBookingRecordKind = "financial_shift" | "tracking_occurrence" | "house_occurrence";
+
+export function daypartBookingRecordKind(type: DaypartType, billingMode: DaypartBillingMode | null): DaypartBookingRecordKind {
+  if (type === "house_activity") return "house_occurrence";
+  return billingMode === "tracking_only" ? "tracking_occurrence" : "financial_shift";
+}
 
 export type ProjectableDaypart = {
   id: string;
   name: string;
   room: string;
   color: string;
+  type: DaypartType;
+  billingMode: DaypartBillingMode | null;
   active: boolean;
   activeUntil: string | null;
   defaultTalentRateCents: number | null;
@@ -28,7 +38,10 @@ export type ProjectedDaypartSlot = {
   name: string;
   room: string;
   color: string;
+  type: DaypartType;
+  billingMode: DaypartBillingMode | null;
   defaultTalentRateCents: number | null;
+  defaultDjCount: number | null;
   startMinute: number;
   endMinute: number;
 };
@@ -141,7 +154,7 @@ export function localDateTimeForMinute(serviceDate: string, minute: number): str
   return `${date}T${minuteToClock(minute)}`;
 }
 
-export function validateDaypartRules(rules: DaypartRuleInput[]): DaypartRuleInput[] {
+export function validateDaypartRules(rules: DaypartRuleInput[], type: DaypartType = "dj_artist"): DaypartRuleInput[] {
   if (!rules.length) throw new Error("Select at least one operating day.");
   const weekdays = new Set<number>();
   return rules.map((rule) => {
@@ -150,7 +163,11 @@ export function validateDaypartRules(rules: DaypartRuleInput[]): DaypartRuleInpu
     weekdays.add(rule.weekday);
     if (!Number.isInteger(rule.startMinute) || rule.startMinute < 0 || rule.startMinute >= 1440) throw new Error(`${weekdayNames[rule.weekday]} needs a valid start time.`);
     if (!Number.isInteger(rule.endMinute) || rule.endMinute <= rule.startMinute || rule.endMinute > rule.startMinute + 1440) throw new Error(`${weekdayNames[rule.weekday]} needs a valid end time.`);
-    return { ...rule, defaultDjCount: 1 };
+    const defaultDjCount = type === "house_activity" ? null : rule.defaultDjCount ?? 1;
+    if (defaultDjCount !== null && (!Number.isInteger(defaultDjCount) || defaultDjCount < 1 || defaultDjCount > 20)) {
+      throw new Error(`${weekdayNames[rule.weekday]} needs a DJ count between 1 and 20.`);
+    }
+    return { ...rule, defaultDjCount };
   }).sort((left, right) => left.weekday - right.weekday);
 }
 
@@ -181,7 +198,10 @@ export function projectDaypartSlots(
         name: daypart.name,
         room: daypart.room,
         color: daypart.color,
+        type: daypart.type,
+        billingMode: daypart.billingMode,
         defaultTalentRateCents: daypart.defaultTalentRateCents,
+        defaultDjCount: rule.defaultDjCount ?? null,
         startMinute: rule.startMinute,
         endMinute: rule.endMinute,
       });
