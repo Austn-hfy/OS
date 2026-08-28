@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { addCalendarAssignmentAction, bookResidencyDateAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, type ResidencyActionState } from "@/app/app/actions";
 import { ArtistSearchPicker } from "@/components/artist-search-picker";
+import { CalendarShareButton } from "@/components/calendar-share-button";
 import { Status } from "@/components/format";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
@@ -32,7 +33,7 @@ type ResidencyEvent = MonthCalendarEvent & {
 };
 
 type ResidencyCalendarProps = {
-  residency: { id: string; name: string; timezone: string; defaultTalentRateCents: number; clientHourlyRateCents: number };
+  residency: { id: string; name: string; timezone: string; defaultTalentRateCents: number; clientHourlyRateCents: number; hasPublicCalendarLink: boolean };
   monthKey: string;
   events: ResidencyEvent[];
   dayparts: Array<{
@@ -453,6 +454,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="needs">Needs coverage</option><option value="all">All slots</option><option value="filled">Scheduled</option></select></div>
           <div className="field"><label htmlFor="calendar-daypart-filter">Daypart</label><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></div>
           </div>
+          <CalendarShareButton residencyId={residency.id} residencyName={residency.name} hasLink={residency.hasPublicCalendarLink} />
           <div className="calendar-month-cluster">
             <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs coverage" : "slots need coverage"}</span></div>
             <div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={previousHref}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={nextHref}>→</Link></div>

@@ -132,6 +132,7 @@ export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLi
         details: { residencyName: residency.name },
       });
     });
+    revalidatePath("/app/calendar");
     revalidatePath("/app/setup");
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://hfy.app";
     return {

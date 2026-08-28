@@ -38,6 +38,14 @@ export async function getResidencyList() {
   }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name));
 }
 
+export async function hasPublicCalendarLink(residencyId: string) {
+  const [link] = await getDb().select({ residencyId: publicCalendarLinks.residencyId })
+    .from(publicCalendarLinks)
+    .where(eq(publicCalendarLinks.residencyId, residencyId))
+    .limit(1);
+  return Boolean(link);
+}
+
 export async function getDashboardData() {
   const database = getDb();
   const [residencyRows, shiftRows, assignmentRows, invoiceRows, attentionRows] = await Promise.all([

@@ -1,12 +1,12 @@
 import { getSetupData } from "@/data/internal";
 import { getDaypartsForResidency } from "@/services/dayparts";
+import { PublicCalendarLinkManager } from "@/components/public-calendar-link-manager";
 import { DaypartManager } from "./daypart-manager";
 import { InvoiceBrandingSettings } from "./invoice-branding-settings";
 import { ApprovedDjManager } from "./approved-dj-manager";
 import { ResidencyContactsManager } from "./residency-contacts-manager";
 import { ResidencyProfileEditor } from "./residency-profile-editor";
 import { ResidencyRateEditor } from "./residency-rate-editor";
-import { PublicCalendarLinkManager } from "./public-calendar-link-manager";
 
 export default async function SetupPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
   const { residency } = await searchParams;

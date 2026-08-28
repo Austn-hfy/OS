@@ -103,6 +103,10 @@ button { cursor: pointer; }
 .day-parts-panel .daypart-manager { margin: 0; }
 .day-parts-panel .daypart-manager > .section-heading { margin-top: 0; }
 .public-calendar-link-card { align-content: start; gap: 18px; }
+.public-calendar-link-compact { display: grid; }
+.calendar-share-modal { width: min(620px, 100%); }
+.calendar-share-modal .quick-modal-header p:last-child { margin: 6px 0 0; color: var(--muted); }
+.calendar-share-button { min-height: 36px; padding-block: 7px; white-space: nowrap; }
 .public-calendar-boundary { display: grid; gap: 4px; padding: 14px; border: 1px solid rgba(52,127,187,.2); border-radius: 16px; background: rgba(217,237,250,.45); }
 .public-calendar-boundary strong { color: var(--dark); font-size: 12px; }
 .public-calendar-boundary span { color: var(--muted); font-size: 10px; line-height: 1.45; }
