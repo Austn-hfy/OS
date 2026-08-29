@@ -1109,6 +1109,7 @@ tr:last-child td { border-bottom: 0; }
   .context-switcher { min-height: 54px; }
   .sidebar-context { display: none; }
   .nav { display: flex; overflow-x: auto; margin-top: 12px; }
+  .client-dayparts-button { width: auto; flex: 0 0 auto; }
   .nav-label { display: none; }
   .sidebar-footer { display: none; }
   .main { padding: 28px 18px 50px; }
@@ -1161,6 +1162,9 @@ tr:last-child td { border-bottom: 0; }
   .payout-detail-panel { position: static; min-height: 480px; max-height: none; }
   .payout-detail-empty { min-height: 440px; }
   .residency-overview-grid, .workspace-shortcuts { grid-template-columns: 1fr; }
+  .residency-client-settings-form > section, .settings-fields { grid-template-columns: 1fr; }
+  .settings-fields .wide { grid-column: auto; }
+  .residency-client-settings-form > footer { align-items: stretch; flex-direction: column; }
   .calendar-controls { align-items: stretch; flex-direction: column; }
   .month-navigation { justify-content: space-between; }
   .calendar-filter-form { align-items: end; }
