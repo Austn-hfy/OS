@@ -78,7 +78,7 @@ export function InternalShell({ actor, residencies, initialPrivacyMode, viewAsRe
             <div className="view-as-banner" role="status"><strong>Viewing as: {viewAsResidency.name}</strong><form action={exitViewAsAction}><button type="submit">Exit preview</button></form></div>
             {previewRouteIsReady ? children : <div className="card empty">Opening {viewAsResidency.name} calendar…</div>}
           </main>
-          {panelResidency ? <DayPartsPanel key={panelResidency.id} residencyId={panelResidency.id} residencyName={panelResidency.name} onClose={() => setDaypartsResidencyId(null)} /> : null}
+          {panelResidency ? <DayPartsPanel key={panelResidency.id} residencyId={panelResidency.id} residencyName={panelResidency.name} onClose={() => setDaypartsResidencyId(null)} hideFinancials /> : null}
         </div>
       </PrivacyModeProvider>
     );
