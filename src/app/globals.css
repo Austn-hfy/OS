@@ -326,6 +326,12 @@ h3 { margin: 0; font-family: "Plus Jakarta Sans", Inter, sans-serif; font-size: 
 .pipeline-status-tabs button b { min-width: 16px; height: 16px; display: grid; place-items: center; border-radius: 999px; background: rgba(24,24,24,.07); font-size: 8px; }
 .pipeline-status-tabs button.active { color: white; background: var(--dark); }
 .pipeline-status-tabs button.active b { background: rgba(255,255,255,.16); }
+
+@media (min-width: 851px) and (max-width: 1400px) {
+  .pipeline-status-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .pipeline-status-tabs button { min-width: 0; min-height: 44px; padding: 7px 8px; font-size: 9px; line-height: 1.15; white-space: normal; }
+  .pipeline-status-tabs button span { min-width: 0; overflow-wrap: anywhere; }
+}
 .lead-list-shell { padding: 0; overflow: hidden; }
 .lead-list-header, .lead-list-row { display: grid; grid-template-columns: minmax(210px, 1.5fr) minmax(180px, 1.2fr) .7fr .65fr 1fr; gap: 16px; align-items: center; }
 .lead-list-header { padding: 12px 18px; color: var(--muted); background: rgba(224,230,236,.7); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }

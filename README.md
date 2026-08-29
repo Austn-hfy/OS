@@ -1,6 +1,6 @@
 # HFY OS
 
-HFY OS is the clean-client pilot application for new hotel residencies. Ace Hotel remains operationally live in Airtable and is not read, written, migrated, or synchronized by this application. During the owner-only pilot, HFY OS uses one real production environment; a separate staging environment is deferred until customer-facing access or a second live hotel makes that separation valuable.
+HFY OS is the operating platform for hotel Residency programming. Production runs from `main`; the persistent `staging` branch deploys against a separate Supabase project for review and testing. The promotion and migration workflow is documented in [`docs/STAGING.md`](docs/STAGING.md).
 
 The pilot includes:
 
@@ -58,10 +58,10 @@ The test suite contains:
 
 Set a strong `CRON_SECRET`; Vercel sends it as a bearer token. Vercel Pro is required for hourly scheduling.
 
-## Pilot deployment checklist
+## Deployment checklist
 
-- Use the single owner-only Supabase and Vercel production environment for the current pilot.
-- Apply migrations and bootstrap private buckets there.
+- Keep the `staging` and production Supabase projects isolated.
+- Apply migrations and bootstrap private buckets in each project separately.
 - Configure production environment variables in Vercel.
 - Verify the Resend domain and `billing@hearforyou.group` reply inbox.
 - Create the HFY admin manually.

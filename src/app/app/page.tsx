@@ -77,7 +77,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </Link>
           ))}
         </div>
-      ) : <div className="card empty">No new-system Residencies yet. Ace remains operationally in Airtable; a separate parity sandbox can be added in staging.</div>}
+      ) : <div className="card empty">No active Residencies yet. Create one here when a new hotel is ready to enter HFY OS.</div>}
       </section>
     </>
   );
