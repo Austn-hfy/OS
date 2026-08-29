@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import * as setupRoute from "@/app/api/auth/setup-account/route";
 import {
@@ -22,6 +23,11 @@ describe("account setup credentials", () => {
   it("exposes no GET mutation handler; only POST can attempt token consumption", () => {
     expect("GET" in setupRoute).toBe(false);
     expect(typeof setupRoute.POST).toBe("function");
+  });
+
+  it("does not reach into Supabase's protected auth schema during setup", async () => {
+    const source = await readFile(new URL("../src/services/account-setup.ts", import.meta.url), "utf8");
+    expect(source).not.toContain("auth.sessions");
   });
 
   it("consumes a valid token exactly once during successful password completion", async () => {
