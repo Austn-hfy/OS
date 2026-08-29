@@ -1,8 +1,9 @@
-import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { auditLog, invoices, residencies, shifts } from "@/db/schema";
+import { assignments, auditLog, invoiceLineItems, invoices, residencies, shifts } from "@/db/schema";
 import { resolveRateCents } from "@/domain/airtable-parity";
 import type { InternalActor } from "@/lib/auth";
+import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 
 export type CreateShiftInput = {
   residencyId: string;
@@ -62,6 +63,46 @@ export async function createShift(actor: InternalActor, input: CreateShiftInput)
         invoiceId: coveringInvoices.length === 1 ? coveringInvoices[0].id : null,
         invoiceLinkIssue: coveringInvoices.length !== 1,
       },
+    });
+    return shift;
+  });
+}
+
+export async function deleteShift(actor: InternalActor | { userId: string; email: string }, shiftId: string) {
+  return getDb().transaction(async (tx) => {
+    const [shift] = await tx.select({
+      id: shifts.id,
+      residencyId: shifts.residencyId,
+      invoiceId: shifts.invoiceId,
+      invoiceStatus: invoices.status,
+      serviceDate: shifts.serviceDate,
+      name: shifts.name,
+    }).from(shifts)
+      .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
+      .where(eq(shifts.id, shiftId))
+      .limit(1);
+    if (!shift) throw new Error("Shift not found.");
+    const assignmentRows = await tx.select({
+      bookingStatus: assignments.bookingStatus,
+      payoutStatus: assignments.payoutStatus,
+    }).from(assignments).where(eq(assignments.shiftId, shift.id));
+    const blockReason = shiftDeletionBlockReason(shift.invoiceStatus, assignmentRows);
+    if (blockReason) throw new Error(blockReason);
+    await tx.delete(assignments).where(eq(assignments.shiftId, shift.id));
+    await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
+    await tx.delete(shifts).where(eq(shifts.id, shift.id));
+    if (shift.invoiceId) {
+      const [remaining] = await tx.select({ total: sql<number>`coalesce(sum(${invoiceLineItems.totalCents}), 0)` }).from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, shift.invoiceId));
+      await tx.update(invoices).set({ totalCents: Number(remaining?.total ?? 0), updatedAt: new Date() }).where(eq(invoices.id, shift.invoiceId));
+    }
+    await tx.insert(auditLog).values({
+      residencyId: shift.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "shift_deleted",
+      entityType: "shift",
+      entityId: shift.id,
+      details: { serviceDate: shift.serviceDate, name: shift.name, draftInvoiceId: shift.invoiceId },
     });
     return shift;
   });

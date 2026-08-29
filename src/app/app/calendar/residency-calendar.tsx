@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState, type CSSProperties } from "react";
-import { addCalendarAssignmentAction, bookResidencyDateAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, type ResidencyActionState } from "@/app/app/actions";
+import { addCalendarAssignmentAction, bookResidencyDateAction, deleteCalendarShiftAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, type ResidencyActionState } from "@/app/app/actions";
 import { ArtistSearchPicker } from "@/components/artist-search-picker";
 import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
@@ -92,7 +92,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   const [newAssignmentDraft, setNewAssignmentDraft] = useState<SlotDraft | null>(null);
   const [editState, setEditState] = useState<ResidencyActionState>(initialActionState);
   const [editPending, setEditPending] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("needs");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [daypartFilter, setDaypartFilter] = useState("all");
   const submitBooking = async (previous: ResidencyActionState, formData: FormData) => {
     const result = await bookResidencyDateAction(previous, formData);
@@ -117,10 +117,8 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   }, [modalOpen]);
 
   useEffect(() => {
-    const savedStatus = window.localStorage.getItem("hfy-calendar-status-filter");
     const savedDaypart = window.localStorage.getItem("hfy-calendar-daypart-filter");
     const restoreFilters = window.setTimeout(() => {
-      if (savedStatus === "needs" || savedStatus === "all" || savedStatus === "filled") setStatusFilter(savedStatus);
       if (savedDaypart && (savedDaypart === "all" || dayparts.some((daypart) => daypart.id === savedDaypart))) setDaypartFilter(savedDaypart);
     }, 0);
     return () => window.clearTimeout(restoreFilters);
@@ -144,10 +142,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     return statusMatches && (daypartFilter === "all" || event.daypartId === daypartFilter);
   });
 
-  function changeStatusFilter(value: StatusFilter) {
-    setStatusFilter(value);
-    window.localStorage.setItem("hfy-calendar-status-filter", value);
-  }
+  function changeStatusFilter(value: StatusFilter) { setStatusFilter(value); }
 
   function changeDaypartFilter(value: string) {
     setDaypartFilter(value);
@@ -472,6 +467,18 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     if (replacementDraft?.assignmentId === assignmentId) setReplacementDraft(null);
   }
 
+  async function deleteExistingShift() {
+    if (!editingEvent || editingEvent.recordType !== "financial_shift") return;
+    if (!window.confirm(`Delete the ${editingEvent.title} Shift on ${editingEvent.date}? This removes its uncompleted DJ assignments too.`)) return;
+    setEditPending(true);
+    const formData = new FormData();
+    formData.set("shiftId", editingEvent.id);
+    const result = await deleteCalendarShiftAction(formData);
+    setEditState(result);
+    setEditPending(false);
+    if (result.status === "success") setModal(null);
+  }
+
   const monthHref = (target: string) => calendarBasePath === "/app/calendar"
     ? `${calendarBasePath}?residency=${residency.id}&month=${target}`
     : `${calendarBasePath}?month=${target}`;
@@ -484,7 +491,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
         <div className="calendar-title"><p className="eyebrow">{residency.name}</p><h1>Calendar</h1></div>
         <div className="calendar-command-controls">
           <div className="calendar-view-filters">
-          <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="needs">Needs scheduling</option><option value="all">All slots</option><option value="filled">Scheduled</option></select></div>
+          <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="all">All slots</option><option value="needs">Needs scheduling</option><option value="filled">Scheduled</option></select></div>
           <div className="field"><label htmlFor="calendar-daypart-filter">Daypart</label><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></div>
           </div>
           {canManage ? <CalendarShareButton residencyId={residency.id} residencyName={residency.name} linkSettings={residency.calendarLinkSettings} dayparts={dayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} /> : null}
@@ -579,7 +586,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
               })}</div>
               {editState.status !== "idle" ? <p className={editState.status === "error" ? "error" : "success"} aria-live="polite">{editState.message}</p> : null}
               {!editingEvent.assignments.length ? <div className="empty quick-empty">This Shift has no Assignment slots to edit.</div> : null}
-              <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
+              <footer className="quick-modal-footer"><button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingShift}>Delete Shift</button><span>Delete is blocked once financial history is finalized.</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
             </> : <div className="empty quick-empty">This slot is no longer available.</div>}
           </div>
         </section>

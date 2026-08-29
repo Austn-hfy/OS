@@ -325,7 +325,7 @@ export const talent = pgTable("talent", {
   talentStatus: talentStatus("talent_status").notNull().default("active"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   homeMarket: text("home_market").notNull().default(""),
-  genres: text("genres").array().notNull().default(sql`'{}'::text[]`),
+  genres: text("genres").array().notNull().default(sql`ARRAY['Electronic/House']::text[]`),
   priority: integer("priority"),
   talentNotes: text("talent_notes").notNull().default(""),
   legacyOutstandingOwedCents: integer("legacy_outstanding_owed_cents").notNull().default(0),
@@ -343,6 +343,7 @@ export const talent = pgTable("talent", {
   index("talent_visibility_idx").on(table.archivedAt, table.talentStatus),
   check("talent_legacy_financials_nonnegative", sql`${table.legacyOutstandingOwedCents} >= 0 AND ${table.legacyTotalEarningsCents} >= 0`),
   check("talent_priority_range", sql`${table.priority} IS NULL OR (${table.priority} >= 1 AND ${table.priority} <= 5)`),
+  check("talent_genres_standardized", sql`cardinality(${table.genres}) BETWEEN 1 AND 3 AND ${table.genres} <@ ARRAY['Electronic/House', 'Open Format', 'Vinyl']::text[]`),
 ]);
 
 export const talentOnboardingSubmissions = pgTable("talent_onboarding_submissions", {
@@ -353,14 +354,16 @@ export const talentOnboardingSubmissions = pgTable("talent_onboarding_submission
   phone: text("phone").notNull().default(""),
   instagramHandle: text("instagram_handle").notNull().default(""),
   homeMarket: text("home_market").notNull().default(""),
-  genres: text("genres").array().notNull().default(sql`'{}'::text[]`),
+  genres: text("genres").array().notNull().default(sql`ARRAY['Electronic/House']::text[]`),
   notes: text("notes").notNull().default(""),
   w9StoragePath: text("w9_storage_path"),
   status: rosterStatus("status").notNull().default("needs_review"),
   submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   reviewedByUserId: uuid("reviewed_by_user_id").references(() => users.id, { onDelete: "set null" }),
-});
+}, (table) => [
+  check("talent_onboarding_genres_standardized", sql`cardinality(${table.genres}) BETWEEN 1 AND 3 AND ${table.genres} <@ ARRAY['Electronic/House', 'Open Format', 'Vinyl']::text[]`),
+]);
 
 export const talentDocuments = pgTable("talent_documents", {
   id: uuid("id").primaryKey().defaultRandom(),

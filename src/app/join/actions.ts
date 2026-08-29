@@ -5,6 +5,7 @@ import { getDb } from "@/db/client";
 import { talentOnboardingSubmissions } from "@/db/schema";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isJoinEnabled } from "./gate";
+import { parseTalentGenres } from "@/domain/talent-genres";
 
 export type OnboardingState = { status: "idle" | "success" | "error"; message: string };
 
@@ -15,7 +16,6 @@ const submissionSchema = z.object({
   phone: z.string().trim().min(7),
   instagramHandle: z.string().trim(),
   homeMarket: z.string().trim(),
-  genres: z.string(),
   notes: z.string(),
   website: z.string().max(0),
 });
@@ -54,7 +54,7 @@ export async function submitTalentOnboarding(_previous: OnboardingState, formDat
       phone: parsed.data.phone,
       instagramHandle: parsed.data.instagramHandle,
       homeMarket: parsed.data.homeMarket,
-      genres: parsed.data.genres.split(",").map((genre) => genre.trim()).filter(Boolean),
+      genres: parseTalentGenres(formData),
       notes: parsed.data.notes,
       w9StoragePath,
       });

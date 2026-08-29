@@ -14,7 +14,8 @@ import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, 
 import { removeDaypart, saveDaypart } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
 import { addAssignmentToShift, createResidencyDateBooking } from "@/services/residency-bookings";
-import { createShift } from "@/services/shifts";
+import { createShift, deleteShift } from "@/services/shifts";
+import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { issuePublicCalendarToken } from "@/domain/public-calendar";
 
@@ -332,16 +333,16 @@ export async function createTalentAction(formData: FormData) {
     email: z.union([z.literal(""), z.email()]),
     phone: z.string().trim(),
     homeMarket: z.string().trim(),
-    genres: z.string(),
     priority: z.coerce.number().int().min(1).max(5),
   }).parse(Object.fromEntries(formData));
+  const genres = parseTalentGenres(formData);
   const [artist] = await getDb().insert(talent).values({
     stageName: parsed.stageName,
     fullName: parsed.fullName,
     email: parsed.email,
     phone: parsed.phone,
     homeMarket: parsed.homeMarket,
-    genres: parsed.genres.split(",").map((genre) => genre.trim()).filter(Boolean),
+    genres,
     priority: parsed.priority,
     rosterStatus: "ready",
     talentStatus: "active",
@@ -378,7 +379,6 @@ export async function updateArtistAction(_previous: ResidencyActionState, formDa
       phone: z.string().trim(),
       instagramHandle: z.string().trim(),
       homeMarket: z.string().trim(),
-      genres: z.string(),
       priority: z.union([z.literal(""), z.coerce.number().int().min(1).max(5)]),
       rosterStatus: z.enum(["needs_review", "ready"]),
       talentStatus: z.enum(["active", "inactive"]),
@@ -388,7 +388,7 @@ export async function updateArtistAction(_previous: ResidencyActionState, formDa
       zellePhone: z.string().trim(),
       lastFour: z.union([z.literal(""), z.string().regex(/^\d{4}$/)]),
     }).parse(Object.fromEntries(formData));
-    const genres = parsed.genres.split(",").map((genre) => genre.trim()).filter(Boolean);
+    const genres = parseTalentGenres(formData);
     const database = getDb();
     await database.transaction(async (tx) => {
       const [artist] = await tx.update(talent).set({
@@ -1319,6 +1319,24 @@ export async function removeCalendarAssignmentAction(formData: FormData): Promis
     return { status: "success", message: "DJ removed from this Shift." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to remove this DJ." };
+  }
+}
+
+export async function deleteCalendarShiftAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const shiftId = z.uuid().parse(formData.get("shiftId"));
+    const actor = await requireManagerForShift(shiftId);
+    await deleteShift(actor, shiftId);
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/payouts");
+    revalidatePath("/app/invoices");
+    revalidatePath("/app");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/payouts");
+    revalidatePath("/residency/invoices");
+    return { status: "success", message: "Shift deleted." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to delete this Shift." };
   }
 }
 
