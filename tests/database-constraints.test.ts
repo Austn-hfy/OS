@@ -43,6 +43,10 @@ beforeAll(async () => {
   const publicCalendarScopes = await readFile(new URL("../drizzle/0017_cold_silhouette.sql", import.meta.url), "utf8");
   const flexibleDayparts = await readFile(new URL("../drizzle/0018_flashy_frightful_four.sql", import.meta.url), "utf8");
   const internalTestAccounts = await readFile(new URL("../drizzle/0020_supreme_dark_beast.sql", import.meta.url), "utf8");
+  const accountSetupTokens = await readFile(new URL("../drizzle/0021_account_setup_tokens.sql", import.meta.url), "utf8");
+  // Supabase provides these PostgREST roles. PGlite starts with neither, so
+  // create them before applying migrations that explicitly revoke access.
+  await database.exec("CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;");
   await database.exec(initial.replaceAll("--> statement-breakpoint", ""));
   await database.exec(onboarding);
   await database.exec(rowSecurity.replaceAll("--> statement-breakpoint", ""));
@@ -63,6 +67,7 @@ beforeAll(async () => {
   await database.exec(publicCalendarScopes.replaceAll("--> statement-breakpoint", ""));
   await database.exec(flexibleDayparts.replaceAll("--> statement-breakpoint", ""));
   await database.exec(internalTestAccounts.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(accountSetupTokens.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -157,6 +162,37 @@ describe("database replacements for Airtable audit formulas", () => {
 
   it("does not allow an internal admin to be labeled as an internal client test account", async () => {
     await expect(database.exec(`UPDATE users SET is_internal_test = true WHERE id = '${ids.admin}';`)).rejects.toThrow();
+  });
+
+  it("keeps account setup tokens reusable across reads and consumable exactly once", async () => {
+    const tokenHash = "c".repeat(64);
+    await database.exec(`
+      INSERT INTO account_setup_tokens (user_id, residency_id, token_hash, expires_at)
+      VALUES ('${ids.hotel}', '${ids.residencyA}', '${tokenHash}', now() + interval '7 days');
+    `);
+    const firstRead = await database.query<{ used_at: string | null }>(`
+      SELECT used_at FROM account_setup_tokens WHERE token_hash = '${tokenHash}';
+    `);
+    const secondRead = await database.query<{ used_at: string | null }>(`
+      SELECT used_at FROM account_setup_tokens WHERE token_hash = '${tokenHash}';
+    `);
+    expect(firstRead.rows[0]?.used_at).toBeNull();
+    expect(secondRead.rows[0]?.used_at).toBeNull();
+
+    const firstUse = await database.query<{ id: string }>(`
+      UPDATE account_setup_tokens
+      SET used_at = now()
+      WHERE token_hash = '${tokenHash}' AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now()
+      RETURNING id;
+    `);
+    const secondUse = await database.query<{ id: string }>(`
+      UPDATE account_setup_tokens
+      SET used_at = now()
+      WHERE token_hash = '${tokenHash}' AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now()
+      RETURNING id;
+    `);
+    expect(firstUse.rows).toHaveLength(1);
+    expect(secondUse.rows).toEqual([]);
   });
 
   it("rotates one hashed public calendar token per Residency and invalidates the old hash", async () => {

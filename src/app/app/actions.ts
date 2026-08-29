@@ -5,7 +5,8 @@ import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
+import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
+import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { requireActorForResidency, requireInternalActor } from "@/lib/auth";
@@ -813,26 +814,39 @@ export async function generateResidencySetupLinkAction(input: { contactId: strin
       ))
       .limit(1);
     if (!contact?.userId || !contact.email) throw new Error("This contact does not have an active login account.");
+    const issuedAt = new Date();
+    const credential = issueAccountSetupToken(issuedAt);
+    await getDb().transaction(async (tx) => {
+      await tx.update(accountSetupTokens).set({ revokedAt: issuedAt }).where(and(
+        eq(accountSetupTokens.userId, contact.userId!),
+        isNull(accountSetupTokens.usedAt),
+        isNull(accountSetupTokens.revokedAt),
+      ));
+      const [setupToken] = await tx.insert(accountSetupTokens).values({
+        userId: contact.userId!,
+        residencyId: contact.residencyId,
+        contactId: contact.id,
+        tokenHash: credential.tokenHash,
+        expiresAt: credential.expiresAt,
+        createdByUserId: actor.userId,
+        createdAt: issuedAt,
+      }).returning({ id: accountSetupTokens.id });
+      await tx.insert(auditLog).values({
+        residencyId: contact.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_setup_link_generated",
+        entityType: "residency_contact",
+        entityId: contact.id,
+        details: { userId: contact.userId, setupTokenId: setupToken.id, expiresAt: credential.expiresAt.toISOString() },
+      });
+    });
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hfy.app";
-    const admin = createSupabaseAdminClient();
-    const { data, error } = await admin.auth.admin.generateLink({
-      type: "recovery",
-      email: contact.email,
-      options: { redirectTo: `${siteUrl}/auth/callback?next=/reset-password` },
-    });
-    if (error) throw error;
-    const setupLink = data.properties.action_link;
-    if (!setupLink) throw new Error("Supabase did not create a setup link.");
-    await getDb().insert(auditLog).values({
-      residencyId: contact.residencyId,
-      actorUserId: actor.userId,
-      actorLabel: actor.email,
-      action: "residency_setup_link_generated",
-      entityType: "residency_contact",
-      entityId: contact.id,
-      details: { userId: contact.userId },
-    });
-    return { status: "success", message: "A one-time setup link was copied. Treat it like a password.", setupLink };
+    return {
+      status: "success",
+      message: "A one-time setup link was copied. It expires in 7 days and is used only after a password is saved.",
+      setupLink: buildAccountSetupUrl(siteUrl, credential.token),
+    };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to create a setup link." };
   }

@@ -290,6 +290,28 @@ export const residencyContacts = pgTable("residency_contacts", {
     .where(sql`${table.email} <> ''`),
 ]);
 
+export const accountSetupTokens = pgTable("account_setup_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  residencyId: uuid("residency_id").references(() => residencies.id, { onDelete: "cascade" }),
+  contactId: uuid("contact_id").references(() => residencyContacts.id, { onDelete: "set null" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("account_setup_tokens_hash_unique").on(table.tokenHash),
+  uniqueIndex("account_setup_tokens_one_active_per_user")
+    .on(table.userId)
+    .where(sql`${table.usedAt} IS NULL AND ${table.revokedAt} IS NULL`),
+  index("account_setup_tokens_user_idx").on(table.userId, table.createdAt),
+  check("account_setup_tokens_hash_valid", sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+  check("account_setup_tokens_expiry_valid", sql`${table.expiresAt} > ${table.createdAt}`),
+  check("account_setup_tokens_terminal_state_valid", sql`NOT (${table.usedAt} IS NOT NULL AND ${table.revokedAt} IS NOT NULL)`),
+]);
+
 export const talent = pgTable("talent", {
   id: uuid("id").primaryKey().defaultRandom(),
   airtableRecordId: text("airtable_record_id"),
@@ -553,6 +575,7 @@ export const auditLog = pgTable("audit_log", {
 }, (table) => [index("audit_log_residency_created_idx").on(table.residencyId, table.createdAt)]);
 
 export type User = typeof users.$inferSelect;
+export type AccountSetupToken = typeof accountSetupTokens.$inferSelect;
 export type Residency = typeof residencies.$inferSelect;
 export type PublicCalendarLink = typeof publicCalendarLinks.$inferSelect;
 export type Daypart = typeof dayparts.$inferSelect;

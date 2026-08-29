@@ -30,6 +30,7 @@ export function ResidencyContactsManager({ residencyId, contacts }: { residencyI
   const [draft, setDraft] = useState<ContactDraft>(blankContact);
   const [state, saveAction, pending] = useActionState(saveResidencyContactAction, initialState);
   const [inviteState, setInviteState] = useState(initialState);
+  const [preparedSetupLink, setPreparedSetupLink] = useState("");
   const [inviting, startInvite] = useTransition();
 
   function edit(contact: ContactRow) {
@@ -43,6 +44,7 @@ export function ResidencyContactsManager({ residencyId, contacts }: { residencyI
       isPrimary: contact.isPrimary,
     });
     setInviteState(initialState);
+    setPreparedSetupLink("");
   }
 
   function invite(contactId: string) {
@@ -53,9 +55,11 @@ export function ResidencyContactsManager({ residencyId, contacts }: { residencyI
     startInvite(async () => {
       const result = await generateResidencySetupLinkAction({ contactId });
       if (result.status !== "success" || !result.setupLink) {
+        setPreparedSetupLink("");
         setInviteState({ status: "error", message: result.message });
         return;
       }
+      setPreparedSetupLink(result.setupLink);
       try {
         await navigator.clipboard.writeText(result.setupLink);
         setInviteState({ status: "success", message: result.message });
@@ -86,6 +90,7 @@ export function ResidencyContactsManager({ residencyId, contacts }: { residencyI
         <label className="checkbox-row"><input name="isPrimary" type="checkbox" checked={draft.isPrimary} onChange={(event) => setDraft({ ...draft, isPrimary: event.target.checked })} /> Primary day-to-day contact</label>
         {state.status !== "idle" ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}
         {inviteState.status !== "idle" ? <p className={inviteState.status === "error" ? "error" : "success"} aria-live="polite">{inviteState.message}</p> : null}
+        {preparedSetupLink ? <p><a className="text-action" href={preparedSetupLink} target="_blank" rel="noreferrer">Open private setup page</a></p> : null}
         <div className="setup-card-actions"><span>Invite access from the saved contact list when ready.</span><button className="button" type="submit" disabled={pending}>{pending ? "Saving…" : "Save contact"}</button></div>
       </form>
     </div>
