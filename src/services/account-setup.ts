@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { accountSetupTokens, auditLog, residencyContacts, users } from "@/db/schema";
 import { hashAccountSetupToken } from "@/domain/account-setup";
@@ -42,10 +42,6 @@ async function consumePersistedAccountSetupToken(tokenHash: string, password: st
       email_confirm: true,
     });
     if (error) throw error;
-
-    // A legacy recovery link can create a session before a password is chosen.
-    // Remove every old session before the browser signs in with the new password.
-    await tx.execute(sql`DELETE FROM auth.sessions WHERE user_id = ${setup.userId}`);
 
     if (setup.contactId) {
       await tx.update(residencyContacts).set({
