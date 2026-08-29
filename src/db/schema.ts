@@ -73,9 +73,13 @@ export const users = pgTable("users", {
   email: text("email").notNull(),
   displayName: text("display_name").notNull(),
   role: userRole("role").notNull(),
+  isInternalTest: boolean("is_internal_test").notNull().default(false),
   active: boolean("active").notNull().default(true),
   ...timestamps,
-}, (table) => [uniqueIndex("users_email_unique").on(sql`lower(${table.email})`)]);
+}, (table) => [
+  uniqueIndex("users_email_unique").on(sql`lower(${table.email})`),
+  check("users_internal_test_role_valid", sql`NOT ${table.isInternalTest} OR ${table.role} = 'hotel_user'`),
+]);
 
 export const platformSettings = pgTable("platform_settings", {
   id: uuid("id").primaryKey(),

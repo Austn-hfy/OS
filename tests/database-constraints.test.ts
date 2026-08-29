@@ -42,6 +42,7 @@ beforeAll(async () => {
   const daypartTypes = await readFile(new URL("../drizzle/0016_daypart_types_and_schedule_occurrences.sql", import.meta.url), "utf8");
   const publicCalendarScopes = await readFile(new URL("../drizzle/0017_cold_silhouette.sql", import.meta.url), "utf8");
   const flexibleDayparts = await readFile(new URL("../drizzle/0018_flashy_frightful_four.sql", import.meta.url), "utf8");
+  const internalTestAccounts = await readFile(new URL("../drizzle/0020_supreme_dark_beast.sql", import.meta.url), "utf8");
   await database.exec(initial.replaceAll("--> statement-breakpoint", ""));
   await database.exec(onboarding);
   await database.exec(rowSecurity.replaceAll("--> statement-breakpoint", ""));
@@ -61,6 +62,7 @@ beforeAll(async () => {
   await database.exec(daypartTypes.replaceAll("--> statement-breakpoint", ""));
   await database.exec(publicCalendarScopes.replaceAll("--> statement-breakpoint", ""));
   await database.exec(flexibleDayparts.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(internalTestAccounts.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -130,6 +132,31 @@ describe("database replacements for Airtable audit formulas", () => {
     `);
     expect(contact.rows[0]).toEqual({ access_role: "calendar_viewer", is_primary: true });
     expect(membership.rows[0]?.access_role).toBe("calendar_viewer");
+  });
+
+  it("allows multiple Residency memberships only for flagged internal test accounts", async () => {
+    await expect(database.exec(`
+      INSERT INTO residency_memberships (user_id, residency_id, access_role)
+      VALUES ('${ids.hotel}', '${ids.residencyB}', 'manager');
+    `)).rejects.toThrow(/only one active Residency membership/);
+
+    await database.exec(`UPDATE users SET is_internal_test = true WHERE id = '${ids.hotel}';`);
+    await database.exec(`
+      INSERT INTO residency_memberships (user_id, residency_id, access_role)
+      VALUES ('${ids.hotel}', '${ids.residencyB}', 'manager');
+    `);
+    const memberships = await database.query<{ count: number }>(`
+      SELECT count(*)::int AS count FROM residency_memberships WHERE user_id = '${ids.hotel}' AND active = true;
+    `);
+    expect(memberships.rows[0]?.count).toBe(2);
+    await expect(database.exec(`UPDATE users SET is_internal_test = false WHERE id = '${ids.hotel}';`)).rejects.toThrow(/Remove extra Residency memberships/);
+
+    await database.exec(`DELETE FROM residency_memberships WHERE user_id = '${ids.hotel}' AND residency_id = '${ids.residencyB}';`);
+    await database.exec(`UPDATE users SET is_internal_test = false WHERE id = '${ids.hotel}';`);
+  });
+
+  it("does not allow an internal admin to be labeled as an internal client test account", async () => {
+    await expect(database.exec(`UPDATE users SET is_internal_test = true WHERE id = '${ids.admin}';`)).rejects.toThrow();
   });
 
   it("rotates one hashed public calendar token per Residency and invalidates the old hash", async () => {

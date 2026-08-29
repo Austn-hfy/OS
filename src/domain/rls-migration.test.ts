@@ -13,4 +13,13 @@ describe("Ace Residency RLS migration", () => {
     expect(sql).not.toMatch(/GRANT SELECT[^;]+invoices/);
     expect(sql).not.toMatch(/GRANT (INSERT|UPDATE|DELETE)/);
   });
+
+  it("keeps internal-test account metadata private and enforces one Residency for customer accounts", async () => {
+    const sql = await readFile(new URL("../../drizzle/0020_supreme_dark_beast.sql", import.meta.url), "utf8");
+    expect(sql).toContain('ADD COLUMN "is_internal_test"');
+    expect(sql).toContain("private.enforce_single_customer_residency_membership()");
+    expect(sql).toContain("Normal customer accounts may have only one active Residency membership.");
+    expect(sql).toContain("private.prevent_invalid_internal_test_demotion()");
+    expect(sql).not.toMatch(/GRANT[^;]+is_internal_test/);
+  });
 });

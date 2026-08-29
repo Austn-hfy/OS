@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, dayparts, shifts, talent } from "@/db/schema";
+import { assignments, dayparts, residencyContacts, shifts, talent, users } from "@/db/schema";
 import { projectClientSafeRoster } from "@/domain/client-safe-talent";
 
 export async function getResidencyClientCalendar(residencyId: string, range: { from: string; to: string }) {
@@ -75,6 +75,22 @@ export async function getResidencyClientSafeRoster(residencyId: string) {
     ))
     .orderBy(asc(talent.stageName));
   return projectClientSafeRoster(rows);
+}
+
+export async function getResidencyClientVisibleAccessContacts(residencyId: string) {
+  return getDb().select({
+    name: residencyContacts.name,
+    title: residencyContacts.title,
+    accessRole: residencyContacts.accessRole,
+    isPrimary: residencyContacts.isPrimary,
+  }).from(residencyContacts)
+    .leftJoin(users, eq(residencyContacts.userId, users.id))
+    .where(and(
+      eq(residencyContacts.residencyId, residencyId),
+      eq(residencyContacts.active, true),
+      or(isNull(residencyContacts.userId), eq(users.isInternalTest, false)),
+    ))
+    .orderBy(asc(residencyContacts.name));
 }
 
 export async function getResidencyClientPayoutStatus(residencyId: string) {

@@ -19,6 +19,7 @@ import { issuePublicCalendarToken } from "@/domain/public-calendar";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
+export type CredentialLinkActionState = ResidencyActionState & { setupLink?: string };
 export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_residency";
 
 function centsFromDollars(value: FormDataEntryValue | null): number {
@@ -790,6 +791,50 @@ export async function inviteResidencyContactAction(input: { contactId: string })
     return { status: "success", message: invitationStatus === "invited" ? `Invitation sent to ${contact.email}.` : `${contact.email} already has an account and now has access.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to invite this contact." };
+  }
+}
+
+export async function generateResidencySetupLinkAction(input: { contactId: string }): Promise<CredentialLinkActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const { contactId } = z.object({ contactId: z.uuid() }).parse(input);
+    const [contact] = await getDb().select({
+      id: residencyContacts.id,
+      residencyId: residencyContacts.residencyId,
+      email: residencyContacts.email,
+      userId: residencyContacts.userId,
+    }).from(residencyContacts)
+      .innerJoin(users, eq(residencyContacts.userId, users.id))
+      .where(and(
+        eq(residencyContacts.id, contactId),
+        eq(residencyContacts.active, true),
+        eq(users.active, true),
+        eq(users.role, "hotel_user"),
+      ))
+      .limit(1);
+    if (!contact?.userId || !contact.email) throw new Error("This contact does not have an active login account.");
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hfy.app";
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email: contact.email,
+      options: { redirectTo: `${siteUrl}/auth/callback?next=/reset-password` },
+    });
+    if (error) throw error;
+    const setupLink = data.properties.action_link;
+    if (!setupLink) throw new Error("Supabase did not create a setup link.");
+    await getDb().insert(auditLog).values({
+      residencyId: contact.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "residency_setup_link_generated",
+      entityType: "residency_contact",
+      entityId: contact.id,
+      details: { userId: contact.userId },
+    });
+    return { status: "success", message: "A one-time setup link was copied. Treat it like a password.", setupLink };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to create a setup link." };
   }
 }
 

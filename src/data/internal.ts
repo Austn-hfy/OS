@@ -18,6 +18,7 @@ import {
   publicCalendarLinks,
   scheduleOccurrences,
   scheduleOccurrenceTalent,
+  users,
 } from "@/db/schema";
 import {
   calculateBillableAmountCents,
@@ -555,12 +556,23 @@ export async function getSetupData() {
       invitationStatus: residencyContacts.invitationStatus,
       isPrimary: residencyContacts.isPrimary,
       active: residencyContacts.active,
-    }).from(residencyContacts).where(eq(residencyContacts.active, true)).orderBy(asc(residencyContacts.name)),
+      userId: residencyContacts.userId,
+      isInternalTest: users.isInternalTest,
+    }).from(residencyContacts)
+      .leftJoin(users, eq(residencyContacts.userId, users.id))
+      .where(eq(residencyContacts.active, true))
+      .orderBy(asc(residencyContacts.name)),
     database.select({ residencyId: publicCalendarLinks.residencyId }).from(publicCalendarLinks),
     getInvoiceBrandingSettings(),
   ]);
   const linkedResidencies = new Set(calendarLinks.map((link) => link.residencyId));
-  return { residencies: residencyRows.map((residency) => ({ ...residency, hasPublicCalendarLink: linkedResidencies.has(residency.id) })), talent: talentRows, approvals, contacts, invoiceBranding };
+  return {
+    residencies: residencyRows.map((residency) => ({ ...residency, hasPublicCalendarLink: linkedResidencies.has(residency.id) })),
+    talent: talentRows,
+    approvals,
+    contacts: contacts.map((contact) => ({ ...contact, hasAccount: Boolean(contact.userId), isInternalTest: Boolean(contact.isInternalTest) })),
+    invoiceBranding,
+  };
 }
 
 export async function getPipelineLeads() {

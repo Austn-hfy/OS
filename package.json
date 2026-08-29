@@ -18,6 +18,7 @@
     "db:migrate": "tsx scripts/migrate-database.ts",
     "db:studio": "drizzle-kit studio",
     "provision": "tsx scripts/provision-user.ts",
+    "provision:residency": "tsx scripts/provision-residency-account.ts",
     "seed:ace-parity": "tsx scripts/seed-ace-parity.ts",
     "storage:bootstrap": "tsx scripts/bootstrap-storage.ts",
     "storage:export": "tsx scripts/export-storage.ts",

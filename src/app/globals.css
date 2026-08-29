@@ -597,6 +597,11 @@ tr:last-child td { border-bottom: 0; }
 .client-residency-context { display: grid; gap: 5px; margin: 4px 0 20px; padding: 14px; border: 1px solid rgba(255,255,255,.14); border-radius: 15px; background: rgba(255,255,255,.08); }
 .client-residency-context small { color: rgba(255,255,255,.55); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .client-residency-context strong { font-size: 15px; }
+.internal-test-residency-switcher { display: grid; gap: 8px; margin: -8px 0 20px; padding: 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 14px; background: rgba(255,255,255,.1); }
+.internal-test-residency-switcher > span { width: fit-content; padding: 4px 7px; border-radius: 999px; background: #ffe7df; color: #8b3f2e; font-size: 8px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.internal-test-residency-switcher label { color: rgba(255,255,255,.65); font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.internal-test-residency-switcher select { width: 100%; min-height: 38px; padding: 8px 28px 8px 10px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; background: rgba(255,255,255,.94); color: #122334; font: inherit; font-size: 10px; }
+.internal-test-residency-switcher .button { width: 100%; min-height: 36px; padding: 8px 10px; font-size: 9px; }
 .client-overview-card { min-height: 230px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-top: 20px; }
 .client-overview-card > div { display: grid; gap: 6px; }
 .client-overview-card > div > strong { font-family: "Plus Jakarta Sans", sans-serif; font-size: clamp(58px, 8vw, 100px); line-height: .9; }

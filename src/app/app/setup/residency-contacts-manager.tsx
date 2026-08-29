@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { inviteResidencyContactAction, saveResidencyContactAction, type ResidencyActionState } from "@/app/app/actions";
+import { generateResidencySetupLinkAction, inviteResidencyContactAction, saveResidencyContactAction, type ResidencyActionState } from "@/app/app/actions";
 
 type ContactRow = {
   id: string;
@@ -12,6 +12,8 @@ type ContactRow = {
   accessRole: "manager" | "calendar_viewer" | null;
   invitationStatus: "not_invited" | "invited" | "active" | "revoked";
   isPrimary: boolean;
+  hasAccount: boolean;
+  isInternalTest: boolean;
 };
 
 const initialState: ResidencyActionState = { status: "idle", message: "" };
@@ -47,13 +49,29 @@ export function ResidencyContactsManager({ residencyId, contacts }: { residencyI
     startInvite(async () => setInviteState(await inviteResidencyContactAction({ contactId })));
   }
 
+  function copySetupLink(contactId: string) {
+    startInvite(async () => {
+      const result = await generateResidencySetupLinkAction({ contactId });
+      if (result.status !== "success" || !result.setupLink) {
+        setInviteState({ status: "error", message: result.message });
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(result.setupLink);
+        setInviteState({ status: "success", message: result.message });
+      } catch {
+        setInviteState({ status: "error", message: "Clipboard access was blocked. Try again from this secure owner screen." });
+      }
+    });
+  }
+
   return <section className="card residency-contacts-manager">
     <div className="setup-card-heading"><div><p className="eyebrow">Contacts &amp; access</p><h2>Residency team</h2><p className="subhead">Keep operational contacts here. Login access is optional and must be invited deliberately.</p></div><button className="button secondary" type="button" onClick={() => setDraft(blankContact)}>+ Add contact</button></div>
     <div className="residency-contacts-layout">
       <div className="residency-contact-list">
         {contacts.map((contact) => <article className={draft.id === contact.id ? "selected" : ""} key={contact.id}>
-          <button type="button" onClick={() => edit(contact)}><span><strong>{contact.name}</strong><small>{contact.title || "Title not set"}</small></span><span><small>{roleLabel(contact.accessRole)}</small>{contact.isPrimary ? <em>Primary</em> : null}</span></button>
-          <div><span className={`contact-invite-status ${contact.invitationStatus}`}>{contact.invitationStatus.replaceAll("_", " ")}</span>{contact.accessRole && contact.invitationStatus !== "active" ? <button className="text-action" type="button" onClick={() => invite(contact.id)} disabled={inviting}>{inviting ? "Sending…" : contact.invitationStatus === "invited" ? "Resend invite" : "Send invite"}</button> : null}</div>
+          <button type="button" onClick={() => edit(contact)}><span><strong>{contact.name}</strong><small>{contact.title || "Title not set"}</small></span><span><small>{roleLabel(contact.accessRole)}</small>{contact.isInternalTest ? <em>Internal test</em> : null}{contact.isPrimary ? <em>Primary</em> : null}</span></button>
+          <div><span className={`contact-invite-status ${contact.invitationStatus}`}>{contact.invitationStatus.replaceAll("_", " ")}</span>{contact.accessRole && contact.hasAccount ? <button className="text-action" type="button" onClick={() => copySetupLink(contact.id)} disabled={inviting}>{inviting ? "Preparing…" : "Copy setup link"}</button> : contact.accessRole && contact.invitationStatus !== "active" ? <button className="text-action" type="button" onClick={() => invite(contact.id)} disabled={inviting}>{inviting ? "Sending…" : contact.invitationStatus === "invited" ? "Resend invite" : "Send invite"}</button> : null}</div>
         </article>)}
         {!contacts.length ? <div className="empty"><strong>No contacts yet</strong><p>Add the manager, event contact, or anyone HFY works with regularly.</p></div> : null}
       </div>

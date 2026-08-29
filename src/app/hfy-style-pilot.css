@@ -502,6 +502,18 @@
 }
 .hfy-style-system .sidebar-footer { color: var(--hfy-muted); font-size: 11px; }
 .hfy-style-system .sidebar-footer .button { min-height: 36px; margin-top: 8px; padding: 7px 12px; font-size: 10px; }
+.hfy-style-system .internal-test-residency-switcher {
+  border-color: rgba(204, 108, 84, 0.22);
+  color: var(--hfy-ink);
+  background: rgba(250, 252, 253, 0.58);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+}
+.hfy-style-system .internal-test-residency-switcher label { color: var(--hfy-label); }
+.hfy-style-system .internal-test-residency-switcher select {
+  border-color: var(--hfy-line);
+  color: var(--hfy-ink);
+  background: rgba(255, 255, 255, 0.76);
+}
 .hfy-style-system .privacy-mode-toggle {
   border-color: var(--hfy-line);
   color: var(--hfy-ink-soft);

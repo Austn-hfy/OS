@@ -1,8 +1,13 @@
-import { and, eq, ne } from "drizzle-orm";
+import { cache } from "react";
+import { and, asc, eq, ne } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db/client";
 import { residencies, residencyContacts, residencyMemberships, users } from "@/db/schema";
+import { selectResidencyMembership, type ResidencyMembershipOption } from "@/domain/residency-membership";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export const INTERNAL_TEST_RESIDENCY_COOKIE = "hfy_internal_test_residency";
 
 export type InternalActor = {
   kind: "internal";
@@ -20,18 +25,72 @@ export type ResidencyActor = {
   residencyName: string;
   residencyTimezone: string;
   accessRole: "manager" | "calendar_viewer";
+  isInternalTest: boolean;
+  availableResidencies: Array<Pick<ResidencyMembershipOption, "residencyId" | "residencyName" | "accessRole">>;
 };
 
 export type AuditActor = InternalActor | ResidencyActor;
 
-async function currentProfile() {
+const currentProfile = cache(async () => {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
   const [profile] = await getDb().select().from(users).where(and(eq(users.id, data.user.id), eq(users.active, true))).limit(1);
   if (!profile) return null;
   return { authUser: data.user, profile };
-}
+});
+
+const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => {
+  const current = await currentProfile();
+  if (!current || current.profile.role !== "hotel_user") return null;
+  const membershipQuery = getDb().select({
+    residencyId: residencyMemberships.residencyId,
+    residencyName: residencies.name,
+    residencyTimezone: residencies.timezone,
+    accessRole: residencyMemberships.accessRole,
+    contactId: residencyContacts.id,
+    invitationStatus: residencyContacts.invitationStatus,
+  }).from(residencyMemberships)
+    .innerJoin(residencies, eq(residencyMemberships.residencyId, residencies.id))
+    .leftJoin(residencyContacts, and(
+      eq(residencyContacts.userId, current.profile.id),
+      eq(residencyContacts.residencyId, residencyMemberships.residencyId),
+      eq(residencyContacts.active, true),
+    ))
+    .where(and(
+      eq(residencyMemberships.userId, current.profile.id),
+      eq(residencyMemberships.active, true),
+      eq(residencies.active, true),
+      eq(residencies.operatingMode, "operations"),
+    ))
+    .orderBy(asc(residencies.name));
+  const memberships = current.profile.isInternalTest ? await membershipQuery : await membershipQuery.limit(1);
+  const selectedResidencyId = current.profile.isInternalTest
+    ? (await cookies()).get(INTERNAL_TEST_RESIDENCY_COOKIE)?.value
+    : undefined;
+  const membership = selectResidencyMembership(memberships, selectedResidencyId, current.profile.isInternalTest);
+  if (!membership) return null;
+  if (membership.contactId && membership.invitationStatus !== "active") {
+    await getDb().update(residencyContacts).set({ invitationStatus: "active", acceptedAt: new Date(), updatedAt: new Date() }).where(and(
+      eq(residencyContacts.id, membership.contactId),
+      ne(residencyContacts.invitationStatus, "active"),
+    ));
+  }
+  return {
+    kind: "residency",
+    userId: current.profile.id,
+    email: current.profile.email,
+    displayName: current.profile.displayName,
+    residencyId: membership.residencyId,
+    residencyName: membership.residencyName,
+    residencyTimezone: membership.residencyTimezone,
+    accessRole: membership.accessRole,
+    isInternalTest: current.profile.isInternalTest,
+    availableResidencies: current.profile.isInternalTest
+      ? memberships.map(({ residencyId, residencyName, accessRole }) => ({ residencyId, residencyName, accessRole }))
+      : [],
+  };
+});
 
 export async function requireInternalActor(): Promise<InternalActor> {
   const current = await currentProfile();
@@ -46,39 +105,9 @@ export async function requireInternalActor(): Promise<InternalActor> {
 }
 
 export async function requireResidencyActor(): Promise<ResidencyActor> {
-  const current = await currentProfile();
-  if (!current) redirect("/login");
-  if (current.profile.role !== "hotel_user") redirect("/login");
-  const [membership] = await getDb().select({
-    residencyId: residencyMemberships.residencyId,
-    residencyName: residencies.name,
-    residencyTimezone: residencies.timezone,
-    accessRole: residencyMemberships.accessRole,
-  }).from(residencyMemberships)
-    .innerJoin(residencies, eq(residencyMemberships.residencyId, residencies.id))
-    .where(and(
-      eq(residencyMemberships.userId, current.profile.id),
-      eq(residencyMemberships.active, true),
-      eq(residencies.active, true),
-      eq(residencies.operatingMode, "operations"),
-    ))
-    .limit(1);
-  if (!membership) redirect("/login");
-  await getDb().update(residencyContacts).set({ invitationStatus: "active", acceptedAt: new Date(), updatedAt: new Date() }).where(and(
-    eq(residencyContacts.userId, current.profile.id),
-    eq(residencyContacts.residencyId, membership.residencyId),
-    ne(residencyContacts.invitationStatus, "active"),
-  ));
-  return {
-    kind: "residency",
-    userId: current.profile.id,
-    email: current.profile.email,
-    displayName: current.profile.displayName,
-    residencyId: membership.residencyId,
-    residencyName: membership.residencyName,
-    residencyTimezone: membership.residencyTimezone,
-    accessRole: membership.accessRole,
-  };
+  const actor = await currentResidencyActor();
+  if (!actor) redirect("/login");
+  return actor;
 }
 
 export async function requireActorForResidency(
@@ -124,6 +153,8 @@ export async function requireActorForResidency(
     residencyName: membership.residencyName,
     residencyTimezone: membership.residencyTimezone,
     accessRole: membership.accessRole,
+    isInternalTest: current.profile.isInternalTest,
+    availableResidencies: [],
   };
 }
 
