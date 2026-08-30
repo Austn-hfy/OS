@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, invoiceLineItems, invoices, residencies, shifts } from "@/db/schema";
 import { resolveRateCents } from "@/domain/airtable-parity";
@@ -108,36 +108,54 @@ export async function deleteShift(actor: InternalActor | { userId: string; email
   });
 }
 
+export function shiftInvoiceReconciliationStatement(residencyId: string) {
+  return sql`
+    WITH eligible_shifts AS MATERIALIZED (
+      SELECT id, service_date, invoice_id
+      FROM shifts
+      WHERE residency_id = ${residencyId}
+        AND billing_status IN ('pending', 'reviewed')
+    ),
+    coverage AS MATERIALIZED (
+      SELECT
+        candidate.id,
+        count(covering_invoice.id)::integer AS invoice_count,
+        max(covering_invoice.id::text)::uuid AS invoice_id
+      FROM eligible_shifts AS candidate
+      LEFT JOIN invoices AS covering_invoice
+        ON covering_invoice.residency_id = ${residencyId}
+        AND covering_invoice.kind = 'scheduled_period'
+        AND covering_invoice.billing_period_start <= candidate.service_date
+        AND covering_invoice.billing_period_end >= candidate.service_date
+        AND covering_invoice.status <> 'void'
+      WHERE candidate.invoice_id IS NULL
+      GROUP BY candidate.id
+    ),
+    updated_shifts AS (
+      UPDATE shifts AS candidate
+      SET
+        invoice_id = CASE WHEN coverage.invoice_count = 1 THEN coverage.invoice_id ELSE NULL END,
+        invoice_link_issue = coverage.invoice_count <> 1,
+        invoice_link_note = CASE
+          WHEN coverage.invoice_count = 1 THEN ''
+          WHEN coverage.invoice_count > 1 THEN 'More than one Invoice covers this Shift.'
+          ELSE 'No Invoice period covers this Shift.'
+        END,
+        updated_at = now()
+      FROM coverage
+      WHERE candidate.id = coverage.id
+      RETURNING coverage.invoice_count
+    )
+    SELECT
+      (SELECT count(*)::integer FROM eligible_shifts) AS processed,
+      (SELECT count(*)::integer FROM updated_shifts WHERE invoice_count = 1) AS changed
+  `;
+}
+
 export async function reconcileShiftInvoiceLinks(residencyId: string) {
   const database = getDb();
-  const unlinked = await database.select().from(shifts).where(and(
-    eq(shifts.residencyId, residencyId),
-    inArray(shifts.billingStatus, ["pending", "reviewed"]),
-  ));
-  let changed = 0;
-  for (const shift of unlinked.filter((item) => !item.invoiceId)) {
-    const covering = await database.select({ id: invoices.id }).from(invoices).where(and(
-      eq(invoices.residencyId, residencyId),
-      eq(invoices.kind, "scheduled_period"),
-      lte(invoices.billingPeriodStart, shift.serviceDate),
-      gte(invoices.billingPeriodEnd, shift.serviceDate),
-      ne(invoices.status, "void"),
-    ));
-    if (covering.length === 1) {
-      await database.update(shifts).set({
-        invoiceId: covering[0].id,
-        invoiceLinkIssue: false,
-        invoiceLinkNote: "",
-        updatedAt: new Date(),
-      }).where(eq(shifts.id, shift.id));
-      changed += 1;
-    } else {
-      await database.update(shifts).set({
-        invoiceLinkIssue: true,
-        invoiceLinkNote: covering.length ? "More than one Invoice covers this Shift." : "No Invoice period covers this Shift.",
-        updatedAt: new Date(),
-      }).where(eq(shifts.id, shift.id));
-    }
-  }
-  return { processed: unlinked.length, changed };
+  const result = await database.execute<{ processed: number; changed: number }>(shiftInvoiceReconciliationStatement(residencyId));
+  const summary = result.rows[0];
+  if (!summary) throw new Error("Shift invoice reconciliation did not return a summary.");
+  return { processed: Number(summary.processed), changed: Number(summary.changed) };
 }
