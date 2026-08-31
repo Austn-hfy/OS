@@ -3,6 +3,7 @@ import { getPublicCalendarByToken } from "@/data/public-calendar";
 import { enforcePublicCalendarResponse } from "@/domain/public-calendar";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const result = await getPublicCalendarByToken((await params).token);

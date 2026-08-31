@@ -6,6 +6,8 @@ import { and, eq } from "drizzle-orm";
 import { requireActorForResidency } from "@/lib/auth";
 import { getDaypartsForResidency } from "@/services/dayparts";
 
+export const maxDuration = 30;
+
 export async function GET(_request: Request, { params }: { params: Promise<{ residencyId: string }> }) {
   const residencyId = z.uuid().parse((await params).residencyId);
   const actor = await requireActorForResidency(residencyId);
