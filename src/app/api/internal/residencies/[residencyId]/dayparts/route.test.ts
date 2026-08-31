@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ResidencyAccessError } from "@/lib/auth";
-import { residencyAccessErrorResponse } from "./route";
+import { residencyAccessErrorResponse } from "./auth-response";
 
 describe("GET /api/internal/residencies/:residencyId/dayparts authorization", () => {
   it("maps an unauthenticated request to 401", async () => {

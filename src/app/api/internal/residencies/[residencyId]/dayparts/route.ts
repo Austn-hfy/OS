@@ -3,18 +3,11 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { residencies } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { isResidencyAccessError, requireActorForResidency } from "@/lib/auth";
+import { requireActorForResidency } from "@/lib/auth";
 import { getDaypartsForResidency } from "@/services/dayparts";
+import { residencyAccessErrorResponse } from "./auth-response";
 
 export const maxDuration = 30;
-
-export function residencyAccessErrorResponse(error: unknown): NextResponse | null {
-  if (!isResidencyAccessError(error)) return null;
-  return NextResponse.json(
-    { error: error.status === 401 ? "Unauthorized." : "Forbidden." },
-    { status: error.status, headers: { "Cache-Control": "private, no-store" } },
-  );
-}
 
 export async function GET(_request: Request, { params }: { params: Promise<{ residencyId: string }> }) {
   const residencyId = z.uuid().parse((await params).residencyId);
