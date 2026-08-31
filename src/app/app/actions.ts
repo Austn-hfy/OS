@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db/client";
@@ -433,6 +433,7 @@ export async function updateArtistAction(_previous: ResidencyActionState, formDa
       });
     });
     revalidatePath("/app/talent");
+    revalidatePath("/app/talent/roster");
     revalidatePath("/app/calendar");
     revalidatePath("/app/setup");
     return { status: "success", message: `${parsed.stageName} saved.` };
@@ -454,7 +455,12 @@ export async function bulkUpdateArtistsAction(input: {
       residencyId: z.uuid().optional(),
     }).parse(input);
     const database = getDb();
-    const artistRows = await database.select({ id: talent.id, stageName: talent.stageName, archivedAt: talent.archivedAt })
+    const artistRows = await database.select({
+      id: talent.id,
+      stageName: talent.stageName,
+      archivedAt: talent.archivedAt,
+      exclusiveResidencyId: talent.exclusiveResidencyId,
+    })
       .from(talent)
       .where(inArray(talent.id, parsed.talentIds));
     if (artistRows.length !== parsed.talentIds.length) throw new Error("One or more artists could not be found.");
@@ -468,6 +474,9 @@ export async function bulkUpdateArtistsAction(input: {
         .limit(1);
       if (!residency) throw new Error("Residency not found.");
       if (artistRows.some((artist) => artist.archivedAt)) throw new Error("Restore archived artists before adding them to a Residency.");
+      if (artistRows.some((artist) => artist.exclusiveResidencyId && artist.exclusiveResidencyId !== parsed.residencyId)) {
+        throw new Error("One or more exclusive artists can only be assigned to their exclusive Residency.");
+      }
       residencyName = residency.name;
     }
 
@@ -505,6 +514,7 @@ export async function bulkUpdateArtistsAction(input: {
     });
 
     revalidatePath("/app/talent");
+    revalidatePath("/app/talent/roster");
     revalidatePath("/app/calendar");
     revalidatePath("/app/setup");
     const count = parsed.talentIds.length;
@@ -535,12 +545,20 @@ export async function updateArtistResidenciesAction(input: {
       residencyIds: z.array(z.uuid()).max(250).transform((ids) => [...new Set(ids)]),
     }).parse(input);
     const database = getDb();
-    const [artist] = await database.select({ id: talent.id, stageName: talent.stageName, archivedAt: talent.archivedAt })
+    const [artist] = await database.select({
+      id: talent.id,
+      stageName: talent.stageName,
+      archivedAt: talent.archivedAt,
+      exclusiveResidencyId: talent.exclusiveResidencyId,
+    })
       .from(talent)
       .where(eq(talent.id, parsed.talentId))
       .limit(1);
     if (!artist) throw new Error("Artist not found.");
     if (artist.archivedAt && parsed.residencyIds.length) throw new Error("Restore this artist before adding Residency access.");
+    if (artist.exclusiveResidencyId && parsed.residencyIds.some((residencyId) => residencyId !== artist.exclusiveResidencyId)) {
+      throw new Error("An exclusive artist can only be assigned to their exclusive Residency.");
+    }
 
     const validResidencies = parsed.residencyIds.length ? await database.select({ id: residencies.id })
       .from(residencies)
@@ -570,11 +588,98 @@ export async function updateArtistResidenciesAction(input: {
       });
     });
     revalidatePath("/app/talent");
+    revalidatePath("/app/talent/roster");
     revalidatePath("/app/calendar");
     revalidatePath("/app/setup");
-    return { status: "success", message: `${artist.stageName}'s Residency access was saved.` };
+    return { status: "success", message: `${artist.stageName}'s Residency assignments were saved.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to update Residency access." };
+  }
+}
+
+export async function updateArtistRosterPlacementAction(input: {
+  talentId: string;
+  exclusiveResidencyId: string | null;
+  residencyIds: string[];
+}): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      talentId: z.uuid(),
+      exclusiveResidencyId: z.uuid().nullable(),
+      residencyIds: z.array(z.uuid()).max(250).transform((ids) => [...new Set(ids)]),
+    }).parse(input);
+    const database = getDb();
+    const [artist] = await database.select({ id: talent.id, stageName: talent.stageName, archivedAt: talent.archivedAt })
+      .from(talent)
+      .where(eq(talent.id, parsed.talentId))
+      .limit(1);
+    if (!artist) throw new Error("Artist not found.");
+    if (artist.archivedAt) throw new Error("Restore this artist before changing Residency eligibility.");
+
+    if (parsed.exclusiveResidencyId && parsed.residencyIds.some((residencyId) => residencyId !== parsed.exclusiveResidencyId)) {
+      throw new Error("An exclusive artist can only be assigned to their exclusive Residency.");
+    }
+    const desiredResidencyIds = parsed.exclusiveResidencyId ? [parsed.exclusiveResidencyId] : parsed.residencyIds;
+    const validResidencies = desiredResidencyIds.length ? await database.select({ id: residencies.id, name: residencies.name })
+      .from(residencies)
+      .where(and(
+        inArray(residencies.id, desiredResidencyIds),
+        eq(residencies.active, true),
+        eq(residencies.operatingMode, "operations"),
+      )) : [];
+    if (validResidencies.length !== desiredResidencyIds.length) throw new Error("One or more Residencies could not be found.");
+    const residencyName = parsed.exclusiveResidencyId
+      ? validResidencies.find((residency) => residency.id === parsed.exclusiveResidencyId)?.name ?? "the selected Residency"
+      : null;
+
+    await database.transaction(async (tx) => {
+      // Clear prior exclusivity before changing assignment rows so moving an
+      // exclusive artist remains one atomic, database-valid operation.
+      await tx.update(talent).set({ exclusiveResidencyId: null, updatedAt: new Date() }).where(eq(talent.id, parsed.talentId));
+      await tx.update(residencyTalent).set({ active: false }).where(eq(residencyTalent.talentId, parsed.talentId));
+      if (desiredResidencyIds.length) {
+        await tx.insert(residencyTalent).values(desiredResidencyIds.map((residencyId) => ({
+          residencyId,
+          talentId: parsed.talentId,
+          approvedByUserId: actor.userId,
+          active: true,
+        }))).onConflictDoUpdate({
+          target: [residencyTalent.residencyId, residencyTalent.talentId],
+          set: { active: true, approvedByUserId: actor.userId },
+        });
+      }
+      await tx.update(talent).set({
+        exclusiveResidencyId: parsed.exclusiveResidencyId,
+        updatedAt: new Date(),
+      }).where(eq(talent.id, parsed.talentId));
+      await tx.insert(auditLog).values({
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "talent_roster_placement_updated",
+        entityType: "talent",
+        entityId: parsed.talentId,
+        residencyId: parsed.exclusiveResidencyId,
+        details: {
+          eligibility: parsed.exclusiveResidencyId ? "exclusive" : "shared",
+          exclusiveResidencyId: parsed.exclusiveResidencyId,
+          residencyName,
+          residencyIds: desiredResidencyIds,
+        },
+      });
+    });
+    revalidatePath("/app/talent");
+    revalidatePath("/app/talent/roster");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/setup");
+    return {
+      status: "success",
+      message: parsed.exclusiveResidencyId
+        ? `${artist.stageName} is exclusive to and assigned to ${residencyName}.`
+        : `${artist.stageName}'s shared Residency assignments were saved.`,
+    };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update roster placement." };
   }
 }
 
@@ -591,6 +696,7 @@ export async function approveResidencyTalentAction(formData: FormData) {
     set: { active: true, approvedByUserId: actor.userId },
   });
   revalidatePath("/app/setup");
+  revalidatePath("/app/talent/roster");
 }
 
 export async function updateResidencyApprovedTalentAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
@@ -610,6 +716,7 @@ export async function updateResidencyApprovedTalentAction(_previous: ResidencyAc
       inArray(talent.id, parsed.talentIds),
       eq(talent.talentStatus, "active"),
       isNull(talent.archivedAt),
+      or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residency.id)),
     )) : [];
     if (validTalent.length !== parsed.talentIds.length) throw new Error("One or more selected DJs are no longer active.");
     await database.transaction(async (tx) => {
@@ -637,6 +744,7 @@ export async function updateResidencyApprovedTalentAction(_previous: ResidencyAc
     });
     revalidatePath("/app/setup");
     revalidatePath("/app/talent");
+    revalidatePath("/app/talent/roster");
     revalidatePath("/app/calendar");
     return { status: "success", message: `${parsed.talentIds.length} approved DJ${parsed.talentIds.length === 1 ? "" : "s"} saved for ${residency.name}.` };
   } catch (error) {

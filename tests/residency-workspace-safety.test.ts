@@ -23,9 +23,18 @@ describe("Residency workspace boundaries", () => {
   });
 
   it("keeps the client-safe roster in the shared Residency calendar assignment path", async () => {
-    const source = await readFile(new URL("../src/app/residency/calendar/page.tsx", import.meta.url), "utf8");
+    const [source, rosterQuery, ownerPicker, bookingService] = await Promise.all([
+      readFile(new URL("../src/app/residency/calendar/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/data/residency-client.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/services/dayparts.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8"),
+    ]);
     expect(source).toContain("getResidencyClientSafeRoster(actor.residencyId)");
     expect(source).toContain("talent={roster.map");
+    expect(rosterQuery).toContain(".innerJoin(residencyTalent");
+    expect(rosterQuery).toContain("eq(residencyTalent.residencyId, residencyId)");
+    expect(ownerPicker).toContain(".innerJoin(residencyTalent");
+    expect(bookingService.match(/\.innerJoin\(residencyTalent/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps company modes out of Residency workspaces and Dayparts out of Setup", async () => {

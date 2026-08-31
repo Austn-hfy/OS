@@ -232,6 +232,7 @@ export async function getTalentDirectory(residencyId?: string) {
       inArray(talent.id, approvals.map((item) => item.talentId)),
       eq(talent.talentStatus, "active"),
       isNull(talent.archivedAt),
+      or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residencyId)),
     ))
     .orderBy(desc(talent.priority), asc(talent.stageName));
 }
@@ -246,7 +247,10 @@ export async function getArtistLookupData(residencyId?: string) {
     : null;
   const artistRows = scopedTalentIds
     ? scopedTalentIds.length
-      ? await database.select().from(talent).where(inArray(talent.id, scopedTalentIds)).orderBy(desc(talent.priority), asc(talent.stageName))
+      ? await database.select().from(talent).where(and(
+        inArray(talent.id, scopedTalentIds),
+        or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residencyId!)),
+      )).orderBy(desc(talent.priority), asc(talent.stageName))
       : []
     : await database.select().from(talent).orderBy(desc(talent.priority), asc(talent.stageName));
   const artistIds = artistRows.map((artist) => artist.id);
@@ -382,6 +386,7 @@ export async function getArtistLookupData(residencyId?: string) {
 export async function getPayoutQueue(residencyId?: string) {
   return getDb().select({
     id: assignments.id,
+    residencyId: residencies.id,
     talentId: assignments.talentId,
     talentName: talent.stageName,
     talentFullName: talent.fullName,
@@ -413,6 +418,47 @@ export async function getPayoutQueue(residencyId?: string) {
     .leftJoin(talentPaymentProfiles, eq(talent.id, talentPaymentProfiles.talentId))
     .where(residencyId ? eq(shifts.residencyId, residencyId) : undefined)
     .orderBy(asc(shifts.serviceDate), asc(talent.stageName));
+}
+
+export async function getCompanyRosterData() {
+  const database = getDb();
+  const [artistRows, assignmentRows, residencyRows] = await Promise.all([
+    database.select({
+      id: talent.id,
+      stageName: talent.stageName,
+      homeMarket: talent.homeMarket,
+      genres: talent.genres,
+      instagramHandle: talent.instagramHandle,
+      talentStatus: talent.talentStatus,
+      archivedAt: talent.archivedAt,
+      exclusiveResidencyId: talent.exclusiveResidencyId,
+    }).from(talent)
+      .where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt)))
+      .orderBy(asc(talent.stageName)),
+    database.select({
+      talentId: residencyTalent.talentId,
+      residencyId: residencyTalent.residencyId,
+      residencyName: residencies.name,
+    }).from(residencyTalent)
+      .innerJoin(residencies, eq(residencyTalent.residencyId, residencies.id))
+      .where(and(
+        eq(residencyTalent.active, true),
+        eq(residencies.active, true),
+        eq(residencies.operatingMode, "operations"),
+      ))
+      .orderBy(asc(residencies.name)),
+    getResidencyList(),
+  ]);
+
+  return {
+    artists: artistRows.map((artist) => ({
+      ...artist,
+      assignedResidencies: assignmentRows
+        .filter((assignment) => assignment.talentId === artist.id)
+        .map((assignment) => ({ id: assignment.residencyId, name: assignment.residencyName })),
+    })),
+    residencies: residencyRows,
+  };
 }
 
 export async function getInvoices(residencyId?: string) {
@@ -543,7 +589,7 @@ export async function getSetupData() {
       defaultTalentRateCents: residencies.defaultTalentRateCents,
       clientHourlyRateCents: residencies.clientHourlyRateCents,
     }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name)),
-    database.select({ id: talent.id, stageName: talent.stageName, homeMarket: talent.homeMarket }).from(talent).where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
+    database.select({ id: talent.id, stageName: talent.stageName, homeMarket: talent.homeMarket, exclusiveResidencyId: talent.exclusiveResidencyId }).from(talent).where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
     database.select({ residencyId: residencyTalent.residencyId, talentId: residencyTalent.talentId }).from(residencyTalent).where(eq(residencyTalent.active, true)),
     database.select({
       id: residencyContacts.id,
