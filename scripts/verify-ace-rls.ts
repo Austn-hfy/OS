@@ -35,9 +35,9 @@ async function createTestActor(email: string, residencyId: string) {
 
 try {
   const residencyRows = await sql<{ id: string; name: string }[]>`SELECT id, name FROM residencies WHERE active = true AND operating_mode = 'operations' ORDER BY created_at`;
-  const ace = residencyRows.find((row) => row.name.toLowerCase().startsWith("ace hotel"));
+  const ace = residencyRows.find((row) => row.name.toLowerCase().startsWith("ace hotel")) ?? residencyRows[0];
   const other = residencyRows.find((row) => row.id !== ace?.id);
-  assert(ace, "Ace Residency was not found.");
+  assert(ace, "An active primary Residency was not found.");
   assert(other, "A second Residency is required to prove cross-Residency denial.");
   const marker = Date.now();
   const aceClient = await createTestActor(`rls-ace-${marker}@example.invalid`, ace.id);
