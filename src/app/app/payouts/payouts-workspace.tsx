@@ -4,9 +4,10 @@ import { useActionState, useEffect, useMemo, useState, type KeyboardEvent, type 
 import { changeAssignmentPaidDateAction, markAssignmentPaidAction, type ResidencyActionState } from "@/app/app/actions";
 import { Status } from "@/components/format";
 import { PrivateValue } from "@/components/privacy-mode";
-import type { getPayoutQueue } from "@/data/internal";
+import type { getPayoutQueue, getResidencyList } from "@/data/internal";
 
 type PayoutRow = Awaited<ReturnType<typeof getPayoutQueue>>[number];
+type ResidencyOption = Awaited<ReturnType<typeof getResidencyList>>[number];
 type PayoutTab = "ready" | "paid" | "needs_rate" | "na" | "all";
 type SortField = "date" | "compensation";
 type SortDirection = "asc" | "desc";
@@ -100,8 +101,9 @@ function ChangePaidDate({ row }: { row: PayoutRow }) {
   </form>;
 }
 
-export function PayoutsWorkspace({ rows }: { rows: PayoutRow[] }) {
+export function PayoutsWorkspace({ rows, residencies, companyWide }: { rows: PayoutRow[]; residencies: ResidencyOption[]; companyWide: boolean }) {
   const [tab, setTab] = useState<PayoutTab>("ready");
+  const [residencyId, setResidencyId] = useState("all");
   const [query, setQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -122,10 +124,11 @@ export function PayoutsWorkspace({ rows }: { rows: PayoutRow[] }) {
     };
   }, [selectedId]);
 
-  const tabCounts = useMemo(() => Object.fromEntries(tabs.map((item) => [item.id, rows.filter((row) => matchesTab(row, item.id)).length])) as Record<PayoutTab, number>, [rows]);
+  const scopedRows = useMemo(() => residencyId === "all" ? rows : rows.filter((row) => row.residencyId === residencyId), [residencyId, rows]);
+  const tabCounts = useMemo(() => Object.fromEntries(tabs.map((item) => [item.id, scopedRows.filter((row) => matchesTab(row, item.id)).length])) as Record<PayoutTab, number>, [scopedRows]);
   const filteredRows = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return rows.filter((row) => matchesTab(row, tab))
+    return scopedRows.filter((row) => matchesTab(row, tab))
       .filter((row) => !normalized || row.talentName?.toLowerCase().includes(normalized) || row.talentFullName?.toLowerCase().includes(normalized))
       .filter((row) => {
         const relevantDate = tab === "paid" && row.paidAt ? dateInputValue(row.paidAt, row.residencyTimezone) : row.serviceDate;
@@ -148,7 +151,7 @@ export function PayoutsWorkspace({ rows }: { rows: PayoutRow[] }) {
           : left.totalCompensationCents - right.totalCompensationCents;
         return sortDirection === "asc" ? difference : -difference;
       });
-  }, [dateFrom, dateTo, query, rows, sortDirection, sortField, tab]);
+  }, [dateFrom, dateTo, query, scopedRows, sortDirection, sortField, tab]);
   const paidGroups = useMemo(() => {
     if (tab !== "paid") return [];
     const groups = new Map<string, PayoutRow[]>();
@@ -197,6 +200,7 @@ export function PayoutsWorkspace({ rows }: { rows: PayoutRow[] }) {
     <nav className="payout-tabs" aria-label="Payout status views">{tabs.map((item) => <button className={tab === item.id ? "active" : ""} type="button" onClick={() => changeTab(item.id)} key={item.id}><span>{item.label}</span><strong>{tabCounts[item.id]}</strong></button>)}</nav>
 
     <section className="payout-filter-bar" aria-label="Payout filters">
+      {companyWide ? <div className="field"><label htmlFor="payout-residency-filter">Residency</label><select id="payout-residency-filter" value={residencyId} onChange={(event) => { setResidencyId(event.target.value); setSelectedId(null); }}><option value="all">All Residencies</option>{residencies.map((residency) => <option value={residency.id} key={residency.id}>{residency.name}</option>)}</select></div> : null}
       <div className="field payout-search"><label htmlFor="payout-artist-search">Artist</label><input id="payout-artist-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search artist name" /></div>
       <div className="payout-date-range"><div className="field"><label htmlFor="payout-date-from">From</label><input id="payout-date-from" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></div><div className="field"><label htmlFor="payout-date-to">To</label><input id="payout-date-to" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></div></div>
       <div className="field payout-sort"><label htmlFor="payout-sort">Sort by</label><select id="payout-sort" value={sortField} onChange={(event) => setSortField(event.target.value as SortField)}><option value="date">{tab === "paid" ? "Paid Date" : "Date"}</option><option value="compensation">Total Compensation</option></select></div>

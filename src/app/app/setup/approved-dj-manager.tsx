@@ -39,8 +39,8 @@ export function ApprovedDjManager({
   return <form action={action} className="card approved-dj-manager">
     <input name="payload" type="hidden" value={payload} />
     <div className="setup-card-heading">
-      <div><p className="eyebrow">Approved DJs</p><h2>Residency artist list</h2><p className="subhead">Checked artists are available when scheduling this Residency. Existing bookings are never removed.</p></div>
-      <strong>{selected.size} approved</strong>
+      <div><p className="eyebrow">Roster assignments</p><h2>Residency artist list</h2><p className="subhead">Checked artists are explicitly assigned to this Residency and available for new bookings. Existing bookings are never removed.</p></div>
+      <strong>{selected.size} assigned</strong>
     </div>
     <label className="approved-dj-search"><span>Search artists</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Artist name or market" /></label>
     <div className="approved-dj-list">
@@ -51,6 +51,6 @@ export function ApprovedDjManager({
       {!visible.length ? <p className="empty">No active artists match this search.</p> : null}
     </div>
     {state.status !== "idle" ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}
-    <div className="setup-card-actions"><span>Only active artists can be approved.</span><button className="button" type="submit" disabled={pending}>{pending ? "Saving…" : "Save approved DJs"}</button></div>
+    <div className="setup-card-actions"><span>Only active, eligible artists can be assigned.</span><button className="button" type="submit" disabled={pending}>{pending ? "Saving…" : "Save Roster"}</button></div>
   </form>;
 }

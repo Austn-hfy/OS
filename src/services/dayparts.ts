@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, invoiceLineItems, invoices, residencies, scheduleOccurrences, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, shifts, talent } from "@/db/schema";
 import { validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartType } from "@/domain/dayparts";
 import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import type { AuditActor } from "@/lib/auth";
@@ -389,6 +389,11 @@ export async function getActiveTalentLookup(residencyId?: string) {
     priority: talent.priority,
     instagramHandle: talent.instagramHandle,
   }).from(talent)
+    .innerJoin(residencyTalent, and(
+      eq(residencyTalent.talentId, talent.id),
+      eq(residencyTalent.residencyId, residencyId),
+      eq(residencyTalent.active, true),
+    ))
     .where(and(
       eq(talent.talentStatus, "active"),
       isNull(talent.archivedAt),

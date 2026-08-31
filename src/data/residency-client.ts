@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, dayparts, invoices, residencies, residencyContacts, shifts, talent, users } from "@/db/schema";
+import { assignments, dayparts, invoices, residencies, residencyContacts, residencyTalent, shifts, talent, users } from "@/db/schema";
 import { projectClientSafeRoster } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
 
@@ -69,6 +69,11 @@ export async function getResidencyClientSafeRoster(residencyId: string) {
     genres: talent.genres,
     instagramHandle: talent.instagramHandle,
   }).from(talent)
+    .innerJoin(residencyTalent, and(
+      eq(residencyTalent.talentId, talent.id),
+      eq(residencyTalent.residencyId, residencyId),
+      eq(residencyTalent.active, true),
+    ))
     .where(and(
       eq(talent.talentStatus, "active"),
       isNull(talent.archivedAt),

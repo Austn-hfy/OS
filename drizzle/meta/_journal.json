@@ -176,6 +176,13 @@
       "when": 1788163199001,
       "tag": "0024_ambitious_doctor_faustus",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788181200000,
+      "tag": "0025_explicit_residency_roster_visibility",
+      "breakpoints": true
     }
   ]
 }

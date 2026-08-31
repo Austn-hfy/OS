@@ -11,6 +11,6 @@ export default async function PayoutsPage({ searchParams }: { searchParams: Prom
   const readyTotal = readyRows.reduce((sum, row) => sum + row.totalCompensationCents, 0);
   return <>
     <header className="page-header payout-page-header"><div><p className="eyebrow">{selected?.name ?? "HFY company"}</p><h1>Payouts</h1><p className="subhead"><strong><PrivateValue>{formatMoney(readyTotal)}</PrivateValue></strong> ready to pay across {readyRows.length} Assignment{readyRows.length === 1 ? "" : "s"}. Completed eligible work still enters this queue automatically.</p></div></header>
-    <PayoutsWorkspace rows={rows} />
+    <PayoutsWorkspace rows={rows} residencies={residencies} companyWide={!selected} />
   </>;
 }
