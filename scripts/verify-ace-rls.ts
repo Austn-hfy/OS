@@ -39,6 +39,7 @@ try {
   const other = residencyRows.find((row) => row.id !== ace?.id);
   assert(ace, "An active primary Residency was not found.");
   assert(other, "A second Residency is required to prove cross-Residency denial.");
+  const primaryLabel = ace.name;
   const marker = Date.now();
   const aceClient = await createTestActor(`rls-ace-${marker}@example.invalid`, ace.id);
   const otherClient = await createTestActor(`rls-other-${marker}@example.invalid`, other.id);
@@ -53,10 +54,10 @@ try {
   await sql`
     INSERT INTO talent (id, stage_name, roster_status, talent_status, exclusive_residency_id) VALUES
       (${rosterFixtures.unassigned}, ${`RLS Unassigned ${marker}`}, 'ready', 'active', NULL),
-      (${rosterFixtures.aceOnly}, ${`RLS Ace ${marker}`}, 'ready', 'active', NULL),
+      (${rosterFixtures.aceOnly}, ${`RLS Primary ${marker}`}, 'ready', 'active', NULL),
       (${rosterFixtures.otherOnly}, ${`RLS Other ${marker}`}, 'ready', 'active', NULL),
       (${rosterFixtures.both}, ${`RLS Both ${marker}`}, 'ready', 'active', NULL),
-      (${rosterFixtures.aceExclusive}, ${`RLS Ace Exclusive ${marker}`}, 'ready', 'active', ${ace.id})
+      (${rosterFixtures.aceExclusive}, ${`RLS Primary Exclusive ${marker}`}, 'ready', 'active', ${ace.id})
   `;
   await sql`
     INSERT INTO residency_talent (residency_id, talent_id, active) VALUES
@@ -68,52 +69,52 @@ try {
   `;
 
   const aceResidencies = await aceClient.from("residencies").select("id,name");
-  assert(!aceResidencies.error, `Ace safe Residency query failed: ${aceResidencies.error?.message}`);
-  assert(aceResidencies.data?.length === 1 && aceResidencies.data[0]?.id === ace.id, "Ace actor could see a Residency outside Ace.");
+  assert(!aceResidencies.error, `${primaryLabel} safe Residency query failed: ${aceResidencies.error?.message}`);
+  assert(aceResidencies.data?.length === 1 && aceResidencies.data[0]?.id === ace.id, `${primaryLabel} actor could see another Residency.`);
   const otherResidencies = await otherClient.from("residencies").select("id,name");
   assert(!otherResidencies.error, `Other safe Residency query failed: ${otherResidencies.error?.message}`);
-  assert(otherResidencies.data?.length === 1 && otherResidencies.data[0]?.id === other.id, "Other actor could see Ace.");
+  assert(otherResidencies.data?.length === 1 && otherResidencies.data[0]?.id === other.id, `Other actor could see ${primaryLabel}.`);
 
   const aceRoster = await aceClient.from("talent").select("id,stage_name,home_market,genres,instagram_handle").in("id", Object.values(rosterFixtures));
-  assert(!aceRoster.error, `Ace safe roster query failed: ${aceRoster.error?.message}`);
+  assert(!aceRoster.error, `${primaryLabel} safe roster query failed: ${aceRoster.error?.message}`);
   const aceRosterIds = new Set(aceRoster.data?.map((row) => row.id));
-  assert(!aceRosterIds.has(rosterFixtures.unassigned), "Ace could see an unassigned shared artist.");
-  assert(aceRosterIds.has(rosterFixtures.aceOnly), "Ace could not see its explicitly assigned shared artist.");
-  assert(!aceRosterIds.has(rosterFixtures.otherOnly), "Ace could see an artist assigned only to another Residency.");
-  assert(aceRosterIds.has(rosterFixtures.both), "Ace could not see a shared artist explicitly assigned to both Residencies.");
-  assert(aceRosterIds.has(rosterFixtures.aceExclusive), "Ace could not see its explicitly assigned exclusive artist.");
+  assert(!aceRosterIds.has(rosterFixtures.unassigned), `${primaryLabel} could see an unassigned shared artist.`);
+  assert(aceRosterIds.has(rosterFixtures.aceOnly), `${primaryLabel} could not see its explicitly assigned shared artist.`);
+  assert(!aceRosterIds.has(rosterFixtures.otherOnly), `${primaryLabel} could see an artist assigned only to another Residency.`);
+  assert(aceRosterIds.has(rosterFixtures.both), `${primaryLabel} could not see a shared artist explicitly assigned to both Residencies.`);
+  assert(aceRosterIds.has(rosterFixtures.aceExclusive), `${primaryLabel} could not see its explicitly assigned exclusive artist.`);
 
   const otherRoster = await otherClient.from("talent").select("id,stage_name,home_market,genres,instagram_handle").in("id", Object.values(rosterFixtures));
   assert(!otherRoster.error, `Other safe roster query failed: ${otherRoster.error?.message}`);
   const otherRosterIds = new Set(otherRoster.data?.map((row) => row.id));
   assert(!otherRosterIds.has(rosterFixtures.unassigned), "Other Residency could see an unassigned shared artist.");
-  assert(!otherRosterIds.has(rosterFixtures.aceOnly), "Other Residency could see Ace-only assigned artist.");
+  assert(!otherRosterIds.has(rosterFixtures.aceOnly), `Other Residency could see ${primaryLabel}-only assigned artist.`);
   assert(otherRosterIds.has(rosterFixtures.otherOnly), "Other Residency could not see its explicitly assigned shared artist.");
   assert(otherRosterIds.has(rosterFixtures.both), "Other Residency could not see a shared artist assigned to both.");
-  assert(!otherRosterIds.has(rosterFixtures.aceExclusive), "Other Residency could see Ace's exclusive artist.");
+  assert(!otherRosterIds.has(rosterFixtures.aceExclusive), `Other Residency could see ${primaryLabel}'s exclusive artist.`);
 
   const aceDayparts = await aceClient.from("dayparts").select("id,residency_id,name");
-  assert(!aceDayparts.error, `Ace Daypart query failed: ${aceDayparts.error?.message}`);
-  assert(aceDayparts.data?.every((row) => row.residency_id === ace.id), "Ace actor could retrieve another Residency's Daypart.");
+  assert(!aceDayparts.error, `${primaryLabel} Daypart query failed: ${aceDayparts.error?.message}`);
+  assert(aceDayparts.data?.every((row) => row.residency_id === ace.id), `${primaryLabel} actor could retrieve another Residency's Daypart.`);
   const otherDaypartIds = (await sql<{ id: string }[]>`SELECT id FROM dayparts WHERE residency_id = ${other.id}`).map((row) => row.id);
-  assert(!aceDayparts.data?.some((row) => otherDaypartIds.includes(row.id)), "Ace actor retrieved a known foreign Daypart.");
+  assert(!aceDayparts.data?.some((row) => otherDaypartIds.includes(row.id)), `${primaryLabel} actor retrieved a known foreign Daypart.`);
 
   const forbiddenRate = await aceClient.from("residencies").select("id,default_talent_rate_cents");
-  assert(Boolean(forbiddenRate.error), "Ace actor could retrieve a Residency rate column.");
+  assert(Boolean(forbiddenRate.error), `${primaryLabel} actor could retrieve a Residency rate column.`);
   const forbiddenInvoice = await aceClient.from("invoices").select("id,residency_id");
-  assert(Boolean(forbiddenInvoice.error), "Ace actor could retrieve Invoice data.");
+  assert(Boolean(forbiddenInvoice.error), `${primaryLabel} actor could retrieve Invoice data.`);
   const forbiddenPayment = await aceClient.from("talent_payment_profiles").select("talent_id,last_four");
-  assert(Boolean(forbiddenPayment.error), "Ace actor could retrieve Talent payment data.");
+  assert(Boolean(forbiddenPayment.error), `${primaryLabel} actor could retrieve Talent payment data.`);
   const forbiddenTalentContact = await aceClient.from("talent").select("id,email,phone");
-  assert(Boolean(forbiddenTalentContact.error), "Ace actor could retrieve Talent contact data.");
+  assert(Boolean(forbiddenTalentContact.error), `${primaryLabel} actor could retrieve Talent contact data.`);
   const forbiddenWrite = await aceClient.from("dayparts").update({ name: "RLS should reject" }).eq("residency_id", other.id);
-  assert(Boolean(forbiddenWrite.error), "Ace actor could mutate a foreign Daypart through the Data API.");
+  assert(Boolean(forbiddenWrite.error), `${primaryLabel} actor could mutate a foreign Daypart through the Data API.`);
 
   process.stdout.write(JSON.stringify({
     passed: true,
     checks: [
-      "Ace reads only Ace Residency",
-      "other Residency cannot read Ace",
+      `${primaryLabel} reads only its own Residency`,
+      `other Residency cannot read ${primaryLabel}`,
       "Dayparts are Residency-scoped",
       "rate columns denied",
       "Invoices denied",
