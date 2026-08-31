@@ -1,6 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm build",
+  "git": {
+    "deploymentEnabled": {
+      "codex/performance-pdx1-region": false,
+      "codex/performance-supabase-lifecycle": false
+    }
+  },
+  "regions": ["pdx1"],
   "crons": [
     {
       "path": "/api/cron/auto-complete",
