@@ -2,11 +2,43 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("owner View As safety", () => {
-  it("hides Daypart financial controls just like the Residency-member workspace", async () => {
-    const source = await readFile(new URL("../src/components/internal-shell.tsx", import.meta.url), "utf8");
-    const viewAsBranch = source.match(/if \(viewAsResidency\) \{([\s\S]*?)\n  \}\n\n  return \(/)?.[1] ?? "";
+  it("routes View As through the exact real Residency-member route tree and shell", async () => {
+    const [viewAsActions, residencyLayout, internalShell, internalCalendar] = await Promise.all([
+      readFile(new URL("../src/app/app/view-as-actions.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/layout.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/internal-shell.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/calendar/page.tsx", import.meta.url), "utf8"),
+    ]);
+    expect(viewAsActions).toContain('redirect("/residency/calendar")');
+    expect(residencyLayout).toContain("<ResidencyShell actor={actor}>");
+    expect(internalShell).not.toContain("if (viewAsResidency)");
+    expect(internalShell).not.toContain("Residency preview");
+    expect(internalCalendar).not.toContain("viewAsResidencyId");
+    expect(internalCalendar).not.toContain("previewResidencyId");
+  });
 
-    expect(viewAsBranch).toContain("<DayPartsPanel");
-    expect(viewAsBranch).toContain("hideFinancials");
+  it("keeps every client page independent of preview state so both actors render the same pages", async () => {
+    const clientPages = [
+      "../src/app/residency/page.tsx",
+      "../src/app/residency/calendar/page.tsx",
+      "../src/app/residency/talent/page.tsx",
+      "../src/app/residency/payouts/page.tsx",
+      "../src/app/residency/invoices/page.tsx",
+      "../src/app/residency/settings/page.tsx",
+    ];
+    const sources = await Promise.all(clientPages.map((page) => readFile(new URL(page, import.meta.url), "utf8")));
+    for (const source of sources) {
+      expect(source).toContain("requireResidencyActor");
+      expect(source).not.toContain("isViewAs");
+      expect(source).not.toContain("viewAsResidencyId");
+    }
+  });
+
+  it("marks an owner preview as a Residency actor before shared manager actions run", async () => {
+    const source = await readFile(new URL("../src/lib/auth.ts", import.meta.url), "utf8");
+    expect(source).toContain('current.profile.role === "internal_admin"');
+    expect(source).toContain("isViewAs: true");
+    expect(source).toContain("if (await viewAsResidencyId() === residencyId)");
+    expect(source).toContain("return previewActor");
   });
 });

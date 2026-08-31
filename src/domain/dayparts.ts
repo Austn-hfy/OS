@@ -46,6 +46,14 @@ export type ProjectedDaypartSlot = {
   endMinute: number;
 };
 
+export type DaypartDateException = {
+  daypartId: string;
+  serviceDate: string;
+  kind: "skip" | "override";
+  startMinute: number | null;
+  endMinute: number | null;
+};
+
 export type SlotSchedulingStatus = "empty" | "partial" | "filled";
 
 export function weekdayForDate(serviceDate: string): number {
@@ -176,12 +184,16 @@ export function projectDaypartSlots(
   rangeStart: string,
   rangeEnd: string,
   existingDaypartDates: ReadonlySet<string> = new Set(),
+  dateExceptions: readonly DaypartDateException[] = [],
 ): ProjectedDaypartSlot[] {
   weekdayForDate(rangeStart);
   weekdayForDate(rangeEnd);
   if (rangeEnd < rangeStart) throw new Error("The projection end date must be on or after its start date.");
 
   const slots: ProjectedDaypartSlot[] = [];
+  const exceptionsByDaypartDate = new Map(
+    dateExceptions.map((exception) => [`${exception.daypartId}:${exception.serviceDate}`, exception] as const),
+  );
   let date = rangeStart;
   let daysVisited = 0;
   while (date <= rangeEnd) {
@@ -191,6 +203,11 @@ export function projectDaypartSlots(
       if (!daypart.active || (daypart.activeUntil && date > daypart.activeUntil)) continue;
       const rule = daypart.rules.find((item) => item.weekday === weekday);
       if (!rule || existingDaypartDates.has(`${daypart.id}:${date}`)) continue;
+      const dateException = exceptionsByDaypartDate.get(`${daypart.id}:${date}`);
+      if (dateException?.kind === "skip") continue;
+      const startMinute = dateException?.kind === "override" ? dateException.startMinute : rule.startMinute;
+      const endMinute = dateException?.kind === "override" ? dateException.endMinute : rule.endMinute;
+      if (startMinute === null || endMinute === null) continue;
       slots.push({
         id: `projected:${daypart.id}:${date}`,
         date,
@@ -202,8 +219,8 @@ export function projectDaypartSlots(
         billingMode: daypart.billingMode,
         defaultTalentRateCents: daypart.defaultTalentRateCents,
         defaultDjCount: rule.defaultDjCount ?? null,
-        startMinute: rule.startMinute,
-        endMinute: rule.endMinute,
+        startMinute,
+        endMinute,
       });
     }
     date = addDays(date, 1);

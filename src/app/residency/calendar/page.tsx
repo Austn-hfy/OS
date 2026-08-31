@@ -4,19 +4,20 @@ import { getResidencyClientSafeRoster } from "@/data/residency-client";
 import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { requireResidencyActor } from "@/lib/auth";
 import { calendarToneForSlot, monthRange, normalizeMonthKey } from "@/lib/calendar";
-import { getDaypartsForResidency } from "@/services/dayparts";
+import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar, type ResidencyEvent } from "@/app/app/calendar/residency-calendar";
 
 export default async function ResidencyClientCalendarPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const [actor, params] = await Promise.all([requireResidencyActor(), searchParams]);
   const monthKey = normalizeMonthKey(params.month);
   const range = monthRange(monthKey);
-  const [calendar, occurrences, dayparts, roster, calendarLinkSettings] = await Promise.all([
+  const [calendar, occurrences, dayparts, roster, calendarLinkSettings, dateExceptions] = await Promise.all([
     getCalendarData(actor.residencyId, range),
     getScheduleOccurrenceData(actor.residencyId, range),
     getDaypartsForResidency(actor.residencyId),
     getResidencyClientSafeRoster(actor.residencyId),
     getPublicCalendarLinkSettings(actor.residencyId),
+    getDaypartDateExceptionsForResidencies([actor.residencyId], range),
   ]);
 
   const savedShifts: ResidencyEvent[] = calendar.map((shift) => {
@@ -69,7 +70,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
     ...calendar.flatMap((shift) => shift.daypartId ? [`${shift.daypartId}:${shift.serviceDate}`] : []),
     ...occurrences.map((occurrence) => `${occurrence.daypartId}:${occurrence.serviceDate}`),
   ]);
-  const projected: ResidencyEvent[] = projectDaypartSlots(dayparts, range.from, range.to, existing).map((slot) => ({
+  const projected: ResidencyEvent[] = projectDaypartSlots(dayparts, range.from, range.to, existing, dateExceptions).map((slot) => ({
     id: slot.id, date: slot.date, title: slot.name, time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · Needs scheduling`,
     residencyName: "Projected from Day Parts", color: slot.color, daypartId: slot.daypartId, shiftStartMinute: slot.startMinute, shiftEndMinute: slot.endMinute,
     projected: true, recordType: "projected", daypartType: slot.type, billingMode: slot.billingMode, defaultDjCount: slot.defaultDjCount,
@@ -86,6 +87,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
     residency={{ id: actor.residencyId, name: actor.residencyName, timezone: actor.residencyTimezone, defaultTalentRateCents: 0, clientHourlyRateCents: 0, calendarLinkSettings }}
     monthKey={monthKey} events={events} dayparts={safeDayparts}
     talent={roster.map((artist) => ({ ...artist, priority: null }))}
+    dateExceptions={dateExceptions}
     previewMode calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}
   /></div>;
 }

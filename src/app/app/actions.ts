@@ -11,7 +11,7 @@ import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { requireActorForResidency, requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
-import { removeDaypart, saveDaypart } from "@/services/dayparts";
+import { clearDaypartDateException, removeDaypart, saveDaypart, saveDaypartDateOverride, skipDaypartDate } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
 import { addAssignmentToShift, createResidencyDateBooking } from "@/services/residency-bookings";
 import { createShift, deleteShift } from "@/services/shifts";
@@ -1129,6 +1129,60 @@ export async function removeDaypartAction(formData: FormData): Promise<Residency
     };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to remove this Daypart." };
+  }
+}
+
+const daypartDateActionSchema = z.object({
+  residencyId: z.uuid(),
+  daypartId: z.uuid(),
+  serviceDate: z.iso.date(),
+});
+
+function revalidateResidencyCalendars() {
+  revalidatePath("/app/calendar");
+  revalidatePath("/residency/calendar");
+}
+
+export async function saveDaypartDateOverrideAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = daypartDateActionSchema.extend({
+      startMinute: z.coerce.number().int().min(0).max(1439),
+      endMinute: z.coerce.number().int().min(1).max(2879),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    await saveDaypartDateOverride(actor, parsed);
+    revalidateResidencyCalendars();
+    return { status: "success", message: "This date now uses custom hours. The standing Daypart was not changed." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to change this date's hours." };
+  }
+}
+
+export async function skipDaypartDateAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = daypartDateActionSchema.parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    await skipDaypartDate(actor, parsed);
+    revalidateResidencyCalendars();
+    revalidatePath("/residency/payouts");
+    revalidatePath("/residency/invoices");
+    revalidatePath("/app/payouts");
+    revalidatePath("/app/invoices");
+    return { status: "success", message: "This date was skipped. The standing Daypart remains unchanged." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to skip this date." };
+  }
+}
+
+export async function clearDaypartDateExceptionAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = daypartDateActionSchema.parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    await clearDaypartDateException(actor, parsed);
+    revalidateResidencyCalendars();
+    return { status: "success", message: "This date now follows the standing Daypart again." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to restore the standing Daypart." };
   }
 }
 

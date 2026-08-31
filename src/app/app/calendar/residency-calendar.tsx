@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState, type CSSProperties } from "react";
-import { addCalendarAssignmentAction, bookResidencyDateAction, deleteCalendarShiftAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, type ResidencyActionState } from "@/app/app/actions";
+import { addCalendarAssignmentAction, bookResidencyDateAction, clearDaypartDateExceptionAction, deleteCalendarShiftAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, type ResidencyActionState } from "@/app/app/actions";
 import { ArtistSearchPicker } from "@/components/artist-search-picker";
 import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
@@ -10,7 +11,7 @@ import { Status } from "@/components/format";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
-import { clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, weekdayForDate, weekdayNames } from "@/domain/dayparts";
+import { clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, weekdayForDate, weekdayNames, type DaypartDateException } from "@/domain/dayparts";
 import { monthLabel, shiftMonthKey } from "@/lib/calendar";
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
@@ -59,13 +60,14 @@ type ResidencyCalendarProps = {
     rules: Array<{ weekday: number; startMinute: number; endMinute: number; defaultDjCount: number | null }>;
   }>;
   talent: Array<{ id: string; stageName: string; homeMarket: string; genres: string[]; priority: number | null }>;
+  dateExceptions: DaypartDateException[];
   previewMode?: boolean;
   calendarBasePath?: string;
   canManage?: boolean;
 };
 
 type SlotDraft = { id: string; talentId: string; start: string; end: string; confirmed: boolean; compensationType: "hourly" | "fixed" | "na"; rateOverride: string; fixedFee: string };
-type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; name: string; room: string; color: string; type: DaypartType; billingMode: DaypartBillingMode | null; defaultTalentRateCents: number | null; defaultDjCount: number | null; existing: boolean; start: string; end: string; clientRateOverride: string; notes: string; programDetails: string; manualHostName: string; slots: SlotDraft[] };
+type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; exceptionKind: "skip" | "override" | null; name: string; room: string; color: string; type: DaypartType; billingMode: DaypartBillingMode | null; defaultTalentRateCents: number | null; defaultDjCount: number | null; existing: boolean; start: string; end: string; clientRateOverride: string; notes: string; programDetails: string; manualHostName: string; slots: SlotDraft[] };
 type ReplacementDraft = { assignmentId: string; talentId: string; start: string; end: string };
 type ModalState = { type: "add"; date: string } | { type: "edit"; eventId: string } | null;
 type StatusFilter = "needs" | "all" | "filled";
@@ -82,7 +84,8 @@ function emptySlot(talentId: string, start: string, end: string): SlotDraft {
   return { id: crypto.randomUUID(), talentId, start, end, confirmed: false, compensationType: "hourly", rateOverride: "", fixedFee: "" };
 }
 
-export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, previewMode = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, dateExceptions, previewMode = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
+  const router = useRouter();
   const [modal, setModal] = useState<ModalState>(null);
   const [suggestions, setSuggestions] = useState<SuggestionDraft[]>([]);
   const [activeDaypartId, setActiveDaypartId] = useState("");
@@ -92,6 +95,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   const [newAssignmentDraft, setNewAssignmentDraft] = useState<SlotDraft | null>(null);
   const [editState, setEditState] = useState<ResidencyActionState>(initialActionState);
   const [editPending, setEditPending] = useState(false);
+  const [dateActionState, setDateActionState] = useState<ResidencyActionState>(initialActionState);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [daypartFilter, setDaypartFilter] = useState("all");
   const submitBooking = async (previous: ResidencyActionState, formData: FormData) => {
@@ -157,13 +161,17 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
       const recurringRule = daypart.rules.find((item) => item.weekday === weekday);
       const rule = recurringRule ?? daypart.rules[0];
       if (!rule) return [];
-      const start = minuteToClock(rule.startMinute);
-      const end = minuteToClock(rule.endMinute);
+      const dateException = dateExceptions.find((item) => item.daypartId === daypart.id && item.serviceDate === date);
+      const startMinute = dateException?.kind === "override" && dateException.startMinute !== null ? dateException.startMinute : rule.startMinute;
+      const endMinute = dateException?.kind === "override" && dateException.endMinute !== null ? dateException.endMinute : rule.endMinute;
+      const start = minuteToClock(startMinute);
+      const end = minuteToClock(endMinute);
       return [{
         daypartId: daypart.id,
         sourceDaypartId: daypart.id,
         oneTime: false,
         recurringToday: Boolean(recurringRule),
+        exceptionKind: dateException?.kind ?? null,
         name: daypart.name,
         room: daypart.room,
         color: daypart.color,
@@ -186,6 +194,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
       sourceDaypartId: null,
       oneTime: true,
       recurringToday: false,
+      exceptionKind: null,
       name: "",
       room: "",
       color: "#7A65D1",
@@ -210,6 +219,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     setReplacementDraft(null);
     setNewAssignmentDraft(null);
     setEditState(initialActionState);
+    setDateActionState(initialActionState);
     setModal({ type: "add", date });
   }
 
@@ -222,6 +232,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     setReplacementDraft(null);
     setNewAssignmentDraft(null);
     setEditState(initialActionState);
+    setDateActionState(initialActionState);
     setModal({ type: "edit", eventId: event.id });
   }
 
@@ -479,6 +490,71 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     if (result.status === "success") setModal(null);
   }
 
+  async function saveDateOverride() {
+    if (modal?.type !== "add" || !activeSuggestion?.sourceDaypartId) return;
+    let startMinute: number;
+    let endMinute: number;
+    try {
+      startMinute = clockToMinute(activeSuggestion.start);
+      endMinute = resolveEndMinute(startMinute, activeSuggestion.end);
+    } catch {
+      setDateActionState({ status: "error", message: "Choose valid hours for this date." });
+      return;
+    }
+    const formData = new FormData();
+    formData.set("residencyId", residency.id);
+    formData.set("daypartId", activeSuggestion.sourceDaypartId);
+    formData.set("serviceDate", modal.date);
+    formData.set("startMinute", String(startMinute));
+    formData.set("endMinute", String(endMinute));
+    setEditPending(true);
+    const result = await saveDaypartDateOverrideAction(formData);
+    setEditPending(false);
+    setDateActionState(result);
+    if (result.status === "success") {
+      setModal(null);
+      router.refresh();
+    }
+  }
+
+  async function skipSelectedDate() {
+    const daypartId = modal?.type === "add" ? activeSuggestion?.sourceDaypartId : editingEvent?.daypartId;
+    const serviceDate = modal?.type === "add" ? modal.date : editingEvent?.date;
+    if (!daypartId || !serviceDate) return;
+    const message = editingEvent
+      ? `Skip ${editingEvent.title} on ${serviceDate}? Its dated schedule and any uncompleted DJ assignments will be removed, but the standing Daypart will remain.`
+      : `Skip this Daypart on ${serviceDate}? Its standing weekly pattern will remain unchanged.`;
+    if (!window.confirm(message)) return;
+    const formData = new FormData();
+    formData.set("residencyId", residency.id);
+    formData.set("daypartId", daypartId);
+    formData.set("serviceDate", serviceDate);
+    setEditPending(true);
+    const result = await skipDaypartDateAction(formData);
+    setEditPending(false);
+    setDateActionState(result);
+    if (result.status === "success") {
+      setModal(null);
+      router.refresh();
+    }
+  }
+
+  async function restoreStandingDate() {
+    if (modal?.type !== "add" || !activeSuggestion?.sourceDaypartId) return;
+    const formData = new FormData();
+    formData.set("residencyId", residency.id);
+    formData.set("daypartId", activeSuggestion.sourceDaypartId);
+    formData.set("serviceDate", modal.date);
+    setEditPending(true);
+    const result = await clearDaypartDateExceptionAction(formData);
+    setEditPending(false);
+    setDateActionState(result);
+    if (result.status === "success") {
+      setModal(null);
+      router.refresh();
+    }
+  }
+
   const monthHref = (target: string) => calendarBasePath === "/app/calendar"
     ? `${calendarBasePath}?residency=${residency.id}&month=${target}`
     : `${calendarBasePath}?month=${target}`;
@@ -519,14 +595,14 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
               </div> : <form action={formAction} className="quick-book-form">
                 <input name="payload" type="hidden" value={payload} />
                 {addMode === "daypart" && !directDaypartSelection ? <>
-                  <div className="quick-slot-picker" role="group" aria-label="Choose Daypart">{suggestions.filter((suggestion) => !suggestion.oneTime).map((suggestion) => <button className={`quick-slot-option ${activeSuggestion?.daypartId === suggestion.daypartId ? "active" : ""}`} style={{ "--daypart-color": suggestion.color } as CSSProperties} type="button" onClick={() => chooseSuggestion(suggestion)} key={suggestion.daypartId}><span><strong>{suggestion.name}</strong><small>{suggestion.recurringToday ? `${suggestion.room} · ${formatLocalMinute(clockToMinute(suggestion.start))}–${formatLocalMinute(resolveEndMinute(clockToMinute(suggestion.start), suggestion.end))}` : `${suggestion.room} · not normally scheduled this day`}</small></span>{suggestion.existing ? <Status value="scheduled" /> : null}</button>)}</div>
+                  <div className="quick-slot-picker" role="group" aria-label="Choose Daypart">{suggestions.filter((suggestion) => !suggestion.oneTime).map((suggestion) => <button className={`quick-slot-option ${activeSuggestion?.daypartId === suggestion.daypartId ? "active" : ""}`} style={{ "--daypart-color": suggestion.color } as CSSProperties} type="button" onClick={() => chooseSuggestion(suggestion)} key={suggestion.daypartId}><span><strong>{suggestion.name}</strong><small>{suggestion.exceptionKind === "skip" ? `${suggestion.room} · skipped on this date` : suggestion.recurringToday ? `${suggestion.room} · ${formatLocalMinute(clockToMinute(suggestion.start))}–${formatLocalMinute(resolveEndMinute(clockToMinute(suggestion.start), suggestion.end))}${suggestion.exceptionKind === "override" ? " · custom hours" : ""}` : `${suggestion.room} · not normally scheduled this day`}</small></span>{suggestion.existing ? <Status value="scheduled" /> : null}</button>)}</div>
                   {!activeSuggestion ? <div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => { const next = suggestions.find((suggestion) => suggestion.oneTime); if (next) chooseSuggestion(next); }}>+ Create one-time slot</button><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button></div> : null}
                 </> : null}
 
-                {activeSuggestion?.existing ? <div className="quick-existing"><p>This slot is already scheduled.</p><button className="button" type="button" onClick={() => openExistingDaypart(activeSuggestion.daypartId, modal.date)}>View scheduled slot</button></div> : activeSuggestion ? <>
+                {activeSuggestion?.exceptionKind === "skip" ? <div className="quick-existing"><p>This occurrence is skipped only on {modal.date}. The standing Daypart is still active.</p><button className="button" type="button" disabled={editPending} onClick={restoreStandingDate}>{editPending ? "Restoring…" : "Restore this date"}</button></div> : activeSuggestion?.existing ? <div className="quick-existing"><p>This slot is already scheduled.</p><button className="button" type="button" onClick={() => openExistingDaypart(activeSuggestion.daypartId, modal.date)}>View scheduled slot</button></div> : activeSuggestion ? <>
                   {activeSuggestion.oneTime ? <div className="quick-one-time-fields"><div className="field"><label>Slot name</label><input value={activeSuggestion.name} onChange={(event) => updateSuggestion({ name: event.target.value })} placeholder="Movie Night" required /></div><div className="field"><label>Room / space</label><input value={activeSuggestion.room} onChange={(event) => updateSuggestion({ room: event.target.value })} placeholder="Pool" required /></div><div className="field"><label>Calendar color</label><div className="daypart-color-control"><input aria-label="One-time slot color" type="color" value={activeSuggestion.color} onChange={(event) => updateSuggestion({ color: event.target.value.toUpperCase() })} /><strong>{activeSuggestion.color}</strong></div></div></div> : null}
                   {!activeSuggestion.oneTime ? <div className="quick-selected-daypart" style={{ "--daypart-color": activeSuggestion.color } as CSSProperties}><div><span>Selected Daypart</span><strong>{activeSuggestion.name}</strong><small>{activeSuggestion.room}</small></div><div className="quick-selected-window"><span>Recommended window</span><strong>{formatLocalMinute(clockToMinute(activeSuggestion.start))}–{formatLocalMinute(resolveEndMinute(clockToMinute(activeSuggestion.start), activeSuggestion.end))}</strong></div></div> : <div className="quick-time-fields"><div className="field"><label>Slot starts</label><TimeSelect ariaLabel="One-time slot start time" value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Slot ends</label><TimeSelect ariaLabel="One-time slot end time" value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div>}
-                  {!activeSuggestion.oneTime ? <details className="quick-shift-options"><summary>Change this slot&apos;s overall window</summary><div className="quick-time-fields"><div className="field"><label>Slot starts</label><TimeSelect ariaLabel={`${activeSuggestion.name} slot start time`} value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Slot ends</label><TimeSelect ariaLabel={`${activeSuggestion.name} slot end time`} value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div></details> : null}
+                  {!activeSuggestion.oneTime ? <details className="quick-shift-options" open={activeSuggestion.exceptionKind === "override"}><summary>Change this date&apos;s hours only</summary><div className="quick-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel={`${activeSuggestion.name} date-specific start time`} value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel={`${activeSuggestion.name} date-specific end time`} value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div><div className="date-exception-actions"><button className="button secondary" type="button" disabled={editPending} onClick={saveDateOverride}>{editPending ? "Saving…" : "Save hours for this date"}</button>{activeSuggestion.exceptionKind === "override" ? <button className="button secondary" type="button" disabled={editPending} onClick={restoreStandingDate}>Use standing hours again</button> : null}<button className="remove-dj-button" type="button" disabled={editPending} onClick={skipSelectedDate}>Skip this date</button></div><small>This changes or skips only {modal.date}; the weekly Daypart stays unchanged.</small></details> : null}
 
                   {activeSuggestion.type === "house_activity" ? <div className="quick-program-fields"><div className="field"><label>Program / activity details <span>optional</span></label><input value={activeSuggestion.programDetails} onChange={(event) => updateSuggestion({ programDetails: event.target.value })} placeholder="Movie title, theme, or event detail" /></div><div className="field"><label>Host / guest name <span>optional</span></label><input value={activeSuggestion.manualHostName} onChange={(event) => updateSuggestion({ manualHostName: event.target.value })} placeholder="Employee or outside host" /><small>Typed names remain informational and never become Artist, Assignment, Payout, or Invoice records.</small></div></div> : <div className="field quick-booking-notes"><label>Notes <span>optional</span></label><textarea value={activeSuggestion.notes} onChange={(event) => updateSuggestion({ notes: event.target.value })} placeholder="Anything the team should know about this booking" /></div>}
 
@@ -548,13 +624,15 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                 </> : null}
 
                 {state.status === "error" ? <p className="error" aria-live="polite">{state.message}</p> : null}
-                {activeSuggestion ? <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => { setActiveDaypartId(""); setDirectDaypartSelection(false); setAddMode("daypart"); }}>Back</button><span>Ready to schedule?</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button><button className="button" type="submit" disabled={pending || activeSuggestion.existing || !activeSuggestion.name.trim() || !activeSuggestion.room.trim() || Boolean(assignmentWarning)}>{pending ? "Saving…" : activeSuggestion.billingMode === "tracking_only" && !activeSuggestion.slots.length ? "Mark scheduled" : `Save ${activeSuggestion.name || "Daypart"}`}</button></footer> : null}
+                {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
+                {activeSuggestion && !activeSuggestion.existing && activeSuggestion.exceptionKind !== "skip" ? <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => { setActiveDaypartId(""); setDirectDaypartSelection(false); setAddMode("daypart"); }}>Back</button><span>Ready to schedule?</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button><button className="button" type="submit" disabled={pending || !activeSuggestion.name.trim() || !activeSuggestion.room.trim() || Boolean(assignmentWarning)}>{pending ? "Saving…" : activeSuggestion.billingMode === "tracking_only" && !activeSuggestion.slots.length ? "Mark scheduled" : `Save ${activeSuggestion.name || "Daypart"}`}</button></footer> : activeSuggestion ? <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => { setActiveDaypartId(""); setDirectDaypartSelection(false); setAddMode("daypart"); }}>Back</button><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer> : null}
               </form>
             ) : editingEvent ? editingEvent.recordType === "nonfinancial_occurrence" ? <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
               <div className="quick-house-activity"><strong>Tracking-only Daypart scheduled</strong><p>No payout or invoice records were created.</p>{editingEvent.programDetails ? <p><strong>Program:</strong> {editingEvent.programDetails}</p> : null}{editingEvent.manualHostName ? <p><strong>Host:</strong> {editingEvent.manualHostName}</p> : null}</div>
               {editingEvent.assignments.length ? <div className="quick-reschedule-list">{editingEvent.assignments.map((assignment, index) => <div className="quick-reschedule-row" key={assignment.id}><div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div></div>)}</div> : null}
-              <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
+              {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
+              <footer className="quick-modal-footer">{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>Skip this date</button> : null}<span>{editingEvent.daypartId ? "The standing Daypart remains active." : "One-time activity"}</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
             </> : <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
               {editingEvent.programDetails || editingEvent.manualHostName ? <div className="quick-program-fields">{editingEvent.programDetails ? <div><span>Program / activity</span><strong>{editingEvent.programDetails}</strong></div> : null}{editingEvent.manualHostName ? <div><span>Host / guest</span><strong>{editingEvent.manualHostName}</strong></div> : null}</div> : null}
@@ -585,8 +663,9 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                 </div>;
               })}</div>
               {editState.status !== "idle" ? <p className={editState.status === "error" ? "error" : "success"} aria-live="polite">{editState.message}</p> : null}
+              {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
               {!editingEvent.assignments.length ? <div className="empty quick-empty">This Shift has no Assignment slots to edit.</div> : null}
-              <footer className="quick-modal-footer"><button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingShift}>Delete Shift</button><span>Delete is blocked once financial history is finalized.</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
+              <footer className="quick-modal-footer"><button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingShift}>Delete Shift</button>{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>Skip this date</button> : null}<span>Deletion is blocked once financial history is finalized.</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
             </> : <div className="empty quick-empty">This slot is no longer available.</div>}
           </div>
         </section>

@@ -1,7 +1,8 @@
-import { and, asc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { auditLog, daypartDayRules, dayparts, residencies, scheduleOccurrences, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, invoiceLineItems, invoices, residencies, scheduleOccurrences, shifts, talent } from "@/db/schema";
 import { validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartType } from "@/domain/dayparts";
+import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import type { AuditActor } from "@/lib/auth";
 
 export type SaveDaypartInput = {
@@ -39,6 +40,171 @@ export async function getDaypartsForResidencies(residencyIds: string[]) {
     ...daypart,
     rules: ruleRows.filter((row) => row.daypart_day_rules.daypartId === daypart.id).map((row) => row.daypart_day_rules),
   }));
+}
+
+export async function getDaypartDateExceptionsForResidencies(
+  residencyIds: string[],
+  range: { from: string; to: string },
+) {
+  if (!residencyIds.length) return [];
+  return getDb().select({
+    daypartId: daypartDateExceptions.daypartId,
+    serviceDate: daypartDateExceptions.serviceDate,
+    kind: daypartDateExceptions.kind,
+    startMinute: daypartDateExceptions.startMinute,
+    endMinute: daypartDateExceptions.endMinute,
+  }).from(daypartDateExceptions)
+    .innerJoin(dayparts, eq(daypartDateExceptions.daypartId, dayparts.id))
+    .where(and(
+      inArray(dayparts.residencyId, residencyIds),
+      gte(daypartDateExceptions.serviceDate, range.from),
+      lte(daypartDateExceptions.serviceDate, range.to),
+    ))
+    .orderBy(asc(daypartDateExceptions.serviceDate), asc(daypartDateExceptions.daypartId));
+}
+
+export async function saveDaypartDateOverride(
+  actor: AuditActor,
+  input: { residencyId: string; daypartId: string; serviceDate: string; startMinute: number; endMinute: number },
+) {
+  weekdayForDate(input.serviceDate);
+  if (!Number.isInteger(input.startMinute) || input.startMinute < 0 || input.startMinute >= 1440
+    || !Number.isInteger(input.endMinute) || input.endMinute <= input.startMinute || input.endMinute > input.startMinute + 1440) {
+    throw new Error("Choose valid hours for this date.");
+  }
+  return getDb().transaction(async (tx) => {
+    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name }).from(dayparts)
+      .innerJoin(daypartDayRules, and(
+        eq(daypartDayRules.daypartId, dayparts.id),
+        eq(daypartDayRules.weekday, weekdayForDate(input.serviceDate)),
+      ))
+      .where(and(
+        eq(dayparts.id, input.daypartId),
+        eq(dayparts.residencyId, input.residencyId),
+        eq(dayparts.active, true),
+      )).limit(1);
+    if (!daypart) throw new Error("This Daypart does not normally run on the selected date.");
+    const [savedShift, savedOccurrence] = await Promise.all([
+      tx.select({ id: shifts.id }).from(shifts).where(and(eq(shifts.daypartId, input.daypartId), eq(shifts.serviceDate, input.serviceDate))).limit(1),
+      tx.select({ id: scheduleOccurrences.id }).from(scheduleOccurrences).where(and(eq(scheduleOccurrences.daypartId, input.daypartId), eq(scheduleOccurrences.serviceDate, input.serviceDate))).limit(1),
+    ]);
+    if (savedShift.length || savedOccurrence.length) {
+      throw new Error("This date is already scheduled. Remove that dated record before changing its recurring hours.");
+    }
+    await tx.insert(daypartDateExceptions).values({
+      daypartId: input.daypartId,
+      serviceDate: input.serviceDate,
+      kind: "override",
+      startMinute: input.startMinute,
+      endMinute: input.endMinute,
+      createdByUserId: actor.userId,
+    }).onConflictDoUpdate({
+      target: [daypartDateExceptions.daypartId, daypartDateExceptions.serviceDate],
+      set: {
+        kind: "override",
+        startMinute: input.startMinute,
+        endMinute: input.endMinute,
+        createdByUserId: actor.userId,
+        updatedAt: new Date(),
+      },
+    });
+    await tx.insert(auditLog).values({
+      residencyId: input.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "daypart_date_hours_overridden",
+      entityType: "daypart",
+      entityId: input.daypartId,
+      details: { serviceDate: input.serviceDate, startMinute: input.startMinute, endMinute: input.endMinute, name: daypart.name },
+    });
+  });
+}
+
+export async function skipDaypartDate(
+  actor: AuditActor,
+  input: { residencyId: string; daypartId: string; serviceDate: string },
+) {
+  weekdayForDate(input.serviceDate);
+  return getDb().transaction(async (tx) => {
+    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name }).from(dayparts)
+      .where(and(eq(dayparts.id, input.daypartId), eq(dayparts.residencyId, input.residencyId)))
+      .limit(1);
+    if (!daypart) throw new Error("Daypart not found in this Residency.");
+    const [shift] = await tx.select({
+      id: shifts.id,
+      invoiceId: shifts.invoiceId,
+      invoiceStatus: invoices.status,
+    }).from(shifts)
+      .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
+      .where(and(eq(shifts.daypartId, input.daypartId), eq(shifts.serviceDate, input.serviceDate)))
+      .limit(1);
+    if (shift) {
+      const assignmentRows = await tx.select({
+        bookingStatus: assignments.bookingStatus,
+        payoutStatus: assignments.payoutStatus,
+      }).from(assignments).where(eq(assignments.shiftId, shift.id));
+      const blockReason = shiftDeletionBlockReason(shift.invoiceStatus, assignmentRows);
+      if (blockReason) throw new Error(blockReason);
+      await tx.delete(assignments).where(eq(assignments.shiftId, shift.id));
+      await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
+      await tx.delete(shifts).where(eq(shifts.id, shift.id));
+      if (shift.invoiceId) {
+        const [remaining] = await tx.select({ total: sql<number>`coalesce(sum(${invoiceLineItems.totalCents}), 0)` })
+          .from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, shift.invoiceId));
+        await tx.update(invoices).set({ totalCents: Number(remaining?.total ?? 0), updatedAt: new Date() }).where(eq(invoices.id, shift.invoiceId));
+      }
+    }
+    await tx.delete(scheduleOccurrences).where(and(
+      eq(scheduleOccurrences.daypartId, input.daypartId),
+      eq(scheduleOccurrences.serviceDate, input.serviceDate),
+    ));
+    await tx.insert(daypartDateExceptions).values({
+      daypartId: input.daypartId,
+      serviceDate: input.serviceDate,
+      kind: "skip",
+      startMinute: null,
+      endMinute: null,
+      createdByUserId: actor.userId,
+    }).onConflictDoUpdate({
+      target: [daypartDateExceptions.daypartId, daypartDateExceptions.serviceDate],
+      set: { kind: "skip", startMinute: null, endMinute: null, createdByUserId: actor.userId, updatedAt: new Date() },
+    });
+    await tx.insert(auditLog).values({
+      residencyId: input.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "daypart_date_skipped",
+      entityType: "daypart",
+      entityId: input.daypartId,
+      details: { serviceDate: input.serviceDate, name: daypart.name, removedShiftId: shift?.id ?? null },
+    });
+  });
+}
+
+export async function clearDaypartDateException(
+  actor: AuditActor,
+  input: { residencyId: string; daypartId: string; serviceDate: string },
+) {
+  weekdayForDate(input.serviceDate);
+  return getDb().transaction(async (tx) => {
+    const [daypart] = await tx.select({ id: dayparts.id }).from(dayparts)
+      .where(and(eq(dayparts.id, input.daypartId), eq(dayparts.residencyId, input.residencyId)))
+      .limit(1);
+    if (!daypart) throw new Error("Daypart not found in this Residency.");
+    await tx.delete(daypartDateExceptions).where(and(
+      eq(daypartDateExceptions.daypartId, input.daypartId),
+      eq(daypartDateExceptions.serviceDate, input.serviceDate),
+    ));
+    await tx.insert(auditLog).values({
+      residencyId: input.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "daypart_date_exception_cleared",
+      entityType: "daypart",
+      entityId: input.daypartId,
+      details: { serviceDate: input.serviceDate },
+    });
+  });
 }
 
 export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {

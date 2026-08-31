@@ -21,4 +21,20 @@ describe("Residency workspace boundaries", () => {
     expect(source).toContain("eq(residencies.id, actor.residencyId)");
     expect(source).not.toContain('formData.get("residencyId")');
   });
+
+  it("keeps the client-safe roster in the shared Residency calendar assignment path", async () => {
+    const source = await readFile(new URL("../src/app/residency/calendar/page.tsx", import.meta.url), "utf8");
+    expect(source).toContain("getResidencyClientSafeRoster(actor.residencyId)");
+    expect(source).toContain("talent={roster.map");
+  });
+
+  it("keeps company modes out of Residency workspaces and Dayparts out of Setup", async () => {
+    const [shell, setup] = await Promise.all([
+      readFile(new URL("../src/components/internal-shell.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/setup/page.tsx", import.meta.url), "utf8"),
+    ]);
+    expect(shell).toContain("{!inResidency ? <div className=\"mode-switch\"");
+    expect(setup).not.toContain("DaypartManager");
+    expect(setup).not.toContain("standing hours");
+  });
 });

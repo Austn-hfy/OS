@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import { residencies, residencyContacts, residencyMemberships, users } from "@/db/schema";
 import { selectResidencyMembership, type ResidencyMembershipOption } from "@/domain/residency-membership";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { viewAsResidencyId } from "@/lib/view-as";
 
 export const INTERNAL_TEST_RESIDENCY_COOKIE = "hfy_internal_test_residency";
 
@@ -25,6 +26,7 @@ export type ResidencyActor = {
   residencyName: string;
   residencyTimezone: string;
   accessRole: "manager" | "calendar_viewer";
+  isViewAs: boolean;
   isInternalTest: boolean;
   availableResidencies: Array<Pick<ResidencyMembershipOption, "residencyId" | "residencyName" | "accessRole">>;
 };
@@ -42,7 +44,33 @@ const currentProfile = cache(async () => {
 
 const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => {
   const current = await currentProfile();
-  if (!current || current.profile.role !== "hotel_user") return null;
+  if (!current) return null;
+  if (current.profile.role === "internal_admin") {
+    const selectedResidencyId = await viewAsResidencyId();
+    if (!selectedResidencyId) return null;
+    const [residency] = await getDb().select({
+      residencyId: residencies.id,
+      residencyName: residencies.name,
+      residencyTimezone: residencies.timezone,
+    }).from(residencies).where(and(
+      eq(residencies.id, selectedResidencyId),
+      eq(residencies.active, true),
+      eq(residencies.operatingMode, "operations"),
+    )).limit(1);
+    if (!residency) return null;
+    return {
+      kind: "residency",
+      userId: current.profile.id,
+      email: current.profile.email,
+      displayName: current.profile.displayName,
+      ...residency,
+      accessRole: "manager",
+      isViewAs: true,
+      isInternalTest: false,
+      availableResidencies: [],
+    };
+  }
+  if (current.profile.role !== "hotel_user") return null;
   const membershipQuery = getDb().select({
     residencyId: residencyMemberships.residencyId,
     residencyName: residencies.name,
@@ -85,6 +113,7 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
     residencyName: membership.residencyName,
     residencyTimezone: membership.residencyTimezone,
     accessRole: membership.accessRole,
+    isViewAs: false,
     isInternalTest: current.profile.isInternalTest,
     availableResidencies: current.profile.isInternalTest
       ? memberships.map(({ residencyId, residencyName, accessRole }) => ({ residencyId, residencyName, accessRole }))
@@ -117,6 +146,10 @@ export async function requireActorForResidency(
   const current = await currentProfile();
   if (!current) throw new Error("Sign in to continue.");
   if (current.profile.role === "internal_admin") {
+    if (await viewAsResidencyId() === residencyId) {
+      const previewActor = await currentResidencyActor();
+      if (previewActor?.residencyId === residencyId) return previewActor;
+    }
     return {
       kind: "internal",
       userId: current.profile.id,
@@ -153,6 +186,7 @@ export async function requireActorForResidency(
     residencyName: membership.residencyName,
     residencyTimezone: membership.residencyTimezone,
     accessRole: membership.accessRole,
+    isViewAs: false,
     isInternalTest: current.profile.isInternalTest,
     availableResidencies: [],
   };

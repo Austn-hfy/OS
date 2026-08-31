@@ -169,6 +169,13 @@
       "when": 1788039310957,
       "tag": "0023_daffy_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788163199001,
+      "tag": "0024_ambitious_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }
