@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { formatTimeInput } from "@/components/format";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { CalendarShareButton } from "@/components/calendar-share-button";
@@ -7,14 +6,12 @@ import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { getCalendarData, getPublicCalendarLinkSettings, getResidencyList, getScheduleOccurrenceData } from "@/data/internal";
 import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
 import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
-import { getActiveTalentLookup, getDaypartsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
+import { getActiveTalentLookup, getDaypartDateExceptionsForResidencies, getDaypartsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar } from "./residency-calendar";
-import { viewAsResidencyId } from "@/lib/view-as";
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ residency?: string; calendarResidency?: string; month?: string }> }) {
   const params = await searchParams;
-  const [residencyList, previewResidencyId] = await Promise.all([getResidencyList(), viewAsResidencyId()]);
-  if (previewResidencyId && params.residency !== previewResidencyId) redirect(`/app/calendar?residency=${previewResidencyId}`);
+  const residencyList = await getResidencyList();
   const workspaceResidency = residencyList.find((item) => item.id === params.residency);
 
   if (!workspaceResidency) {
@@ -22,11 +19,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     const range = monthRange(monthKey);
     const calendarResidency = residencyList.find((item) => item.id === params.calendarResidency);
     const visibleResidencies = calendarResidency ? [calendarResidency] : residencyList;
-    const [calendar, occurrences, visibleDayparts, calendarLinkSettings] = await Promise.all([
+    const [calendar, occurrences, visibleDayparts, calendarLinkSettings, dateExceptions] = await Promise.all([
       getCalendarData(calendarResidency?.id, range),
       getScheduleOccurrenceData(calendarResidency?.id, range),
       getDaypartsForResidencies(visibleResidencies.map((residency) => residency.id)),
       calendarResidency ? getPublicCalendarLinkSettings(calendarResidency.id) : Promise.resolve({ hasLink: false, scope: "all" as const, daypartIds: [] }),
+      getDaypartDateExceptionsForResidencies(visibleResidencies.map((residency) => residency.id), range),
     ]);
     const tones: MonthCalendarEvent["tone"][] = ["blue", "navy", "sky"];
     const savedShiftEvents = calendar.map((shift) => {
@@ -75,6 +73,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       range.from,
       range.to,
       existingDaypartDates,
+      dateExceptions,
     ).map((slot) => ({
       id: slot.id,
       date: slot.date,
@@ -115,12 +114,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   const monthKey = normalizeMonthKey(params.month);
   const range = monthRange(monthKey);
-  const [calendar, occurrences, dayparts, talent, calendarLinkSettings] = await Promise.all([
+  const [calendar, occurrences, dayparts, talent, calendarLinkSettings, dateExceptions] = await Promise.all([
     getCalendarData(workspaceResidency.id, range),
     getScheduleOccurrenceData(workspaceResidency.id, range),
     getDaypartsForResidency(workspaceResidency.id),
     getActiveTalentLookup(workspaceResidency.id),
     getPublicCalendarLinkSettings(workspaceResidency.id),
+    getDaypartDateExceptionsForResidencies([workspaceResidency.id], range),
   ]);
   const realEvents = calendar.map((shift) => {
     const activeAssignments = shift.assignments.filter((assignment) => assignment.bookingStatus !== "cancelled");
@@ -212,7 +212,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     ...calendar.flatMap((shift) => shift.daypartId ? [`${shift.daypartId}:${shift.serviceDate}`] : []),
     ...occurrences.map((occurrence) => `${occurrence.daypartId}:${occurrence.serviceDate}`),
   ]);
-  const projectedEvents = projectDaypartSlots(dayparts, range.from, range.to, existingDaypartDates).map((slot) => ({
+  const projectedEvents = projectDaypartSlots(dayparts, range.from, range.to, existingDaypartDates, dateExceptions).map((slot) => ({
     id: slot.id,
     date: slot.date,
     title: slot.name,
@@ -241,7 +241,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         events={events}
         dayparts={dayparts.map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })) }))}
         talent={talent}
-        previewMode={Boolean(previewResidencyId)}
+        dateExceptions={dateExceptions}
       />
     </div>
   );

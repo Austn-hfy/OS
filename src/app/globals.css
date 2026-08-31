@@ -156,9 +156,10 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .public-calendar-dayparts > label.selected { border-color: rgba(39,131,220,.26); background: rgba(217,237,250,.56); }
 .public-calendar-daypart-color { width: 9px; height: 28px; border-radius: 999px; }
 .public-calendar-page { width: min(880px, calc(100% - 32px)); min-height: 100dvh; display: grid; align-content: start; gap: 22px; margin: 0 auto; padding: 48px 0 34px; }
-.client-nav-item { display: grid; }
-.client-dayparts-button { appearance: none; margin: -4px 12px 2px 24px; padding: 5px 10px; border: 0; border-left: 1px solid var(--line); color: var(--muted); background: transparent; text-align: left; font-size: 10px; font-weight: 700; cursor: pointer; }
-.client-dayparts-button:hover { color: var(--forest); }
+.client-nav-slot { display: contents; }
+.client-dayparts-button { appearance: none; display: block; width: 100%; padding: 12px 14px; border: 0; border-radius: 12px; color: var(--muted); background: transparent; text-align: left; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.client-dayparts-button:hover { color: var(--forest); background: rgba(255,255,255,.42); }
+.client-dayparts-button.active { color: var(--ink); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 .client-safe-roster-boundary { display: grid; gap: 4px; margin-bottom: 14px; padding: 14px 18px; border-color: rgba(52,127,187,.2); background: rgba(217,237,250,.5); }
 .client-safe-roster-boundary strong { color: var(--dark); }
 .client-safe-roster-boundary span { color: var(--muted); font-size: 11px; }
@@ -171,6 +172,20 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .client-safe-talent-card dt { color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
 .client-safe-talent-card dd { margin: 0; color: var(--dark); font-size: 11px; }
 .client-payout-table table { min-width: 650px; }
+.client-invoice-table table { min-width: 780px; }
+.danger-button { color: var(--danger) !important; border-color: rgba(183,67,55,.26) !important; background: rgba(250,233,229,.72) !important; }
+.danger-button:hover { background: rgba(250,215,207,.9) !important; }
+.genre-options { display: flex; flex-wrap: wrap; gap: 9px; padding: 0; border: 0; }
+.genre-options legend { width: 100%; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 750; }
+.genre-options label { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.62); font-size: 12px; font-weight: 700; }
+.genre-options input { width: 17px; height: 17px; margin: 0; }
+.residency-client-settings-form { display: grid; gap: 22px; }
+.residency-client-settings-form > section { display: grid; grid-template-columns: minmax(220px,.7fr) minmax(0,1.3fr); gap: 28px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.residency-client-settings-form > section > div:first-child p:last-child { margin-top: 7px; color: var(--muted); line-height: 1.5; }
+.settings-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.settings-fields .wide { grid-column: 1 / -1; }
+.residency-client-settings-form > footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.residency-client-settings-form > footer span { color: var(--muted); font-size: 11px; }
 .public-calendar-header { display: flex; align-items: flex-start; gap: 18px; padding: 28px; border: 1px solid rgba(255,255,255,.74); border-radius: 28px; background: rgba(249,251,252,.84); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
 .public-calendar-header .brand-mark { width: 48px; height: 48px; flex: 0 0 48px; }
 .public-calendar-header h1 { margin: 6px 0 8px; font-size: clamp(34px, 7vw, 54px); }
@@ -353,6 +368,12 @@ h3 { margin: 0; font-family: "Plus Jakarta Sans", Inter, sans-serif; font-size: 
 .pipeline-status-tabs button b { min-width: 16px; height: 16px; display: grid; place-items: center; border-radius: 999px; background: rgba(24,24,24,.07); font-size: 8px; }
 .pipeline-status-tabs button.active { color: white; background: var(--dark); }
 .pipeline-status-tabs button.active b { background: rgba(255,255,255,.16); }
+
+@media (min-width: 851px) and (max-width: 1400px) {
+  .pipeline-status-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .pipeline-status-tabs button { min-width: 0; min-height: 44px; padding: 7px 8px; font-size: 9px; line-height: 1.15; white-space: normal; }
+  .pipeline-status-tabs button span { min-width: 0; overflow-wrap: anywhere; }
+}
 .lead-list-shell { padding: 0; overflow: hidden; }
 .lead-list-header, .lead-list-row { display: grid; grid-template-columns: minmax(210px, 1.5fr) minmax(180px, 1.2fr) .7fr .65fr 1fr; gap: 16px; align-items: center; }
 .lead-list-header { padding: 12px 18px; color: var(--muted); background: rgba(224,230,236,.7); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -687,6 +708,8 @@ tr:last-child td { border-bottom: 0; }
 .quick-shift-options summary { padding: 10px 12px; color: var(--muted); cursor: pointer; font-size: 10px; font-weight: 750; }
 .quick-shift-options[open] summary { border-bottom: 1px solid var(--line); }
 .quick-shift-options .quick-time-fields { padding: 11px 12px 12px; }
+.quick-shift-options > small { display: block; padding: 0 12px 12px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.date-exception-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 12px 10px; }
 .quick-time-choice { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 13px; background: #e8eaed; }
 .quick-time-choice button { appearance: none; border: 0; border-radius: 10px; padding: 9px; color: var(--muted); background: transparent; font-size: 11px; font-weight: 750; }
 .quick-time-choice button.active { color: var(--ink); background: white; box-shadow: 0 3px 10px rgba(7,26,49,.08); }
@@ -1115,6 +1138,7 @@ tr:last-child td { border-bottom: 0; }
   .context-switcher { min-height: 54px; }
   .sidebar-context { display: none; }
   .nav { display: flex; overflow-x: auto; margin-top: 12px; }
+  .client-dayparts-button { width: auto; flex: 0 0 auto; }
   .nav-label { display: none; }
   .sidebar-footer { display: none; }
   .main { padding: 28px 18px 50px; }
@@ -1167,6 +1191,9 @@ tr:last-child td { border-bottom: 0; }
   .payout-detail-panel { position: static; min-height: 480px; max-height: none; }
   .payout-detail-empty { min-height: 440px; }
   .residency-overview-grid, .workspace-shortcuts { grid-template-columns: 1fr; }
+  .residency-client-settings-form > section, .settings-fields { grid-template-columns: 1fr; }
+  .settings-fields .wide { grid-column: auto; }
+  .residency-client-settings-form > footer { align-items: stretch; flex-direction: column; }
   .calendar-controls { align-items: stretch; flex-direction: column; }
   .month-navigation { justify-content: space-between; }
   .calendar-filter-form { align-items: end; }

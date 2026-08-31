@@ -25,7 +25,7 @@ export async function enterViewAsAction(formData: FormData) {
     path: "/",
     maxAge: 60 * 60 * 8,
   });
-  redirect(`/app/calendar?residency=${residency.id}`);
+  redirect("/residency/calendar");
 }
 
 export async function exitViewAsAction() {

@@ -62,6 +62,7 @@ export const attentionStatus = pgEnum("attention_status", ["open", "resolved"]);
 export const automationStatus = pgEnum("automation_status", ["running", "succeeded", "failed", "skipped"]);
 export const daypartType = pgEnum("daypart_type", ["dj_artist", "house_activity"]);
 export const daypartBillingMode = pgEnum("daypart_billing_mode", ["billed_by_hfy", "tracking_only"]);
+export const daypartDateExceptionKind = pgEnum("daypart_date_exception_kind", ["skip", "override"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -219,6 +220,25 @@ export const daypartDayRules = pgTable("daypart_day_rules", {
   check("daypart_day_rules_dj_count_valid", sql`${table.defaultDjCount} IS NULL OR (${table.defaultDjCount} > 0 AND ${table.defaultDjCount} <= 20)`),
 ]);
 
+export const daypartDateExceptions = pgTable("daypart_date_exceptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  daypartId: uuid("daypart_id").notNull().references(() => dayparts.id, { onDelete: "cascade" }),
+  serviceDate: date("service_date", { mode: "string" }).notNull(),
+  kind: daypartDateExceptionKind("kind").notNull(),
+  startMinute: integer("start_minute"),
+  endMinute: integer("end_minute"),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("daypart_date_exceptions_daypart_date_unique").on(table.daypartId, table.serviceDate),
+  index("daypart_date_exceptions_date_idx").on(table.serviceDate, table.daypartId),
+  check("daypart_date_exceptions_fields_valid", sql`
+    (${table.kind} = 'skip' AND ${table.startMinute} IS NULL AND ${table.endMinute} IS NULL)
+    OR
+    (${table.kind} = 'override' AND ${table.startMinute} >= 0 AND ${table.startMinute} < 1440 AND ${table.endMinute} > ${table.startMinute} AND ${table.endMinute} <= ${table.startMinute} + 1440)
+  `),
+]);
+
 export const scheduleOccurrences = pgTable("schedule_occurrences", {
   id: uuid("id").primaryKey().defaultRandom(),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
@@ -325,7 +345,7 @@ export const talent = pgTable("talent", {
   talentStatus: talentStatus("talent_status").notNull().default("active"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   homeMarket: text("home_market").notNull().default(""),
-  genres: text("genres").array().notNull().default(sql`'{}'::text[]`),
+  genres: text("genres").array().notNull().default(sql`ARRAY['Electronic/House']::text[]`),
   priority: integer("priority"),
   talentNotes: text("talent_notes").notNull().default(""),
   legacyOutstandingOwedCents: integer("legacy_outstanding_owed_cents").notNull().default(0),
@@ -343,6 +363,7 @@ export const talent = pgTable("talent", {
   index("talent_visibility_idx").on(table.archivedAt, table.talentStatus),
   check("talent_legacy_financials_nonnegative", sql`${table.legacyOutstandingOwedCents} >= 0 AND ${table.legacyTotalEarningsCents} >= 0`),
   check("talent_priority_range", sql`${table.priority} IS NULL OR (${table.priority} >= 1 AND ${table.priority} <= 5)`),
+  check("talent_genres_standardized", sql`cardinality(${table.genres}) BETWEEN 1 AND 3 AND ${table.genres} <@ ARRAY['Electronic/House', 'Open Format', 'Vinyl']::text[]`),
 ]);
 
 export const talentOnboardingSubmissions = pgTable("talent_onboarding_submissions", {
@@ -353,14 +374,16 @@ export const talentOnboardingSubmissions = pgTable("talent_onboarding_submission
   phone: text("phone").notNull().default(""),
   instagramHandle: text("instagram_handle").notNull().default(""),
   homeMarket: text("home_market").notNull().default(""),
-  genres: text("genres").array().notNull().default(sql`'{}'::text[]`),
+  genres: text("genres").array().notNull().default(sql`ARRAY['Electronic/House']::text[]`),
   notes: text("notes").notNull().default(""),
   w9StoragePath: text("w9_storage_path"),
   status: rosterStatus("status").notNull().default("needs_review"),
   submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   reviewedByUserId: uuid("reviewed_by_user_id").references(() => users.id, { onDelete: "set null" }),
-});
+}, (table) => [
+  check("talent_onboarding_genres_standardized", sql`cardinality(${table.genres}) BETWEEN 1 AND 3 AND ${table.genres} <@ ARRAY['Electronic/House', 'Open Format', 'Vinyl']::text[]`),
+]);
 
 export const talentDocuments = pgTable("talent_documents", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -579,6 +602,7 @@ export type AccountSetupToken = typeof accountSetupTokens.$inferSelect;
 export type Residency = typeof residencies.$inferSelect;
 export type PublicCalendarLink = typeof publicCalendarLinks.$inferSelect;
 export type Daypart = typeof dayparts.$inferSelect;
+export type DaypartDateException = typeof daypartDateExceptions.$inferSelect;
 export type DaypartDayRule = typeof daypartDayRules.$inferSelect;
 export type ScheduleOccurrence = typeof scheduleOccurrences.$inferSelect;
 export type ScheduleOccurrenceTalent = typeof scheduleOccurrenceTalent.$inferSelect;

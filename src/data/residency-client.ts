@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, dayparts, residencyContacts, shifts, talent, users } from "@/db/schema";
+import { assignments, dayparts, invoices, residencies, residencyContacts, shifts, talent, users } from "@/db/schema";
 import { projectClientSafeRoster } from "@/domain/client-safe-talent";
+import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
 
 export async function getResidencyClientCalendar(residencyId: string, range: { from: string; to: string }) {
   const database = getDb();
@@ -116,4 +117,36 @@ export async function getResidencyClientPayoutStatus(residencyId: string) {
     status: row.payoutStatus === "paid" ? "Paid" as const : "Pending" as const,
     paidAt: row.paidAt?.toISOString() ?? null,
   }));
+}
+
+export async function getResidencyClientInvoices(residencyId: string) {
+  const rows = await getDb().select({
+    id: invoices.id,
+    invoiceNumber: invoices.invoiceNumber,
+    billingPeriodStart: invoices.billingPeriodStart,
+    billingPeriodEnd: invoices.billingPeriodEnd,
+    invoiceDate: invoices.invoiceDate,
+    status: invoices.status,
+    totalCents: invoices.totalCents,
+    sentAt: invoices.sentAt,
+  }).from(invoices)
+    .where(and(
+      eq(invoices.residencyId, residencyId),
+      inArray(invoices.status, ["approved", "sent"]),
+    ))
+    .orderBy(desc(invoices.invoiceDate), desc(invoices.createdAt));
+  return rows.map((row) => projectClientSafeInvoice({ ...row, sentAt: row.sentAt?.toISOString() ?? null }));
+}
+
+export async function getResidencyClientSettings(residencyId: string) {
+  const [row] = await getDb().select({
+    name: residencies.name,
+    cityState: residencies.cityState,
+    timezone: residencies.timezone,
+    primaryContactName: residencies.primaryContactName,
+    primaryContactPhone: residencies.primaryContactPhone,
+    primaryContactEmail: residencies.primaryContactEmail,
+  }).from(residencies).where(eq(residencies.id, residencyId)).limit(1);
+  if (!row) throw new Error("Residency not found.");
+  return row;
 }

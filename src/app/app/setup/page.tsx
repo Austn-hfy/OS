@@ -1,6 +1,4 @@
 import { getSetupData } from "@/data/internal";
-import { getDaypartsForResidency } from "@/services/dayparts";
-import { DaypartManager } from "./daypart-manager";
 import { InvoiceBrandingSettings } from "./invoice-branding-settings";
 import { ApprovedDjManager } from "./approved-dj-manager";
 import { ResidencyContactsManager } from "./residency-contacts-manager";
@@ -11,11 +9,9 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
   const { residency } = await searchParams;
   const data = await getSetupData();
   const selected = data.residencies.find((item) => item.id === residency);
-  const dayparts = selected ? await getDaypartsForResidency(selected.id) : [];
   return (
     <>
-      <header className="page-header card"><div><p className="eyebrow">{selected?.name ?? "HFY company"}</p><h1>{selected ? "Residency setup" : "Company Invoices"}</h1><p className="subhead">{selected ? "Program details, standing hours, rate defaults, approved artists, and client contacts for this Residency." : "Manage the company identity and sender details used on client Invoices."}</p></div></header>
-      {selected ? <DaypartManager residencyId={selected.id} dayparts={dayparts.map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, sortOrder: daypart.sortOrder, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })) }))} /> : null}
+      <header className="page-header card"><div><p className="eyebrow">{selected?.name ?? "HFY company"}</p><h1>{selected ? "Residency setup" : "Company Invoices"}</h1><p className="subhead">{selected ? "Program details, rate defaults, approved artists, and client contacts for this Residency." : "Manage the company identity and sender details used on client Invoices."}</p></div></header>
       <section className={selected ? "residency-setup-grid" : "grid residency-grid"}>
         {!selected ? <InvoiceBrandingSettings
           companyName={data.invoiceBranding.companyName}

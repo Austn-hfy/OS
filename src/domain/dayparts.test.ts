@@ -149,4 +149,29 @@ describe("Daypart weekly rules", () => {
     expect(projectDaypartSlots([{ ...base, active: true, activeUntil: "2026-09-03" }], "2026-09-03", "2026-09-10")).toHaveLength(1);
     expect(projectDaypartSlots([{ ...base, active: false, activeUntil: null }], "2026-09-03", "2026-09-10")).toEqual([]);
   });
+
+  it("applies one-date skips and hour overrides without changing the weekly rule", () => {
+    const daypart = {
+      id: "pool",
+      name: "Pool",
+      room: "Pool",
+      color: "#2783DC",
+      type: "dj_artist" as const,
+      billingMode: "billed_by_hfy" as const,
+      active: true,
+      activeUntil: null,
+      defaultTalentRateCents: null,
+      rules: [{ weekday: 0, startMinute: 720, endMinute: 1140, defaultDjCount: null }],
+    };
+    const exceptions = [
+      { daypartId: "pool", serviceDate: "2026-09-06", kind: "skip" as const, startMinute: null, endMinute: null },
+      { daypartId: "pool", serviceDate: "2026-09-13", kind: "override" as const, startMinute: 780, endMinute: 1020 },
+    ];
+    const slots = projectDaypartSlots([daypart], "2026-09-06", "2026-09-20", new Set(), exceptions);
+    expect(slots.map((slot) => ({ date: slot.date, start: slot.startMinute, end: slot.endMinute }))).toEqual([
+      { date: "2026-09-13", start: 780, end: 1020 },
+      { date: "2026-09-20", start: 720, end: 1140 },
+    ]);
+    expect(daypart.rules[0]).toMatchObject({ startMinute: 720, endMinute: 1140 });
+  });
 });

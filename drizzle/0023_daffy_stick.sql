@@ -1,0 +1,2 @@
+ALTER TABLE "talent" ALTER COLUMN "genres" SET DEFAULT ARRAY['Electronic/House']::text[];--> statement-breakpoint
+ALTER TABLE "talent_onboarding_submissions" ALTER COLUMN "genres" SET DEFAULT ARRAY['Electronic/House']::text[];

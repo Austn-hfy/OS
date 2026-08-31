@@ -42,11 +42,18 @@ beforeAll(async () => {
   const daypartTypes = await readFile(new URL("../drizzle/0016_daypart_types_and_schedule_occurrences.sql", import.meta.url), "utf8");
   const publicCalendarScopes = await readFile(new URL("../drizzle/0017_cold_silhouette.sql", import.meta.url), "utf8");
   const flexibleDayparts = await readFile(new URL("../drizzle/0018_flashy_frightful_four.sql", import.meta.url), "utf8");
+  const realResidencyBoundary = await readFile(new URL("../drizzle/0019_sudden_lucky_pierre.sql", import.meta.url), "utf8");
   const internalTestAccounts = await readFile(new URL("../drizzle/0020_supreme_dark_beast.sql", import.meta.url), "utf8");
   const accountSetupTokens = await readFile(new URL("../drizzle/0021_account_setup_tokens.sql", import.meta.url), "utf8");
+  const daypartDateExceptions = await readFile(new URL("../drizzle/0024_ambitious_doctor_faustus.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
-  await database.exec("CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;");
+  await database.exec(`
+    CREATE ROLE anon NOLOGIN;
+    CREATE ROLE authenticated NOLOGIN;
+    CREATE SCHEMA auth;
+    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS 'SELECT NULL::uuid';
+  `);
   await database.exec(initial.replaceAll("--> statement-breakpoint", ""));
   await database.exec(onboarding);
   await database.exec(rowSecurity.replaceAll("--> statement-breakpoint", ""));
@@ -66,8 +73,10 @@ beforeAll(async () => {
   await database.exec(daypartTypes.replaceAll("--> statement-breakpoint", ""));
   await database.exec(publicCalendarScopes.replaceAll("--> statement-breakpoint", ""));
   await database.exec(flexibleDayparts.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(realResidencyBoundary.replaceAll("--> statement-breakpoint", ""));
   await database.exec(internalTestAccounts.replaceAll("--> statement-breakpoint", ""));
   await database.exec(accountSetupTokens.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(daypartDateExceptions.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -271,6 +280,29 @@ describe("database replacements for Airtable audit formulas", () => {
     await expect(database.exec(`
       INSERT INTO daypart_day_rules (daypart_id, weekday, start_minute, end_minute, default_dj_count)
       VALUES ('${ids.daypartA}', 2, 900, 800, 0);
+    `)).rejects.toThrow();
+  });
+
+  it("stores one valid date exception per Daypart and rejects malformed overrides", async () => {
+    await database.exec(`
+      INSERT INTO daypart_date_exceptions (daypart_id, service_date, kind)
+      VALUES ('${ids.daypartA}', '2026-09-06', 'skip');
+      INSERT INTO daypart_date_exceptions (daypart_id, service_date, kind, start_minute, end_minute)
+      VALUES ('${ids.daypartA}', '2026-09-13', 'override', 780, 1020);
+    `);
+    const exceptions = await database.query<{ service_date: string; kind: string; start_minute: number | null; end_minute: number | null }>(`
+      SELECT service_date::text, kind::text, start_minute, end_minute
+      FROM daypart_date_exceptions
+      WHERE daypart_id = '${ids.daypartA}'
+      ORDER BY service_date;
+    `);
+    expect(exceptions.rows).toEqual([
+      { service_date: "2026-09-06", kind: "skip", start_minute: null, end_minute: null },
+      { service_date: "2026-09-13", kind: "override", start_minute: 780, end_minute: 1020 },
+    ]);
+    await expect(database.exec(`
+      INSERT INTO daypart_date_exceptions (daypart_id, service_date, kind, start_minute, end_minute)
+      VALUES ('${ids.daypartA}', '2026-09-20', 'override', 1200, 900);
     `)).rejects.toThrow();
   });
 
