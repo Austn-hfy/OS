@@ -447,6 +447,7 @@
 .hfy-style-system .sidebar-context p { color: var(--hfy-muted); font-size: 11px; }
 .hfy-style-system :is(.nav, .preview-nav) { gap: var(--hfy-space-1); }
 .hfy-style-system .nav a,
+.hfy-style-system .client-dayparts-button,
 .hfy-style-system .preview-nav button {
   position: relative;
   min-height: 42px;
@@ -462,12 +463,14 @@
   transition: color var(--hfy-motion), border-color var(--hfy-motion), background var(--hfy-motion), transform var(--hfy-motion);
 }
 .hfy-style-system .nav a:hover,
+.hfy-style-system .client-dayparts-button:hover,
 .hfy-style-system .preview-nav button:hover {
   transform: translateY(-1px);
   color: var(--hfy-ink);
   background: rgba(255, 255, 255, 0.38);
 }
 .hfy-style-system .nav a.active,
+.hfy-style-system .client-dayparts-button.active,
 .hfy-style-system .preview-nav button.active {
   border-color: rgba(52, 127, 187, 0.22);
   color: var(--hfy-action-ink);
@@ -1038,8 +1041,10 @@
 @media (max-width: 850px) {
   .hfy-style-system .sidebar { position: static; height: auto; padding: 16px 20px; }
   .hfy-style-system .nav a,
+  .hfy-style-system .client-dayparts-button,
   .hfy-style-system .preview-nav button { min-width: max-content; }
   .hfy-style-system .nav a.active,
+  .hfy-style-system .client-dayparts-button.active,
   .hfy-style-system .preview-nav button.active { box-shadow: inset 0 -2px var(--hfy-action-strong), inset 0 1px rgba(255, 255, 255, 0.65); }
   .hfy-style-system .calendar-command-controls { align-items: stretch; flex-direction: column; }
   .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) { margin-right: 0; }

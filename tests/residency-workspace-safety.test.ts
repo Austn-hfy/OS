@@ -37,4 +37,14 @@ describe("Residency workspace boundaries", () => {
     expect(setup).not.toContain("DaypartManager");
     expect(setup).not.toContain("standing hours");
   });
+
+  it("uses title case and one shared type treatment for every Residency navigation item", async () => {
+    const [shell, styles] = await Promise.all([
+      readFile(new URL("../src/components/residency-shell.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
+    ]);
+    expect(shell).toContain('["Talent Roster", "/residency/talent"]');
+    expect(shell).not.toContain('["Talent roster", "/residency/talent"]');
+    expect(styles).toMatch(/\.hfy-style-system \.nav a,\s*\.hfy-style-system \.client-dayparts-button,/);
+  });
 });
