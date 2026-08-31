@@ -3,6 +3,7 @@ import { completeAccountSetup } from "@/services/account-setup";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const requestSchema = z.object({
   token: z.string().min(32).max(256),
