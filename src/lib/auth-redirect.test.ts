@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeAuthRedirect } from "./auth-redirect";
+import { passwordRecoveryRedirectUrl, safeAuthRedirect } from "./auth-redirect";
 
 describe("safeAuthRedirect", () => {
   it("allows app-local paths", () => {
@@ -13,5 +13,10 @@ describe("safeAuthRedirect", () => {
 
   it("uses the requested fallback for missing values", () => {
     expect(safeAuthRedirect(null, "/reset-password")).toBe("/reset-password");
+  });
+
+  it("uses the exact allowlisted callback for password recovery", () => {
+    expect(passwordRecoveryRedirectUrl("https://staging.hfy.app"))
+      .toBe("https://staging.hfy.app/auth/callback");
   });
 });

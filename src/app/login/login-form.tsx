@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { passwordRecoveryRedirectUrl } from "@/lib/auth-redirect";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export function LoginForm() {
@@ -21,7 +22,7 @@ export function LoginForm() {
       const supabase = createSupabaseBrowserClient();
       if (mode === "recovery") {
         const result = await supabase.auth.resetPasswordForEmail(String(data.get("email") ?? ""), {
-          redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+          redirectTo: passwordRecoveryRedirectUrl(window.location.origin),
         });
         if (result.error) throw result.error;
         setMessage("Check your email for a secure password-reset link. You can close this page after it arrives.");
