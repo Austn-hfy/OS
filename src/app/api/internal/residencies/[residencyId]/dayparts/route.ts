@@ -3,14 +3,29 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { residencies } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { requireActorForResidency } from "@/lib/auth";
+import { isResidencyAccessError, requireActorForResidency } from "@/lib/auth";
 import { getDaypartsForResidency } from "@/services/dayparts";
 
 export const maxDuration = 30;
 
+export function residencyAccessErrorResponse(error: unknown): NextResponse | null {
+  if (!isResidencyAccessError(error)) return null;
+  return NextResponse.json(
+    { error: error.status === 401 ? "Unauthorized." : "Forbidden." },
+    { status: error.status, headers: { "Cache-Control": "private, no-store" } },
+  );
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ residencyId: string }> }) {
   const residencyId = z.uuid().parse((await params).residencyId);
-  const actor = await requireActorForResidency(residencyId);
+  let actor: Awaited<ReturnType<typeof requireActorForResidency>>;
+  try {
+    actor = await requireActorForResidency(residencyId);
+  } catch (error) {
+    const response = residencyAccessErrorResponse(error);
+    if (!response) throw error;
+    return response;
+  }
   const [residencyRows, dayparts] = await Promise.all([
     getDb().select({ id: residencies.id }).from(residencies).where(and(eq(residencies.id, residencyId), eq(residencies.active, true))).limit(1),
     getDaypartsForResidency(residencyId),

@@ -33,6 +33,24 @@ export type ResidencyActor = {
 
 export type AuditActor = InternalActor | ResidencyActor;
 
+export class ResidencyAccessError extends Error {
+  constructor(
+    public readonly status: 401 | 403,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ResidencyAccessError";
+  }
+}
+
+export function isResidencyAccessError(error: unknown): error is ResidencyAccessError {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as Partial<ResidencyAccessError>;
+  return candidate.name === "ResidencyAccessError"
+    && candidate.status !== undefined
+    && [401, 403].includes(candidate.status);
+}
+
 const currentProfile = cache(async () => {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
@@ -144,7 +162,7 @@ export async function requireActorForResidency(
   options: { manager?: boolean } = {},
 ): Promise<AuditActor> {
   const current = await currentProfile();
-  if (!current) throw new Error("Sign in to continue.");
+  if (!current) throw new ResidencyAccessError(401, "Sign in to continue.");
   if (current.profile.role === "internal_admin") {
     if (await viewAsResidencyId() === residencyId) {
       const previewActor = await currentResidencyActor();
@@ -157,7 +175,7 @@ export async function requireActorForResidency(
       displayName: current.profile.displayName,
     };
   }
-  if (current.profile.role !== "hotel_user") throw new Error("This account cannot access a Residency.");
+  if (current.profile.role !== "hotel_user") throw new ResidencyAccessError(403, "This account cannot access a Residency.");
   const [membership] = await getDb().select({
     residencyId: residencyMemberships.residencyId,
     residencyName: residencies.name,
@@ -173,9 +191,9 @@ export async function requireActorForResidency(
       eq(residencies.operatingMode, "operations"),
     ))
     .limit(1);
-  if (!membership) throw new Error("You do not have access to this Residency.");
+  if (!membership) throw new ResidencyAccessError(403, "You do not have access to this Residency.");
   if (options.manager && membership.accessRole !== "manager") {
-    throw new Error("Manager access is required for this change.");
+    throw new ResidencyAccessError(403, "Manager access is required for this change.");
   }
   return {
     kind: "residency",
