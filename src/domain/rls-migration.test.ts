@@ -22,4 +22,16 @@ describe("Ace Residency RLS migration", () => {
     expect(sql).toContain("private.prevent_invalid_internal_test_demotion()");
     expect(sql).not.toMatch(/GRANT[^;]+is_internal_test/);
   });
+
+  it("requires an explicit Residency assignment for client-safe artist visibility", async () => {
+    const sql = await readFile(new URL("../../drizzle/0025_explicit_residency_roster_visibility.sql", import.meta.url), "utf8");
+    expect(sql).toContain('CREATE POLICY "talent_read_approved_safe_roster"');
+    expect(sql).toContain("FROM public.residency_talent AS rt");
+    expect(sql).toContain("rt.active = true");
+    expect(sql).toContain("rt.residency_id IN (SELECT private.current_residency_ids())");
+    expect(sql).toContain("validate_residency_talent_scope");
+    expect(sql).toContain("validate_assignment_scope");
+    expect(sql).toContain("validate_occurrence_talent_scope");
+    expect(sql).not.toContain('"exclusive_residency_id" IS NULL OR "exclusive_residency_id" IN');
+  });
 });

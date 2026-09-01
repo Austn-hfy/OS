@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, dayparts, invoices, residencies, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, dayparts, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
 import { daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
@@ -88,6 +88,11 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
 
     const talentIds = [...new Set(input.dayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
     const talentRows = talentIds.length ? await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
+      .innerJoin(residencyTalent, and(
+        eq(residencyTalent.talentId, talent.id),
+        eq(residencyTalent.residencyId, residency.id),
+        eq(residencyTalent.active, true),
+      ))
       .where(and(
         inArray(talent.id, talentIds),
         eq(talent.talentStatus, "active"),
@@ -312,6 +317,11 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
     if (!shift) throw new Error("Shift not found.");
 
     const [selectedTalent] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
+      .innerJoin(residencyTalent, and(
+        eq(residencyTalent.talentId, talent.id),
+        eq(residencyTalent.residencyId, shift.residencyId),
+        eq(residencyTalent.active, true),
+      ))
       .where(and(
         eq(talent.id, input.talentId),
         eq(talent.talentStatus, "active"),

@@ -13,6 +13,7 @@ const ids = {
   daypartA: "00000000-0000-4000-8000-000000000025",
   daypartB: "00000000-0000-4000-8000-000000000026",
   talent: "00000000-0000-4000-8000-000000000030",
+  exclusiveTalent: "00000000-0000-4000-8000-000000000031",
   invoiceA: "00000000-0000-4000-8000-000000000040",
   shiftA: "00000000-0000-4000-8000-000000000050",
   shiftB: "00000000-0000-4000-8000-000000000051",
@@ -46,6 +47,7 @@ beforeAll(async () => {
   const internalTestAccounts = await readFile(new URL("../drizzle/0020_supreme_dark_beast.sql", import.meta.url), "utf8");
   const accountSetupTokens = await readFile(new URL("../drizzle/0021_account_setup_tokens.sql", import.meta.url), "utf8");
   const daypartDateExceptions = await readFile(new URL("../drizzle/0024_ambitious_doctor_faustus.sql", import.meta.url), "utf8");
+  const explicitResidencyRoster = await readFile(new URL("../drizzle/0025_explicit_residency_roster_visibility.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -77,6 +79,7 @@ beforeAll(async () => {
   await database.exec(internalTestAccounts.replaceAll("--> statement-breakpoint", ""));
   await database.exec(accountSetupTokens.replaceAll("--> statement-breakpoint", ""));
   await database.exec(daypartDateExceptions.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(explicitResidencyRoster.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -102,6 +105,8 @@ beforeAll(async () => {
       ('${ids.daypartB}', 6, 1260, 1440, 1);
     INSERT INTO talent (id, stage_name, roster_status, talent_status) VALUES
       ('${ids.talent}', 'DJ Constraint', 'ready', 'active');
+    INSERT INTO talent (id, stage_name, roster_status, talent_status, exclusive_residency_id) VALUES
+      ('${ids.exclusiveTalent}', 'Exclusive DJ', 'ready', 'active', '${ids.residencyA}');
     INSERT INTO invoices
       (id, residency_id, invoice_number, billing_period_start, billing_period_end, invoice_date, payment_terms_days)
     VALUES
@@ -351,13 +356,29 @@ describe("database replacements for Airtable audit formulas", () => {
     `)).rejects.toThrow(/within its Shift/);
   });
 
-  it("requires a Residency-approved active DJ for hotel selections", async () => {
+  it("requires an explicitly assigned active artist for hotel selections", async () => {
     await expect(database.exec(`
       INSERT INTO assignments
         (shift_id, talent_id, source, set_name, starts_at, ends_at, booking_status, compensation_type, talent_rate_cents)
       VALUES
         ('${ids.shiftA}', '${ids.talent}', 'hotel', 'Unapproved', '2026-09-05T20:00:00Z', '2026-09-05T22:00:00Z', 'pending_hfy_confirmation', 'hourly', 8000);
-    `)).rejects.toThrow(/approved DJ/);
+    `)).rejects.toThrow(/explicitly assigned/);
+  });
+
+  it("requires an explicitly assigned active artist for internal selections too", async () => {
+    await expect(database.exec(`
+      INSERT INTO assignments
+        (shift_id, talent_id, source, set_name, starts_at, ends_at, booking_status, compensation_type, talent_rate_cents)
+      VALUES
+        ('${ids.shiftA}', '${ids.talent}', 'internal', 'Unassigned internal', '2026-09-05T20:00:00Z', '2026-09-05T22:00:00Z', 'confirmed', 'hourly', 8000);
+    `)).rejects.toThrow(/explicitly assigned/);
+  });
+
+  it("prevents an exclusive artist from being assigned to another Residency roster", async () => {
+    await expect(database.exec(`
+      INSERT INTO residency_talent (residency_id, talent_id)
+      VALUES ('${ids.residencyB}', '${ids.exclusiveTalent}');
+    `)).rejects.toThrow(/exclusive Residency/);
   });
 
   it("forces hotel selections into Pending HFY Confirmation", async () => {

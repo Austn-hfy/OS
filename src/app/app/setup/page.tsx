@@ -22,7 +22,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
         {selected ? <>
           <ResidencyProfileEditor residency={selected} />
           <ResidencyRateEditor residencyId={selected.id} defaultTalentRateCents={selected.defaultTalentRateCents} clientHourlyRateCents={selected.clientHourlyRateCents} />
-          <ApprovedDjManager residencyId={selected.id} artists={data.talent} approvedTalentIds={data.approvals.filter((approval) => approval.residencyId === selected.id).map((approval) => approval.talentId)} />
+          <ApprovedDjManager residencyId={selected.id} artists={data.talent.filter((artist) => !artist.exclusiveResidencyId || artist.exclusiveResidencyId === selected.id)} approvedTalentIds={data.approvals.filter((approval) => approval.residencyId === selected.id).map((approval) => approval.talentId)} />
           <ResidencyContactsManager residencyId={selected.id} contacts={data.contacts.filter((contact) => contact.residencyId === selected.id)} />
         </> : null}
 
