@@ -6,6 +6,7 @@ import { formatLocalMinute } from "@/domain/dayparts";
 import { enterViewAsAction } from "./view-as-actions";
 import { CreateResidencyModal } from "./create-residency-modal";
 import { HfyRequestQueue } from "./hfy-request-queue";
+import { formatServiceTier } from "@/domain/service-tier";
 
 const weekdayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -30,13 +31,13 @@ async function DeveloperDashboard() {
       <article><strong>{residencies.length}</strong><span>Total Residencies</span></article>
       <article><strong>{activeCount}</strong><span>Active Platform records</span></article>
       <article><strong>{residencies.length - activeCount}</strong><span>Inactive records</span></article>
-      <article><strong>{completeCount}</strong><span>Complete tier</span></article>
+      <article><strong>{completeCount}</strong><span>Full Programming</span></article>
     </section>
     <section className="developer-residencies-section">
       <div className="section-heading"><div><p className="eyebrow">Support directory</p><h2>All Residencies</h2><p className="subhead">Open the exact Residency-facing workspace to investigate support issues, or jump directly to its owner-only configuration.</p></div></div>
       {residencies.length ? <div className="developer-residency-grid">{residencies.map((residency) => <article className={`card developer-residency-card ${residency.active ? "" : "inactive"}`} key={residency.id}>
         <div className="developer-residency-heading"><div><span className="developer-residency-mark">{residency.name.slice(0, 1)}</span><div><h2>{residency.name}</h2><p>{residency.cityState || "Location pending"}</p></div></div><span className={`platform-status ${residency.active ? "active" : "inactive"}`}>{residency.active ? "Active" : "Inactive"}</span></div>
-        <dl><div><dt>Service tier</dt><dd>{residency.tier.replaceAll("_", " ")}</dd></div><div><dt>Timezone</dt><dd>{residency.timezone}</dd></div></dl>
+        <dl><div><dt>Service tier</dt><dd>{formatServiceTier(residency.tier)}</dd></div><div><dt>Timezone</dt><dd>{residency.timezone}</dd></div></dl>
         <div className="developer-residency-actions"><form action={enterViewAsAction}><input name="residencyId" type="hidden" value={residency.id} /><button className="button" type="submit">Open Workspace</button></form><Link className="button secondary" href={`/app/setup?${new URLSearchParams({ mode: "developer", residency: residency.id }).toString()}`}>Admin Settings</Link></div>
       </article>)}</div> : <div className="card empty">No Residency records exist yet.</div>}
     </section>
@@ -69,7 +70,7 @@ async function HfyWorkQueue() {
       {queue.length ? <div className="hfy-work-queue-groups">{[...grouped.values()].map((daypartsForResidency) => {
         const first = daypartsForResidency[0];
         return <section className="hfy-work-queue-group" key={first.residencyId}>
-          <header><div><p className="eyebrow">{first.residencyCityState || "Location pending"}</p><h3>{first.residencyName}</h3></div><div className="queue-residency-status"><span className={`platform-status ${first.residencyActive ? "active" : "inactive"}`}>{first.residencyActive ? "Platform active" : "Platform inactive"}</span><span className="pill">{first.residencyTier.replaceAll("_", " ")}</span></div></header>
+          <header><div><p className="eyebrow">{first.residencyCityState || "Location pending"}</p><h3>{first.residencyName}</h3></div><div className="queue-residency-status"><span className={`platform-status ${first.residencyActive ? "active" : "inactive"}`}>{first.residencyActive ? "Platform active" : "Platform inactive"}</span><span className="pill">{formatServiceTier(first.residencyTier)}</span></div></header>
           <div className="hfy-work-queue-list">{daypartsForResidency.map((daypart) => {
             const live = daypart.active && (!daypart.activeUntil || daypart.activeUntil >= today);
             return <article className={live ? "" : "inactive"} key={daypart.id}>
@@ -95,7 +96,7 @@ async function OperationsDashboard({ residencyId }: { residencyId?: string }) {
       <>
         <header className="page-header">
           <div><p className="eyebrow">Residency dashboard</p><h1>{selected.name}</h1><p className="subhead">Everything below belongs only to this residency program.</p></div>
-          <span className={`pill ${selected.tier}`}>{selected.tier.replaceAll("_", " ")}</span>
+          <span className={`pill ${selected.tier}`}>{formatServiceTier(selected.tier)}</span>
         </header>
         <section className="grid residency-overview-grid">
           <article className="card residency-summary-card">
@@ -111,7 +112,7 @@ async function OperationsDashboard({ residencyId }: { residencyId?: string }) {
             <div><p className="eyebrow">Residency profile</p><h2>Program details</h2></div>
             <dl>
               <div><dt>Location</dt><dd>{selected.cityState || "Location pending"}</dd></div>
-              <div><dt>Service tier</dt><dd>{selected.tier.replaceAll("_", " ")}</dd></div>
+              <div><dt>Service tier</dt><dd>{formatServiceTier(selected.tier)}</dd></div>
               <div><dt>Timezone</dt><dd>{selected.timezone}</dd></div>
             </dl>
             <Link className="button secondary" href={hfyResidencyHref("/app/setup", selected.id)}>Open residency setup</Link>
@@ -143,7 +144,7 @@ async function OperationsDashboard({ residencyId }: { residencyId?: string }) {
             <Link className="card residency-card residency-card-button" href={hfyResidencyHref("/app", residency.id)} aria-label={`Open ${residency.name} residency`} key={residency.id}>
               <div className="residency-card-top">
                 <div><h2>{residency.name}</h2><p className="location">{residency.cityState || "Location pending"}</p></div>
-                <span className={`pill ${residency.tier}`}>{residency.tier.replaceAll("_", " ")}</span>
+                <span className={`pill ${residency.tier}`}>{formatServiceTier(residency.tier)}</span>
               </div>
               <div className="metrics">
                 <div className="metric"><strong>{residency.upcomingShiftCount}</strong><span>Upcoming shifts</span></div>

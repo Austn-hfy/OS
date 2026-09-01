@@ -8,6 +8,7 @@ import { signOut } from "@/app/actions";
 import { PrivacyModeIndicator, PrivacyModeProvider, PrivacyModeToggle } from "@/components/privacy-mode";
 import { DayPartsPanel } from "@/components/day-parts-panel";
 import { enterViewAsAction } from "@/app/app/view-as-actions";
+import { formatServiceTier } from "@/domain/service-tier";
 
 type ResidencyOption = { id: string; name: string; cityState: string | null; tier: string; active: boolean };
 type OwnerMode = "developer" | "hfy";
@@ -108,7 +109,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
           ) : null}
         </div>
         <div className="sidebar-context">
-          <span>{mode === "developer" ? "Software business" : inPipeline ? "Pre-signature" : residency ? residency.tier.replaceAll("_", " ") : "HFY Programming"}</span>
+          <span>{mode === "developer" ? "Software business" : inPipeline ? "Pre-signature" : residency ? formatServiceTier(residency.tier) : "HFY Programming"}</span>
           <p>{mode === "developer" ? "Technical support, Platform access, and administration." : inPipeline ? "Leads before they move into Operations." : residency ? residency.cityState || "Location pending" : "Revenue work driven by Standing HFY Bookings."}</p>
         </div>
         <nav className="nav">
