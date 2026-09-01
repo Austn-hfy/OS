@@ -63,6 +63,11 @@ export type DaypartDateException = {
 
 export type SlotSchedulingStatus = "empty" | "partial" | "filled";
 
+export function daypartDateKey(daypartId: string, serviceDate: string): string {
+  weekdayForDate(serviceDate);
+  return `${daypartId}:${serviceDate}`;
+}
+
 export function weekdayForDate(serviceDate: string): number {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(serviceDate);
   if (!match) throw new Error("Date must use YYYY-MM-DD.");
@@ -199,7 +204,7 @@ export function projectDaypartSlots(
 
   const slots: ProjectedDaypartSlot[] = [];
   const exceptionsByDaypartDate = new Map(
-    dateExceptions.map((exception) => [`${exception.daypartId}:${exception.serviceDate}`, exception] as const),
+    dateExceptions.map((exception) => [daypartDateKey(exception.daypartId, exception.serviceDate), exception] as const),
   );
   let date = rangeStart;
   let daysVisited = 0;
@@ -209,8 +214,9 @@ export function projectDaypartSlots(
     for (const daypart of dayparts) {
       if (!daypart.active || (daypart.activeUntil && date > daypart.activeUntil)) continue;
       const rule = daypart.rules.find((item) => item.weekday === weekday);
-      if (!rule || existingDaypartDates.has(`${daypart.id}:${date}`)) continue;
-      const dateException = exceptionsByDaypartDate.get(`${daypart.id}:${date}`);
+      const dateKey = daypartDateKey(daypart.id, date);
+      if (!rule || existingDaypartDates.has(dateKey)) continue;
+      const dateException = exceptionsByDaypartDate.get(dateKey);
       if (dateException?.kind === "skip") continue;
       const startMinute = dateException?.kind === "override" ? dateException.startMinute : rule.startMinute;
       const endMinute = dateException?.kind === "override" ? dateException.endMinute : rule.endMinute;

@@ -5,7 +5,7 @@ import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { getCalendarData, getPublicCalendarLinkSettings, getResidencyList, getScheduleOccurrenceData } from "@/data/internal";
 import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
-import { calendarColorForShift, clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
+import { calendarColorForShift, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { getActiveTalentLookup, getDaypartDateExceptionsForResidencies, getDaypartsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar } from "./residency-calendar";
 
@@ -65,8 +65,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       };
     });
     const existingDaypartDates = new Set([
-      ...calendar.flatMap((shift) => shift.daypartId ? [`${shift.daypartId}:${shift.serviceDate}`] : []),
-      ...occurrences.map((occurrence) => `${occurrence.daypartId}:${occurrence.serviceDate}`),
+      ...calendar.flatMap((shift) => shift.daypartId ? [daypartDateKey(shift.daypartId, shift.serviceDate)] : []),
+      ...occurrences.map((occurrence) => daypartDateKey(occurrence.daypartId, occurrence.serviceDate)),
     ]);
     const projectedEvents = visibleResidencies.flatMap((residency) => projectDaypartSlots(
       visibleDayparts.filter((daypart) => daypart.residencyId === residency.id),
@@ -210,8 +210,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     };
   });
   const existingDaypartDates = new Set([
-    ...calendar.flatMap((shift) => shift.daypartId ? [`${shift.daypartId}:${shift.serviceDate}`] : []),
-    ...occurrences.map((occurrence) => `${occurrence.daypartId}:${occurrence.serviceDate}`),
+    ...calendar.flatMap((shift) => shift.daypartId ? [daypartDateKey(shift.daypartId, shift.serviceDate)] : []),
+    ...occurrences.map((occurrence) => daypartDateKey(occurrence.daypartId, occurrence.serviceDate)),
   ]);
   const projectedEvents = projectDaypartSlots(dayparts, range.from, range.to, existingDaypartDates, dateExceptions).map((slot) => ({
     id: slot.id,

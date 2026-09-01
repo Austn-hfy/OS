@@ -1023,7 +1023,10 @@
 
 @media (max-width: 1200px) {
   .hfy-style-system .main { padding-inline: clamp(20px, 3vw, 42px); }
-  .hfy-style-system .calendar-command-controls { gap: 12px; }
+  .hfy-style-system .calendar-command-bar { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .calendar-command-controls { width: 100%; flex-wrap: wrap; gap: 12px; }
+  .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) { margin-right: 0; }
+  .hfy-style-system .calendar-month-cluster { margin-left: auto; }
   .hfy-style-system .calendar-view-filters select { min-width: 126px; }
 }
 
@@ -1034,7 +1037,6 @@
   .hfy-style-system .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hfy-style-system .metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--hfy-line); }
   .hfy-style-system .metric:nth-child(4) { border-top: 1px solid var(--hfy-line); }
-  .hfy-style-system .calendar-command-bar { align-items: stretch; flex-direction: column; }
   .hfy-style-system .calendar-command-controls { align-items: end; }
   .hfy-style-system .login-form,
   .hfy-style-system .login-panel > div > .selection-form { padding: var(--hfy-space-6); }
@@ -1050,7 +1052,7 @@
   .hfy-style-system .preview-nav button.active { box-shadow: inset 0 -2px var(--hfy-action-strong), inset 0 1px rgba(255, 255, 255, 0.65); }
   .hfy-style-system .calendar-command-controls { align-items: stretch; flex-direction: column; }
   .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) { margin-right: 0; }
-  .hfy-style-system .calendar-month-cluster { align-self: stretch; }
+  .hfy-style-system .calendar-month-cluster { align-self: stretch; margin-left: 0; }
   .hfy-style-system .login-art { min-height: 34vh; }
 }
 
@@ -1406,6 +1408,10 @@
 .hfy-style-system .main > .residency-toolbar strong { font-size: 12px; }
 
 .hfy-style-system .calendar-main > .calendar-page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
   gap: var(--hfy-space-2);
   padding: 14px;
   overflow: hidden;

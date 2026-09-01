@@ -237,9 +237,9 @@ body:has(.daypart-drawer-backdrop) .view-as-control { opacity: 0; visibility: hi
 .view-as-banner button { appearance: none; border: 1px solid rgba(255,255,255,.42); border-radius: 999px; color: white; background: rgba(255,255,255,.12); padding: 6px 11px; font-size: 10px; font-weight: 750; }
 .preview-context { cursor: default; }
 .view-as-main > .calendar-page { min-height: 0; flex: 1; }
-.main.calendar-main { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; padding-top: 24px; padding-bottom: 24px; }
-.calendar-main > .calendar-page { flex: 1; }
-.calendar-page { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.main.calendar-main { width: 100%; min-width: 0; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; padding-top: 24px; padding-bottom: 24px; }
+.calendar-main > .calendar-page { width: 100%; max-width: 100%; min-width: 0; min-height: 0; flex: 1 1 auto; }
+.calendar-page { width: 100%; max-width: 100%; min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .calendar-page .page-header { margin-bottom: 8px; }
 .calendar-page .page-header h1 { margin-block: 3px 0; font-size: clamp(30px, 3vw, 39px); }
 .calendar-page .page-header .subhead { font-size: 13px; }
@@ -536,8 +536,8 @@ tr:last-child td { border-bottom: 0; }
 .month-calendar-wrap.compact .calendar-event-line strong { font-size: 8px; }
 .month-calendar-wrap.compact .calendar-event-line > span, .month-calendar-wrap.compact .calendar-event small { font-size: 7px; line-height: 1; }
 .month-calendar-wrap.compact .calendar-more-events { min-height: 9px; font-size: 7px; line-height: 1; }
-.calendar-page .month-calendar-wrap { min-height: 0; height: 100%; overflow-y: hidden; }
-.calendar-page .month-calendar { height: 100%; grid-template-rows: 30px repeat(var(--calendar-weeks), minmax(0, 1fr)); }
+.calendar-page .month-calendar-wrap { width: 100%; max-width: 100%; min-height: 0; height: 100%; overflow-y: hidden; }
+.calendar-page .month-calendar { width: 100%; min-width: min(880px, 100%); height: 100%; grid-template-rows: 30px repeat(var(--calendar-weeks), minmax(0, 1fr)); }
 .calendar-page .calendar-day, .calendar-page .month-calendar-wrap.compact .calendar-day { min-height: 0; overflow: hidden; }
 .calendar-page .calendar-events { max-height: 100%; overflow: hidden; }
 .booking-list { display: grid; gap: 8px; }
@@ -731,9 +731,7 @@ tr:last-child td { border-bottom: 0; }
 .quick-time-summary strong { font-family: "Plus Jakarta Sans", sans-serif; font-size: 15px; }
 .quick-time-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .quick-time-fields input { min-height: 42px; }
-.calendar-daypart-setup-button { min-height: 48px; display: grid; align-content: center; gap: 2px; text-align: left; }
-.calendar-daypart-setup-button strong { font-size: 10px; }
-.calendar-daypart-setup-button span { color: var(--muted); font-size: 8px; font-weight: 700; }
+.calendar-daypart-setup-button { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; padding-inline: 13px; font-size: 10px; line-height: 1.15; text-align: center; white-space: nowrap; }
 .standing-hfy-calendar-notice { display: grid; gap: 5px; padding: 17px 18px; border: 1px solid color-mix(in srgb, var(--hfy-booked-color) 42%, var(--line)); border-left: 6px solid var(--hfy-booked-color); border-radius: 16px; background: color-mix(in srgb, var(--hfy-booked-color) 8%, white); }
 .standing-hfy-calendar-notice > span { color: var(--hfy-booked-color); font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
 .standing-hfy-calendar-notice > strong { font-size: 14px; }
@@ -1191,6 +1189,7 @@ tr:last-child td { border-bottom: 0; }
   .public-calendar-day { grid-template-columns: 1fr; gap: 12px; padding: 16px; }
   .public-calendar-scope-form fieldset, .public-calendar-dayparts { grid-template-columns: 1fr; }
   .main.calendar-main { height: auto; min-height: 100dvh; overflow: visible; }
+  .calendar-page .month-calendar { min-width: 880px; }
   .residency-calendar-main .preview-ribbon.inline { margin-bottom: 20px; }
   .residency-calendar-main .residency-toolbar { position: static; align-items: center; flex-direction: row; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line); text-align: left; }
   .residency-calendar-main .calendar-page .page-header { min-height: 0; padding-right: 0; }

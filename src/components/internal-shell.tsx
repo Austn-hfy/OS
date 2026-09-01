@@ -13,7 +13,7 @@ type ResidencyOption = { id: string; name: string; cityState: string | null; tie
 type OwnerMode = "developer" | "hfy";
 
 export function resolveOwnerMode(pathname: string, requestedMode: string | null): OwnerMode {
-  const hfyOnlyRoute = ["/app/leads", "/app/calendar", "/app/payouts", "/app/invoices", "/app/talent"]
+  const hfyOnlyRoute = ["/app/leads", "/app/calendar", "/app/dayparts", "/app/payouts", "/app/invoices", "/app/talent"]
     .some((route) => pathname.startsWith(route));
   if (hfyOnlyRoute) return "hfy";
   if (requestedMode === "developer") return "developer";
@@ -41,6 +41,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
   const links: Array<[string, string]> = inResidency ? [
     ["Overview", `/app${residencySuffix}`],
     ["Calendar", `/app/calendar${residencySuffix}`],
+    ["Day Parts", `/app/dayparts${residencySuffix}`],
     ["Payouts", `/app/payouts${residencySuffix}`],
     ["Invoices", `/app/invoices${residencySuffix}`],
     ["Setup", `/app/setup${residencySuffix}`],
@@ -117,7 +118,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
               <button className={`day-parts-nav-toggle ${pathname.startsWith("/app/talent") ? "active" : ""}`} type="button" aria-expanded={talentExpanded} onClick={() => setTalentExpanded((open) => !open)}><span>Talent</span><span aria-hidden="true">⌄</span></button>
               {talentExpanded ? <div className="day-parts-nav-list"><Link className={pathname === "/app/talent" ? "active" : ""} href="/app/talent?mode=hfy">Artist Lookup</Link><Link className={pathname === "/app/talent/roster" ? "active" : ""} href="/app/talent/roster?mode=hfy">Roster</Link></div> : null}
             </div> : <Link className={isActive(label, href) ? "active" : ""} href={href}>{label}</Link>}
-            {mode === "hfy" && label === "Calendar" ? <div className={`day-parts-nav ${daypartsExpanded ? "expanded" : ""}`}>
+            {mode === "hfy" && !inResidency && label === "Calendar" ? <div className={`day-parts-nav ${daypartsExpanded ? "expanded" : ""}`}>
               <button className="day-parts-nav-toggle" type="button" aria-expanded={daypartsExpanded} onClick={() => {
                 if (inResidency && residency) {
                   const willOpen = daypartsResidencyId !== residency.id;

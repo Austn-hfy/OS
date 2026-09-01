@@ -3,6 +3,7 @@ import {
   HFY_BOOKED_COLOR,
   calendarColorForShift,
   clockToMinute,
+  daypartDateKey,
   daypartBookingRecordKind,
   formatLocalMinute,
   formatCompactMinuteRange,
@@ -181,5 +182,35 @@ describe("Daypart weekly rules", () => {
       { date: "2026-09-20", start: 720, end: 1140 },
     ]);
     expect(daypart.rules[0]).toMatchObject({ startMinute: 720, endMinute: 1140 });
+  });
+
+  it("scopes Request HFY to one Client Managed date and leaves sibling occurrences unchanged", () => {
+    const daypart = {
+      id: "sunset",
+      name: "Sunset DJ Set",
+      room: "Terrace",
+      color: "#2783DC",
+      type: "dj_artist" as const,
+      billingMode: "tracking_only" as const,
+      active: true,
+      activeUntil: null,
+      defaultTalentRateCents: null,
+      rules: [{ weekday: 5, startMinute: 1080, endMinute: 1260, defaultDjCount: null }],
+    };
+    const requestedDate = daypartDateKey(daypart.id, "2026-09-04");
+
+    const whileRequested = projectDaypartSlots(
+      [daypart],
+      "2026-09-04",
+      "2026-09-18",
+      new Set([requestedDate]),
+    );
+    expect(whileRequested.map((slot) => slot.date)).toEqual(["2026-09-11", "2026-09-18"]);
+    expect(whileRequested.every((slot) => slot.billingMode === "tracking_only")).toBe(true);
+    expect(daypart.billingMode).toBe("tracking_only");
+
+    const afterCancellation = projectDaypartSlots([daypart], "2026-09-04", "2026-09-18", new Set());
+    expect(afterCancellation.map((slot) => slot.date)).toEqual(["2026-09-04", "2026-09-11", "2026-09-18"]);
+    expect(afterCancellation.filter((slot) => slot.date !== "2026-09-04")).toEqual(whileRequested);
   });
 });

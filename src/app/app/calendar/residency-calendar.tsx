@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState, type CSSProperties } from "react";
-import { addCalendarAssignmentAction, bookResidencyDateAction, clearDaypartDateExceptionAction, deleteCalendarShiftAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, type ResidencyActionState } from "@/app/app/actions";
+import { addCalendarAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, deleteCalendarShiftAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, type ResidencyActionState } from "@/app/app/actions";
 import { ArtistSearchPicker } from "@/components/artist-search-picker";
 import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
@@ -15,7 +15,6 @@ import { DEFAULT_DAYPART_COLOR, HFY_BOOKED_COLOR, clockToMinute, formatLocalMinu
 import { monthLabel, shiftMonthKey } from "@/lib/calendar";
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
-import { DayPartsPanel } from "@/components/day-parts-panel";
 
 export type CalendarAssignment = {
   id: string;
@@ -65,6 +64,7 @@ type ResidencyCalendarProps = {
   dateExceptions: DaypartDateException[];
   previewMode?: boolean;
   calendarBasePath?: string;
+  daypartsHref?: string;
   canManage?: boolean;
 };
 
@@ -86,7 +86,7 @@ function emptySlot(talentId: string, start: string, end: string): SlotDraft {
   return { id: crypto.randomUUID(), talentId, start, end, confirmed: false, compensationType: "hourly", rateOverride: "", fixedFee: "" };
 }
 
-export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, dateExceptions, previewMode = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, dateExceptions, previewMode = false, calendarBasePath = "/app/calendar", daypartsHref, canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
   const [modal, setModal] = useState<ModalState>(null);
   const [suggestions, setSuggestions] = useState<SuggestionDraft[]>([]);
@@ -100,7 +100,6 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   const [dateActionState, setDateActionState] = useState<ResidencyActionState>(initialActionState);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [daypartFilter, setDaypartFilter] = useState("all");
-  const [createDaypartOpen, setCreateDaypartOpen] = useState(false);
   const submitBooking = async (previous: ResidencyActionState, formData: FormData) => {
     const result = await bookResidencyDateAction(previous, formData);
     if (result.status === "success") setModal(null);
@@ -559,6 +558,24 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     }
   }
 
+  async function cancelSelectedHfyRequest() {
+    if (!editingEvent?.daypartId || editingEvent.economicsMode !== "hfy_request") return;
+    if (!window.confirm(`Cancel the HFY request for ${editingEvent.title} on ${editingEvent.date}? Only this date will return to Client Managed.`)) return;
+    const formData = new FormData();
+    formData.set("residencyId", residency.id);
+    formData.set("shiftId", editingEvent.id);
+    formData.set("daypartId", editingEvent.daypartId);
+    formData.set("serviceDate", editingEvent.date);
+    setEditPending(true);
+    const result = await cancelHfyTalentRequestAction(formData);
+    setEditPending(false);
+    setDateActionState(result);
+    if (result.status === "success") {
+      setModal(null);
+      router.refresh();
+    }
+  }
+
   async function restoreStandingDate() {
     if (modal?.type !== "add" || !activeSuggestion?.sourceDaypartId) return;
     const formData = new FormData();
@@ -580,6 +597,9 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     : `${calendarBasePath}?month=${target}`;
   const previousHref = monthHref(shiftMonthKey(monthKey, -1));
   const nextHref = monthHref(shiftMonthKey(monthKey, 1));
+  const createDaypartHref = daypartsHref ?? (previewMode
+    ? "/residency/dayparts?create=1"
+    : `/app/dayparts?${new URLSearchParams({ mode: "hfy", residency: residency.id, create: "1" }).toString()}`);
 
   return (
     <>
@@ -590,7 +610,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="all">All slots</option><option value="needs">Needs scheduling</option><option value="filled">Scheduled</option></select></div>
           <div className="field"><label htmlFor="calendar-daypart-filter">Daypart</label><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></div>
           </div>
-          {canManage ? <button className="button secondary calendar-daypart-setup-button" type="button" onClick={() => setCreateDaypartOpen(true)}><strong>+ Create New Daypart</strong><span>Opens Day Parts setup →</span></button> : null}
+          {canManage ? <Link className="button secondary calendar-daypart-setup-button" href={createDaypartHref}>+ Create New Daypart</Link> : null}
           {canManage ? <CalendarShareButton residencyId={residency.id} residencyName={residency.name} linkSettings={residency.calendarLinkSettings} dayparts={dayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} /> : null}
           <CalendarStatusLegend />
           <div className="calendar-month-cluster">
@@ -688,12 +708,11 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
               {editState.status !== "idle" ? <p className={editState.status === "error" ? "error" : "success"} aria-live="polite">{editState.message}</p> : null}
               {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
               {!editingEvent.assignments.length ? <div className="empty quick-empty">This Shift has no Assignment slots to edit.</div> : null}
-              <footer className="quick-modal-footer">{editingEventCanManageAssignments ? <><button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingShift}>Delete Shift</button>{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>Skip this date</button> : null}<span>Deletion is blocked once financial history is finalized.</span></> : <span>Ownership controls are enforced for this slot.</span>}<button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
+              <footer className="quick-modal-footer">{editingEventCanManageAssignments ? <><button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingShift}>Delete Shift</button>{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>Skip this date</button> : null}<span>Deletion is blocked once financial history is finalized.</span></> : previewMode && editingEvent.economicsMode === "hfy_request" ? <><button className="button danger-button" type="button" disabled={editPending} onClick={cancelSelectedHfyRequest}>{editPending ? "Cancelling…" : "Cancel Request HFY"}</button><span>Only {editingEvent.date} will return to Client Managed.</span></> : <span>Ownership controls are enforced for this slot.</span>}<button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
             </> : <div className="empty quick-empty">This slot is no longer available.</div>}
           </div>
         </section>
       </div> : null}
-      {createDaypartOpen ? <DayPartsPanel residencyId={residency.id} residencyName={residency.name} onClose={() => setCreateDaypartOpen(false)} hideFinancials={previewMode} initialCreate /> : null}
     </>
   );
 }

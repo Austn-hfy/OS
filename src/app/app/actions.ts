@@ -18,7 +18,7 @@ import { createShift, deleteShift } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { issuePublicCalendarToken } from "@/domain/public-calendar";
-import { fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
+import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
@@ -1211,7 +1211,9 @@ export async function saveDaypartAction(_previous: ResidencyActionState, formDat
     await saveDaypart(actor, protectedPayload);
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
+    revalidatePath("/app/dayparts");
     revalidatePath("/residency/calendar");
+    revalidatePath("/residency/dayparts");
     return { status: "success", message: `${parsed.name} saved.` };
   } catch (error) {
     const message = error instanceof Error && !error.message.startsWith("Failed query:")
@@ -1228,8 +1230,10 @@ export async function removeDaypartAction(formData: FormData): Promise<Residency
     const result = await removeDaypart(actor, parsed.residencyId, parsed.daypartId);
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
+    revalidatePath("/app/dayparts");
     revalidatePath("/app");
     revalidatePath("/residency/calendar");
+    revalidatePath("/residency/dayparts");
     return {
       status: "success",
       message: result.mode === "archived"
@@ -1433,6 +1437,24 @@ export async function bookResidencyDateAction(_previous: ResidencyActionState, f
     return { status: "success", message: `${count} calendar slot${count === 1 ? "" : "s"} scheduled.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to book this date." };
+  }
+}
+
+export async function cancelHfyTalentRequestAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      shiftId: z.uuid(),
+      daypartId: z.uuid(),
+      serviceDate: z.iso.date(),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    await cancelHfyTalentRequest(actor, parsed);
+    revalidateResidencyCalendars();
+    revalidatePath("/app");
+    return { status: "success", message: "HFY request cancelled for this date only. The date is Client Managed again." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to cancel this HFY request." };
   }
 }
 

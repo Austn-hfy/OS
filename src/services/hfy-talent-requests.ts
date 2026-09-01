@@ -2,8 +2,8 @@ import { and, eq, gt, inArray, isNull, lt, or, gte, lte } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, hfyTalentRequests, invoices, residencyTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents } from "@/domain/airtable-parity";
-import { HFY_BOOKED_COLOR } from "@/domain/dayparts";
-import type { InternalActor } from "@/lib/auth";
+import { HFY_BOOKED_COLOR, weekdayForDate } from "@/domain/dayparts";
+import type { AuditActor, InternalActor } from "@/lib/auth";
 
 export type FulfillHfyTalentRequestInput = {
   requestId: string;
@@ -11,6 +11,73 @@ export type FulfillHfyTalentRequestInput = {
   clientRateCents: number;
   artistRateCents: number;
 };
+
+export type CancelHfyTalentRequestInput = {
+  residencyId: string;
+  shiftId: string;
+  daypartId: string;
+  serviceDate: string;
+};
+
+export async function cancelHfyTalentRequest(actor: AuditActor, input: CancelHfyTalentRequestInput) {
+  if (actor.kind !== "residency") throw new Error("Only the Residency can cancel its pending HFY request.");
+  weekdayForDate(input.serviceDate);
+
+  return getDb().transaction(async (tx) => {
+    const [request] = await tx.select({
+      id: hfyTalentRequests.id,
+      status: hfyTalentRequests.status,
+      residencyId: shifts.residencyId,
+      daypartId: shifts.daypartId,
+      serviceDate: shifts.serviceDate,
+      economicsMode: shifts.economicsMode,
+    }).from(hfyTalentRequests)
+      .innerJoin(shifts, eq(hfyTalentRequests.shiftId, shifts.id))
+      .where(and(
+        eq(hfyTalentRequests.shiftId, input.shiftId),
+        eq(shifts.residencyId, input.residencyId),
+        eq(shifts.daypartId, input.daypartId),
+        eq(shifts.serviceDate, input.serviceDate),
+      ))
+      .limit(1)
+      .for("update");
+    if (!request || request.status !== "pending" || request.economicsMode !== "hfy_request") {
+      throw new Error("This dated HFY request is no longer pending.");
+    }
+
+    const cancelledAt = new Date();
+    const [claimed] = await tx.update(hfyTalentRequests).set({
+      status: "cancelled",
+      updatedAt: cancelledAt,
+    }).where(and(
+      eq(hfyTalentRequests.id, request.id),
+      eq(hfyTalentRequests.status, "pending"),
+    )).returning({ id: hfyTalentRequests.id });
+    if (!claimed) throw new Error("This dated HFY request is no longer pending.");
+
+    await tx.delete(shifts).where(and(
+      eq(shifts.id, input.shiftId),
+      eq(shifts.residencyId, input.residencyId),
+      eq(shifts.daypartId, input.daypartId),
+      eq(shifts.serviceDate, input.serviceDate),
+      eq(shifts.economicsMode, "hfy_request"),
+    ));
+    await tx.insert(auditLog).values({
+      residencyId: input.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "hfy_talent_request_cancelled",
+      entityType: "hfy_talent_request",
+      entityId: request.id,
+      details: {
+        shiftId: input.shiftId,
+        daypartId: input.daypartId,
+        serviceDate: input.serviceDate,
+      },
+    });
+    return { daypartId: input.daypartId, serviceDate: input.serviceDate };
+  });
+}
 
 export async function fulfillHfyTalentRequest(actor: InternalActor, input: FulfillHfyTalentRequestInput) {
   if (!Number.isInteger(input.clientRateCents) || input.clientRateCents < 0) throw new Error("Enter a valid client-billed hourly rate.");
@@ -30,7 +97,8 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
     }).from(hfyTalentRequests)
       .innerJoin(shifts, eq(hfyTalentRequests.shiftId, shifts.id))
       .where(eq(hfyTalentRequests.id, input.requestId))
-      .limit(1);
+      .limit(1)
+      .for("update");
     if (!request || request.status !== "pending" || request.economicsMode !== "hfy_request") {
       throw new Error("This HFY request is no longer pending.");
     }
