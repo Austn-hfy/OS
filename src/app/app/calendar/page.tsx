@@ -5,7 +5,7 @@ import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { getCalendarData, getPublicCalendarLinkSettings, getResidencyList, getScheduleOccurrenceData } from "@/data/internal";
 import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
-import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
+import { calendarColorForShift, clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { getActiveTalentLookup, getDaypartDateExceptionsForResidencies, getDaypartsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar } from "./residency-calendar";
 
@@ -44,7 +44,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         title: calendarResidency ? shift.name : `${shift.name} · ${shift.residencyName}`,
         time: `${formatCompactMinuteRange(shiftStartMinute, shiftEndMinute)} · ${statusLabel}`,
         residencyName: shift.residencyName,
-        color: shift.daypartColor ?? shift.shiftCalendarColor ?? undefined,
+        color: calendarColorForShift(shift.daypartColor, shift.shiftCalendarColor),
         tone: calendarToneForSlot(shift.room, tones[Math.max(0, residencyList.findIndex((item) => item.id === shift.residencyId)) % tones.length]),
         schedulingStatus,
         startMinute: shiftStartMinute,
@@ -148,7 +148,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     title: matchedDaypart?.name ?? shift.name,
     time: `${formatCompactMinuteRange(shiftStartMinute, shiftEndMinute)} · ${schedulingLabel}`,
     residencyName: artistNames.length ? artistNames.join(" + ") : shift.manualHostName || shift.programDetails || shift.name,
-    color: matchedDaypart?.color ?? shift.daypartColor ?? shift.shiftCalendarColor ?? undefined,
+    color: calendarColorForShift(matchedDaypart?.color ?? shift.daypartColor, shift.shiftCalendarColor),
     tone: calendarToneForSlot(shift.room, daypartTones[Math.max(0, daypartIndex) % daypartTones.length]),
     daypartId: shift.daypartId,
     shiftStartMinute,
@@ -156,7 +156,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     projected: false,
     recordType: "financial_shift" as const,
     daypartType: "dj_artist" as const,
-    billingMode: "billed_by_hfy" as const,
+    billingMode: matchedDaypart?.billingMode ?? "billed_by_hfy" as const,
     programDetails: shift.programDetails,
     manualHostName: shift.manualHostName,
     economicsMode: shift.economicsMode,

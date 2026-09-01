@@ -2,6 +2,7 @@ import { and, eq, gt, inArray, isNull, lt, or, gte, lte } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, hfyTalentRequests, invoices, residencyTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents } from "@/domain/airtable-parity";
+import { HFY_BOOKED_COLOR } from "@/domain/dayparts";
 import type { InternalActor } from "@/lib/auth";
 
 export type FulfillHfyTalentRequestInput = {
@@ -98,6 +99,7 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
         : "No Invoice period covers this Shift.";
     await tx.update(shifts).set({
       economicsMode: "hfy",
+      calendarColor: HFY_BOOKED_COLOR,
       invoiceId: coveringInvoices.length === 1 ? coveringInvoices[0].id : null,
       clientRateOverrideCents: input.clientRateCents,
       clientRateCents: input.clientRateCents,

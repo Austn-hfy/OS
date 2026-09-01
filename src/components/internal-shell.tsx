@@ -108,7 +108,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
         </div>
         <div className="sidebar-context">
           <span>{mode === "developer" ? "Software business" : inPipeline ? "Pre-signature" : residency ? residency.tier.replaceAll("_", " ") : "HFY Programming"}</span>
-          <p>{mode === "developer" ? "Technical support, Platform access, and administration." : inPipeline ? "Leads before they move into Operations." : residency ? residency.cityState || "Location pending" : "Revenue work driven by Billed-by-HFY Dayparts."}</p>
+          <p>{mode === "developer" ? "Technical support, Platform access, and administration." : inPipeline ? "Leads before they move into Operations." : residency ? residency.cityState || "Location pending" : "Revenue work driven by Standing HFY Bookings."}</p>
         </div>
         <nav className="nav">
           <p className="nav-label">{inResidency ? "Residency" : mode === "developer" ? "Developer" : "HFY"}</p>

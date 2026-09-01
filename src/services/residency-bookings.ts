@@ -2,7 +2,7 @@ import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or } from "drizzle-orm"
 import { getDb } from "@/db/client";
 import { assignments, auditLog, clientAssignmentTerms, dayparts, hfyTalentRequests, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
-import { daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import type { AuditActor } from "@/lib/auth";
 
@@ -133,9 +133,17 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       }
       const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.startMinute), residency.timezone);
       const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.endMinute), residency.timezone);
-      const recordKind = daypartBookingRecordKind(rule.type, rule.billingMode);
+      const recordKind = actor.kind === "residency" && rule.type === "dj_artist"
+        ? "financial_shift" as const
+        : daypartBookingRecordKind(rule.type, rule.billingMode);
       if (requested.requestHfy && (actor.kind !== "residency" || rule.type !== "dj_artist" || requested.assignments.length)) {
         throw new Error("Request HFY must be a client-created DJ slot without a selected artist.");
+      }
+      if (actor.kind === "residency" && rule.type === "dj_artist" && rule.billingMode === "billed_by_hfy") {
+        throw new Error("Standing HFY Booking dates are managed by HFY automatically.");
+      }
+      if (!requested.daypartId && rule.color.toUpperCase() === HFY_BOOKED_COLOR) {
+        throw new Error("HFY pink is reserved for fulfilled HFY bookings. Choose another calendar color.");
       }
       if (actor.kind === "residency" && recordKind === "financial_shift" && !requested.requestHfy && !requested.assignments.length) {
         throw new Error("Choose one of your artists or use Request HFY.");

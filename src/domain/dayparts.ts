@@ -1,6 +1,8 @@
 import { addDays } from "./airtable-parity";
 
 export const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+export const HFY_BOOKED_COLOR = "#EC4899";
+export const DEFAULT_DAYPART_COLOR = "#2783DC";
 
 export type DaypartRuleInput = {
   weekday: number;
@@ -12,6 +14,11 @@ export type DaypartRuleInput = {
 export type DaypartType = "dj_artist" | "house_activity";
 export type DaypartBillingMode = "billed_by_hfy" | "tracking_only";
 export type DaypartBookingRecordKind = "financial_shift" | "tracking_occurrence";
+
+export function calendarColorForShift(daypartColor: string | null, shiftCalendarColor: string | null): string | undefined {
+  if (shiftCalendarColor?.toUpperCase() === HFY_BOOKED_COLOR) return HFY_BOOKED_COLOR;
+  return daypartColor ?? shiftCalendarColor ?? undefined;
+}
 
 export function daypartBookingRecordKind(type: DaypartType, billingMode: DaypartBillingMode | null): DaypartBookingRecordKind {
   if (type === "house_activity") return "tracking_occurrence";

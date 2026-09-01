@@ -1186,7 +1186,7 @@ const daypartPayloadSchema = z.object({
     context.addIssue({ code: "custom", message: "Choose how this DJ / Artist Daypart is billed." });
   }
   if (daypart.billingMode === "tracking_only" && daypart.defaultTalentRateCents != null) {
-    context.addIssue({ code: "custom", message: "Tracking-only Dayparts cannot include a talent rate." });
+    context.addIssue({ code: "custom", message: "Client Managed Dayparts cannot include an HFY talent rate." });
   }
 });
 

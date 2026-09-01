@@ -56,16 +56,16 @@ async function HfyWorkQueue() {
   }
 
   return <>
-    <header className="page-header owner-mode-header hfy-mode-header"><div><p className="eyebrow">HFY · Programming</p><h1>Work Queue</h1><p className="subhead">Every Daypart marked Billed by HFY, across every Residency. This is the programming work that directly represents HFY revenue.</p></div><Link className="button secondary" href="/app?mode=hfy&view=operations">Open Operations</Link></header>
+    <header className="page-header owner-mode-header hfy-mode-header"><div><p className="eyebrow">HFY · Programming</p><h1>Work Queue</h1><p className="subhead">Every Standing HFY Booking, across every Residency. This is the programming work that directly represents HFY revenue.</p></div><Link className="button secondary" href="/app?mode=hfy&view=operations">Open Operations</Link></header>
     <section className="owner-mode-summary hfy-summary" aria-label="HFY Programming summary">
       <article><strong>{liveQueue.length}</strong><span>Live Dayparts</span></article>
-      <article><strong>{queue.length}</strong><span>Total Billed by HFY</span></article>
+      <article><strong>{queue.length}</strong><span>Standing HFY Bookings</span></article>
       <article><strong>{residencyCount}</strong><span>Residencies represented</span></article>
       <article><strong>{queue.length - liveQueue.length}</strong><span>Inactive or ended</span></article>
     </section>
     <HfyRequestQueue requests={hfyRequests.requests} artists={hfyRequests.artists} />
     <section className="hfy-work-queue-section">
-      <div className="section-heading"><div><p className="eyebrow">Revenue source of truth</p><h2>Billed-by-HFY Dayparts</h2><p className="subhead">Residency Platform status never removes a matching Daypart from this view. Inactive records stay visible and clearly labeled.</p></div></div>
+      <div className="section-heading"><div><p className="eyebrow">Revenue source of truth</p><h2>Standing HFY Bookings</h2><p className="subhead">Residency Platform status never removes a matching Daypart from this view. Inactive records stay visible and clearly labeled.</p></div></div>
       {queue.length ? <div className="hfy-work-queue-groups">{[...grouped.values()].map((daypartsForResidency) => {
         const first = daypartsForResidency[0];
         return <section className="hfy-work-queue-group" key={first.residencyId}>
@@ -81,7 +81,7 @@ async function HfyWorkQueue() {
             </article>;
           })}</div>
         </section>;
-      })}</div> : <div className="card empty">No Dayparts are currently marked Billed by HFY.</div>}
+      })}</div> : <div className="card empty">No Dayparts are currently set as Standing HFY Bookings.</div>}
     </section>
   </>;
 }

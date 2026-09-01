@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  HFY_BOOKED_COLOR,
+  calendarColorForShift,
   clockToMinute,
   daypartBookingRecordKind,
   formatLocalMinute,
@@ -15,6 +17,12 @@ import {
 } from "./dayparts";
 
 describe("Daypart weekly rules", () => {
+  it("lets a fulfilled HFY request override its Client Managed Daypart color", () => {
+    expect(calendarColorForShift("#2783DC", HFY_BOOKED_COLOR)).toBe(HFY_BOOKED_COLOR);
+    expect(calendarColorForShift("#2783DC", null)).toBe("#2783DC");
+    expect(calendarColorForShift(null, "#7A65D1")).toBe("#7A65D1");
+  });
+
   it("routes billed and tracking-only Dayparts to separate record chains", () => {
     expect(daypartBookingRecordKind("dj_artist", "billed_by_hfy")).toBe("financial_shift");
     expect(daypartBookingRecordKind("dj_artist", "tracking_only")).toBe("tracking_occurrence");

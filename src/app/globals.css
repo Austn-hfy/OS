@@ -586,6 +586,7 @@ tr:last-child td { border-bottom: 0; }
 .daypart-color-control { min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.9); }
 .daypart-color-control input { width: 38px; height: 30px; min-height: 30px; padding: 0; border: 0; border-radius: 8px; overflow: hidden; }
 .daypart-color-control strong { font-size: 11px; }
+.daypart-color-control.hfy-reserved-color span { width: 38px; height: 30px; flex: 0 0 38px; border: 2px solid white; border-radius: 8px; box-shadow: 0 0 0 1px var(--line); }
 .daypart-color-presets { display: flex; gap: 6px; flex-wrap: wrap; }
 .daypart-color-presets button { width: 22px; height: 22px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
 .daypart-color-presets button.active { box-shadow: 0 0 0 2px var(--ink); }
@@ -714,6 +715,13 @@ tr:last-child td { border-bottom: 0; }
 .quick-shift-options[open] summary { border-bottom: 1px solid var(--line); }
 .quick-shift-options .quick-time-fields { padding: 11px 12px 12px; }
 .quick-shift-options > small { display: block; padding: 0 12px 12px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.quick-date-hours { display: grid; gap: 12px; padding: 14px; }
+.quick-date-hours-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.quick-date-hours-heading > div { display: grid; gap: 3px; }
+.quick-date-hours-heading strong { font-size: 12px; }
+.quick-date-hours-heading small { color: var(--muted); font-size: 10px; line-height: 1.45; }
+.quick-date-hours-heading > span { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; color: #6f3a11; background: #f6e7ce; font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.quick-date-hours .date-exception-actions { padding: 0; }
 .date-exception-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 12px 10px; }
 .quick-time-choice { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 13px; background: #e8eaed; }
 .quick-time-choice button { appearance: none; border: 0; border-radius: 10px; padding: 9px; color: var(--muted); background: transparent; font-size: 11px; font-weight: 750; }
@@ -723,6 +731,13 @@ tr:last-child td { border-bottom: 0; }
 .quick-time-summary strong { font-family: "Plus Jakarta Sans", sans-serif; font-size: 15px; }
 .quick-time-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .quick-time-fields input { min-height: 42px; }
+.calendar-daypart-setup-button { min-height: 48px; display: grid; align-content: center; gap: 2px; text-align: left; }
+.calendar-daypart-setup-button strong { font-size: 10px; }
+.calendar-daypart-setup-button span { color: var(--muted); font-size: 8px; font-weight: 700; }
+.standing-hfy-calendar-notice { display: grid; gap: 5px; padding: 17px 18px; border: 1px solid color-mix(in srgb, var(--hfy-booked-color) 42%, var(--line)); border-left: 6px solid var(--hfy-booked-color); border-radius: 16px; background: color-mix(in srgb, var(--hfy-booked-color) 8%, white); }
+.standing-hfy-calendar-notice > span { color: var(--hfy-booked-color); font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.standing-hfy-calendar-notice > strong { font-size: 14px; }
+.standing-hfy-calendar-notice > small { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .quick-artist-search input { min-height: 42px; }
 .quick-assignment-list, .quick-reschedule-list { display: grid; gap: 8px; }
 .quick-assignment-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; }

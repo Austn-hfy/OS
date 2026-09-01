@@ -1,7 +1,7 @@
 import { formatTimeInput } from "@/components/format";
 import { getCalendarData, getPublicCalendarLinkSettings, getScheduleOccurrenceData } from "@/data/internal";
 import { getResidencyClientSafeRoster } from "@/data/residency-client";
-import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
+import { calendarColorForShift, clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { requireResidencyActor } from "@/lib/auth";
 import { calendarToneForSlot, monthRange, normalizeMonthKey } from "@/lib/calendar";
 import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
@@ -35,9 +35,9 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
       id: shift.id, date: shift.serviceDate, title: matchedDaypart?.name ?? shift.name,
       time: `${formatCompactMinuteRange(start, end)} · ${pendingHfy ? "Request HFY pending" : status === "empty" ? "Needs scheduling" : status === "partial" ? "Partially scheduled" : `${activeAssignments.length} talent`}`,
       residencyName: pendingHfy ? "HFY staffing requested" : names.join(" + ") || shift.name,
-      color: matchedDaypart?.color ?? shift.daypartColor ?? shift.shiftCalendarColor ?? undefined,
+      color: calendarColorForShift(matchedDaypart?.color ?? shift.daypartColor, shift.shiftCalendarColor),
       tone: calendarToneForSlot(shift.room, "blue"), daypartId: shift.daypartId, shiftStartMinute: start, shiftEndMinute: end,
-      projected: false, recordType: "financial_shift", daypartType: "dj_artist", billingMode: "billed_by_hfy",
+      projected: false, recordType: "financial_shift", daypartType: "dj_artist", billingMode: matchedDaypart?.billingMode ?? "billed_by_hfy",
       programDetails: "", manualHostName: "", schedulingStatus: status,
       economicsMode: shift.economicsMode,
       assignments: activeAssignments.map((assignment) => ({
