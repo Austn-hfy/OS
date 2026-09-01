@@ -11,7 +11,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
   const selected = data.residencies.find((item) => item.id === residency);
   return (
     <>
-      <header className="page-header card"><div><p className="eyebrow">{selected?.name ?? "HFY company"}</p><h1>{selected ? "Residency setup" : "Company Invoices"}</h1><p className="subhead">{selected ? "Program details, rate defaults, approved artists, and client contacts for this Residency." : "Manage the company identity and sender details used on client Invoices."}</p></div></header>
+      <header className="page-header card"><div><p className="eyebrow">{selected?.name ?? "Developer · Platform"}</p><h1>{selected ? "Residency setup" : "Admin Settings"}</h1><p className="subhead">{selected ? "Program details, rate defaults, approved artists, and client contacts for this Residency." : "Manage the Platform-level identity and sender details used on client Invoices."}</p></div></header>
       <section className={selected ? "residency-setup-grid" : "grid residency-grid"}>
         {!selected ? <InvoiceBrandingSettings
           companyName={data.invoiceBranding.companyName}

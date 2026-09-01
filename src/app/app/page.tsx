@@ -1,11 +1,90 @@
 import Link from "next/link";
 import { formatMoney } from "@/components/format";
 import { PrivateValue } from "@/components/privacy-mode";
-import { getDashboardData } from "@/data/internal";
+import { getBilledByHfyWorkQueue, getDashboardData, getDeveloperResidencyList } from "@/data/internal";
+import { formatLocalMinute } from "@/domain/dayparts";
+import { enterViewAsAction } from "./view-as-actions";
 import { CreateResidencyModal } from "./create-residency-modal";
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
-  const { residency: residencyId } = await searchParams;
+const weekdayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function hfyResidencyHref(route: string, residencyId: string) {
+  return `${route}?${new URLSearchParams({ mode: "hfy", view: "operations", residency: residencyId }).toString()}`;
+}
+
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ residency?: string; mode?: string; view?: string }> }) {
+  const params = await searchParams;
+  if (params.mode === "developer") return <DeveloperDashboard />;
+  if (params.view === "operations" || params.residency) return <OperationsDashboard residencyId={params.residency} />;
+  return <HfyWorkQueue />;
+}
+
+async function DeveloperDashboard() {
+  const residencies = await getDeveloperResidencyList();
+  const activeCount = residencies.filter((residency) => residency.active).length;
+  const completeCount = residencies.filter((residency) => residency.tier === "complete").length;
+  return <>
+    <header className="page-header owner-mode-header developer-mode-header"><div><p className="eyebrow">Developer · Platform</p><h1>Platform Control</h1><p className="subhead">Every Residency, technical support access, and administrative settings—independent of HFY Programming operations.</p></div><Link className="button secondary" href="/app/setup?mode=developer">Admin Settings</Link></header>
+    <section className="owner-mode-summary" aria-label="Platform summary">
+      <article><strong>{residencies.length}</strong><span>Total Residencies</span></article>
+      <article><strong>{activeCount}</strong><span>Active Platform records</span></article>
+      <article><strong>{residencies.length - activeCount}</strong><span>Inactive records</span></article>
+      <article><strong>{completeCount}</strong><span>Complete tier</span></article>
+    </section>
+    <section className="developer-residencies-section">
+      <div className="section-heading"><div><p className="eyebrow">Support directory</p><h2>All Residencies</h2><p className="subhead">Open the exact Residency-facing workspace to investigate support issues, or jump directly to its owner-only configuration.</p></div></div>
+      {residencies.length ? <div className="developer-residency-grid">{residencies.map((residency) => <article className={`card developer-residency-card ${residency.active ? "" : "inactive"}`} key={residency.id}>
+        <div className="developer-residency-heading"><div><span className="developer-residency-mark">{residency.name.slice(0, 1)}</span><div><h2>{residency.name}</h2><p>{residency.cityState || "Location pending"}</p></div></div><span className={`platform-status ${residency.active ? "active" : "inactive"}`}>{residency.active ? "Active" : "Inactive"}</span></div>
+        <dl><div><dt>Service tier</dt><dd>{residency.tier.replaceAll("_", " ")}</dd></div><div><dt>Timezone</dt><dd>{residency.timezone}</dd></div></dl>
+        <div className="developer-residency-actions"><form action={enterViewAsAction}><input name="residencyId" type="hidden" value={residency.id} /><button className="button" type="submit">Open Workspace</button></form><Link className="button secondary" href={`/app/setup?${new URLSearchParams({ mode: "developer", residency: residency.id }).toString()}`}>Admin Settings</Link></div>
+      </article>)}</div> : <div className="card empty">No Residency records exist yet.</div>}
+    </section>
+  </>;
+}
+
+async function HfyWorkQueue() {
+  const queue = await getBilledByHfyWorkQueue();
+  const today = new Date().toISOString().slice(0, 10);
+  const liveQueue = queue.filter((daypart) => daypart.active && (!daypart.activeUntil || daypart.activeUntil >= today));
+  const residencyCount = new Set(queue.map((daypart) => daypart.residencyId)).size;
+  const grouped = new Map<string, typeof queue>();
+  for (const daypart of queue) {
+    const existing = grouped.get(daypart.residencyId) ?? [];
+    existing.push(daypart);
+    grouped.set(daypart.residencyId, existing);
+  }
+
+  return <>
+    <header className="page-header owner-mode-header hfy-mode-header"><div><p className="eyebrow">HFY · Programming</p><h1>Work Queue</h1><p className="subhead">Every Daypart marked Billed by HFY, across every Residency. This is the programming work that directly represents HFY revenue.</p></div><Link className="button secondary" href="/app?mode=hfy&view=operations">Open Operations</Link></header>
+    <section className="owner-mode-summary hfy-summary" aria-label="HFY Programming summary">
+      <article><strong>{liveQueue.length}</strong><span>Live Dayparts</span></article>
+      <article><strong>{queue.length}</strong><span>Total Billed by HFY</span></article>
+      <article><strong>{residencyCount}</strong><span>Residencies represented</span></article>
+      <article><strong>{queue.length - liveQueue.length}</strong><span>Inactive or ended</span></article>
+    </section>
+    <section className="hfy-work-queue-section">
+      <div className="section-heading"><div><p className="eyebrow">Revenue source of truth</p><h2>Billed-by-HFY Dayparts</h2><p className="subhead">Residency Platform status never removes a matching Daypart from this view. Inactive records stay visible and clearly labeled.</p></div></div>
+      {queue.length ? <div className="hfy-work-queue-groups">{[...grouped.values()].map((daypartsForResidency) => {
+        const first = daypartsForResidency[0];
+        return <section className="hfy-work-queue-group" key={first.residencyId}>
+          <header><div><p className="eyebrow">{first.residencyCityState || "Location pending"}</p><h3>{first.residencyName}</h3></div><div className="queue-residency-status"><span className={`platform-status ${first.residencyActive ? "active" : "inactive"}`}>{first.residencyActive ? "Platform active" : "Platform inactive"}</span><span className="pill">{first.residencyTier.replaceAll("_", " ")}</span></div></header>
+          <div className="hfy-work-queue-list">{daypartsForResidency.map((daypart) => {
+            const live = daypart.active && (!daypart.activeUntil || daypart.activeUntil >= today);
+            return <article className={live ? "" : "inactive"} key={daypart.id}>
+              <span className="queue-color" style={{ background: daypart.color }} aria-hidden="true" />
+              <div className="queue-daypart-name"><strong>{daypart.name}</strong><span>{daypart.room || "Room not set"}</span></div>
+              <div className="queue-daypart-schedule">{daypart.rules.length ? daypart.rules.map((rule) => <span key={rule.weekday}><strong>{weekdayLabels[rule.weekday]}</strong> {formatLocalMinute(rule.startMinute)}–{formatLocalMinute(rule.endMinute)}{rule.defaultDjCount ? ` · ${rule.defaultDjCount} talent` : ""}</span>) : <span>No standing schedule</span>}</div>
+              <div className="queue-daypart-rate"><small>Default talent rate</small><strong><PrivateValue>{daypart.defaultTalentRateCents === null ? "Residency default" : formatMoney(daypart.defaultTalentRateCents)}</PrivateValue></strong></div>
+              <div className="queue-daypart-actions"><span className={`platform-status ${live ? "active" : "inactive"}`}>{live ? daypart.activeUntil ? `Live until ${daypart.activeUntil}` : "Live" : daypart.activeUntil && daypart.activeUntil < today ? `Ended ${daypart.activeUntil}` : "Inactive"}</span><Link href={`/app/calendar?${new URLSearchParams({ mode: "hfy", view: "operations", residency: daypart.residencyId }).toString()}`}>Open Calendar →</Link></div>
+            </article>;
+          })}</div>
+        </section>;
+      })}</div> : <div className="card empty">No Dayparts are currently marked Billed by HFY.</div>}
+    </section>
+  </>;
+}
+
+async function OperationsDashboard({ residencyId }: { residencyId?: string }) {
   const data = await getDashboardData();
   const selected = residencyId ? data.find((item) => item.id === residencyId) : undefined;
 
@@ -33,13 +112,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <div><dt>Service tier</dt><dd>{selected.tier.replaceAll("_", " ")}</dd></div>
               <div><dt>Timezone</dt><dd>{selected.timezone}</dd></div>
             </dl>
-            <Link className="button secondary" href={`/app/setup?residency=${selected.id}`}>Open residency setup</Link>
+            <Link className="button secondary" href={hfyResidencyHref("/app/setup", selected.id)}>Open residency setup</Link>
           </article>
         </section>
         <section className="workspace-shortcuts">
-          <Link className="card workspace-shortcut" href={`/app/calendar?residency=${selected.id}`}><span>01</span><strong>Calendar</strong><small>Shifts and confirmations</small></Link>
-          <Link className="card workspace-shortcut" href={`/app/payouts?residency=${selected.id}`}><span>02</span><strong>Payouts</strong><small>Residency-specific artist payments</small></Link>
-          <Link className="card workspace-shortcut" href={`/app/invoices?residency=${selected.id}`}><span>03</span><strong>Invoices</strong><small>Billing and delivery</small></Link>
+          <Link className="card workspace-shortcut" href={hfyResidencyHref("/app/calendar", selected.id)}><span>01</span><strong>Calendar</strong><small>Shifts and confirmations</small></Link>
+          <Link className="card workspace-shortcut" href={hfyResidencyHref("/app/payouts", selected.id)}><span>02</span><strong>Payouts</strong><small>Residency-specific artist payments</small></Link>
+          <Link className="card workspace-shortcut" href={hfyResidencyHref("/app/invoices", selected.id)}><span>03</span><strong>Invoices</strong><small>Billing and delivery</small></Link>
         </section>
       </>
     );
@@ -49,8 +128,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <>
       <header className="page-header">
         <div>
-          <p className="eyebrow">HFY company</p>
-          <h1>Overview</h1>
+          <p className="eyebrow">HFY · Operations</p>
+          <h1>Operations</h1>
           <p className="subhead">See every residency at once, then open one to work inside that program.</p>
         </div>
       </header>
@@ -59,7 +138,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {data.length ? (
         <div className="active-residencies-grid">
           {data.map((residency) => (
-            <Link className="card residency-card residency-card-button" href={`/app?residency=${residency.id}`} aria-label={`Open ${residency.name} residency`} key={residency.id}>
+            <Link className="card residency-card residency-card-button" href={hfyResidencyHref("/app", residency.id)} aria-label={`Open ${residency.name} residency`} key={residency.id}>
               <div className="residency-card-top">
                 <div><h2>{residency.name}</h2><p className="location">{residency.cityState || "Location pending"}</p></div>
                 <span className={`pill ${residency.tier}`}>{residency.tier.replaceAll("_", " ")}</span>

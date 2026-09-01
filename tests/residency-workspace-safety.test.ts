@@ -38,11 +38,13 @@ describe("Residency workspace boundaries", () => {
   });
 
   it("keeps company modes out of Residency workspaces and Dayparts out of Setup", async () => {
-    const [shell, setup] = await Promise.all([
+    const [shell, residencyShell, setup] = await Promise.all([
       readFile(new URL("../src/components/internal-shell.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/residency-shell.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/app/setup/page.tsx", import.meta.url), "utf8"),
     ]);
-    expect(shell).toContain("{!inResidency ? <div className=\"mode-switch\"");
+    expect(shell).toContain('className="owner-mode-switch"');
+    expect(residencyShell).not.toContain("owner-mode-switch");
     expect(setup).not.toContain("DaypartManager");
     expect(setup).not.toContain("standing hours");
   });

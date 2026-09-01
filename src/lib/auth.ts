@@ -72,7 +72,6 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
       residencyTimezone: residencies.timezone,
     }).from(residencies).where(and(
       eq(residencies.id, selectedResidencyId),
-      eq(residencies.active, true),
       eq(residencies.operatingMode, "operations"),
     )).limit(1);
     if (!residency) return null;

@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import {
   assignments,
   attentionItems,
+  daypartDayRules,
   dayparts,
   invoiceDeliveries,
   invoices,
@@ -40,11 +41,79 @@ export const getResidencyList = cache(async function getResidencyList() {
     name: residencies.name,
     cityState: residencies.cityState,
     tier: residencies.tier,
+    active: residencies.active,
     timezone: residencies.timezone,
     defaultTalentRateCents: residencies.defaultTalentRateCents,
     clientHourlyRateCents: residencies.clientHourlyRateCents,
   }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name));
 });
+
+export const getDeveloperResidencyList = cache(async function getDeveloperResidencyList() {
+  return getDb().select({
+    id: residencies.id,
+    name: residencies.name,
+    cityState: residencies.cityState,
+    tier: residencies.tier,
+    active: residencies.active,
+    timezone: residencies.timezone,
+    defaultTalentRateCents: residencies.defaultTalentRateCents,
+    clientHourlyRateCents: residencies.clientHourlyRateCents,
+  }).from(residencies)
+    .where(eq(residencies.operatingMode, "operations"))
+    .orderBy(desc(residencies.active), asc(residencies.name));
+});
+
+export async function getBilledByHfyWorkQueue() {
+  const rows = await getDb().select({
+    id: dayparts.id,
+    residencyId: residencies.id,
+    residencyName: residencies.name,
+    residencyCityState: residencies.cityState,
+    residencyTier: residencies.tier,
+    residencyActive: residencies.active,
+    name: dayparts.name,
+    room: dayparts.room,
+    color: dayparts.color,
+    active: dayparts.active,
+    activeUntil: dayparts.activeUntil,
+    defaultTalentRateCents: dayparts.defaultTalentRateCents,
+    sortOrder: dayparts.sortOrder,
+    weekday: daypartDayRules.weekday,
+    startMinute: daypartDayRules.startMinute,
+    endMinute: daypartDayRules.endMinute,
+    defaultDjCount: daypartDayRules.defaultDjCount,
+  }).from(dayparts)
+    .innerJoin(residencies, eq(dayparts.residencyId, residencies.id))
+    .leftJoin(daypartDayRules, eq(daypartDayRules.daypartId, dayparts.id))
+    .where(and(
+      eq(dayparts.billingMode, "billed_by_hfy"),
+      eq(residencies.operatingMode, "operations"),
+    ))
+    .orderBy(desc(dayparts.active), asc(residencies.name), asc(dayparts.sortOrder), asc(daypartDayRules.weekday));
+
+  const queue = new Map<string, Omit<(typeof rows)[number], "weekday" | "startMinute" | "endMinute" | "defaultDjCount"> & {
+    rules: Array<{ weekday: number; startMinute: number; endMinute: number; defaultDjCount: number | null }>;
+  }>();
+
+  for (const row of rows) {
+    const existing = queue.get(row.id);
+    if (existing) {
+      if (row.weekday !== null && row.startMinute !== null && row.endMinute !== null) {
+        existing.rules.push({ weekday: row.weekday, startMinute: row.startMinute, endMinute: row.endMinute, defaultDjCount: row.defaultDjCount });
+      }
+      continue;
+    }
+    const { weekday, startMinute, endMinute, defaultDjCount, ...daypart } = row;
+    queue.set(row.id, {
+      ...daypart,
+      rules: weekday !== null && startMinute !== null && endMinute !== null
+        ? [{ weekday, startMinute, endMinute, defaultDjCount }]
+        : [],
+    });
+  }
+
+  return [...queue.values()];
+}
 
 export type PublicCalendarLinkSettings = {
   hasLink: boolean;
@@ -585,10 +654,11 @@ export async function getSetupData() {
       cityState: residencies.cityState,
       timezone: residencies.timezone,
       tier: residencies.tier,
+      active: residencies.active,
       internalNotes: residencies.internalNotes,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
       clientHourlyRateCents: residencies.clientHourlyRateCents,
-    }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name)),
+    }).from(residencies).where(eq(residencies.operatingMode, "operations")).orderBy(desc(residencies.active), asc(residencies.name)),
     database.select({ id: talent.id, stageName: talent.stageName, homeMarket: talent.homeMarket, exclusiveResidencyId: talent.exclusiveResidencyId }).from(talent).where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
     database.select({ residencyId: residencyTalent.residencyId, talentId: residencyTalent.talentId }).from(residencyTalent).where(eq(residencyTalent.active, true)),
     database.select({
