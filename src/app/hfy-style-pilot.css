@@ -1522,32 +1522,256 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #ec4899) 72%, transparent);
 }
 
-/* The sidebar reduces real calendar width before viewport media queries run. */
+/* The calendar command bar uses the real content width after the sidebar. */
 .hfy-style-system .calendar-command-bar {
   width: 100%;
   min-width: 0;
+  display: grid;
+  gap: 10px;
   align-items: stretch;
-  flex-direction: column;
 }
 
-.hfy-style-system .calendar-command-controls {
-  width: 100%;
-  max-width: 100%;
+.hfy-style-system :is(.calendar-command-primary, .calendar-command-secondary) {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.hfy-style-system .calendar-command-secondary {
+  padding-top: 10px;
+  border-top: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .calendar-command-primary .calendar-month-cluster {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.hfy-style-system .calendar-command-primary .month-navigation {
+  width: auto;
+  min-width: 230px;
+}
+
+.hfy-style-system .calendar-command-primary .calendar-needs-summary {
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid rgba(183, 75, 82, 0.16);
+  border-radius: 9px;
+  background: var(--hfy-error-soft);
+}
+
+.hfy-style-system .calendar-command-primary .calendar-needs-summary.clear {
+  border-color: rgba(50, 118, 90, 0.16);
+  background: var(--hfy-success-soft);
+}
+
+.hfy-style-system .calendar-command-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 10px 12px;
+  gap: 8px;
 }
 
-.hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) {
+.hfy-style-system .calendar-command-secondary .calendar-view-filters { justify-content: flex-start; }
+
+/* Day Parts, Talent, and Payment use one contained workspace rhythm. */
+.hfy-style-system .daypart-workspace-heading {
+  min-height: 106px;
+  margin-bottom: var(--hfy-space-4);
+  padding: 18px 22px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--hfy-radius-card);
+  background:
+    linear-gradient(120deg, rgba(249, 251, 252, 0.9), rgba(235, 242, 246, 0.76)),
+    var(--hfy-surface);
+  box-shadow: 0 12px 32px rgba(48, 65, 78, 0.09), inset 0 1px var(--hfy-inset-highlight);
+  backdrop-filter: blur(16px) saturate(112%);
+}
+
+.hfy-style-system .daypart-workspace-heading h2,
+.hfy-style-system .client-add-artist-heading h2 { font-size: clamp(28px, 3vw, 38px); }
+
+.hfy-style-system .client-add-artist {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--hfy-space-5);
+  align-items: stretch;
+  margin-bottom: var(--hfy-space-4);
+  padding: 22px;
+}
+
+.hfy-style-system .client-add-artist-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--hfy-space-6);
+}
+
+.hfy-style-system .client-add-artist-heading .eyebrow { margin: 0 0 5px; }
+.hfy-style-system .client-add-artist-heading > p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--hfy-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.hfy-style-system .client-add-artist form {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.2fr) minmax(220px, 1fr) minmax(190px, 0.8fr) auto;
+  gap: var(--hfy-space-3);
+  align-items: end;
+  padding-top: var(--hfy-space-4);
+  border-top: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .client-safe-roster { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.hfy-style-system .client-safe-roster-empty {
+  grid-column: 1 / -1;
+  min-height: 132px;
+  display: grid;
+  place-content: center;
+  gap: 5px;
+  text-align: center;
+}
+.hfy-style-system .client-safe-roster-empty strong { color: var(--hfy-ink); font-size: 15px; }
+.hfy-style-system .client-safe-roster-empty span { color: var(--hfy-muted); font-size: 11px; }
+
+.hfy-style-system .client-payment-panel {
+  display: grid;
+  gap: var(--hfy-space-4);
+  padding: 22px;
+}
+
+.hfy-style-system .client-payment-section-heading {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hfy-space-6);
+}
+
+.hfy-style-system .client-payment-section-heading .subhead {
+  max-width: 680px;
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.hfy-style-system .client-payment-total {
+  flex: 0 0 auto;
+  min-width: 175px;
+  padding: 10px 13px;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  background: var(--hfy-surface-nested);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+}
+
+.hfy-style-system .client-payment-total strong { font-size: 24px; }
+
+/* The date editor stays inside the viewport and groups one-date hours with the Daypart. */
+.hfy-style-system .quick-modal-backdrop { padding: 32px; }
+.hfy-style-system .quick-modal {
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 64px);
+}
+.hfy-style-system .quick-modal-header { padding: 17px 20px 14px; }
+.hfy-style-system .quick-modal-body { gap: 10px; padding: 14px 20px 18px; }
+.hfy-style-system .quick-book-form { gap: 12px; }
+.hfy-style-system .quick-selected-daypart-editable {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.62fr) minmax(320px, 1.38fr);
+  align-items: center;
+  gap: 14px 20px;
+  padding: 14px 16px;
+}
+.hfy-style-system .quick-selected-daypart-summary { display: grid; gap: 2px; }
+.hfy-style-system .quick-selected-window { justify-items: stretch; text-align: left; }
+.hfy-style-system .quick-selected-window-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.hfy-style-system .quick-selected-window-heading em {
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: var(--hfy-warning);
+  background: var(--hfy-warning-soft);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.hfy-style-system .quick-selected-window > small {
+  margin-top: 2px;
+  color: var(--hfy-muted);
+  font-size: 9px;
+}
+.hfy-style-system .quick-inline-time-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 7px;
+}
+.hfy-style-system .quick-inline-time-fields .field { gap: 3px; }
+.hfy-style-system .quick-inline-time-fields :is(input, select) { min-height: 38px; }
+.hfy-style-system .quick-selected-daypart-editable .date-exception-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--hfy-line);
+}
+.hfy-style-system .quick-selected-daypart-editable .date-exception-actions > small {
   margin-right: auto;
+  color: var(--hfy-muted);
+  font-size: 9px;
+}
+.hfy-style-system .quick-selected-daypart-editable .date-exception-actions :is(.button, .remove-dj-button) {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 9px;
+}
+.hfy-style-system .client-assignment-choices.equal-options :is(.artist-choice-option, .request-hfy-option) { min-height: 100px; }
+.hfy-style-system .quick-booking-notes textarea { min-height: 68px; resize: vertical; }
+.hfy-style-system .quick-modal-footer {
+  bottom: -18px;
+  margin: 0 -20px -18px;
+  padding: 12px 20px 14px;
+}
+
+@media (max-width: 1050px) {
+  .hfy-style-system .calendar-command-secondary { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .calendar-command-actions { justify-content: flex-start; }
 }
 
 @media (max-width: 850px) {
-  .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) {
-    width: 100%;
-    margin-right: 0;
-  }
+  .hfy-style-system .calendar-command-primary { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .calendar-command-primary .calendar-month-cluster { justify-content: space-between; }
+  .hfy-style-system .calendar-command-secondary .calendar-view-filters { width: 100%; }
+  .hfy-style-system .client-add-artist-heading,
+  .hfy-style-system .client-payment-section-heading { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .client-add-artist-heading > p { max-width: none; text-align: left; }
+  .hfy-style-system .client-add-artist form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hfy-style-system .client-payment-total { width: 100%; text-align: left; }
+}
+
+@media (max-width: 700px) {
+  .hfy-style-system .daypart-workspace-heading { min-height: 0; padding: 16px 18px; }
+  .hfy-style-system .quick-modal-backdrop { padding: 12px; }
+  .hfy-style-system .quick-modal { max-height: calc(100dvh - 24px); }
+  .hfy-style-system .quick-selected-daypart-editable { grid-template-columns: 1fr; }
+  .hfy-style-system .quick-selected-daypart-editable .date-exception-actions { grid-column: auto; }
 }
 
 @media (max-width: 650px) {
@@ -1558,8 +1782,6 @@
     flex-direction: column;
   }
 
-  .hfy-style-system .client-page-header-stat {
-    width: 100%;
-    text-align: left;
-  }
+  .hfy-style-system .client-add-artist form,
+  .hfy-style-system .quick-inline-time-fields { grid-template-columns: 1fr; }
 }
