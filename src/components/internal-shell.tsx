@@ -35,7 +35,7 @@ export function InternalShell({ actor, residencies, initialPrivacyMode, children
     ["Overview", "/app"],
     ["Calendar", "/app/calendar"],
     ["Payouts", "/app/payouts"],
-    ["Artist Lookup", "/app/talent"],
+    ["Talent", "/app/talent"],
     ["Admin settings", "/app/setup"],
   ];
 
@@ -81,8 +81,8 @@ export function InternalShell({ actor, residencies, initialPrivacyMode, children
         <nav className="nav">
           <p className="nav-label">{inPipeline ? "Pipeline" : inResidency ? "Residency" : "HFY company"}</p>
           {links.map(([label, href]) => <div className="nav-entry" key={href}>
-            {label === "Artist Lookup" && !inResidency ? <div className={`day-parts-nav artist-lookup-nav ${artistLookupExpanded ? "expanded" : ""}`}>
-              <button className={`day-parts-nav-toggle ${pathname.startsWith("/app/talent") ? "active" : ""}`} type="button" aria-expanded={artistLookupExpanded} onClick={() => setArtistLookupExpanded((open) => !open)}><span>Artist Lookup</span><span aria-hidden="true">⌄</span></button>
+            {label === "Talent" && !inResidency ? <div className={`day-parts-nav artist-lookup-nav ${artistLookupExpanded ? "expanded" : ""}`}>
+              <button className={`day-parts-nav-toggle ${pathname.startsWith("/app/talent") ? "active" : ""}`} type="button" aria-expanded={artistLookupExpanded} onClick={() => setArtistLookupExpanded((open) => !open)}><span>Talent</span><span aria-hidden="true">⌄</span></button>
               {artistLookupExpanded ? <div className="day-parts-nav-list"><Link className={pathname === "/app/talent" ? "active" : ""} href="/app/talent">Artist Lookup</Link><Link className={pathname === "/app/talent/roster" ? "active" : ""} href="/app/talent/roster">Roster</Link></div> : null}
             </div> : <Link className={isActive(href) ? "active" : ""} href={href}>{label}</Link>}
             {label === "Calendar" ? <div className={`day-parts-nav ${daypartsExpanded ? "expanded" : ""}`}>

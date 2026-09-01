@@ -2,9 +2,12 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("Company Operations workspace", () => {
-  it("exposes company-wide Payouts and an expandable Artist Lookup with Roster", async () => {
+  it("exposes company-wide Payouts and an expandable Talent section with Artist Lookup and Roster", async () => {
     const shell = await readFile(new URL("../src/components/internal-shell.tsx", import.meta.url), "utf8");
     expect(shell).toContain('["Payouts", "/app/payouts"]');
+    expect(shell).toContain('["Talent", "/app/talent"]');
+    expect(shell).toContain('<span>Talent</span>');
+    expect(shell).toContain('href="/app/talent">Artist Lookup</Link>');
     expect(shell).toContain('href="/app/talent/roster">Roster</Link>');
     expect(shell).toContain("artistLookupExpanded");
   });
