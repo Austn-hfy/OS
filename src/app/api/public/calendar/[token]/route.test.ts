@@ -11,16 +11,22 @@ describe("GET /api/public/calendar/:token", () => {
 
   it("returns only the public field allow-list even if its loader returns expanded data", async () => {
     mockedLoader.mockResolvedValue({
-      residencyName: "Private Hotel",
+      residencyName: "Test 1",
       billingEmail: "billing@private.test",
       entries: [{
-        instagramHandle: "@public-handle",
+        daypartName: "Sunset DJ Set",
+        room: "Rooftop",
+        color: "#2783DC",
         date: "2026-09-04",
         startTime: "12:00 PM",
         endTime: "3:00 PM",
+        artists: [{
+          name: "DJ Public",
+          instagramHandle: "@public-handle",
+          email: "artist@private.test",
+          phone: "555-0199",
+        }],
         fullName: "Private Name",
-        email: "artist@private.test",
-        phone: "555-0199",
         talentRateCents: 8000,
         clientRateCents: 12500,
         internalNotes: "secret",
@@ -32,8 +38,19 @@ describe("GET /api/public/calendar/:token", () => {
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(response.headers.get("x-robots-tag")).toContain("noindex");
     const body = await response.json();
-    expect(body).toEqual({ entries: [{ instagramHandle: "@public-handle", date: "2026-09-04", startTime: "12:00 PM", endTime: "3:00 PM" }] });
-    expect(JSON.stringify(body)).not.toMatch(/Private Hotel|billing@|Private Name|artist@|555-0199|8000|12500|secret/);
+    expect(body).toEqual({
+      residencyName: "Test 1",
+      entries: [{
+        daypartName: "Sunset DJ Set",
+        room: "Rooftop",
+        color: "#2783DC",
+        date: "2026-09-04",
+        startTime: "12:00 PM",
+        endTime: "3:00 PM",
+        artists: [{ name: "DJ Public", instagramHandle: "@public-handle" }],
+      }],
+    });
+    expect(JSON.stringify(body)).not.toMatch(/billing@|Private Name|artist@private|555-0199|8000|12500|secret/);
   });
 
   it("returns a generic 404 without leaking token or Residency details", async () => {
