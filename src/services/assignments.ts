@@ -5,6 +5,7 @@ import { calculateCompensationCents, isPaymentEligible, nextPayoutStatus } from 
 import { localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import type { AuditActor } from "@/lib/auth";
+import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 
 const transitions: Record<string, string[]> = {
   open: ["offered", "confirmed", "cancelled"],
@@ -154,10 +155,13 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
       bookingStatus: assignments.bookingStatus,
       payoutStatus: assignments.payoutStatus,
       source: assignments.source,
+      defaultTalentRateCents: residencies.defaultTalentRateCents,
     }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+      .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
       .where(eq(assignments.id, assignmentId)).limit(1);
     if (!current) throw new Error("Assignment not found.");
     assertEconomicOwner(actor, current.source);
+    if (actor.kind === "internal") assertResidencyTalentRateConfigured(current.defaultTalentRateCents);
     if (current.bookingStatus === "completed" || current.payoutStatus === "ready_to_pay" || current.payoutStatus === "paid") {
       throw new Error("Completed or payable work cannot be rescheduled from the calendar.");
     }
@@ -227,6 +231,7 @@ export async function rescheduleAssignment(
       fixedFeeCents: assignments.fixedFeeCents,
       payoutStatus: assignments.payoutStatus,
       source: assignments.source,
+      defaultTalentRateCents: residencies.defaultTalentRateCents,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
@@ -234,6 +239,7 @@ export async function rescheduleAssignment(
       .limit(1);
     if (!current) throw new Error("Assignment not found.");
     assertEconomicOwner(actor, current.source);
+    if (actor.kind === "internal") assertResidencyTalentRateConfigured(current.defaultTalentRateCents);
     if (current.bookingStatus === "completed" || current.payoutStatus === "ready_to_pay" || current.payoutStatus === "paid") {
       throw new Error("Completed or payable work cannot be rescheduled from the calendar.");
     }

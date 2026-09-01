@@ -246,9 +246,11 @@ export async function getCalendarData(residencyId?: string, range?: { from: stri
     programDetails: shifts.programDetails,
     manualHostName: shifts.manualHostName,
     economicsMode: shifts.economicsMode,
+    hfyRequestId: hfyTalentRequests.id,
   }).from(shifts)
     .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
     .leftJoin(dayparts, eq(shifts.daypartId, dayparts.id))
+    .leftJoin(hfyTalentRequests, eq(hfyTalentRequests.shiftId, shifts.id))
     .where(shiftWhere)
     .orderBy(asc(shifts.startsAt));
 

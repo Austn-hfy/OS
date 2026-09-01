@@ -1468,7 +1468,7 @@ export async function fulfillHfyTalentRequestAction(
       requestId: z.uuid(),
       talentId: z.uuid(),
       clientRate: z.coerce.number().min(0).max(1_000_000),
-      artistRate: z.coerce.number().min(0).max(1_000_000),
+      artistRate: z.coerce.number().positive().max(1_000_000),
     }).parse(Object.fromEntries(formData));
     const result = await fulfillHfyTalentRequest(actor, {
       requestId: parsed.requestId,

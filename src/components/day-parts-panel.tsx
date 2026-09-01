@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { DaypartManager, type DaypartRow } from "@/app/app/setup/daypart-manager";
 
-async function requestDayparts(residencyId: string) {
-  const response = await fetch(`/api/internal/residencies/${encodeURIComponent(residencyId)}/dayparts`, { cache: "no-store" });
+async function requestDayparts(residencyId: string, hfyOnly: boolean) {
+  const query = hfyOnly ? "?scope=hfy" : "";
+  const response = await fetch(`/api/internal/residencies/${encodeURIComponent(residencyId)}/dayparts${query}`, { cache: "no-store" });
   if (!response.ok) throw new Error(response.status === 404 ? "This Residency is no longer active." : "Unable to load Day Parts.");
   return (await response.json() as { dayparts: DaypartRow[] }).dayparts;
 }
 
-export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = false, hideFinancials = false, initialCreate = false }: { residencyId: string; residencyName: string; onClose: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean }) {
+export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = false, hideFinancials = false, initialCreate = false, hfyOnly = false }: { residencyId: string; residencyName: string; onClose: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean; hfyOnly?: boolean }) {
   const [dayparts, setDayparts] = useState<DaypartRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -18,22 +19,22 @@ export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = 
     setLoading(true);
     setError("");
     try {
-      setDayparts(await requestDayparts(residencyId));
+      setDayparts(await requestDayparts(residencyId, hfyOnly));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load Day Parts.");
     } finally {
       setLoading(false);
     }
-  }, [residencyId]);
+  }, [hfyOnly, residencyId]);
 
   useEffect(() => {
     let active = true;
-    requestDayparts(residencyId)
+    requestDayparts(residencyId, hfyOnly)
       .then((rows) => { if (active) setDayparts(rows); })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Unable to load Day Parts."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [residencyId]);
+  }, [hfyOnly, residencyId]);
   useEffect(() => {
     const previous = document.body.style.overflow;
     const close = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };

@@ -4,6 +4,7 @@ import { assignments, auditLog, clientAssignmentTerms, dayparts, hfyTalentReques
 import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
 import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
+import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 import type { AuditActor } from "@/lib/auth";
 
 export type BookingAssignmentInput = {
@@ -88,6 +89,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
     if (existingShifts.length || existingOccurrences.length) throw new Error("One of these Dayparts is already scheduled on this date.");
 
     const talentIds = [...new Set(input.dayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
+    if (actor.kind === "internal" && talentIds.length) assertResidencyTalentRateConfigured(residency.defaultTalentRateCents);
     const talentRows = talentIds.length ? await tx.select({
       id: talent.id,
       stageName: talent.stageName,
@@ -371,6 +373,7 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
 
     if (actor.kind === "residency" && shift.economicsMode !== "client_owned") throw new Error("HFY-managed slots cannot be edited by the client.");
     if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned slots are managed only by the client.");
+    if (actor.kind === "internal") assertResidencyTalentRateConfigured(shift.defaultTalentRateCents);
 
     const [selectedTalent] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
       .innerJoin(residencyTalent, and(

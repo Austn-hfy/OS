@@ -1,9 +1,10 @@
 import { and, eq, gt, inArray, isNull, lt, or, gte, lte } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, hfyTalentRequests, invoices, residencyTalent, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, hfyTalentRequests, invoices, residencies, residencyTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents } from "@/domain/airtable-parity";
 import { HFY_BOOKED_COLOR, weekdayForDate } from "@/domain/dayparts";
 import type { AuditActor, InternalActor } from "@/lib/auth";
+import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 
 export type FulfillHfyTalentRequestInput = {
   requestId: string;
@@ -81,7 +82,7 @@ export async function cancelHfyTalentRequest(actor: AuditActor, input: CancelHfy
 
 export async function fulfillHfyTalentRequest(actor: InternalActor, input: FulfillHfyTalentRequestInput) {
   if (!Number.isInteger(input.clientRateCents) || input.clientRateCents < 0) throw new Error("Enter a valid client-billed hourly rate.");
-  if (!Number.isInteger(input.artistRateCents) || input.artistRateCents < 0) throw new Error("Enter a valid artist-paid hourly rate.");
+  if (!Number.isInteger(input.artistRateCents) || input.artistRateCents <= 0) throw new Error("Enter an artist-paid hourly rate greater than $0.");
 
   return getDb().transaction(async (tx) => {
     const [request] = await tx.select({
@@ -94,14 +95,17 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
       endsAt: shifts.endsAt,
       shiftName: shifts.name,
       economicsMode: shifts.economicsMode,
+      defaultTalentRateCents: residencies.defaultTalentRateCents,
     }).from(hfyTalentRequests)
       .innerJoin(shifts, eq(hfyTalentRequests.shiftId, shifts.id))
+      .innerJoin(residencies, eq(hfyTalentRequests.residencyId, residencies.id))
       .where(eq(hfyTalentRequests.id, input.requestId))
       .limit(1)
       .for("update");
     if (!request || request.status !== "pending" || request.economicsMode !== "hfy_request") {
       throw new Error("This HFY request is no longer pending.");
     }
+    assertResidencyTalentRateConfigured(request.defaultTalentRateCents);
 
     const [selectedTalent] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent).where(and(
       eq(talent.id, input.talentId),

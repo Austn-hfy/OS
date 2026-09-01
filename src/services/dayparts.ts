@@ -410,3 +410,19 @@ export async function getActiveTalentLookup(residencyId?: string) {
     ))
     .orderBy(asc(talent.stageName));
 }
+
+export async function getHfyRequestTalentLookup(residencyId: string) {
+  return getDb().select({
+    id: talent.id,
+    stageName: talent.stageName,
+    homeMarket: talent.homeMarket,
+    genres: talent.genres,
+    priority: talent.priority,
+    ownership: talent.ownership,
+  }).from(talent).where(and(
+    eq(talent.ownership, "hfy"),
+    eq(talent.talentStatus, "active"),
+    isNull(talent.archivedAt),
+    or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residencyId)),
+  )).orderBy(asc(talent.stageName));
+}

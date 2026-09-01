@@ -139,7 +139,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
         </div>
       </aside>
       <main className={`main ${mode === "hfy" && pathname === "/app/calendar" ? "calendar-main" : ""}`}>{mode === "developer" ? <div className="view-as-control"><form action={enterViewAsAction}><label htmlFor="view-as-residency">Open workspace</label><select id="view-as-residency" name="residencyId" defaultValue=""><option value="" disabled>Select a Residency</option>{developerResidencies.map((item) => <option value={item.id} key={item.id}>{item.name}{item.active ? "" : " · Inactive"}</option>)}</select><button className="button secondary" type="submit">Open</button></form></div> : null}<PrivacyModeIndicator />{children}</main>
-      {panelResidency ? <DayPartsPanel key={panelResidency.id} residencyId={panelResidency.id} residencyName={panelResidency.name} onClose={() => { setDaypartsResidencyId(null); if (inResidency) setDaypartsExpanded(false); }} /> : null}
+      {panelResidency ? <DayPartsPanel key={panelResidency.id} residencyId={panelResidency.id} residencyName={panelResidency.name} hfyOnly={mode === "hfy"} onClose={() => { setDaypartsResidencyId(null); if (inResidency) setDaypartsExpanded(false); }} /> : null}
     </div>
     </PrivacyModeProvider>
   );

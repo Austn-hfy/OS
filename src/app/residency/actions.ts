@@ -6,7 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, clientAssignmentTerms, residencies, residencyTalent, shifts, talent } from "@/db/schema";
 import { requireResidencyActor } from "@/lib/auth";
-import { talentGenreSchema } from "@/domain/talent-genres";
+import { resolveClientArtistGenre } from "@/domain/talent-genres";
 
 export type ClientSettingsActionState = { status: "idle" | "success" | "error"; message: string };
 
@@ -21,8 +21,10 @@ export async function createClientOwnedArtistAction(
     const parsed = z.object({
       name: z.string().trim().min(1).max(200),
       contact: z.string().trim().max(300),
-      genre: talentGenreSchema,
+      genre: z.string(),
+      customGenre: z.string().default(""),
     }).parse(Object.fromEntries(formData));
+    const genre = resolveClientArtistGenre(parsed.genre, parsed.customGenre);
     const database = getDb();
     await database.transaction(async (tx) => {
       const duplicate = await tx.select({ id: talent.id }).from(talent).where(and(
@@ -33,7 +35,7 @@ export async function createClientOwnedArtistAction(
       const [artist] = await tx.insert(talent).values({
         stageName: parsed.name,
         clientContact: parsed.contact,
-        genres: [parsed.genre],
+        genres: [genre],
         ownership: "residency",
         owningResidencyId: actor.residencyId,
         exclusiveResidencyId: actor.residencyId,
