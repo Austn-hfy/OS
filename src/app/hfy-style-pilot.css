@@ -1066,9 +1066,9 @@
 }
 
 .hfy-style-system .client-shell .main > .client-page-header {
-  min-height: 106px;
+  min-height: 90px;
   margin: 0 0 var(--hfy-space-4);
-  padding: 18px 22px;
+  padding: 14px 20px;
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: var(--hfy-radius-card);
@@ -1080,10 +1080,12 @@
 }
 
 .hfy-style-system .client-shell .main > .client-page-header h1 {
-  margin: 3px 0 0;
-  font-size: clamp(28px, 3vw, 38px);
-  line-height: 1.04;
+  margin: 2px 0 0;
+  font-size: clamp(27px, 2.5vw, 34px);
+  line-height: 1.02;
 }
+
+.hfy-style-system .client-shell .main > .client-page-header .eyebrow { margin: 0 0 5px; }
 
 .hfy-style-system .client-page-header-stat {
   min-width: 180px;
@@ -1527,11 +1529,14 @@
   width: 100%;
   min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
+  justify-content: stretch;
 }
 
 .hfy-style-system :is(.calendar-command-primary, .calendar-command-secondary) {
+  width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -1580,6 +1585,10 @@
 }
 
 .hfy-style-system .calendar-command-secondary .calendar-view-filters { justify-content: flex-start; }
+
+.hfy-style-system .calendar-command-primary .calendar-title h1 {
+  font-size: clamp(30px, 2.6vw, 35px);
+}
 
 /* Day Parts, Talent, and Payment use one contained workspace rhythm. */
 .hfy-style-system .daypart-workspace-heading {
