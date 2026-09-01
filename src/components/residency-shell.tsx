@@ -9,7 +9,7 @@ import type { ResidencyActor } from "@/lib/auth";
 export function ResidencyShell({ actor, children }: { actor: ResidencyActor; children: React.ReactNode }) {
   const pathname = usePathname();
   const links = actor.accessRole === "manager"
-    ? [["Overview", "/residency"], ["Calendar", "/residency/calendar"], ["Day Parts", "/residency/dayparts"], ["Talent Roster", "/residency/talent"], ...(actor.clientPaymentStatusVisible ? [["Payment Status", "/residency/payouts"]] : []), ["Invoices", "/residency/invoices"], ["Settings", "/residency/settings"]]
+    ? [["Calendar", "/residency/calendar"], ["Day Parts", "/residency/dayparts"], ["Talent Roster", "/residency/talent"], ...(actor.clientPaymentStatusVisible ? [["Payment Status", "/residency/payouts"]] : []), ["Invoices", "/residency/invoices"], ["Settings", "/residency/settings"]]
     : [["Calendar", "/residency/calendar"]];
   return <div className="shell client-shell">
     <aside className="sidebar client-sidebar">

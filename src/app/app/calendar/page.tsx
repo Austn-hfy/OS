@@ -5,7 +5,7 @@ import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { getCalendarData, getPublicCalendarLinkSettings, getResidencyList, getScheduleOccurrenceData } from "@/data/internal";
 import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
-import { calendarColorForShift, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
+import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { getActiveTalentLookup, getDaypartDateExceptionsForResidencies, getDaypartsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar } from "./residency-calendar";
 
@@ -44,7 +44,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         title: calendarResidency ? shift.name : `${shift.name} · ${shift.residencyName}`,
         time: `${formatCompactMinuteRange(shiftStartMinute, shiftEndMinute)} · ${statusLabel}`,
         residencyName: shift.residencyName,
-        color: calendarColorForShift(shift.daypartColor, shift.shiftCalendarColor),
+        color: calendarColorForEconomics(shift.daypartColor, shift.shiftCalendarColor, shift.economicsMode),
+        bookingState: shift.economicsMode === "hfy_request" ? "hfy_pending" as const : shift.economicsMode === "hfy" ? "hfy_confirmed" as const : undefined,
         tone: calendarToneForSlot(shift.room, tones[Math.max(0, residencyList.findIndex((item) => item.id === shift.residencyId)) % tones.length]),
         schedulingStatus,
         startMinute: shiftStartMinute,
@@ -148,7 +149,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     title: matchedDaypart?.name ?? shift.name,
     time: `${formatCompactMinuteRange(shiftStartMinute, shiftEndMinute)} · ${schedulingLabel}`,
     residencyName: artistNames.length ? artistNames.join(" + ") : shift.manualHostName || shift.programDetails || shift.name,
-    color: calendarColorForShift(matchedDaypart?.color ?? shift.daypartColor, shift.shiftCalendarColor),
+    color: calendarColorForEconomics(matchedDaypart?.color ?? shift.daypartColor, shift.shiftCalendarColor, shift.economicsMode),
+    bookingState: shift.economicsMode === "hfy_request" ? "hfy_pending" as const : shift.economicsMode === "hfy" ? "hfy_confirmed" as const : undefined,
     tone: calendarToneForSlot(shift.room, daypartTones[Math.max(0, daypartIndex) % daypartTones.length]),
     daypartId: shift.daypartId,
     shiftStartMinute,

@@ -10,7 +10,7 @@ export default async function ResidencyDaypartsPage({ searchParams }: { searchPa
   const dayparts = await getDaypartsForResidency(actor.residencyId);
 
   return <>
-    <header className="page-header card"><div><p className="eyebrow">Standing schedule</p><h1>Day Parts</h1><p className="subhead">Create and manage the recurring schedule that projects onto your Calendar.</p></div></header>
+    <header className="page-header client-page-header"><div><p className="eyebrow">Standing schedule</p><h1>Day Parts</h1></div></header>
     <DaypartRouteManager
       residencyId={actor.residencyId}
       dayparts={dayparts}
