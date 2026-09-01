@@ -12,7 +12,7 @@ import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { DEFAULT_DAYPART_COLOR, HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, weekdayForDate, weekdayNames, type DaypartDateException } from "@/domain/dayparts";
-import { monthLabel, shiftMonthKey } from "@/lib/calendar";
+import { calendarDaypartsHref, monthLabel, shiftMonthKey } from "@/lib/calendar";
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
 import { MISSING_RESIDENCY_TALENT_RATE_MESSAGE } from "@/domain/residency-rates";
@@ -633,9 +633,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   };
   const previousHref = monthHref(shiftMonthKey(monthKey, -1));
   const nextHref = monthHref(shiftMonthKey(monthKey, 1));
-  const createDaypartHref = daypartsHref ?? (previewMode
-    ? "/residency/dayparts?create=1"
-    : `/app/dayparts?${new URLSearchParams({ mode: "hfy", residency: residency.id, create: "1" }).toString()}`);
+  const createDaypartHref = calendarDaypartsHref(residency.id, previewMode, daypartsHref);
   const activeStandingRule = modal?.type === "add" && activeSuggestion?.sourceDaypartId
     ? (() => {
       const source = dayparts.find((daypart) => daypart.id === activeSuggestion.sourceDaypartId);
