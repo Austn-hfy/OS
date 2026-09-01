@@ -14,11 +14,32 @@ describe("requestOrigin", () => {
     }), { NEXT_PUBLIC_APP_URL: "https://staging.hfy.app" })).toBe("https://staging.hfy.app");
   });
 
+  it("repairs a Vercel-configured URL for the staging branch", () => {
+    expect(requestOrigin(requestHeaders({
+      host: "hfy-os-git-staging-austyn-7123.vercel.app",
+      "x-forwarded-proto": "https",
+    }), {
+      NEXT_PUBLIC_APP_URL: "https://hfy-os-git-staging-austyn-7123.vercel.app",
+      VERCEL_ENV: "preview",
+      VERCEL_GIT_COMMIT_REF: "staging",
+    })).toBe("https://staging.hfy.app");
+  });
+
+  it("repairs a Vercel alias when the staging branch has no configured public URL", () => {
+    expect(requestOrigin(requestHeaders({
+      host: "hfy-os-git-staging-austyn-7123.vercel.app",
+      "x-forwarded-proto": "https",
+    }), {
+      VERCEL_ENV: "preview",
+      VERCEL_GIT_COMMIT_REF: "staging",
+    })).toBe("https://staging.hfy.app");
+  });
+
   it("uses the configured production domain without separate production link logic", () => {
     expect(requestOrigin(requestHeaders({
       host: "hfy-os.vercel.app",
       "x-forwarded-proto": "https",
-    }), { NEXT_PUBLIC_APP_URL: "https://hfy.app" })).toBe("https://hfy.app");
+    }), { NEXT_PUBLIC_APP_URL: "https://hfy-os.vercel.app", VERCEL_ENV: "production" })).toBe("https://hfy.app");
   });
 
   it("falls back to a validated custom request domain when no public origin is configured", () => {

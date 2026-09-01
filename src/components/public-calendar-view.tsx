@@ -77,7 +77,7 @@ export function PublicCalendarView({ token, monthKey, calendar }: {
             </div>
           </div>
           <div className="calendar-command-secondary public-calendar-command-secondary">
-            <p><strong>Shared schedule</strong><span>Click any Daypart for artist details, or scan the date list below.</span></p>
+            <p><strong>Shared schedule</strong><span>Click any Daypart for artist details.</span></p>
             <span className="public-calendar-read-only">Read only</span>
           </div>
         </header>
@@ -90,27 +90,26 @@ export function PublicCalendarView({ token, monthKey, calendar }: {
           ariaLabel={`${monthLabel(monthKey)} programming calendar`}
         />
       </div>
-    </section>
-
-    <section className="public-calendar-agenda" aria-labelledby="public-calendar-agenda-title">
-      <header className="public-calendar-agenda-heading">
-        <div><p className="eyebrow">At a glance</p><h2 id="public-calendar-agenda-title">{monthLabel(monthKey)} schedule</h2></div>
-        <p>Artist names and Instagram handles only. No private contact or financial information is shared.</p>
-      </header>
-      <div className="public-calendar-agenda-list">
-        {groups.map((date) => <article className="public-calendar-agenda-day" key={date}>
-          <h3>{displayDate(date)}</h3>
-          <div>{visibleEntries.filter(({ entry }) => entry.date === date).map(({ entry, id }) => {
-            const eventStyle = { "--daypart-color": entry.color } as CSSProperties;
-            return <button className="public-calendar-agenda-entry" type="button" style={eventStyle} onClick={() => setSelectedId(id)} key={id}>
-              <span className="public-calendar-agenda-color" aria-hidden="true" />
-              <span><strong>{entry.daypartName}</strong><small>{entry.room ? `${entry.room} · ` : ""}{entry.startTime}–{entry.endTime}</small></span>
-              <span className="public-calendar-agenda-artists">{entry.artists.map((artist) => artist.name).join(", ")}</span>
-            </button>;
-          })}</div>
-        </article>)}
-        {!visibleEntries.length ? <div className="card empty">No confirmed programming is listed for this month.</div> : null}
-      </div>
+      <aside className="public-calendar-agenda" aria-labelledby="public-calendar-agenda-title">
+        <header className="public-calendar-agenda-heading">
+          <div><p className="eyebrow">At a glance</p><h2 id="public-calendar-agenda-title">{monthLabel(monthKey)} schedule</h2></div>
+          <p>Every confirmed date, in one quick view.</p>
+        </header>
+        <div className="public-calendar-agenda-list">
+          {groups.map((date) => <article className="public-calendar-agenda-day" key={date}>
+            <h3>{displayDate(date)}</h3>
+            <div>{visibleEntries.filter(({ entry }) => entry.date === date).map(({ entry, id }) => {
+              const eventStyle = { "--daypart-color": entry.color } as CSSProperties;
+              return <button className="public-calendar-agenda-entry" type="button" style={eventStyle} onClick={() => setSelectedId(id)} key={id}>
+                <span className="public-calendar-agenda-color" aria-hidden="true" />
+                <span><strong>{entry.daypartName}</strong><small>{entry.room ? `${entry.room} · ` : ""}{entry.startTime}–{entry.endTime}</small></span>
+                <span className="public-calendar-agenda-artists">{entry.artists.map((artist) => artist.name).join(", ")}</span>
+              </button>;
+            })}</div>
+          </article>)}
+          {!visibleEntries.length ? <div className="card empty">No confirmed programming is listed for this month.</div> : null}
+        </div>
+      </aside>
     </section>
 
     <footer className="public-calendar-footer">Shared by HFY · Read only</footer>

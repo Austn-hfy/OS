@@ -2,7 +2,12 @@ type HeaderReader = Pick<Headers, "get">;
 
 type PublicOriginEnvironment = Readonly<{
   NEXT_PUBLIC_APP_URL?: string;
+  VERCEL_ENV?: string;
+  VERCEL_TARGET_ENV?: string;
+  VERCEL_GIT_COMMIT_REF?: string;
 }>;
+
+const productionOrigin = "https://hfy.app";
 
 function firstHeaderValue(value: string | null): string {
   return value?.split(",", 1)[0]?.trim() ?? "";
@@ -31,15 +36,26 @@ function validOrigin(value: string | undefined): string | null {
   }
 }
 
-/** Returns the canonical public origin configured for this deployment. */
-export function requestOrigin(headers: HeaderReader, environment: PublicOriginEnvironment = {
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-}): string {
-  const configuredOrigin = validOrigin(environment.NEXT_PUBLIC_APP_URL);
-  if (configuredOrigin) return configuredOrigin;
+function isVercelOrigin(origin: string): boolean {
+  return new URL(origin).hostname.endsWith(".vercel.app");
+}
 
+function deploymentOrigin(environment: PublicOriginEnvironment): string | null {
+  const branch = environment.VERCEL_GIT_COMMIT_REF?.toLowerCase();
+  const target = environment.VERCEL_TARGET_ENV?.toLowerCase();
+  const vercelEnvironment = environment.VERCEL_ENV?.toLowerCase();
+  if (branch === "staging" || target === "staging") {
+    const production = new URL(productionOrigin);
+    production.hostname = `staging.${production.hostname}`;
+    return production.origin;
+  }
+  if (target === "production" || vercelEnvironment === "production") return productionOrigin;
+  return null;
+}
+
+function requestHeaderOrigin(headers: HeaderReader): string | null {
   const host = firstHeaderValue(headers.get("x-forwarded-host") ?? headers.get("host"));
-  if (!host) throw new Error("Unable to determine the application domain.");
+  if (!host) return null;
 
   const forwardedProtocol = firstHeaderValue(headers.get("x-forwarded-proto"));
   const protocol = forwardedProtocol || (localHost(host) ? "http" : "https");
@@ -50,4 +66,22 @@ export function requestOrigin(headers: HeaderReader, environment: PublicOriginEn
     throw new Error("Unable to determine the application domain.");
   }
   return origin.origin;
+}
+
+/** Returns the canonical public origin configured for this deployment. */
+export function requestOrigin(headers: HeaderReader, environment: PublicOriginEnvironment = {
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  VERCEL_ENV: process.env.VERCEL_ENV,
+  VERCEL_TARGET_ENV: process.env.VERCEL_TARGET_ENV,
+  VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF,
+}): string {
+  const configuredOrigin = validOrigin(environment.NEXT_PUBLIC_APP_URL);
+  if (configuredOrigin && !isVercelOrigin(configuredOrigin)) return configuredOrigin;
+
+  const requestOrigin = requestHeaderOrigin(headers);
+  if (requestOrigin && !isVercelOrigin(requestOrigin)) return requestOrigin;
+
+  const resolvedOrigin = deploymentOrigin(environment) ?? configuredOrigin ?? requestOrigin;
+  if (!resolvedOrigin) throw new Error("Unable to determine the application domain.");
+  return resolvedOrigin;
 }
