@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, dayparts, invoices, residencies, residencyContacts, residencyTalent, shifts, talent, users } from "@/db/schema";
+import { assignments, clientAssignmentTerms, dayparts, invoices, residencies, residencyContacts, residencyTalent, shifts, talent, users } from "@/db/schema";
 import { projectClientSafeRoster } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
 
@@ -68,6 +68,8 @@ export async function getResidencyClientSafeRoster(residencyId: string) {
     homeMarket: talent.homeMarket,
     genres: talent.genres,
     instagramHandle: talent.instagramHandle,
+    clientContact: talent.clientContact,
+    ownership: talent.ownership,
   }).from(talent)
     .innerJoin(residencyTalent, and(
       eq(residencyTalent.talentId, talent.id),
@@ -108,9 +110,12 @@ export async function getResidencyClientPayoutStatus(residencyId: string) {
     endsAt: assignments.endsAt,
     payoutStatus: assignments.payoutStatus,
     paidAt: assignments.paidAt,
+    source: assignments.source,
+    clientRateCents: clientAssignmentTerms.rateCents,
   }).from(assignments)
     .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
     .leftJoin(talent, eq(assignments.talentId, talent.id))
+    .leftJoin(clientAssignmentTerms, eq(clientAssignmentTerms.assignmentId, assignments.id))
     .where(and(eq(shifts.residencyId, residencyId), inArray(assignments.bookingStatus, ["confirmed", "completed"])))
     .orderBy(asc(shifts.serviceDate), asc(assignments.startsAt));
   return rows.map((row) => ({
@@ -119,8 +124,13 @@ export async function getResidencyClientPayoutStatus(residencyId: string) {
     serviceDate: row.serviceDate,
     startsAt: row.startsAt.toISOString(),
     endsAt: row.endsAt.toISOString(),
-    status: row.payoutStatus === "paid" ? "Paid" as const : "Pending" as const,
+    status: row.source === "client_owned" ? "Client managed" as const : row.payoutStatus === "paid" ? "Paid" as const : "Pending" as const,
     paidAt: row.paidAt?.toISOString() ?? null,
+    ownership: row.source === "client_owned" ? "client" as const : "hfy" as const,
+    clientRateCents: row.source === "client_owned" ? row.clientRateCents : null,
+    owedCents: row.source === "client_owned" && row.clientRateCents !== null
+      ? Math.round(((row.endsAt.getTime() - row.startsAt.getTime()) / 3_600_000) * row.clientRateCents)
+      : null,
   }));
 }
 
@@ -137,7 +147,7 @@ export async function getResidencyClientInvoices(residencyId: string) {
   }).from(invoices)
     .where(and(
       eq(invoices.residencyId, residencyId),
-      inArray(invoices.status, ["approved", "sent"]),
+      inArray(invoices.status, ["approved", "sent", "paid"]),
     ))
     .orderBy(desc(invoices.invoiceDate), desc(invoices.createdAt));
   return rows.map((row) => projectClientSafeInvoice({ ...row, sentAt: row.sentAt?.toISOString() ?? null }));

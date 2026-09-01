@@ -2,6 +2,7 @@ export type ResidencyMembershipOption = {
   residencyId: string;
   residencyName: string;
   residencyTimezone: string;
+  clientPaymentStatusVisible: boolean;
   accessRole: "manager" | "calendar_viewer";
   contactId: string | null;
   invitationStatus: "not_invited" | "invited" | "active" | "revoked" | null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { removeDaypartAction, saveDaypartAction, type ResidencyActionState } from "@/app/app/actions";
 import { clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, weekdayNames, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
 import { SensitiveInput } from "@/components/privacy-mode";
@@ -101,8 +101,9 @@ function displayRange(dayparts: DaypartRow[]) {
   };
 }
 
-export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = false, hideFinancials = false }: { residencyId: string; dayparts: DaypartRow[]; onSaved?: () => void; readOnly?: boolean; hideFinancials?: boolean }) {
+export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = false, hideFinancials = false, initialCreate = false }: { residencyId: string; dayparts: DaypartRow[]; onSaved?: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean }) {
   const [draft, setDraft] = useState<EditorDraft | null>(null);
+  const openedInitialDraft = useRef(false);
   const [removePending, setRemovePending] = useState(false);
   const [removeState, setRemoveState] = useState<ResidencyActionState>(initialActionState);
   const submitDaypart = async (previous: ResidencyActionState, formData: FormData) => {
@@ -117,6 +118,12 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
   const rooms = useMemo(() => [...new Set(dayparts.map((daypart) => daypart.room))].sort(), [dayparts]);
   const range = useMemo(() => displayRange(dayparts), [dayparts]);
   const rangeMinutes = range.end - range.start;
+
+  useEffect(() => {
+    if (!initialCreate || readOnly || openedInitialDraft.current) return;
+    openedInitialDraft.current = true;
+    setDraft(blankDraft({ color: colorPresets[dayparts.length % colorPresets.length] }));
+  }, [dayparts.length, initialCreate, readOnly]);
 
   useEffect(() => {
     if (!draft) return;

@@ -1,8 +1,8 @@
 import { and, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, invoiceLineItems, invoices, residencies, shifts } from "@/db/schema";
+import { assignments, auditLog, hfyTalentRequests, invoiceLineItems, invoices, residencies, shifts } from "@/db/schema";
 import { resolveRateCents } from "@/domain/airtable-parity";
-import type { InternalActor } from "@/lib/auth";
+import type { AuditActor, InternalActor } from "@/lib/auth";
 import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 
 export type CreateShiftInput = {
@@ -68,7 +68,7 @@ export async function createShift(actor: InternalActor, input: CreateShiftInput)
   });
 }
 
-export async function deleteShift(actor: InternalActor | { userId: string; email: string }, shiftId: string) {
+export async function deleteShift(actor: AuditActor, shiftId: string) {
   return getDb().transaction(async (tx) => {
     const [shift] = await tx.select({
       id: shifts.id,
@@ -77,17 +77,21 @@ export async function deleteShift(actor: InternalActor | { userId: string; email
       invoiceStatus: invoices.status,
       serviceDate: shifts.serviceDate,
       name: shifts.name,
+      economicsMode: shifts.economicsMode,
     }).from(shifts)
       .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
       .where(eq(shifts.id, shiftId))
       .limit(1);
     if (!shift) throw new Error("Shift not found.");
+    if (actor.kind === "residency" && shift.economicsMode === "hfy") throw new Error("HFY-managed Shifts cannot be deleted by the client.");
+    if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned and pending-request Shifts are controlled through their own workflow.");
     const assignmentRows = await tx.select({
       bookingStatus: assignments.bookingStatus,
       payoutStatus: assignments.payoutStatus,
     }).from(assignments).where(eq(assignments.shiftId, shift.id));
     const blockReason = shiftDeletionBlockReason(shift.invoiceStatus, assignmentRows);
     if (blockReason) throw new Error(blockReason);
+    await tx.delete(hfyTalentRequests).where(eq(hfyTalentRequests.shiftId, shift.id));
     await tx.delete(assignments).where(eq(assignments.shiftId, shift.id));
     await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
     await tx.delete(shifts).where(eq(shifts.id, shift.id));

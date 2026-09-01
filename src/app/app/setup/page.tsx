@@ -4,6 +4,7 @@ import { ApprovedDjManager } from "./approved-dj-manager";
 import { ResidencyContactsManager } from "./residency-contacts-manager";
 import { ResidencyProfileEditor } from "./residency-profile-editor";
 import { ResidencyRateEditor } from "./residency-rate-editor";
+import { ClientVisibilitySettings } from "./client-visibility-settings";
 
 export default async function SetupPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
   const { residency } = await searchParams;
@@ -22,6 +23,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
         {selected ? <>
           <ResidencyProfileEditor residency={selected} />
           <ResidencyRateEditor residencyId={selected.id} defaultTalentRateCents={selected.defaultTalentRateCents} clientHourlyRateCents={selected.clientHourlyRateCents} />
+          <ClientVisibilitySettings residencyId={selected.id} paymentStatusVisible={selected.clientPaymentStatusVisible} />
           <ApprovedDjManager residencyId={selected.id} artists={data.talent.filter((artist) => !artist.exclusiveResidencyId || artist.exclusiveResidencyId === selected.id)} approvedTalentIds={data.approvals.filter((approval) => approval.residencyId === selected.id).map((approval) => approval.talentId)} />
           <ResidencyContactsManager residencyId={selected.id} contacts={data.contacts.filter((contact) => contact.residencyId === selected.id)} />
         </> : null}

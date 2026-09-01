@@ -9,7 +9,7 @@ async function requestDayparts(residencyId: string) {
   return (await response.json() as { dayparts: DaypartRow[] }).dayparts;
 }
 
-export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = false, hideFinancials = false }: { residencyId: string; residencyName: string; onClose: () => void; readOnly?: boolean; hideFinancials?: boolean }) {
+export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = false, hideFinancials = false, initialCreate = false }: { residencyId: string; residencyName: string; onClose: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean }) {
   const [dayparts, setDayparts] = useState<DaypartRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -49,7 +49,7 @@ export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = 
     <aside className="day-parts-panel" role="dialog" aria-modal="true" aria-labelledby="day-parts-panel-title">
       <header className="day-parts-panel-header"><div><p className="eyebrow">{residencyName}</p><h2 id="day-parts-panel-title">Day Parts</h2><p>{readOnly ? "Standing weekly schedule for this Residency." : "Review and edit the standing weekly schedule without leaving the calendar."}</p></div><button className="quick-modal-close" type="button" aria-label="Close Day Parts" onClick={onClose}>×</button></header>
       <div className="day-parts-panel-scroll">
-        {loading ? <div className="card empty">Loading Day Parts…</div> : error ? <div className="card empty error">{error}<button className="button secondary" type="button" onClick={() => void load()}>Try again</button></div> : <DaypartManager residencyId={residencyId} dayparts={dayparts} onSaved={() => void load()} readOnly={readOnly} hideFinancials={hideFinancials} />}
+        {loading ? <div className="card empty">Loading Day Parts…</div> : error ? <div className="card empty error">{error}<button className="button secondary" type="button" onClick={() => void load()}>Try again</button></div> : <DaypartManager residencyId={residencyId} dayparts={dayparts} onSaved={() => void load()} readOnly={readOnly} hideFinancials={hideFinancials} initialCreate={initialCreate} />}
       </div>
     </aside>
   </div>;

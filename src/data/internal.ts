@@ -7,6 +7,7 @@ import {
   daypartDayRules,
   dayparts,
   invoiceDeliveries,
+  hfyTalentRequests,
   invoices,
   residencies,
   shifts,
@@ -115,6 +116,47 @@ export async function getBilledByHfyWorkQueue() {
   return [...queue.values()];
 }
 
+export async function getPendingHfyTalentRequests() {
+  const [requests, artists] = await Promise.all([
+    getDb().select({
+      id: hfyTalentRequests.id,
+      residencyId: hfyTalentRequests.residencyId,
+      residencyName: residencies.name,
+      residencyTimezone: residencies.timezone,
+      shiftId: shifts.id,
+      shiftName: shifts.name,
+      room: shifts.room,
+      serviceDate: shifts.serviceDate,
+      startsAt: shifts.startsAt,
+      endsAt: shifts.endsAt,
+      createdAt: hfyTalentRequests.createdAt,
+    }).from(hfyTalentRequests)
+      .innerJoin(shifts, eq(hfyTalentRequests.shiftId, shifts.id))
+      .innerJoin(residencies, eq(hfyTalentRequests.residencyId, residencies.id))
+      .where(eq(hfyTalentRequests.status, "pending"))
+      .orderBy(asc(shifts.serviceDate), asc(shifts.startsAt)),
+    getDb().select({
+      id: talent.id,
+      stageName: talent.stageName,
+      homeMarket: talent.homeMarket,
+      exclusiveResidencyId: talent.exclusiveResidencyId,
+    }).from(talent).where(and(
+      eq(talent.ownership, "hfy"),
+      eq(talent.talentStatus, "active"),
+      isNull(talent.archivedAt),
+    )).orderBy(asc(talent.stageName)),
+  ]);
+  return {
+    requests: requests.map((request) => ({
+      ...request,
+      startsAt: request.startsAt.toISOString(),
+      endsAt: request.endsAt.toISOString(),
+      createdAt: request.createdAt.toISOString(),
+    })),
+    artists,
+  };
+}
+
 export type PublicCalendarLinkSettings = {
   hasLink: boolean;
   scope: "all" | "selected";
@@ -144,13 +186,14 @@ export async function getDashboardData() {
   const [residencyRows, shiftRows, assignmentRows, invoiceRows, attentionRows] = await Promise.all([
     getResidencyList(),
     database.select({ id: shifts.id, residencyId: shifts.residencyId, serviceDate: shifts.serviceDate })
-      .from(shifts).where(gte(shifts.serviceDate, todayUtc())),
+      .from(shifts).where(and(gte(shifts.serviceDate, todayUtc()), inArray(shifts.economicsMode, ["hfy", "hfy_request"]))),
     database.select({
       residencyId: shifts.residencyId,
       bookingStatus: assignments.bookingStatus,
       payoutStatus: assignments.payoutStatus,
       totalCompensationCents: assignments.totalCompensationCents,
-    }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id)),
+    }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+      .where(inArray(assignments.source, ["internal", "hfy_request"])),
     database.select().from(invoices).orderBy(desc(invoices.billingPeriodEnd)),
     database.select({ residencyId: attentionItems.residencyId }).from(attentionItems).where(eq(attentionItems.status, "open")),
   ]);
@@ -202,6 +245,7 @@ export async function getCalendarData(residencyId?: string, range?: { from: stri
     invoiceLinkNote: shifts.invoiceLinkNote,
     programDetails: shifts.programDetails,
     manualHostName: shifts.manualHostName,
+    economicsMode: shifts.economicsMode,
   }).from(shifts)
     .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
     .leftJoin(dayparts, eq(shifts.daypartId, dayparts.id))
@@ -485,7 +529,9 @@ export async function getPayoutQueue(residencyId?: string) {
     .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
     .leftJoin(talent, eq(assignments.talentId, talent.id))
     .leftJoin(talentPaymentProfiles, eq(talent.id, talentPaymentProfiles.talentId))
-    .where(residencyId ? eq(shifts.residencyId, residencyId) : undefined)
+    .where(residencyId
+      ? and(eq(shifts.residencyId, residencyId), inArray(assignments.source, ["internal", "hfy_request"]))
+      : inArray(assignments.source, ["internal", "hfy_request"]))
     .orderBy(asc(shifts.serviceDate), asc(talent.stageName));
 }
 
@@ -502,7 +548,7 @@ export async function getCompanyRosterData() {
       archivedAt: talent.archivedAt,
       exclusiveResidencyId: talent.exclusiveResidencyId,
     }).from(talent)
-      .where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt)))
+      .where(and(eq(talent.ownership, "hfy"), eq(talent.talentStatus, "active"), isNull(talent.archivedAt)))
       .orderBy(asc(talent.stageName)),
     database.select({
       talentId: residencyTalent.talentId,
@@ -658,8 +704,9 @@ export async function getSetupData() {
       internalNotes: residencies.internalNotes,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
       clientHourlyRateCents: residencies.clientHourlyRateCents,
+      clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
     }).from(residencies).where(eq(residencies.operatingMode, "operations")).orderBy(desc(residencies.active), asc(residencies.name)),
-    database.select({ id: talent.id, stageName: talent.stageName, homeMarket: talent.homeMarket, exclusiveResidencyId: talent.exclusiveResidencyId }).from(talent).where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
+    database.select({ id: talent.id, stageName: talent.stageName, homeMarket: talent.homeMarket, exclusiveResidencyId: talent.exclusiveResidencyId }).from(talent).where(and(eq(talent.ownership, "hfy"), eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
     database.select({ residencyId: residencyTalent.residencyId, talentId: residencyTalent.talentId }).from(residencyTalent).where(eq(residencyTalent.active, true)),
     database.select({
       id: residencyContacts.id,

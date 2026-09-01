@@ -12,7 +12,7 @@ export function ResidencyShell({ actor, children }: { actor: ResidencyActor; chi
   const pathname = usePathname();
   const [dayPartsOpen, setDayPartsOpen] = useState(false);
   const links = actor.accessRole === "manager"
-    ? [["Overview", "/residency"], ["Calendar", "/residency/calendar"], ["Talent Roster", "/residency/talent"], ["Payment Status", "/residency/payouts"], ["Invoices", "/residency/invoices"], ["Settings", "/residency/settings"]]
+    ? [["Overview", "/residency"], ["Calendar", "/residency/calendar"], ["Talent Roster", "/residency/talent"], ...(actor.clientPaymentStatusVisible ? [["Payment Status", "/residency/payouts"]] : []), ["Invoices", "/residency/invoices"], ["Settings", "/residency/settings"]]
     : [["Calendar", "/residency/calendar"]];
   return <div className="shell client-shell">
     <aside className="sidebar client-sidebar">

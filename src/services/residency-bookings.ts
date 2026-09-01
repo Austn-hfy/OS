@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, dayparts, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, clientAssignmentTerms, dayparts, hfyTalentRequests, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
 import { daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
@@ -26,6 +26,7 @@ export type DaypartBookingInput = {
   notes?: string;
   programDetails?: string;
   manualHostName?: string;
+  requestHfy?: boolean;
   assignments: BookingAssignmentInput[];
 };
 
@@ -87,7 +88,12 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
     if (existingShifts.length || existingOccurrences.length) throw new Error("One of these Dayparts is already scheduled on this date.");
 
     const talentIds = [...new Set(input.dayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
-    const talentRows = talentIds.length ? await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
+    const talentRows = talentIds.length ? await tx.select({
+      id: talent.id,
+      stageName: talent.stageName,
+      ownership: talent.ownership,
+      owningResidencyId: talent.owningResidencyId,
+    }).from(talent)
       .innerJoin(residencyTalent, and(
         eq(residencyTalent.talentId, talent.id),
         eq(residencyTalent.residencyId, residency.id),
@@ -98,6 +104,9 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         eq(talent.talentStatus, "active"),
         isNull(talent.archivedAt),
         or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residency.id)),
+        actor.kind === "residency"
+          ? and(eq(talent.ownership, "residency"), eq(talent.owningResidencyId, residency.id))
+          : eq(talent.ownership, "hfy"),
       )) : [];
     if (talentRows.length !== talentIds.length) throw new Error("One or more selected artists are unavailable to this Residency.");
 
@@ -125,6 +134,12 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.startMinute), residency.timezone);
       const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.endMinute), residency.timezone);
       const recordKind = daypartBookingRecordKind(rule.type, rule.billingMode);
+      if (requested.requestHfy && (actor.kind !== "residency" || rule.type !== "dj_artist" || requested.assignments.length)) {
+        throw new Error("Request HFY must be a client-created DJ slot without a selected artist.");
+      }
+      if (actor.kind === "residency" && recordKind === "financial_shift" && !requested.requestHfy && !requested.assignments.length) {
+        throw new Error("Choose one of your artists or use Request HFY.");
+      }
       const notes = requested.notes?.trim() ?? "";
       const programDetails = requested.programDetails?.trim() ?? "";
       const manualHostName = requested.manualHostName?.trim() ?? "";
@@ -199,12 +214,15 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         continue;
       }
 
-      const coveringInvoices = await tx.select({ id: invoices.id }).from(invoices).where(and(
-        eq(invoices.residencyId, residency.id),
-        lte(invoices.billingPeriodStart, input.serviceDate),
-        gte(invoices.billingPeriodEnd, input.serviceDate),
-        ne(invoices.status, "void"),
-      ));
+      const economicsMode = actor.kind === "residency"
+        ? requested.requestHfy ? "hfy_request" as const : "client_owned" as const
+        : "hfy" as const;
+      const coveringInvoices = economicsMode === "hfy" ? await tx.select({ id: invoices.id }).from(invoices).where(and(
+          eq(invoices.residencyId, residency.id),
+          lte(invoices.billingPeriodStart, input.serviceDate),
+          gte(invoices.billingPeriodEnd, input.serviceDate),
+          ne(invoices.status, "void"),
+        )) : [];
       const invoiceLinkNote = coveringInvoices.length === 1
         ? ""
         : coveringInvoices.length
@@ -223,13 +241,32 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         notes,
         programDetails,
         manualHostName,
-        clientRateOverrideCents: requested.clientRateOverrideCents ?? null,
-        clientRateCents: resolveRateCents(requested.clientRateOverrideCents, residency.clientHourlyRateCents),
-        billingStatus: "pending",
-        invoiceLinkIssue: coveringInvoices.length !== 1,
-        invoiceLinkNote,
+        economicsMode,
+        clientRateOverrideCents: economicsMode === "hfy" ? requested.clientRateOverrideCents ?? null : null,
+        clientRateCents: economicsMode === "hfy" ? resolveRateCents(requested.clientRateOverrideCents, residency.clientHourlyRateCents) : 0,
+        billingStatus: economicsMode === "hfy" ? "pending" : "not_billable",
+        invoiceLinkIssue: economicsMode === "hfy" && coveringInvoices.length !== 1,
+        invoiceLinkNote: economicsMode === "hfy" ? invoiceLinkNote : "",
       }).returning({ id: shifts.id });
       createdShiftIds.push(shift.id);
+
+      if (economicsMode === "hfy_request") {
+        const [request] = await tx.insert(hfyTalentRequests).values({
+          residencyId: residency.id,
+          shiftId: shift.id,
+          createdByUserId: actor.userId,
+        }).returning({ id: hfyTalentRequests.id });
+        await tx.insert(auditLog).values({
+          residencyId: residency.id,
+          actorUserId: actor.userId,
+          actorLabel: actor.email,
+          action: "hfy_talent_requested",
+          entityType: "hfy_talent_request",
+          entityId: request.id,
+          details: { shiftId: shift.id, serviceDate: input.serviceDate, daypartId: rule.daypartId },
+        });
+        continue;
+      }
 
       for (let index = 0; index < requested.assignments.length; index += 1) {
         const assignmentInput = requested.assignments[index];
@@ -237,13 +274,13 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         const assignmentStartsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentStartMinute), residency.timezone);
         const assignmentEndsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentEndMinute), residency.timezone);
         const selectedTalent = assignmentInput.talentId ? talentRows.find((item) => item.id === assignmentInput.talentId) : null;
-        const compensationType = assignmentInput.compensationType ?? "hourly";
-        const effectiveRateCents = resolveTalentRateCents(
-          assignmentInput.talentRateOverrideCents,
-          rule.defaultTalentRateCents,
-          residency.defaultTalentRateCents,
-        );
-        const fixedFeeCents = compensationType === "fixed" ? assignmentInput.fixedFeeCents ?? 0 : null;
+        const compensationType = economicsMode === "client_owned" ? "na" as const : assignmentInput.compensationType ?? "hourly";
+        const effectiveRateCents = economicsMode === "client_owned" ? 0 : resolveTalentRateCents(
+            assignmentInput.talentRateOverrideCents,
+            rule.defaultTalentRateCents,
+            residency.defaultTalentRateCents,
+          );
+        const fixedFeeCents = economicsMode === "client_owned" ? null : compensationType === "fixed" ? assignmentInput.fixedFeeCents ?? 0 : null;
         const totalCompensationCents = calculateCompensationCents({
           compensationType,
           startsAt: assignmentStartsAt,
@@ -255,18 +292,25 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
           shiftId: shift.id,
           talentId: selectedTalent?.id ?? null,
           createdByUserId: actor.userId,
-          source: "internal",
+          source: economicsMode === "client_owned" ? "client_owned" : "internal",
           setName: selectedTalent?.stageName ?? `${rule.name} slot ${index + 1}`,
           startsAt: assignmentStartsAt,
           endsAt: assignmentEndsAt,
           bookingStatus: selectedTalent ? "confirmed" : "open",
           compensationType,
-          talentRateOverrideCents: assignmentInput.talentRateOverrideCents ?? null,
+          talentRateOverrideCents: economicsMode === "client_owned" ? null : assignmentInput.talentRateOverrideCents ?? null,
           talentRateCents: effectiveRateCents,
           fixedFeeCents,
           totalCompensationCents,
           payoutStatus: compensationType === "na" ? "na" : "not_ready",
         }).returning({ id: assignments.id });
+        if (economicsMode === "client_owned") {
+          await tx.insert(clientAssignmentTerms).values({
+            assignmentId: assignment.id,
+            residencyId: residency.id,
+            updatedByUserId: actor.userId,
+          });
+        }
         await tx.insert(auditLog).values({
           residencyId: residency.id,
           actorUserId: actor.userId,
@@ -309,12 +353,16 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
       timezone: residencies.timezone,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
       daypartDefaultTalentRateCents: dayparts.defaultTalentRateCents,
+      economicsMode: shifts.economicsMode,
     }).from(shifts)
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
       .leftJoin(dayparts, eq(shifts.daypartId, dayparts.id))
       .where(and(eq(shifts.id, input.shiftId), eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
       .limit(1);
     if (!shift) throw new Error("Shift not found.");
+
+    if (actor.kind === "residency" && shift.economicsMode !== "client_owned") throw new Error("HFY-managed slots cannot be edited by the client.");
+    if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned slots are managed only by the client.");
 
     const [selectedTalent] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
       .innerJoin(residencyTalent, and(
@@ -327,6 +375,9 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
         eq(talent.talentStatus, "active"),
         isNull(talent.archivedAt),
         or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, shift.residencyId)),
+        actor.kind === "residency"
+          ? and(eq(talent.ownership, "residency"), eq(talent.owningResidencyId, shift.residencyId))
+          : eq(talent.ownership, "hfy"),
       ))
       .limit(1);
     if (!selectedTalent) throw new Error("This DJ is unavailable to this Residency.");
@@ -356,13 +407,14 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
     )).limit(1);
     if (artistConflict.length) throw new Error(`${selectedTalent.stageName} already has an overlapping active booking.`);
 
-    const compensationType = input.compensationType ?? "hourly";
-    const talentRateCents = resolveTalentRateCents(
-      input.talentRateOverrideCents,
-      shift.daypartDefaultTalentRateCents,
-      shift.defaultTalentRateCents,
-    );
-    const fixedFeeCents = compensationType === "fixed" ? input.fixedFeeCents ?? 0 : null;
+    const clientOwned = actor.kind === "residency";
+    const compensationType = clientOwned ? "na" as const : input.compensationType ?? "hourly";
+    const talentRateCents = clientOwned ? 0 : resolveTalentRateCents(
+        input.talentRateOverrideCents,
+        shift.daypartDefaultTalentRateCents,
+        shift.defaultTalentRateCents,
+      );
+    const fixedFeeCents = clientOwned ? null : compensationType === "fixed" ? input.fixedFeeCents ?? 0 : null;
     const totalCompensationCents = calculateCompensationCents({
       compensationType,
       startsAt: assignmentStartsAt,
@@ -374,18 +426,25 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
       shiftId: shift.id,
       talentId: selectedTalent.id,
       createdByUserId: actor.userId,
-      source: "internal",
+      source: clientOwned ? "client_owned" : "internal",
       setName: selectedTalent.stageName,
       startsAt: assignmentStartsAt,
       endsAt: assignmentEndsAt,
       bookingStatus: "confirmed",
       compensationType,
-      talentRateOverrideCents: input.talentRateOverrideCents ?? null,
+      talentRateOverrideCents: clientOwned ? null : input.talentRateOverrideCents ?? null,
       talentRateCents,
       fixedFeeCents,
       totalCompensationCents,
       payoutStatus: compensationType === "na" ? "na" : "not_ready",
     }).returning({ id: assignments.id });
+    if (clientOwned) {
+      await tx.insert(clientAssignmentTerms).values({
+        assignmentId: assignment.id,
+        residencyId: shift.residencyId,
+        updatedByUserId: actor.userId,
+      });
+    }
     await tx.insert(auditLog).values({
       residencyId: shift.residencyId,
       actorUserId: actor.userId,

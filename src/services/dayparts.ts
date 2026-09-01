@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, shifts, talent } from "@/db/schema";
 import { validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartType } from "@/domain/dayparts";
 import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import type { AuditActor } from "@/lib/auth";
@@ -134,17 +134,21 @@ export async function skipDaypartDate(
       id: shifts.id,
       invoiceId: shifts.invoiceId,
       invoiceStatus: invoices.status,
+      economicsMode: shifts.economicsMode,
     }).from(shifts)
       .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
       .where(and(eq(shifts.daypartId, input.daypartId), eq(shifts.serviceDate, input.serviceDate)))
       .limit(1);
     if (shift) {
+      if (actor.kind === "residency" && shift.economicsMode === "hfy") throw new Error("HFY-managed Shifts cannot be skipped by the client.");
+      if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned and pending-request Shifts are controlled through their own workflow.");
       const assignmentRows = await tx.select({
         bookingStatus: assignments.bookingStatus,
         payoutStatus: assignments.payoutStatus,
       }).from(assignments).where(eq(assignments.shiftId, shift.id));
       const blockReason = shiftDeletionBlockReason(shift.invoiceStatus, assignmentRows);
       if (blockReason) throw new Error(blockReason);
+      await tx.delete(hfyTalentRequests).where(eq(hfyTalentRequests.shiftId, shift.id));
       await tx.delete(assignments).where(eq(assignments.shiftId, shift.id));
       await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
       await tx.delete(shifts).where(eq(shifts.id, shift.id));
@@ -380,7 +384,7 @@ export async function getActiveTalentLookup(residencyId?: string) {
     homeMarket: talent.homeMarket,
     genres: talent.genres,
     priority: talent.priority,
-  }).from(talent).where(eq(talent.talentStatus, "active")).orderBy(asc(talent.stageName));
+  }).from(talent).where(and(eq(talent.ownership, "hfy"), eq(talent.talentStatus, "active"))).orderBy(asc(talent.stageName));
   return database.select({
     id: talent.id,
     stageName: talent.stageName,
@@ -396,6 +400,7 @@ export async function getActiveTalentLookup(residencyId?: string) {
     ))
     .where(and(
       eq(talent.talentStatus, "active"),
+      eq(talent.ownership, "hfy"),
       isNull(talent.archivedAt),
       or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residencyId)),
     ))

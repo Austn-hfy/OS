@@ -33,4 +33,17 @@ describe("client-safe Invoice boundary", () => {
     expect(result).not.toHaveProperty("pdfStoragePath");
     expect(result).not.toHaveProperty("notes");
   });
+
+  it("keeps a paid Invoice visible to the client", () => {
+    expect(projectClientSafeInvoice({
+      id: "invoice-paid",
+      invoiceNumber: "ACE-100",
+      billingPeriodStart: "2026-07-01",
+      billingPeriodEnd: "2026-07-07",
+      invoiceDate: "2026-07-08",
+      status: "paid",
+      totalCents: 90000,
+      sentAt: "2026-07-08T18:00:00.000Z",
+    }).status).toBe("paid");
+  });
 });

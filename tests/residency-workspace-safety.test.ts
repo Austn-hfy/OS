@@ -5,7 +5,7 @@ describe("Residency workspace boundaries", () => {
   it("scopes Invoice PDF downloads to the signed-in Residency and client-visible statuses", async () => {
     const source = await readFile(new URL("../src/app/residency/invoices/[invoiceId]/pdf/route.ts", import.meta.url), "utf8");
     expect(source).toContain("eq(invoices.residencyId, actor.residencyId)");
-    expect(source).toContain('inArray(invoices.status, ["approved", "sent"])');
+    expect(source).toContain('inArray(invoices.status, ["approved", "sent", "paid"])');
     expect(source).not.toContain("talentCost");
     expect(source).not.toContain("grossMargin");
   });
@@ -30,7 +30,7 @@ describe("Residency workspace boundaries", () => {
       readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8"),
     ]);
     expect(source).toContain("getResidencyClientSafeRoster(actor.residencyId)");
-    expect(source).toContain("talent={roster.map");
+    expect(source).toContain('talent={roster.filter((artist) => artist.ownership === "residency").map');
     expect(rosterQuery).toContain(".innerJoin(residencyTalent");
     expect(rosterQuery).toContain("eq(residencyTalent.residencyId, residencyId)");
     expect(ownerPicker).toContain(".innerJoin(residencyTalent");

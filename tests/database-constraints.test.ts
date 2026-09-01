@@ -18,6 +18,11 @@ const ids = {
   shiftA: "00000000-0000-4000-8000-000000000050",
   shiftB: "00000000-0000-4000-8000-000000000051",
   lead: "00000000-0000-4000-8000-000000000060",
+  clientOwnedTalent: "00000000-0000-4000-8000-000000000070",
+  clientOwnedShift: "00000000-0000-4000-8000-000000000071",
+  clientOwnedAssignment: "00000000-0000-4000-8000-000000000072",
+  hfyRequestShift: "00000000-0000-4000-8000-000000000073",
+  hfyRequest: "00000000-0000-4000-8000-000000000074",
 };
 
 let database: PGlite;
@@ -48,6 +53,7 @@ beforeAll(async () => {
   const accountSetupTokens = await readFile(new URL("../drizzle/0021_account_setup_tokens.sql", import.meta.url), "utf8");
   const daypartDateExceptions = await readFile(new URL("../drizzle/0024_ambitious_doctor_faustus.sql", import.meta.url), "utf8");
   const explicitResidencyRoster = await readFile(new URL("../drizzle/0025_explicit_residency_roster_visibility.sql", import.meta.url), "utf8");
+  const clientOwnershipBoundary = await readFile(new URL("../drizzle/0026_fine_tyrannus.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -80,6 +86,7 @@ beforeAll(async () => {
   await database.exec(accountSetupTokens.replaceAll("--> statement-breakpoint", ""));
   await database.exec(daypartDateExceptions.replaceAll("--> statement-breakpoint", ""));
   await database.exec(explicitResidencyRoster.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(clientOwnershipBoundary.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -405,6 +412,60 @@ describe("database replacements for Airtable audit formulas", () => {
       VALUES
         ('${ids.shiftB}', '${ids.talent}', 'hotel', 'Overlapping request', '2026-09-05T21:00:00Z', '2026-09-05T23:00:00Z', 'pending_hfy_confirmation', 'hourly', 9000);
     `)).rejects.toThrow();
+  });
+
+  it("keeps client-owned rates in their own Residency-only ledger", async () => {
+    await database.exec(`
+      INSERT INTO talent
+        (id, stage_name, ownership, owning_residency_id, exclusive_residency_id, roster_status, talent_status)
+      VALUES
+        ('${ids.clientOwnedTalent}', 'Client-Owned DJ', 'residency', '${ids.residencyA}', '${ids.residencyA}', 'ready', 'active');
+      INSERT INTO residency_talent (residency_id, talent_id)
+      VALUES ('${ids.residencyA}', '${ids.clientOwnedTalent}');
+      INSERT INTO shifts
+        (id, residency_id, name, service_date, room, starts_at, ends_at, economics_mode, client_rate_cents, billing_status)
+      VALUES
+        ('${ids.clientOwnedShift}', '${ids.residencyA}', 'Client Slot', '2026-09-20', 'Pool', '2026-09-20T20:00:00Z', '2026-09-20T23:00:00Z', 'client_owned', 0, 'not_billable');
+      INSERT INTO assignments
+        (id, shift_id, talent_id, source, set_name, starts_at, ends_at, booking_status, compensation_type, talent_rate_cents, total_compensation_cents, payout_status)
+      VALUES
+        ('${ids.clientOwnedAssignment}', '${ids.clientOwnedShift}', '${ids.clientOwnedTalent}', 'client_owned', 'Client-Owned DJ', '2026-09-20T20:00:00Z', '2026-09-20T23:00:00Z', 'confirmed', 'na', 0, 0, 'na');
+      INSERT INTO client_assignment_terms (assignment_id, residency_id, rate_cents)
+      VALUES ('${ids.clientOwnedAssignment}', '${ids.residencyA}', 12500);
+    `);
+    const terms = await database.query<{ rate_cents: number }>(`
+      SELECT rate_cents FROM client_assignment_terms WHERE assignment_id = '${ids.clientOwnedAssignment}';
+    `);
+    expect(terms.rows[0]?.rate_cents).toBe(12500);
+    await expect(database.exec(`
+      UPDATE client_assignment_terms SET residency_id = '${ids.residencyB}'
+      WHERE assignment_id = '${ids.clientOwnedAssignment}';
+    `)).rejects.toThrow(/match their client-owned Residency slot/);
+    await expect(database.exec(`
+      UPDATE assignments SET source = 'internal'
+      WHERE id = '${ids.clientOwnedAssignment}';
+    `)).rejects.toThrow(/matching Assignment source/);
+  });
+
+  it("stores Request HFY as a no-artist pending slot", async () => {
+    await database.exec(`
+      INSERT INTO shifts
+        (id, residency_id, name, service_date, room, starts_at, ends_at, economics_mode, client_rate_cents, billing_status)
+      VALUES
+        ('${ids.hfyRequestShift}', '${ids.residencyA}', 'Request HFY Slot', '2026-09-21', 'Lobby', '2026-09-21T20:00:00Z', '2026-09-21T23:00:00Z', 'hfy_request', 0, 'not_billable');
+      INSERT INTO hfy_talent_requests (id, residency_id, shift_id, created_by_user_id)
+      VALUES ('${ids.hfyRequest}', '${ids.residencyA}', '${ids.hfyRequestShift}', '${ids.hotel}');
+    `);
+    const request = await database.query<{ status: string }>(`
+      SELECT status FROM hfy_talent_requests WHERE id = '${ids.hfyRequest}';
+    `);
+    expect(request.rows[0]?.status).toBe("pending");
+    await expect(database.exec(`
+      INSERT INTO assignments
+        (shift_id, talent_id, source, set_name, starts_at, ends_at, booking_status, compensation_type, talent_rate_cents)
+      VALUES
+        ('${ids.hfyRequestShift}', '${ids.talent}', 'internal', 'Bypass', '2026-09-21T20:00:00Z', '2026-09-21T23:00:00Z', 'confirmed', 'hourly', 8000);
+    `)).rejects.toThrow(/matching Assignment source/);
   });
 
   it("prevents a Shift from linking to another Residency's Invoice", async () => {

@@ -159,6 +159,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     billingMode: "billed_by_hfy" as const,
     programDetails: shift.programDetails,
     manualHostName: shift.manualHostName,
+    economicsMode: shift.economicsMode,
     schedulingStatus,
     assignments: activeAssignments.map((assignment) => ({
       id: assignment.id,

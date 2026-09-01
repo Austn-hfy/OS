@@ -18,6 +18,7 @@ import { createShift, deleteShift } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { issuePublicCalendarToken } from "@/domain/public-calendar";
+import { fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
@@ -1387,6 +1388,7 @@ const residencyBookingPayloadSchema = z.object({
     startMinute: z.number().int().min(0).max(1439),
     endMinute: z.number().int().min(1).max(2879),
     clientRateOverrideCents: z.number().int().min(0).nullable().optional(),
+    requestHfy: z.boolean().optional(),
     assignments: z.array(z.object({
       talentId: z.uuid().nullable().optional(),
       startsAtMinute: z.number().int().min(0).max(2879).optional(),
@@ -1414,7 +1416,7 @@ export async function bookResidencyDateAction(_previous: ResidencyActionState, f
         clientRateOverrideCents: null,
         assignments: slot.assignments.map((assignment) => ({
           ...assignment,
-          compensationType: "hourly" as const,
+          compensationType: "na" as const,
           talentRateOverrideCents: null,
           fixedFeeCents: null,
         })),
@@ -1431,6 +1433,71 @@ export async function bookResidencyDateAction(_previous: ResidencyActionState, f
     return { status: "success", message: `${count} calendar slot${count === 1 ? "" : "s"} scheduled.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to book this date." };
+  }
+}
+
+export async function fulfillHfyTalentRequestAction(
+  _previous: ResidencyActionState,
+  formData: FormData,
+): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      requestId: z.uuid(),
+      talentId: z.uuid(),
+      clientRate: z.coerce.number().min(0).max(1_000_000),
+      artistRate: z.coerce.number().min(0).max(1_000_000),
+    }).parse(Object.fromEntries(formData));
+    const result = await fulfillHfyTalentRequest(actor, {
+      requestId: parsed.requestId,
+      talentId: parsed.talentId,
+      clientRateCents: Math.round(parsed.clientRate * 100),
+      artistRateCents: Math.round(parsed.artistRate * 100),
+    });
+    revalidatePath("/app");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/payouts");
+    revalidatePath("/app/invoices");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/payouts");
+    revalidatePath("/residency/invoices");
+    return { status: "success", message: `${result.artistName} assigned and moved into HFY billing.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to fulfill this HFY request." };
+  }
+}
+
+export async function updateClientPaymentStatusVisibilityAction(
+  _previous: ResidencyActionState,
+  formData: FormData,
+): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const residencyId = z.uuid().parse(formData.get("residencyId"));
+    const visible = formData.get("visible") === "on";
+    const [updated] = await getDb().update(residencies).set({
+      clientPaymentStatusVisible: visible,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(residencies.id, residencyId),
+      eq(residencies.operatingMode, "operations"),
+    )).returning({ id: residencies.id });
+    if (!updated) throw new Error("Residency not found.");
+    await getDb().insert(auditLog).values({
+      residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "client_payment_status_visibility_updated",
+      entityType: "residency",
+      entityId: residencyId,
+      details: { visible },
+    });
+    revalidatePath("/app/setup");
+    revalidatePath("/residency");
+    revalidatePath("/residency/payouts");
+    return { status: "success", message: visible ? "Payment Status is visible to this client." : "Payment Status is hidden from this client." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update client visibility." };
   }
 }
 

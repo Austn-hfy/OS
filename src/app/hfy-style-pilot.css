@@ -1061,6 +1061,80 @@
   }
 }
 
+/* Client-owned programming and Request HFY stay visually distinct. */
+.hfy-style-system .client-add-artist {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(420px, 1.2fr);
+  gap: var(--hfy-space-8);
+  align-items: end;
+}
+
+.hfy-style-system .client-add-artist form,
+.hfy-style-system .hfy-request-fulfillment-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: var(--hfy-space-3);
+  align-items: end;
+}
+
+.hfy-style-system .client-add-artist form > p,
+.hfy-style-system .hfy-request-fulfillment-form > p { grid-column: 1 / -1; margin: 0; }
+
+.hfy-style-system .client-assignment-choices { display: grid; gap: var(--hfy-space-3); }
+
+.hfy-style-system .request-hfy-option,
+.hfy-style-system .request-hfy-selection {
+  display: flex;
+  gap: var(--hfy-space-4);
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--hfy-space-4);
+  border: 1px solid color-mix(in srgb, var(--hfy-action) 42%, var(--hfy-line));
+  border-radius: var(--hfy-radius-control);
+  text-align: left;
+  color: var(--hfy-ink);
+  background: color-mix(in srgb, var(--hfy-action-soft) 72%, white);
+}
+
+.hfy-style-system .request-hfy-option > *,
+.hfy-style-system .request-hfy-selection > div > * { display: block; }
+.hfy-style-system .request-hfy-option span,
+.hfy-style-system .request-hfy-selection span { color: var(--hfy-action-strong); font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; }
+.hfy-style-system .request-hfy-option small,
+.hfy-style-system .request-hfy-selection small { margin-top: 3px; color: var(--hfy-ink-soft); }
+.hfy-style-system .request-hfy-option:hover { transform: translateY(-1px); border-color: var(--hfy-action); }
+
+.hfy-style-system .hfy-request-queue-section { display: grid; gap: var(--hfy-space-4); margin-bottom: var(--hfy-space-8); }
+.hfy-style-system .hfy-request-list { display: grid; gap: var(--hfy-space-4); }
+.hfy-style-system .hfy-request-card { display: grid; grid-template-columns: minmax(220px, 0.55fr) minmax(520px, 1.45fr); gap: var(--hfy-space-6); align-items: end; }
+.hfy-style-system .hfy-request-details dl { display: flex; flex-wrap: wrap; gap: var(--hfy-space-4); margin: var(--hfy-space-3) 0 0; }
+.hfy-style-system .hfy-request-details dl div { display: grid; gap: 2px; }
+.hfy-style-system .hfy-request-details dt { color: var(--hfy-ink-soft); font-size: 10px; text-transform: uppercase; }
+.hfy-style-system .hfy-request-details dd { margin: 0; font-weight: 700; }
+
+.hfy-style-system .client-owed-total { display: grid; gap: 4px; text-align: right; }
+.hfy-style-system .client-owed-total span { color: var(--hfy-ink-soft); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.hfy-style-system .client-owed-total strong { font-size: clamp(24px, 3vw, 38px); }
+.hfy-style-system .client-rate-form { display: grid; grid-template-columns: auto minmax(88px, 120px) auto; gap: 6px; align-items: center; }
+.hfy-style-system .client-rate-form input { min-width: 0; }
+.hfy-style-system .client-rate-form small { grid-column: 1 / -1; }
+.hfy-style-system .status.client-owned { margin-bottom: 6px; color: #215e52; background: #d9f0ea; }
+.hfy-style-system .client-visibility-settings .toggle-control { margin: var(--hfy-space-4) 0; }
+
+@media (max-width: 1050px) {
+  .hfy-style-system .client-add-artist,
+  .hfy-style-system .hfy-request-card { grid-template-columns: 1fr; }
+  .hfy-style-system .client-add-artist form,
+  .hfy-style-system .hfy-request-fulfillment-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 650px) {
+  .hfy-style-system .client-add-artist form,
+  .hfy-style-system .hfy-request-fulfillment-form { grid-template-columns: 1fr; }
+  .hfy-style-system .request-hfy-selection { align-items: flex-start; flex-direction: column; }
+}
+
 /* Owner business modes */
 .hfy-style-system .owner-shell {
   --owner-accent: var(--hfy-action-strong);

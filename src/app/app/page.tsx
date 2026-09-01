@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { formatMoney } from "@/components/format";
 import { PrivateValue } from "@/components/privacy-mode";
-import { getBilledByHfyWorkQueue, getDashboardData, getDeveloperResidencyList } from "@/data/internal";
+import { getBilledByHfyWorkQueue, getDashboardData, getDeveloperResidencyList, getPendingHfyTalentRequests } from "@/data/internal";
 import { formatLocalMinute } from "@/domain/dayparts";
 import { enterViewAsAction } from "./view-as-actions";
 import { CreateResidencyModal } from "./create-residency-modal";
+import { HfyRequestQueue } from "./hfy-request-queue";
 
 const weekdayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -43,7 +44,7 @@ async function DeveloperDashboard() {
 }
 
 async function HfyWorkQueue() {
-  const queue = await getBilledByHfyWorkQueue();
+  const [queue, hfyRequests] = await Promise.all([getBilledByHfyWorkQueue(), getPendingHfyTalentRequests()]);
   const today = new Date().toISOString().slice(0, 10);
   const liveQueue = queue.filter((daypart) => daypart.active && (!daypart.activeUntil || daypart.activeUntil >= today));
   const residencyCount = new Set(queue.map((daypart) => daypart.residencyId)).size;
@@ -62,6 +63,7 @@ async function HfyWorkQueue() {
       <article><strong>{residencyCount}</strong><span>Residencies represented</span></article>
       <article><strong>{queue.length - liveQueue.length}</strong><span>Inactive or ended</span></article>
     </section>
+    <HfyRequestQueue requests={hfyRequests.requests} artists={hfyRequests.artists} />
     <section className="hfy-work-queue-section">
       <div className="section-heading"><div><p className="eyebrow">Revenue source of truth</p><h2>Billed-by-HFY Dayparts</h2><p className="subhead">Residency Platform status never removes a matching Daypart from this view. Inactive records stay visible and clearly labeled.</p></div></div>
       {queue.length ? <div className="hfy-work-queue-groups">{[...grouped.values()].map((daypartsForResidency) => {
