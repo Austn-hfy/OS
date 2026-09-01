@@ -9,13 +9,10 @@ export default async function ResidencyDaypartsPage({ searchParams }: { searchPa
   if (!canResidencyRoleAccess(actor.accessRole, "manage_dayparts")) redirect("/residency/calendar");
   const dayparts = await getDaypartsForResidency(actor.residencyId);
 
-  return <>
-    <header className="page-header client-page-header"><div><p className="eyebrow">Standing schedule</p><h1>Day Parts</h1></div></header>
-    <DaypartRouteManager
-      residencyId={actor.residencyId}
-      dayparts={dayparts}
-      hideFinancials
-      initialCreate={actor.accessRole === "manager" && params.create === "1"}
-    />
-  </>;
+  return <DaypartRouteManager
+    residencyId={actor.residencyId}
+    dayparts={dayparts}
+    hideFinancials
+    initialCreate={actor.accessRole === "manager" && params.create === "1"}
+  />;
 }

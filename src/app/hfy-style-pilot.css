@@ -1066,37 +1066,36 @@
 }
 
 .hfy-style-system .client-shell .main > .client-page-header {
-  min-height: 0;
+  min-height: 106px;
   margin: 0 0 var(--hfy-space-4);
-  padding: 0 2px 12px;
-  align-items: flex-end;
-  border: 0;
-  border-bottom: 1px solid var(--hfy-line);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
+  padding: 18px 22px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--hfy-radius-card);
+  background:
+    linear-gradient(120deg, rgba(249, 251, 252, 0.86), rgba(235, 242, 246, 0.72)),
+    var(--hfy-surface);
+  box-shadow: 0 12px 32px rgba(48, 65, 78, 0.09), inset 0 1px var(--hfy-inset-highlight);
+  backdrop-filter: blur(16px) saturate(112%);
 }
 
 .hfy-style-system .client-shell .main > .client-page-header h1 {
   margin: 3px 0 0;
-  font-size: clamp(26px, 3vw, 34px);
+  font-size: clamp(28px, 3vw, 38px);
   line-height: 1.04;
 }
 
-.hfy-style-system .client-owed-summary {
-  width: max-content;
-  max-width: 100%;
-  margin: 0 0 var(--hfy-space-4);
+.hfy-style-system .client-page-header-stat {
+  min-width: 180px;
   padding: 10px 14px;
   border: 1px solid var(--hfy-line);
   border-radius: var(--hfy-radius-control);
-  text-align: left;
-  background: rgba(250, 252, 253, 0.62);
+  text-align: right;
+  background: rgba(250, 252, 253, 0.72);
   box-shadow: inset 0 1px var(--hfy-inset-highlight);
 }
 
-.hfy-style-system .client-owed-summary strong { font-size: 24px; }
+.hfy-style-system .client-page-header-stat strong { font-size: 24px; }
 
 @media (max-width: 700px) {
   .hfy-style-system .daypart-week-corner,
@@ -1521,4 +1520,46 @@
   border-left-color: var(--daypart-color, #ec4899);
   background: color-mix(in srgb, var(--daypart-color, #ec4899) 42%, white);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #ec4899) 72%, transparent);
+}
+
+/* The sidebar reduces real calendar width before viewport media queries run. */
+.hfy-style-system .calendar-command-bar {
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.hfy-style-system .calendar-command-controls {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+}
+
+.hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) {
+  min-width: 0;
+  margin-right: auto;
+}
+
+@media (max-width: 850px) {
+  .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) {
+    width: 100%;
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 650px) {
+  .hfy-style-system .client-shell .main > .client-page-header {
+    min-height: 0;
+    padding: 16px 18px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hfy-style-system .client-page-header-stat {
+    width: 100%;
+    text-align: left;
+  }
 }

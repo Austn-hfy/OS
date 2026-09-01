@@ -9,7 +9,6 @@ export default async function ResidencyTalentPage() {
   if (!canResidencyRoleAccess(actor.accessRole, "talent")) redirect("/residency/calendar");
   const roster = await getResidencyClientSafeRoster(actor.residencyId);
   return <>
-    <header className="page-header client-page-header"><div><p className="eyebrow">Your talent</p><h1>Talent Roster</h1></div></header>
     {actor.accessRole === "manager" ? <AddClientArtistForm /> : null}
     <section className="card client-safe-roster-boundary"><strong>Ownership boundary</strong><span>Your artists remain client-owned. HFY payment, tax, payout, and earnings fields are never added to them.</span></section>
     <section className="client-safe-roster" aria-label="Approved talent roster">
