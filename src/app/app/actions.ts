@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
@@ -19,6 +20,7 @@ import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { issuePublicCalendarToken } from "@/domain/public-calendar";
 import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
+import { requestOrigin } from "@/lib/request-origin";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
@@ -130,6 +132,7 @@ export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLi
       scope: z.enum(["all", "selected"]),
     }).parse(Object.fromEntries(formData));
     const actor = await requireActorForResidency(residencyId, { manager: true });
+    const baseUrl = requestOrigin(await headers());
     const selectedDaypartIds = z.array(z.uuid()).max(100).parse([...new Set(formData.getAll("daypartIds").map(String))]);
     if (scope === "selected" && !selectedDaypartIds.length) throw new Error("Select at least one Daypart for this link.");
     const { token, tokenHash } = issuePublicCalendarToken();
@@ -176,7 +179,6 @@ export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLi
     });
     revalidatePath("/app/calendar");
     revalidatePath("/app/setup");
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://hfy.app";
     return {
       status: "success",
       message: "New public calendar link created. The previous link, if any, is now invalid.",

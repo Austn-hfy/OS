@@ -160,7 +160,7 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .public-calendar-dayparts > label { min-width: 0; display: grid; grid-template-columns: auto auto minmax(0,1fr); align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid transparent; border-radius: 11px; cursor: pointer; }
 .public-calendar-dayparts > label.selected { border-color: rgba(39,131,220,.26); background: rgba(217,237,250,.56); }
 .public-calendar-daypart-color { width: 9px; height: 28px; border-radius: 999px; }
-.public-calendar-page { width: min(880px, calc(100% - 32px)); min-height: 100dvh; display: grid; align-content: start; gap: 22px; margin: 0 auto; padding: 48px 0 34px; }
+.public-calendar-page { width: min(1240px, calc(100% - 32px)); min-height: 100dvh; display: grid; align-content: start; gap: 22px; margin: 0 auto; padding: 48px 0 34px; }
 .client-nav-slot { display: contents; }
 .client-dayparts-button { appearance: none; display: block; width: 100%; padding: 12px 14px; border: 0; border-radius: 12px; color: var(--muted); background: transparent; text-align: left; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .client-dayparts-button:hover { color: var(--forest); background: rgba(255,255,255,.42); }
@@ -195,13 +195,12 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .public-calendar-header .brand-mark { width: 48px; height: 48px; flex: 0 0 48px; }
 .public-calendar-header h1 { margin: 6px 0 8px; font-size: clamp(34px, 7vw, 54px); }
 .public-calendar-header p:last-child { margin: 0; color: var(--muted); }
-.public-calendar-list { display: grid; gap: 12px; }
-.public-calendar-day { display: grid; grid-template-columns: minmax(190px,.7fr) minmax(0,1.3fr); gap: 22px; padding: 20px 22px; border: 1px solid rgba(255,255,255,.74); border-radius: 22px; background: rgba(249,251,252,.86); box-shadow: 0 12px 38px rgba(7,26,49,.07); backdrop-filter: blur(16px); }
-.public-calendar-day h2 { font-size: 17px; }
-.public-calendar-day > div { display: grid; gap: 7px; }
-.public-calendar-entry { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.72); }
-.public-calendar-entry strong { color: var(--dark); font-size: 12px; }
-.public-calendar-entry span { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.public-calendar-surface { min-width: 0; display: grid; gap: 18px; padding: 22px; border: 1px solid rgba(255,255,255,.74); border-radius: 28px; background: rgba(249,251,252,.86); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
+.public-calendar-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.public-calendar-toolbar > p { margin: 0; color: var(--muted); font-size: 11px; font-weight: 700; }
+.public-calendar-toolbar .month-navigation { margin-left: auto; }
+.public-calendar-toolbar .month-navigation h2 { margin: 0; }
+.public-calendar-surface .month-calendar-wrap { box-shadow: none; }
 .public-calendar-footer { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
 .sidebar-footer { margin-top: auto; color: rgba(255,255,255,.55); font-size: 12px; line-height: 1.6; }
 .privacy-mode-toggle { appearance: none; width: 100%; min-height: 54px; display: flex; align-items: center; gap: 10px; margin-bottom: 13px; padding: 9px 10px; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; color: rgba(255,255,255,.72); background: rgba(255,255,255,.065); text-align: left; transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease; }
@@ -1186,9 +1185,12 @@ tr:last-child td { border-bottom: 0; }
   .active-residencies-heading { align-items: stretch; flex-direction: column; }
   .active-residencies-heading .button { width: 100%; }
   .day-parts-panel { width: 100%; }
-  .public-calendar-page { width: min(100% - 20px, 680px); padding-top: 10px; }
+  .public-calendar-page { width: calc(100% - 20px); padding-top: 10px; }
   .public-calendar-header { padding: 20px; border-radius: 22px; }
-  .public-calendar-day { grid-template-columns: 1fr; gap: 12px; padding: 16px; }
+  .public-calendar-surface { padding: 12px; border-radius: 22px; }
+  .public-calendar-toolbar { align-items: stretch; flex-direction: column; }
+  .public-calendar-toolbar .month-navigation { width: 100%; justify-content: space-between; margin-left: 0; }
+  .public-calendar-toolbar .month-navigation h2 { min-width: 0; }
   .public-calendar-scope-form fieldset, .public-calendar-dayparts { grid-template-columns: 1fr; }
   .main.calendar-main { height: auto; min-height: 100dvh; overflow: visible; }
   .calendar-page .month-calendar { min-width: 0; }
