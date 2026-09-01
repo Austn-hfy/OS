@@ -5,11 +5,12 @@ import { residencies } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { requireActorForResidency } from "@/lib/auth";
 import { getDaypartsForResidency } from "@/services/dayparts";
+import { isStandingHfyDaypart } from "@/domain/hfy-programming";
 import { residencyAccessErrorResponse } from "./auth-response";
 
 export const maxDuration = 30;
 
-export async function GET(_request: Request, { params }: { params: Promise<{ residencyId: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ residencyId: string }> }) {
   const residencyId = z.uuid().parse((await params).residencyId);
   let actor: Awaited<ReturnType<typeof requireActorForResidency>>;
   try {
@@ -24,8 +25,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ res
     getDaypartsForResidency(residencyId),
   ]);
   if (!residencyRows[0]) return NextResponse.json({ error: "Residency not found." }, { status: 404 });
+  const hfyOnly = actor.kind === "internal" && new URL(request.url).searchParams.get("scope") === "hfy";
   return NextResponse.json({
-    dayparts: dayparts.map((daypart) => ({
+    dayparts: dayparts.filter((daypart) => !hfyOnly || isStandingHfyDaypart(daypart)).map((daypart) => ({
       id: daypart.id,
       name: daypart.name,
       room: daypart.room,

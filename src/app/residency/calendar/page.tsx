@@ -1,7 +1,7 @@
 import { formatTimeInput } from "@/components/format";
 import { getCalendarData, getPublicCalendarLinkSettings, getScheduleOccurrenceData } from "@/data/internal";
 import { getResidencyClientSafeRoster } from "@/data/residency-client";
-import { clockToMinute, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
+import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { requireResidencyActor } from "@/lib/auth";
 import { calendarToneForSlot, monthRange, normalizeMonthKey } from "@/lib/calendar";
 import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
@@ -30,14 +30,17 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
       .filter((window) => window.withinShift);
     const status = slotSchedulingStatus(start, end, coverage);
     const names = activeAssignments.map((assignment) => assignment.talentName || assignment.guestName).filter(Boolean);
+    const pendingHfy = shift.economicsMode === "hfy_request";
     return {
       id: shift.id, date: shift.serviceDate, title: matchedDaypart?.name ?? shift.name,
-      time: `${formatCompactMinuteRange(start, end)} · ${status === "empty" ? "Needs scheduling" : status === "partial" ? "Partially scheduled" : `${activeAssignments.length} talent`}`,
-      residencyName: names.join(" + ") || shift.name,
-      color: matchedDaypart?.color ?? shift.daypartColor ?? shift.shiftCalendarColor ?? undefined,
+      time: `${formatCompactMinuteRange(start, end)} · ${pendingHfy ? "Request HFY pending" : status === "empty" ? "Needs scheduling" : status === "partial" ? "Partially scheduled" : `${activeAssignments.length} talent`}`,
+      residencyName: pendingHfy ? "HFY staffing requested" : names.join(" + ") || shift.name,
+      color: calendarColorForEconomics(matchedDaypart?.color ?? shift.daypartColor, shift.shiftCalendarColor, shift.economicsMode),
+      bookingState: pendingHfy ? "hfy_pending" : shift.economicsMode === "hfy" ? "hfy_confirmed" : undefined,
       tone: calendarToneForSlot(shift.room, "blue"), daypartId: shift.daypartId, shiftStartMinute: start, shiftEndMinute: end,
-      projected: false, recordType: "financial_shift", daypartType: "dj_artist", billingMode: "billed_by_hfy",
+      projected: false, recordType: "financial_shift", daypartType: "dj_artist", billingMode: matchedDaypart?.billingMode ?? "billed_by_hfy",
       programDetails: "", manualHostName: "", schedulingStatus: status,
+      economicsMode: shift.economicsMode,
       assignments: activeAssignments.map((assignment) => ({
         id: assignment.id, talentId: assignment.talentId, talentName: assignment.talentName, guestName: assignment.guestName,
         startsAt: assignment.startsAt.toISOString(), endsAt: assignment.endsAt.toISOString(),
@@ -67,8 +70,8 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
   });
 
   const existing = new Set([
-    ...calendar.flatMap((shift) => shift.daypartId ? [`${shift.daypartId}:${shift.serviceDate}`] : []),
-    ...occurrences.map((occurrence) => `${occurrence.daypartId}:${occurrence.serviceDate}`),
+    ...calendar.flatMap((shift) => shift.daypartId ? [daypartDateKey(shift.daypartId, shift.serviceDate)] : []),
+    ...occurrences.map((occurrence) => daypartDateKey(occurrence.daypartId, occurrence.serviceDate)),
   ]);
   const projected: ResidencyEvent[] = projectDaypartSlots(dayparts, range.from, range.to, existing, dateExceptions).map((slot) => ({
     id: slot.id, date: slot.date, title: slot.name, time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · Needs scheduling`,
@@ -86,7 +89,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
   return <div className="calendar-page client-calendar-page"><ResidencyCalendar
     residency={{ id: actor.residencyId, name: actor.residencyName, timezone: actor.residencyTimezone, defaultTalentRateCents: 0, clientHourlyRateCents: 0, calendarLinkSettings }}
     monthKey={monthKey} events={events} dayparts={safeDayparts}
-    talent={roster.map((artist) => ({ ...artist, priority: null }))}
+    talent={roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
     dateExceptions={dateExceptions}
     previewMode calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}
   /></div>;

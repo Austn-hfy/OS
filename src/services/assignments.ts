@@ -5,6 +5,7 @@ import { calculateCompensationCents, isPaymentEligible, nextPayoutStatus } from 
 import { localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import type { AuditActor } from "@/lib/auth";
+import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 
 const transitions: Record<string, string[]> = {
   open: ["offered", "confirmed", "cancelled"],
@@ -14,6 +15,15 @@ const transitions: Record<string, string[]> = {
   completed: [],
   cancelled: ["open"],
 };
+
+function assertEconomicOwner(actor: AuditActor, source: string) {
+  if (actor.kind === "residency" && source !== "client_owned") {
+    throw new Error("HFY-managed Assignments cannot be changed by the client.");
+  }
+  if (actor.kind === "internal" && source === "client_owned") {
+    throw new Error("Client-owned Assignments are managed only by the client.");
+  }
+}
 
 export async function transitionAssignment(
   actor: AuditActor,
@@ -33,11 +43,13 @@ export async function transitionAssignment(
       talentRateCents: assignments.talentRateCents,
       fixedFeeCents: assignments.fixedFeeCents,
       payoutStatus: assignments.payoutStatus,
+      source: assignments.source,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .where(eq(assignments.id, assignmentId))
       .limit(1);
     if (!current) throw new Error("Assignment not found.");
+    assertEconomicOwner(actor, current.source);
     if (!transitions[current.bookingStatus]?.includes(targetStatus)) {
       throw new Error(`Cannot move ${current.bookingStatus.replaceAll("_", " ")} to ${targetStatus.replaceAll("_", " ")}.`);
     }
@@ -84,9 +96,11 @@ export async function markAssignmentPaid(
       residencyId: shifts.residencyId,
       payoutStatus: assignments.payoutStatus,
       totalCompensationCents: assignments.totalCompensationCents,
+      source: assignments.source,
     }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .where(and(eq(assignments.id, assignmentId), eq(assignments.payoutStatus, "ready_to_pay"))).limit(1);
     if (!current) throw new Error("Only a Ready to Pay Assignment can be marked Paid.");
+    assertEconomicOwner(actor, current.source);
     await tx.update(assignments).set({
       payoutStatus: "paid",
       paidAt: payment.paidAt,
@@ -112,9 +126,11 @@ export async function changeAssignmentPaidDate(actor: AuditActor, assignmentId: 
       id: assignments.id,
       residencyId: shifts.residencyId,
       paidAt: assignments.paidAt,
+      source: assignments.source,
     }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .where(and(eq(assignments.id, assignmentId), eq(assignments.payoutStatus, "paid"))).limit(1);
     if (!current) throw new Error("Only a Paid Assignment can have its paid date changed.");
+    assertEconomicOwner(actor, current.source);
     await tx.update(assignments).set({ paidAt, updatedAt: new Date() }).where(eq(assignments.id, current.id));
     await tx.insert(auditLog).values({
       residencyId: current.residencyId,
@@ -138,9 +154,14 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
       endsAt: assignments.endsAt,
       bookingStatus: assignments.bookingStatus,
       payoutStatus: assignments.payoutStatus,
+      source: assignments.source,
+      defaultTalentRateCents: residencies.defaultTalentRateCents,
     }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+      .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
       .where(eq(assignments.id, assignmentId)).limit(1);
     if (!current) throw new Error("Assignment not found.");
+    assertEconomicOwner(actor, current.source);
+    if (actor.kind === "internal") assertResidencyTalentRateConfigured(current.defaultTalentRateCents);
     if (current.bookingStatus === "completed" || current.payoutStatus === "ready_to_pay" || current.payoutStatus === "paid") {
       throw new Error("Completed or payable work cannot be rescheduled from the calendar.");
     }
@@ -148,7 +169,13 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
     if (current.talentId === talentId) return;
 
     const [replacement] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
-      .where(and(eq(talent.id, talentId), eq(talent.talentStatus, "active"))).limit(1);
+      .where(and(
+        eq(talent.id, talentId),
+        eq(talent.talentStatus, "active"),
+        actor.kind === "residency"
+          ? and(eq(talent.ownership, "residency"), eq(talent.owningResidencyId, current.residencyId))
+          : eq(talent.ownership, "hfy"),
+      )).limit(1);
     if (!replacement) throw new Error("Choose an active Talent record.");
     const conflict = await tx.select({ id: assignments.id }).from(assignments).where(and(
       ne(assignments.id, current.id),
@@ -203,12 +230,16 @@ export async function rescheduleAssignment(
       talentRateCents: assignments.talentRateCents,
       fixedFeeCents: assignments.fixedFeeCents,
       payoutStatus: assignments.payoutStatus,
+      source: assignments.source,
+      defaultTalentRateCents: residencies.defaultTalentRateCents,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
       .where(eq(assignments.id, assignmentId))
       .limit(1);
     if (!current) throw new Error("Assignment not found.");
+    assertEconomicOwner(actor, current.source);
+    if (actor.kind === "internal") assertResidencyTalentRateConfigured(current.defaultTalentRateCents);
     if (current.bookingStatus === "completed" || current.payoutStatus === "ready_to_pay" || current.payoutStatus === "paid") {
       throw new Error("Completed or payable work cannot be rescheduled from the calendar.");
     }
@@ -221,7 +252,13 @@ export async function rescheduleAssignment(
     }
 
     const [replacement] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent)
-      .where(and(eq(talent.id, input.talentId), eq(talent.talentStatus, "active"))).limit(1);
+      .where(and(
+        eq(talent.id, input.talentId),
+        eq(talent.talentStatus, "active"),
+        actor.kind === "residency"
+          ? and(eq(talent.ownership, "residency"), eq(talent.owningResidencyId, current.residencyId))
+          : eq(talent.ownership, "hfy"),
+      )).limit(1);
     if (!replacement) throw new Error("Choose an active Talent record.");
 
     const shiftOverlap = await tx.select({ id: assignments.id }).from(assignments).where(and(

@@ -23,7 +23,7 @@ export function ResidencyProfileEditor({ residency }: {
       <div className="field"><label htmlFor="residency-profile-name">Residency name</label><input id="residency-profile-name" name="name" defaultValue={residency.name} required /></div>
       <div className="field"><label htmlFor="residency-profile-location">City / State</label><input id="residency-profile-location" name="cityState" defaultValue={residency.cityState} placeholder="Palm Springs, CA" /></div>
       <div className="field"><label htmlFor="residency-profile-timezone">Timezone</label><input id="residency-profile-timezone" name="timezone" defaultValue={residency.timezone} required /></div>
-      <div className="field"><label htmlFor="residency-profile-tier">Service tier</label><select id="residency-profile-tier" name="tier" defaultValue={residency.tier}><option value="operations_only">Operations Only</option><option value="complete">Complete</option></select></div>
+      <div className="field"><label htmlFor="residency-profile-tier">Service tier</label><select id="residency-profile-tier" name="tier" defaultValue={residency.tier}><option value="operations_only">Platform</option><option value="complete">Full Programming</option></select></div>
       <div className="field wide"><label htmlFor="residency-profile-notes">Internal notes</label><textarea id="residency-profile-notes" name="internalNotes" rows={3} defaultValue={residency.internalNotes} placeholder="Operating context, client preferences, or internal reminders" /></div>
     </div>
     {state.status !== "idle" ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}

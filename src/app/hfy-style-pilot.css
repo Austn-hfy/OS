@@ -382,6 +382,15 @@
 }
 .hfy-style-system .brand-copy span { color: var(--hfy-muted); font-size: 11px; }
 
+.hfy-style-system .client-residency-context {
+  border-color: var(--hfy-line);
+  color: var(--hfy-ink);
+  background: rgba(250, 252, 253, 0.58);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+}
+.hfy-style-system .client-residency-context small { color: var(--hfy-label); }
+.hfy-style-system .client-residency-context strong { color: var(--hfy-ink); }
+
 .hfy-style-system .context-switcher {
   min-height: 58px;
   padding: 10px 12px;
@@ -506,7 +515,7 @@
 .hfy-style-system .sidebar-footer { color: var(--hfy-muted); font-size: 11px; }
 .hfy-style-system .sidebar-footer .button { min-height: 36px; margin-top: 8px; padding: 7px 12px; font-size: 10px; }
 .hfy-style-system .internal-test-residency-switcher {
-  border-color: rgba(204, 108, 84, 0.22);
+  border-color: var(--hfy-line);
   color: var(--hfy-ink);
   background: rgba(250, 252, 253, 0.58);
   box-shadow: inset 0 1px var(--hfy-inset-highlight);
@@ -805,6 +814,8 @@
 .hfy-style-system .daypart-week-add:is(:hover, :focus-visible) span { color: var(--hfy-action-ink); border-color: rgba(52, 127, 187, 0.3); background: var(--hfy-action-soft); }
 .hfy-style-system .daypart-week-block { box-shadow: 0 5px 14px rgba(48, 65, 78, 0.1); }
 .hfy-style-system .daypart-color-control { border-color: var(--hfy-line-strong); border-radius: var(--hfy-radius-control); background: rgba(251, 252, 253, 0.88); }
+.hfy-style-system .daypart-type-options .standing-hfy { border-color: color-mix(in srgb, #ec4899 28%, var(--hfy-line)); }
+.hfy-style-system .daypart-type-options .standing-hfy.active { border-color: #ec4899; background: color-mix(in srgb, #ec4899 9%, white); box-shadow: inset 3px 0 0 #ec4899; }
 
 /* Modals and drawers */
 .hfy-style-system :is(.quick-modal-backdrop, .daypart-drawer-backdrop, .artist-editor-backdrop, .payout-detail-backdrop) {
@@ -1021,7 +1032,10 @@
 
 @media (max-width: 1200px) {
   .hfy-style-system .main { padding-inline: clamp(20px, 3vw, 42px); }
-  .hfy-style-system .calendar-command-controls { gap: 12px; }
+  .hfy-style-system .calendar-command-bar { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .calendar-command-controls { width: 100%; flex-wrap: wrap; gap: 12px; }
+  .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) { margin-right: 0; }
+  .hfy-style-system .calendar-month-cluster { margin-left: auto; }
   .hfy-style-system .calendar-view-filters select { min-width: 126px; }
 }
 
@@ -1032,7 +1046,6 @@
   .hfy-style-system .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hfy-style-system .metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--hfy-line); }
   .hfy-style-system .metric:nth-child(4) { border-top: 1px solid var(--hfy-line); }
-  .hfy-style-system .calendar-command-bar { align-items: stretch; flex-direction: column; }
   .hfy-style-system .calendar-command-controls { align-items: end; }
   .hfy-style-system .login-form,
   .hfy-style-system .login-panel > div > .selection-form { padding: var(--hfy-space-6); }
@@ -1048,7 +1061,7 @@
   .hfy-style-system .preview-nav button.active { box-shadow: inset 0 -2px var(--hfy-action-strong), inset 0 1px rgba(255, 255, 255, 0.65); }
   .hfy-style-system .calendar-command-controls { align-items: stretch; flex-direction: column; }
   .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) { margin-right: 0; }
-  .hfy-style-system .calendar-month-cluster { align-self: stretch; }
+  .hfy-style-system .calendar-month-cluster { align-self: stretch; margin-left: 0; }
   .hfy-style-system .login-art { min-height: 34vh; }
 }
 
@@ -1059,6 +1072,540 @@
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.hfy-style-system .client-shell .main > .client-page-header {
+  min-height: 90px;
+  margin: 0 0 var(--hfy-space-4);
+  padding: 14px 20px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--hfy-radius-card);
+  background:
+    linear-gradient(120deg, rgba(249, 251, 252, 0.86), rgba(235, 242, 246, 0.72)),
+    var(--hfy-surface);
+  box-shadow: 0 12px 32px rgba(48, 65, 78, 0.09), inset 0 1px var(--hfy-inset-highlight);
+  backdrop-filter: blur(16px) saturate(112%);
+}
+
+.hfy-style-system .client-shell .main > .client-page-header h1 {
+  margin: 2px 0 0;
+  font-size: clamp(27px, 2.5vw, 34px);
+  line-height: 1.02;
+}
+
+.hfy-style-system .client-shell .main > .client-page-header .eyebrow { margin: 0 0 5px; }
+
+.hfy-style-system .client-page-header-stat {
+  min-width: 180px;
+  padding: 10px 14px;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  text-align: right;
+  background: rgba(250, 252, 253, 0.72);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+}
+
+.hfy-style-system .client-page-header-stat strong { font-size: 24px; }
+
+@media (max-width: 700px) {
+  .hfy-style-system .daypart-week-corner,
+  .hfy-style-system .daypart-room-label { padding-inline: 8px; }
+  .hfy-style-system .daypart-room-label span { display: none; }
+  .hfy-style-system .daypart-week-block { padding-inline: 3px; border-left-width: 3px; }
+}
+
+/* Public calendar: a read-only mirror of the authenticated Residency calendar. */
+.hfy-style-system .public-calendar-page {
+  width: calc(100% - 40px);
+  max-width: none;
+  gap: var(--hfy-space-3);
+  padding: 20px 0 34px;
+}
+
+.hfy-style-system .public-calendar-shell {
+  width: 100%;
+  min-width: 0;
+  height: calc(100dvh - 66px);
+  min-height: 700px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(420px, 28vw, 560px);
+  gap: 0;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--hfy-radius-feature);
+  background:
+    linear-gradient(135deg, rgba(249, 251, 252, 0.91), rgba(235, 241, 244, 0.84)),
+    var(--hfy-surface);
+  box-shadow: var(--hfy-shadow-section), inset 0 1px var(--hfy-inset-highlight);
+  backdrop-filter: blur(19px) saturate(114%);
+}
+
+.hfy-style-system .calendar-main.public-calendar-shell > .calendar-page {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system .public-calendar-heading {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--hfy-line);
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: var(--hfy-radius-card) 0 0 0;
+  background: rgba(250, 252, 253, 0.68);
+}
+
+.hfy-style-system .public-calendar-heading .eyebrow { min-height: 34px; display: flex; align-items: center; margin: 0; padding-right: 14px; border-right: 1px solid var(--hfy-line); }
+.hfy-style-system .public-calendar-heading h1 { margin: 0; font-size: clamp(24px, 2.2vw, 31px); }
+.hfy-style-system .public-calendar-heading .month-navigation { width: auto; min-width: 0; justify-content: flex-start; gap: 9px; }
+.hfy-style-system .public-calendar-heading .calendar-arrow { width: 34px; height: 34px; }
+
+.hfy-style-system .public-calendar-grid-page {
+  gap: 0;
+}
+
+.hfy-style-system .public-calendar-grid-page .month-calendar-wrap {
+  border-right: 0;
+  border-radius: 0 0 0 var(--hfy-radius-card);
+  box-shadow: none;
+}
+
+.hfy-style-system .public-calendar-agenda {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--hfy-line);
+  border-radius: 0 var(--hfy-radius-card) var(--hfy-radius-card) 0;
+  background: rgba(250, 252, 253, 0.68);
+  box-shadow: none;
+}
+
+.hfy-style-system .public-calendar-agenda-heading {
+  min-height: 68px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--hfy-line);
+  background: rgba(250, 252, 253, 0.68);
+}
+
+.hfy-style-system .public-calendar-agenda-heading h2 { font-size: clamp(19px, 1.8vw, 23px); }
+.hfy-style-system .public-calendar-agenda-heading > p { margin: 0; color: var(--hfy-muted); font-size: 9px; line-height: 1.45; }
+.hfy-style-system .public-calendar-agenda-list { min-height: 0; display: block; overflow-y: auto; }
+
+.hfy-style-system .public-calendar-agenda-day {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(108px, 0.65fr) minmax(0, 1.35fr);
+  align-items: start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--hfy-line);
+  background: rgba(251, 252, 253, 0.42);
+}
+
+.hfy-style-system .public-calendar-agenda-day:last-of-type { border-bottom: 0; }
+.hfy-style-system .public-calendar-agenda-day h3 { padding: 7px 0 0; color: var(--hfy-ink); font-size: 10px; line-height: 1.4; }
+.hfy-style-system .public-calendar-agenda-day > div { min-width: 0; display: grid; gap: 7px; }
+
+.hfy-style-system .public-calendar-agenda-entry {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 0;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  color: var(--hfy-ink);
+  background: rgba(251, 252, 253, 0.72);
+  text-align: left;
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+  transition: border-color var(--hfy-motion), background var(--hfy-motion), transform var(--hfy-motion);
+}
+
+.hfy-style-system .public-calendar-agenda-entry:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--daypart-color) 42%, var(--hfy-line));
+  background: color-mix(in srgb, var(--daypart-color) 6%, white);
+}
+
+.hfy-style-system .public-calendar-agenda-entry:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--daypart-color) 72%, var(--hfy-action-strong));
+  outline-offset: 2px;
+}
+
+.hfy-style-system .public-calendar-agenda-color { width: 4px; height: 34px; border-radius: 0 999px 999px 0; background: var(--daypart-color); }
+.hfy-style-system .public-calendar-agenda-entry > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
+.hfy-style-system .public-calendar-agenda-entry strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.hfy-style-system .public-calendar-agenda-entry small { overflow: hidden; color: var(--hfy-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.hfy-style-system .public-calendar-agenda-artists { grid-column: 2; overflow: hidden; color: var(--hfy-ink-soft); font-size: 9px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.hfy-style-system .public-calendar-agenda-list > .empty { margin: 12px; }
+
+.hfy-style-system .public-calendar-detail { min-height: 0; grid-row: 1 / -1; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.hfy-style-system .public-calendar-detail-heading { display: grid; align-content: start; gap: 4px; padding: 16px 18px 17px; border-bottom: 1px solid var(--hfy-line); }
+.hfy-style-system .public-calendar-detail-heading .eyebrow { margin: 7px 0 1px; }
+.hfy-style-system .public-calendar-detail-heading h2 { font-size: clamp(22px, 2vw, 28px); }
+.hfy-style-system .public-calendar-detail-back { appearance: none; width: fit-content; padding: 0; border: 0; color: var(--hfy-action-ink); background: transparent; font-size: 10px; font-weight: 760; }
+.hfy-style-system .public-calendar-detail-back:hover { color: var(--hfy-action-strong); }
+.hfy-style-system .public-calendar-detail-back:focus-visible { outline: 2px solid var(--hfy-action-strong); outline-offset: 3px; }
+.hfy-style-system .public-calendar-detail-body { min-height: 0; display: grid; align-content: start; gap: 17px; padding: 18px; overflow-y: auto; }
+.hfy-style-system .public-calendar-detail-summary { display: grid; grid-template-columns: 6px repeat(2, minmax(0, 1fr)); gap: 14px; align-items: center; padding: 14px 16px 14px 0; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-card); background: rgba(250, 252, 253, 0.76); }
+.hfy-style-system .public-calendar-detail-color { width: 6px; height: 42px; border-radius: 0 999px 999px 0; background: var(--daypart-color); }
+.hfy-style-system .public-calendar-detail-summary div { min-width: 0; display: grid; gap: 3px; }
+.hfy-style-system .public-calendar-detail-summary small { color: var(--hfy-label); font-size: 8px; font-weight: 760; letter-spacing: 0.08em; text-transform: uppercase; }
+.hfy-style-system .public-calendar-detail-summary strong { overflow: hidden; color: var(--hfy-ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.hfy-style-system .public-calendar-artists { display: grid; gap: 7px; }
+.hfy-style-system .public-calendar-artists h3 { margin: 5px 0 2px; color: var(--hfy-label); font-size: 9px; font-weight: 760; letter-spacing: 0.08em; text-transform: uppercase; }
+.hfy-style-system .public-calendar-artist { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 14px; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-control); background: rgba(250, 252, 253, 0.72); }
+.hfy-style-system .public-calendar-artist strong { color: var(--hfy-ink); font-size: 12px; }
+.hfy-style-system .public-calendar-artist span { color: var(--hfy-action-ink); font-size: 11px; font-weight: 650; }
+
+@media (max-width: 1200px) {
+  .hfy-style-system .public-calendar-shell { height: auto; grid-template-columns: minmax(0, 1fr); gap: 14px; overflow: visible; }
+  .hfy-style-system .calendar-main.public-calendar-shell > .calendar-page { min-height: 720px; }
+  .hfy-style-system .public-calendar-heading { border-right: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-card) var(--hfy-radius-card) 0 0; }
+  .hfy-style-system .public-calendar-grid-page .month-calendar-wrap { border-right: 1px solid var(--hfy-line); border-radius: 0 0 var(--hfy-radius-card) var(--hfy-radius-card); }
+  .hfy-style-system .public-calendar-agenda { border-radius: var(--hfy-radius-card); }
+  .hfy-style-system .public-calendar-agenda-list { max-height: 480px; }
+}
+
+@media (max-width: 850px) {
+  .hfy-style-system .public-calendar-page { width: calc(100% - 20px); padding-top: 10px; }
+  .hfy-style-system .public-calendar-shell { min-height: 720px; padding: 10px; }
+  .hfy-style-system .public-calendar-heading { min-height: 60px; }
+  .hfy-style-system .public-calendar-agenda-heading { min-height: 0; padding: 16px 18px; }
+}
+
+@media (max-width: 520px) {
+  .hfy-style-system .public-calendar-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .hfy-style-system .public-calendar-heading .eyebrow { min-height: 0; padding-right: 0; border-right: 0; }
+  .hfy-style-system .public-calendar-agenda-day { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .hfy-style-system .public-calendar-agenda-day h3 { padding-top: 0; }
+  .hfy-style-system .public-calendar-detail-summary { grid-template-columns: 6px minmax(0, 1fr); }
+  .hfy-style-system .public-calendar-detail-color { grid-row: 1 / 3; height: 100%; min-height: 42px; }
+  .hfy-style-system .public-calendar-artist { align-items: flex-start; flex-direction: column; gap: 3px; }
+}
+
+/* Client-owned programming and Request HFY stay visually distinct. */
+.hfy-style-system .client-add-artist {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(420px, 1.2fr);
+  gap: var(--hfy-space-8);
+  align-items: end;
+}
+
+.hfy-style-system .client-add-artist form,
+.hfy-style-system .hfy-request-fulfillment-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: var(--hfy-space-3);
+  align-items: end;
+}
+
+.hfy-style-system .client-add-artist form > p,
+.hfy-style-system .hfy-request-fulfillment-form > p { grid-column: 1 / -1; margin: 0; }
+
+.hfy-style-system .client-assignment-choices { display: grid; gap: var(--hfy-space-3); }
+.hfy-style-system .client-assignment-choices.equal-options { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+.hfy-style-system .client-assignment-choices.equal-options > .artist-picker { grid-column: 1 / -1; }
+.hfy-style-system .artist-choice-option {
+  appearance: none;
+  min-height: 126px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  width: 100%;
+  padding: var(--hfy-space-4);
+  border: 1px solid color-mix(in srgb, #2e9e79 38%, var(--hfy-line));
+  border-radius: var(--hfy-radius-control);
+  color: var(--hfy-ink);
+  background: color-mix(in srgb, #2e9e79 7%, white);
+  text-align: left;
+}
+.hfy-style-system .artist-choice-option span { color: #24775c; font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; }
+.hfy-style-system .artist-choice-option strong { font-size: 14px; }
+.hfy-style-system .artist-choice-option small { color: var(--hfy-ink-soft); line-height: 1.45; }
+.hfy-style-system .artist-choice-option:hover { transform: translateY(-1px); border-color: #2e9e79; }
+
+.hfy-style-system .request-hfy-option,
+.hfy-style-system .request-hfy-selection {
+  display: flex;
+  gap: var(--hfy-space-4);
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--hfy-space-4);
+  border: 1px solid color-mix(in srgb, var(--hfy-action) 42%, var(--hfy-line));
+  border-radius: var(--hfy-radius-control);
+  text-align: left;
+  color: var(--hfy-ink);
+  background: color-mix(in srgb, var(--hfy-action-soft) 72%, white);
+}
+
+.hfy-style-system .request-hfy-option > *,
+.hfy-style-system .request-hfy-selection > div > * { display: block; }
+.hfy-style-system .request-hfy-option span,
+.hfy-style-system .request-hfy-selection span { color: var(--hfy-action-strong); font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; }
+.hfy-style-system .request-hfy-option small,
+.hfy-style-system .request-hfy-selection small { margin-top: 3px; color: var(--hfy-ink-soft); }
+.hfy-style-system .request-hfy-option:hover { transform: translateY(-1px); border-color: var(--hfy-action); }
+.hfy-style-system .client-assignment-choices.equal-options .request-hfy-option { min-height: 126px; display: grid; align-content: center; justify-content: stretch; gap: 5px; border-color: color-mix(in srgb, #ec4899 42%, var(--hfy-line)); background: color-mix(in srgb, #ec4899 8%, white); }
+.hfy-style-system .client-assignment-choices.equal-options .request-hfy-option span { color: #c82f7b; }
+.hfy-style-system .client-assignment-choices.equal-options .request-hfy-option:hover { border-color: #ec4899; }
+
+.hfy-style-system .hfy-request-queue-section { display: grid; gap: var(--hfy-space-4); margin-bottom: var(--hfy-space-8); }
+.hfy-style-system .hfy-request-list { display: grid; gap: var(--hfy-space-4); }
+.hfy-style-system .hfy-request-card { display: grid; grid-template-columns: minmax(220px, 0.55fr) minmax(520px, 1.45fr); gap: var(--hfy-space-6); align-items: end; }
+.hfy-style-system .hfy-request-details dl { display: flex; flex-wrap: wrap; gap: var(--hfy-space-4); margin: var(--hfy-space-3) 0 0; }
+.hfy-style-system .hfy-request-details dl div { display: grid; gap: 2px; }
+.hfy-style-system .hfy-request-details dt { color: var(--hfy-ink-soft); font-size: 10px; text-transform: uppercase; }
+.hfy-style-system .hfy-request-details dd { margin: 0; font-weight: 700; }
+
+.hfy-style-system .client-owed-total { display: grid; gap: 4px; text-align: right; }
+.hfy-style-system .client-owed-total span { color: var(--hfy-ink-soft); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.hfy-style-system .client-owed-total strong { font-size: clamp(24px, 3vw, 38px); }
+.hfy-style-system .client-rate-form { display: grid; grid-template-columns: auto minmax(88px, 120px) auto; gap: 6px; align-items: center; }
+.hfy-style-system .client-rate-form input { min-width: 0; }
+.hfy-style-system .client-rate-form small { grid-column: 1 / -1; }
+.hfy-style-system .status.client-owned { margin-bottom: 6px; color: #215e52; background: #d9f0ea; }
+.hfy-style-system .client-visibility-settings .toggle-control { margin: var(--hfy-space-4) 0; }
+
+@media (max-width: 1050px) {
+  .hfy-style-system .client-add-artist,
+  .hfy-style-system .hfy-request-card { grid-template-columns: 1fr; }
+  .hfy-style-system .client-add-artist form,
+  .hfy-style-system .hfy-request-fulfillment-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 650px) {
+  .hfy-style-system .client-add-artist form,
+  .hfy-style-system .hfy-request-fulfillment-form { grid-template-columns: 1fr; }
+  .hfy-style-system .request-hfy-selection { align-items: flex-start; flex-direction: column; }
+  .hfy-style-system .client-assignment-choices.equal-options { grid-template-columns: 1fr; }
+}
+
+/* Owner business modes */
+.hfy-style-system .owner-shell {
+  --owner-accent: var(--hfy-action-strong);
+  --owner-accent-soft: var(--hfy-action-soft);
+  transition: background var(--hfy-motion);
+}
+
+.hfy-style-system .owner-mode-developer {
+  --owner-accent: #347fbb;
+  --owner-accent-soft: rgba(139, 199, 241, 0.24);
+  background:
+    radial-gradient(circle at 13% -8%, rgba(128, 195, 239, 0.45), transparent 34rem),
+    radial-gradient(circle at 96% 88%, rgba(85, 112, 132, 0.18), transparent 30rem),
+    linear-gradient(145deg, #e4ebef 0%, #eef2f3 58%, #d9e2e7 100%);
+}
+
+.hfy-style-system .owner-mode-hfy {
+  --hfy-action: #eda591;
+  --hfy-action-strong: #c7614c;
+  --hfy-action-ink: #6d3025;
+  --hfy-action-soft: rgba(232, 141, 122, 0.2);
+  --hfy-focus-ring: rgba(199, 97, 76, 0.22);
+  --owner-accent: #c7614c;
+  --owner-accent-soft: rgba(232, 141, 122, 0.2);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(232, 141, 122, 0.42), transparent 34rem),
+    radial-gradient(circle at 96% 82%, rgba(101, 117, 128, 0.19), transparent 32rem),
+    linear-gradient(145deg, #ece8e5 0%, #f1efec 55%, #dedfdf 100%);
+}
+
+.hfy-style-system .owner-mode-developer .sidebar {
+  background:
+    linear-gradient(180deg, rgba(231, 241, 247, 0.9), rgba(208, 223, 233, 0.9)),
+    var(--hfy-canvas-cool);
+  box-shadow: 18px 0 54px rgba(45, 84, 112, 0.14), inset -1px 0 rgba(52, 127, 187, 0.16);
+}
+
+.hfy-style-system .owner-mode-hfy .sidebar {
+  background:
+    linear-gradient(180deg, rgba(244, 235, 231, 0.91), rgba(226, 222, 219, 0.9)),
+    #e6e0dc;
+  box-shadow: 18px 0 54px rgba(102, 68, 57, 0.13), inset -1px 0 rgba(199, 97, 76, 0.15);
+}
+
+.hfy-style-system .owner-mode-hfy .brand-mark {
+  color: #6d3025;
+  background: linear-gradient(145deg, #f6c9bb, #e88d7a);
+  box-shadow: 0 8px 20px rgba(154, 72, 54, 0.16), inset 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.hfy-style-system .owner-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin: 0 0 var(--hfy-space-4);
+  padding: 5px;
+  border: 1px solid var(--hfy-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.58);
+}
+
+.hfy-style-system .owner-mode-switch a {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 9px 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--hfy-muted);
+  text-align: center;
+  transition: color var(--hfy-motion), background var(--hfy-motion), border-color var(--hfy-motion), transform var(--hfy-motion);
+}
+
+.hfy-style-system .owner-mode-switch a:hover { transform: translateY(-1px); color: var(--hfy-ink); }
+.hfy-style-system .owner-mode-switch a span { font-size: 11px; font-weight: 750; }
+.hfy-style-system .owner-mode-switch a small { font-size: 8px; font-weight: 680; letter-spacing: 0.05em; text-transform: uppercase; }
+.hfy-style-system .owner-mode-switch a.active {
+  border-color: color-mix(in srgb, var(--owner-accent) 24%, transparent);
+  color: color-mix(in srgb, var(--owner-accent) 72%, #16212b);
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: inset 0 -3px var(--owner-accent), 0 6px 16px rgba(48, 65, 78, 0.08);
+}
+
+.hfy-style-system .owner-mode-developer .context-chevron,
+.hfy-style-system .owner-mode-developer .context-option-icon,
+.hfy-style-system .owner-mode-developer .context-option-icon.hotel { color: #173b57; background: rgba(139, 199, 241, 0.3); }
+.hfy-style-system .owner-mode-hfy .context-chevron,
+.hfy-style-system .owner-mode-hfy .context-option-icon,
+.hfy-style-system .owner-mode-hfy .context-option-icon.hotel { color: #6d3025; background: rgba(232, 141, 122, 0.28); }
+.hfy-style-system .context-menu form { margin: 0; }
+
+.hfy-style-system .owner-mode-header {
+  border-color: color-mix(in srgb, var(--owner-accent) 16%, rgba(255, 255, 255, 0.72)) !important;
+}
+.hfy-style-system .developer-mode-header {
+  background: linear-gradient(120deg, rgba(244, 250, 253, 0.93), rgba(222, 237, 246, 0.82)) !important;
+}
+.hfy-style-system .hfy-mode-header {
+  background: linear-gradient(120deg, rgba(251, 247, 244, 0.94), rgba(242, 224, 217, 0.8)) !important;
+}
+.hfy-style-system .owner-mode-header > .button { flex: 0 0 auto; }
+
+.hfy-style-system .owner-mode-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: var(--hfy-space-6);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: var(--hfy-radius-card);
+  background: rgba(248, 251, 252, 0.72);
+  box-shadow: var(--hfy-shadow-section), inset 0 1px var(--hfy-inset-highlight);
+  backdrop-filter: blur(16px) saturate(112%);
+}
+.hfy-style-system .owner-mode-summary article { min-height: 92px; display: grid; align-content: center; gap: 5px; padding: 18px 20px; }
+.hfy-style-system .owner-mode-summary article + article { border-left: 1px solid var(--hfy-line); }
+.hfy-style-system .owner-mode-summary strong { color: var(--owner-accent); font-size: 28px; font-weight: 620; letter-spacing: -0.045em; }
+.hfy-style-system .owner-mode-summary span { color: var(--hfy-muted); font-size: 10px; font-weight: 680; }
+
+.hfy-style-system :is(.developer-residencies-section, .hfy-work-queue-section) {
+  padding: var(--hfy-space-6);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: var(--hfy-radius-feature);
+  background: rgba(248, 250, 251, 0.7);
+  box-shadow: var(--hfy-shadow-section), inset 0 1px var(--hfy-inset-highlight);
+  backdrop-filter: blur(18px) saturate(112%);
+}
+
+.hfy-style-system .developer-residency-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--hfy-space-4); }
+.hfy-style-system .developer-residency-card { min-height: 256px; display: grid; align-content: space-between; gap: var(--hfy-space-4); }
+.hfy-style-system .developer-residency-card.inactive { opacity: 0.78; background: rgba(237, 240, 242, 0.88); }
+.hfy-style-system .developer-residency-heading,
+.hfy-style-system .developer-residency-heading > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.hfy-style-system .developer-residency-heading > div { justify-content: flex-start; }
+.hfy-style-system .developer-residency-heading h2 { margin: 2px 0 5px; font-size: 18px; }
+.hfy-style-system .developer-residency-heading p { margin: 0; color: var(--hfy-muted); font-size: 10px; }
+.hfy-style-system .developer-residency-mark { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; border-radius: 10px; color: #173b57; background: rgba(139, 199, 241, 0.3); font-weight: 780; }
+.hfy-style-system .developer-residency-card dl { margin: 0; display: grid; gap: 8px; }
+.hfy-style-system .developer-residency-card dl div { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--hfy-line); }
+.hfy-style-system .developer-residency-card :is(dt, dd) { margin: 0; font-size: 10px; }
+.hfy-style-system .developer-residency-card dt { color: var(--hfy-muted); }
+.hfy-style-system .developer-residency-card dd { color: var(--hfy-ink-soft); font-weight: 700; text-align: right; text-transform: capitalize; }
+.hfy-style-system .developer-residency-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hfy-style-system .developer-residency-actions form { display: contents; }
+.hfy-style-system .developer-residency-actions .button { min-width: 0; display: flex; align-items: center; justify-content: center; padding-inline: 10px; text-align: center; }
+
+.hfy-style-system .platform-status { width: max-content; display: inline-flex; align-items: center; padding: 6px 9px; border: 1px solid transparent; border-radius: 999px; font-size: 8px; font-weight: 760; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.hfy-style-system .platform-status.active { border-color: rgba(50, 118, 90, 0.16); color: var(--hfy-success); background: var(--hfy-success-soft); }
+.hfy-style-system .platform-status.inactive { border-color: var(--hfy-line); color: var(--hfy-muted); background: var(--hfy-surface-nested); }
+
+.hfy-style-system .hfy-work-queue-groups { display: grid; gap: var(--hfy-space-4); }
+.hfy-style-system .hfy-work-queue-group { overflow: hidden; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-card); background: rgba(251, 252, 253, 0.82); }
+.hfy-style-system .hfy-work-queue-group > header { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 18px; border-bottom: 1px solid var(--hfy-line); background: rgba(232, 141, 122, 0.08); }
+.hfy-style-system .hfy-work-queue-group > header .eyebrow { margin: 0 0 4px; font-size: 8px; }
+.hfy-style-system .hfy-work-queue-group > header h3 { font-size: 17px; }
+.hfy-style-system .queue-residency-status { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
+.hfy-style-system .hfy-work-queue-list { display: grid; }
+.hfy-style-system .hfy-work-queue-list > article {
+  position: relative;
+  min-height: 94px;
+  display: grid;
+  grid-template-columns: minmax(135px, 0.9fr) minmax(230px, 1.7fr) minmax(120px, 0.75fr) minmax(150px, 0.8fr);
+  align-items: center;
+  gap: 18px;
+  padding: 15px 18px 15px 25px;
+}
+.hfy-style-system .hfy-work-queue-list > article + article { border-top: 1px solid var(--hfy-line); }
+.hfy-style-system .hfy-work-queue-list > article.inactive { opacity: 0.68; background: rgba(225, 232, 237, 0.34); }
+.hfy-style-system .queue-color { position: absolute; inset: 17px auto 17px 0; width: 5px; border-radius: 0 999px 999px 0; }
+.hfy-style-system .queue-daypart-name,
+.hfy-style-system .queue-daypart-rate,
+.hfy-style-system .queue-daypart-actions { min-width: 0; display: grid; gap: 5px; }
+.hfy-style-system .queue-daypart-name > strong { color: var(--hfy-ink); font-size: 14px; }
+.hfy-style-system .queue-daypart-name > span,
+.hfy-style-system .queue-daypart-rate > small { color: var(--hfy-muted); font-size: 9px; }
+.hfy-style-system .queue-daypart-schedule { min-width: 0; display: grid; gap: 4px; color: var(--hfy-ink-soft); font-size: 9px; }
+.hfy-style-system .queue-daypart-schedule strong { font-size: 9px; }
+.hfy-style-system .queue-daypart-rate > strong { color: var(--hfy-ink); font-size: 11px; }
+.hfy-style-system .queue-daypart-actions { justify-items: start; }
+.hfy-style-system .queue-daypart-actions > a { color: var(--hfy-action-ink); font-size: 10px; font-weight: 760; }
+
+@media (max-width: 1120px) {
+  .hfy-style-system .developer-residency-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hfy-style-system .hfy-work-queue-list > article { grid-template-columns: minmax(140px, 0.8fr) minmax(220px, 1.5fr) minmax(145px, 0.8fr); }
+  .hfy-style-system .queue-daypart-rate { display: none; }
+}
+
+@media (max-width: 850px) {
+  .hfy-style-system .owner-mode-switch { width: min(360px, 100%); margin-bottom: 8px; }
+  .hfy-style-system .owner-mode-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hfy-style-system .owner-mode-summary article:nth-child(3) { border-left: 0; border-top: 1px solid var(--hfy-line); }
+  .hfy-style-system .owner-mode-summary article:nth-child(4) { border-top: 1px solid var(--hfy-line); }
+  .hfy-style-system .developer-residency-grid { grid-template-columns: 1fr; }
+  .hfy-style-system .hfy-work-queue-list > article { grid-template-columns: 1fr; gap: 10px; padding-left: 24px; }
+  .hfy-style-system .queue-daypart-rate { display: grid; }
+  .hfy-style-system .hfy-work-queue-group > header { align-items: flex-start; flex-direction: column; }
+  .hfy-style-system .queue-residency-status { justify-content: flex-start; }
+}
+
+@media (max-width: 520px) {
+  .hfy-style-system .owner-mode-summary { grid-template-columns: 1fr; }
+  .hfy-style-system .owner-mode-summary article + article { border-left: 0; border-top: 1px solid var(--hfy-line); }
+  .hfy-style-system .developer-residency-actions { grid-template-columns: 1fr; }
 }
 
 /*
@@ -1101,6 +1648,10 @@
 .hfy-style-system .main > .residency-toolbar strong { font-size: 12px; }
 
 .hfy-style-system .calendar-main > .calendar-page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
   gap: var(--hfy-space-2);
   padding: 14px;
   overflow: hidden;
@@ -1155,4 +1706,290 @@
     padding: 10px;
     overflow: visible;
   }
+}
+
+/* Pending requests stay faded; staffed HFY slots use the full reserved pink. */
+.hfy-style-system .calendar-event.hfy-pending {
+  color: #7c2852;
+  border-left-color: var(--daypart-color, #f9a8d4);
+  background: color-mix(in srgb, var(--daypart-color, #f9a8d4) 20%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #f9a8d4) 42%, transparent);
+}
+
+.hfy-style-system .calendar-event.hfy-confirmed {
+  color: #65143e;
+  border-left-color: var(--daypart-color, #ec4899);
+  background: color-mix(in srgb, var(--daypart-color, #ec4899) 42%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #ec4899) 72%, transparent);
+}
+
+/* The calendar command bar uses the real content width after the sidebar. */
+.hfy-style-system .calendar-command-bar {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.hfy-style-system :is(.calendar-command-primary, .calendar-command-secondary) {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.hfy-style-system .calendar-command-secondary {
+  padding-top: 10px;
+  border-top: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .calendar-command-primary .calendar-month-cluster {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.hfy-style-system .calendar-command-primary .month-navigation {
+  width: auto;
+  min-width: 230px;
+}
+
+.hfy-style-system .calendar-command-primary .calendar-needs-summary {
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 1px solid rgba(183, 75, 82, 0.16);
+  border-radius: 9px;
+  background: var(--hfy-error-soft);
+}
+
+.hfy-style-system .calendar-command-primary .calendar-needs-summary.clear {
+  border-color: rgba(50, 118, 90, 0.16);
+  background: var(--hfy-success-soft);
+}
+
+.hfy-style-system .calendar-command-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hfy-style-system .calendar-command-secondary .calendar-view-filters { justify-content: flex-start; }
+
+.hfy-style-system .calendar-command-primary .calendar-title h1 {
+  font-size: clamp(30px, 2.6vw, 35px);
+}
+
+/* Day Parts, Talent, and Payment use one contained workspace rhythm. */
+.hfy-style-system .daypart-workspace-heading {
+  min-height: 106px;
+  margin-bottom: var(--hfy-space-4);
+  padding: 18px 22px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--hfy-radius-card);
+  background:
+    linear-gradient(120deg, rgba(249, 251, 252, 0.9), rgba(235, 242, 246, 0.76)),
+    var(--hfy-surface);
+  box-shadow: 0 12px 32px rgba(48, 65, 78, 0.09), inset 0 1px var(--hfy-inset-highlight);
+  backdrop-filter: blur(16px) saturate(112%);
+}
+
+.hfy-style-system .daypart-workspace-heading h2,
+.hfy-style-system .client-add-artist-heading h2 { font-size: clamp(28px, 3vw, 38px); }
+
+.hfy-style-system .client-add-artist {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--hfy-space-5);
+  align-items: stretch;
+  margin-bottom: var(--hfy-space-4);
+  padding: 22px;
+}
+
+.hfy-style-system .client-add-artist-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--hfy-space-6);
+}
+
+.hfy-style-system .client-add-artist-heading .eyebrow { margin: 0 0 5px; }
+.hfy-style-system .client-add-artist-heading > p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--hfy-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.hfy-style-system .client-add-artist form {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.2fr) minmax(220px, 1fr) minmax(190px, 0.8fr) auto;
+  gap: var(--hfy-space-3);
+  align-items: end;
+  padding-top: var(--hfy-space-4);
+  border-top: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .client-safe-roster { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.hfy-style-system .client-safe-roster-empty {
+  grid-column: 1 / -1;
+  min-height: 132px;
+  display: grid;
+  place-content: center;
+  gap: 5px;
+  text-align: center;
+}
+.hfy-style-system .client-safe-roster-empty strong { color: var(--hfy-ink); font-size: 15px; }
+.hfy-style-system .client-safe-roster-empty span { color: var(--hfy-muted); font-size: 11px; }
+
+.hfy-style-system .client-payment-panel {
+  display: grid;
+  gap: var(--hfy-space-4);
+  padding: 22px;
+}
+
+.hfy-style-system .client-payment-section-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hfy-space-6);
+}
+
+.hfy-style-system .client-payment-section-heading .subhead {
+  max-width: 680px;
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.hfy-style-system .client-payment-total {
+  flex: 0 0 auto;
+  min-width: 175px;
+  padding: 10px 13px;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  background: var(--hfy-surface-nested);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+}
+
+.hfy-style-system .client-payment-total strong { font-size: 24px; }
+
+/* The date editor stays inside the viewport and groups one-date hours with the Daypart. */
+.hfy-style-system .quick-modal-backdrop { padding: 32px; }
+.hfy-style-system .quick-modal {
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 64px);
+}
+.hfy-style-system .quick-modal-header { padding: 17px 20px 14px; }
+.hfy-style-system .quick-modal-body { gap: 10px; padding: 14px 20px 18px; }
+.hfy-style-system .quick-book-form { gap: 12px; }
+.hfy-style-system .quick-selected-daypart-editable {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.62fr) minmax(320px, 1.38fr);
+  align-items: center;
+  gap: 14px 20px;
+  padding: 14px 16px;
+}
+.hfy-style-system .quick-selected-daypart-summary { display: grid; gap: 2px; }
+.hfy-style-system .quick-selected-window { justify-items: stretch; text-align: left; }
+.hfy-style-system .quick-selected-window-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.hfy-style-system .quick-selected-window-heading em {
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: var(--hfy-warning);
+  background: var(--hfy-warning-soft);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.hfy-style-system .quick-selected-window > small {
+  margin-top: 2px;
+  color: var(--hfy-muted);
+  font-size: 9px;
+}
+.hfy-style-system .quick-inline-time-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 7px;
+}
+.hfy-style-system .quick-inline-time-fields .field { gap: 3px; }
+.hfy-style-system .quick-inline-time-fields :is(input, select) { min-height: 38px; }
+.hfy-style-system .quick-selected-daypart-editable .date-exception-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--hfy-line);
+}
+.hfy-style-system .quick-selected-daypart-editable .date-exception-actions > small {
+  margin-right: auto;
+  color: var(--hfy-muted);
+  font-size: 9px;
+}
+.hfy-style-system .quick-selected-daypart-editable .date-exception-actions :is(.button, .remove-dj-button) {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 9px;
+}
+.hfy-style-system .client-assignment-choices.equal-options :is(.artist-choice-option, .request-hfy-option) { min-height: 100px; }
+.hfy-style-system .quick-booking-notes textarea { min-height: 68px; resize: vertical; }
+.hfy-style-system .quick-modal-footer {
+  bottom: -18px;
+  margin: 0 -20px -18px;
+  padding: 12px 20px 14px;
+}
+
+@media (max-width: 1050px) {
+  .hfy-style-system .calendar-command-secondary { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .calendar-command-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 850px) {
+  .hfy-style-system .calendar-command-primary { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .calendar-command-primary .calendar-month-cluster { justify-content: space-between; }
+  .hfy-style-system .calendar-command-secondary .calendar-view-filters { width: 100%; }
+  .hfy-style-system .client-add-artist-heading,
+  .hfy-style-system .client-payment-section-heading { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .client-add-artist-heading > p { max-width: none; text-align: left; }
+  .hfy-style-system .client-add-artist form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hfy-style-system .client-payment-total { width: 100%; text-align: left; }
+}
+
+@media (max-width: 700px) {
+  .hfy-style-system .daypart-workspace-heading { min-height: 0; padding: 16px 18px; }
+  .hfy-style-system .quick-modal-backdrop { padding: 12px; }
+  .hfy-style-system .quick-modal { max-height: calc(100dvh - 24px); }
+  .hfy-style-system .quick-selected-daypart-editable { grid-template-columns: 1fr; }
+  .hfy-style-system .quick-selected-daypart-editable .date-exception-actions { grid-column: auto; }
+}
+
+@media (max-width: 650px) {
+  .hfy-style-system .client-shell .main > .client-page-header {
+    min-height: 0;
+    padding: 16px 18px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hfy-style-system .client-add-artist form,
+  .hfy-style-system .quick-inline-time-fields { grid-template-columns: 1fr; }
 }

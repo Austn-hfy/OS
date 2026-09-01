@@ -14,6 +14,8 @@ export function ArtistSearchPicker({
   label = "Add DJ",
   resultActionLabel = "Select",
   initiallyOpen = false,
+  collapsedEyebrow,
+  collapsedDescription,
   onSelect,
 }: {
   artists: ArtistSearchOption[];
@@ -21,6 +23,8 @@ export function ArtistSearchPicker({
   label?: string;
   resultActionLabel?: string;
   initiallyOpen?: boolean;
+  collapsedEyebrow?: string;
+  collapsedDescription?: string;
   onSelect: (artistId: string) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
@@ -46,7 +50,7 @@ export function ArtistSearchPicker({
   }
 
   if (!open) {
-    return <button className="button secondary quick-add-dj" type="button" onClick={() => setOpen(true)}>+ {label}</button>;
+    return collapsedDescription ? <button className="artist-choice-option" type="button" onClick={() => setOpen(true)}><span>{collapsedEyebrow}</span><strong>+ {label}</strong><small>{collapsedDescription}</small></button> : <button className="button secondary quick-add-dj" type="button" onClick={() => setOpen(true)}>+ {label}</button>;
   }
 
   return (

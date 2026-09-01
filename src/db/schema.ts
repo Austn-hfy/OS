@@ -63,6 +63,9 @@ export const automationStatus = pgEnum("automation_status", ["running", "succeed
 export const daypartType = pgEnum("daypart_type", ["dj_artist", "house_activity"]);
 export const daypartBillingMode = pgEnum("daypart_billing_mode", ["billed_by_hfy", "tracking_only"]);
 export const daypartDateExceptionKind = pgEnum("daypart_date_exception_kind", ["skip", "override"]);
+export const talentOwnership = pgEnum("talent_ownership", ["hfy", "residency"]);
+export const shiftEconomicsMode = pgEnum("shift_economics_mode", ["hfy", "client_owned", "hfy_request"]);
+export const hfyTalentRequestStatus = pgEnum("hfy_talent_request_status", ["pending", "fulfilled", "cancelled"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -142,6 +145,7 @@ export const residencies = pgTable("residencies", {
   invoicePrefix: text("invoice_prefix").notNull(),
   autoSendInvoices: boolean("auto_send_invoices").notNull().default(false),
   autoSendReason: text("auto_send_reason").notNull().default(""),
+  clientPaymentStatusVisible: boolean("client_payment_status_visible").notNull().default(true),
   internalNotes: text("internal_notes").notNull().default(""),
   ...timestamps,
 }, (table) => [
@@ -340,6 +344,9 @@ export const talent = pgTable("talent", {
   email: text("email").notNull().default(""),
   phone: text("phone").notNull().default(""),
   instagramHandle: text("instagram_handle").notNull().default(""),
+  clientContact: text("client_contact").notNull().default(""),
+  ownership: talentOwnership("ownership").notNull().default("hfy"),
+  owningResidencyId: uuid("owning_residency_id").references(() => residencies.id, { onDelete: "cascade" }),
   exclusiveResidencyId: uuid("exclusive_residency_id").references(() => residencies.id, { onDelete: "set null" }),
   rosterStatus: rosterStatus("roster_status").notNull().default("needs_review"),
   talentStatus: talentStatus("talent_status").notNull().default("active"),
@@ -359,11 +366,17 @@ export const talent = pgTable("talent", {
 }, (table) => [
   uniqueIndex("talent_airtable_record_id_unique").on(table.airtableRecordId),
   index("talent_stage_name_idx").on(table.stageName),
+  index("talent_owning_residency_idx").on(table.owningResidencyId, table.archivedAt),
   index("talent_exclusive_residency_idx").on(table.exclusiveResidencyId),
   index("talent_visibility_idx").on(table.archivedAt, table.talentStatus),
   check("talent_legacy_financials_nonnegative", sql`${table.legacyOutstandingOwedCents} >= 0 AND ${table.legacyTotalEarningsCents} >= 0`),
   check("talent_priority_range", sql`${table.priority} IS NULL OR (${table.priority} >= 1 AND ${table.priority} <= 5)`),
   check("talent_genres_standardized", sql`cardinality(${table.genres}) BETWEEN 1 AND 3 AND ${table.genres} <@ ARRAY['Electronic/House', 'Open Format', 'Vinyl']::text[]`),
+  check("talent_ownership_valid", sql`
+    (${table.ownership} = 'hfy' AND ${table.owningResidencyId} IS NULL)
+    OR
+    (${table.ownership} = 'residency' AND ${table.owningResidencyId} IS NOT NULL AND ${table.exclusiveResidencyId} = ${table.owningResidencyId})
+  `),
 ]);
 
 export const talentOnboardingSubmissions = pgTable("talent_onboarding_submissions", {
@@ -468,6 +481,7 @@ export const shifts = pgTable("shifts", {
   notes: text("notes").notNull().default(""),
   programDetails: text("program_details").notNull().default(""),
   manualHostName: text("manual_host_name").notNull().default(""),
+  economicsMode: shiftEconomicsMode("economics_mode").notNull().default("hfy"),
   clientRateOverrideCents: integer("client_rate_override_cents"),
   clientRateCents: integer("client_rate_cents").notNull(),
   billingStatus: billingStatus("billing_status").notNull().default("pending"),
@@ -482,6 +496,11 @@ export const shifts = pgTable("shifts", {
   check("shifts_time_valid", sql`${table.endsAt} > ${table.startsAt}`),
   check("shifts_calendar_color_valid", sql`${table.calendarColor} IS NULL OR ${table.calendarColor} ~ '^#[0-9A-Fa-f]{6}$'`),
   check("shifts_client_rate_nonnegative", sql`${table.clientRateCents} >= 0 AND (${table.clientRateOverrideCents} IS NULL OR ${table.clientRateOverrideCents} >= 0)`),
+  check("shifts_economics_boundary", sql`
+    ${table.economicsMode} = 'hfy'
+    OR
+    (${table.invoiceId} IS NULL AND ${table.billingStatus} = 'not_billable' AND ${table.clientRateOverrideCents} IS NULL AND ${table.clientRateCents} = 0)
+  `),
 ]);
 
 export const assignments = pgTable("assignments", {
@@ -515,6 +534,38 @@ export const assignments = pgTable("assignments", {
   check("assignments_money_nonnegative", sql`${table.talentRateCents} >= 0 AND (${table.talentRateOverrideCents} IS NULL OR ${table.talentRateOverrideCents} >= 0) AND ${table.totalCompensationCents} >= 0 AND (${table.fixedFeeCents} IS NULL OR ${table.fixedFeeCents} >= 0) AND (${table.paidAmountCents} IS NULL OR ${table.paidAmountCents} >= 0)`),
   check("assignments_na_payout_consistent", sql`${table.compensationType} <> 'na' OR (${table.payoutStatus} = 'na' AND ${table.totalCompensationCents} = 0)`),
   check("assignments_paid_complete", sql`${table.payoutStatus} <> 'paid' OR (${table.paidAt} IS NOT NULL AND ${table.paidAmountCents} IS NOT NULL AND ${table.paymentReference} IS NOT NULL)`),
+]);
+
+export const clientAssignmentTerms = pgTable("client_assignment_terms", {
+  assignmentId: uuid("assignment_id").primaryKey().references(() => assignments.id, { onDelete: "cascade" }),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  rateCents: integer("rate_cents"),
+  updatedByUserId: uuid("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [
+  index("client_assignment_terms_residency_idx").on(table.residencyId, table.updatedAt),
+  check("client_assignment_terms_rate_nonnegative", sql`${table.rateCents} IS NULL OR ${table.rateCents} >= 0`),
+]);
+
+export const hfyTalentRequests = pgTable("hfy_talent_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  shiftId: uuid("shift_id").notNull().references(() => shifts.id, { onDelete: "cascade" }),
+  status: hfyTalentRequestStatus("status").notNull().default("pending"),
+  fulfilledAssignmentId: uuid("fulfilled_assignment_id").references(() => assignments.id, { onDelete: "set null" }),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  fulfilledByUserId: uuid("fulfilled_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("hfy_talent_requests_shift_unique").on(table.shiftId),
+  uniqueIndex("hfy_talent_requests_assignment_unique").on(table.fulfilledAssignmentId).where(sql`${table.fulfilledAssignmentId} IS NOT NULL`),
+  index("hfy_talent_requests_queue_idx").on(table.status, table.createdAt),
+  check("hfy_talent_requests_fulfillment_valid", sql`
+    (${table.status} = 'fulfilled' AND ${table.fulfilledAssignmentId} IS NOT NULL AND ${table.fulfilledByUserId} IS NOT NULL AND ${table.fulfilledAt} IS NOT NULL)
+    OR
+    (${table.status} <> 'fulfilled' AND ${table.fulfilledAssignmentId} IS NULL AND ${table.fulfilledByUserId} IS NULL AND ${table.fulfilledAt} IS NULL)
+  `),
 ]);
 
 export const invoiceLineItems = pgTable("invoice_line_items", {

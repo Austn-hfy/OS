@@ -25,6 +25,7 @@ export type ResidencyActor = {
   residencyId: string;
   residencyName: string;
   residencyTimezone: string;
+  clientPaymentStatusVisible: boolean;
   accessRole: "manager" | "calendar_viewer";
   isViewAs: boolean;
   isInternalTest: boolean;
@@ -70,9 +71,9 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
       residencyId: residencies.id,
       residencyName: residencies.name,
       residencyTimezone: residencies.timezone,
+      clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
     }).from(residencies).where(and(
       eq(residencies.id, selectedResidencyId),
-      eq(residencies.active, true),
       eq(residencies.operatingMode, "operations"),
     )).limit(1);
     if (!residency) return null;
@@ -93,6 +94,7 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
     residencyId: residencyMemberships.residencyId,
     residencyName: residencies.name,
     residencyTimezone: residencies.timezone,
+    clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
     accessRole: residencyMemberships.accessRole,
     contactId: residencyContacts.id,
     invitationStatus: residencyContacts.invitationStatus,
@@ -130,6 +132,7 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
     residencyId: membership.residencyId,
     residencyName: membership.residencyName,
     residencyTimezone: membership.residencyTimezone,
+    clientPaymentStatusVisible: membership.clientPaymentStatusVisible,
     accessRole: membership.accessRole,
     isViewAs: false,
     isInternalTest: current.profile.isInternalTest,
@@ -180,6 +183,7 @@ export async function requireActorForResidency(
     residencyId: residencyMemberships.residencyId,
     residencyName: residencies.name,
     residencyTimezone: residencies.timezone,
+    clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
     accessRole: residencyMemberships.accessRole,
   }).from(residencyMemberships)
     .innerJoin(residencies, eq(residencyMemberships.residencyId, residencies.id))
@@ -203,6 +207,7 @@ export async function requireActorForResidency(
     residencyId: membership.residencyId,
     residencyName: membership.residencyName,
     residencyTimezone: membership.residencyTimezone,
+    clientPaymentStatusVisible: membership.clientPaymentStatusVisible,
     accessRole: membership.accessRole,
     isViewAs: false,
     isInternalTest: current.profile.isInternalTest,

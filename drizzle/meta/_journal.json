@@ -183,6 +183,20 @@
       "when": 1788181200000,
       "tag": "0025_explicit_residency_roster_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788242304689,
+      "tag": "0026_fine_tyrannus",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788246000000,
+      "tag": "0027_reserved_hfy_booking_color",
+      "breakpoints": true
     }
   ]
 }

@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 describe("Company Operations workspace", () => {
   it("exposes company-wide Payouts and an expandable Talent section with Artist Lookup and Roster", async () => {
     const shell = await readFile(new URL("../src/components/internal-shell.tsx", import.meta.url), "utf8");
-    expect(shell).toContain('["Payouts", "/app/payouts"]');
-    expect(shell).toContain('["Talent", "/app/talent"]');
+    expect(shell).toContain('["Payouts", "/app/payouts?mode=hfy"]');
+    expect(shell).toContain('["Talent", "/app/talent?mode=hfy"]');
     expect(shell).toContain('<span>Talent</span>');
-    expect(shell).toContain('href="/app/talent">Artist Lookup</Link>');
-    expect(shell).toContain('href="/app/talent/roster">Roster</Link>');
-    expect(shell).toContain("artistLookupExpanded");
+    expect(shell).toContain('href="/app/talent?mode=hfy">Artist Lookup</Link>');
+    expect(shell).toContain('href="/app/talent/roster?mode=hfy">Roster</Link>');
+    expect(shell).toContain("talentExpanded");
   });
 
   it("provides a Residency filter on the company-wide Payouts roll-up", async () => {

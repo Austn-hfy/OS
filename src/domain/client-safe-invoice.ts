@@ -4,7 +4,7 @@ export type ClientSafeInvoice = {
   billingPeriodStart: string;
   billingPeriodEnd: string;
   invoiceDate: string;
-  status: "approved" | "sent";
+  status: "approved" | "sent" | "paid";
   totalCents: number;
   sentAt: string | null;
 };
@@ -12,7 +12,7 @@ export type ClientSafeInvoice = {
 type ClientSafeInvoiceSource = Omit<ClientSafeInvoice, "status"> & { status: string } & Record<string, unknown>;
 
 export function projectClientSafeInvoice(row: ClientSafeInvoiceSource): ClientSafeInvoice {
-  if (row.status !== "approved" && row.status !== "sent") throw new Error("Only approved or sent Invoices are client-visible.");
+  if (row.status !== "approved" && row.status !== "sent" && row.status !== "paid") throw new Error("Only approved, sent, or paid Invoices are client-visible.");
   return {
     id: row.id,
     invoiceNumber: row.invoiceNumber,

@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ inv
   }).from(invoices).where(and(
     eq(invoices.id, invoiceId),
     eq(invoices.residencyId, actor.residencyId),
-    inArray(invoices.status, ["approved", "sent"]),
+    inArray(invoices.status, ["approved", "sent", "paid"]),
   )).limit(1);
   if (!invoice?.pdfStoragePath) return new Response("Invoice PDF not found.", { status: 404 });
   const download = await createSupabaseAdminClient().storage.from("invoice-pdfs").download(invoice.pdfStoragePath);

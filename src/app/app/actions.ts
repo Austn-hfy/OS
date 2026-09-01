@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
@@ -18,6 +19,8 @@ import { createShift, deleteShift } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { issuePublicCalendarToken } from "@/domain/public-calendar";
+import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
+import { requestOrigin } from "@/lib/request-origin";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
@@ -129,6 +132,7 @@ export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLi
       scope: z.enum(["all", "selected"]),
     }).parse(Object.fromEntries(formData));
     const actor = await requireActorForResidency(residencyId, { manager: true });
+    const baseUrl = requestOrigin(await headers());
     const selectedDaypartIds = z.array(z.uuid()).max(100).parse([...new Set(formData.getAll("daypartIds").map(String))]);
     if (scope === "selected" && !selectedDaypartIds.length) throw new Error("Select at least one Daypart for this link.");
     const { token, tokenHash } = issuePublicCalendarToken();
@@ -175,7 +179,6 @@ export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLi
     });
     revalidatePath("/app/calendar");
     revalidatePath("/app/setup");
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://hfy.app";
     return {
       status: "success",
       message: "New public calendar link created. The previous link, if any, is now invalid.",
@@ -1185,7 +1188,7 @@ const daypartPayloadSchema = z.object({
     context.addIssue({ code: "custom", message: "Choose how this DJ / Artist Daypart is billed." });
   }
   if (daypart.billingMode === "tracking_only" && daypart.defaultTalentRateCents != null) {
-    context.addIssue({ code: "custom", message: "Tracking-only Dayparts cannot include a talent rate." });
+    context.addIssue({ code: "custom", message: "Client Managed Dayparts cannot include an HFY talent rate." });
   }
 });
 
@@ -1210,7 +1213,9 @@ export async function saveDaypartAction(_previous: ResidencyActionState, formDat
     await saveDaypart(actor, protectedPayload);
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
+    revalidatePath("/app/dayparts");
     revalidatePath("/residency/calendar");
+    revalidatePath("/residency/dayparts");
     return { status: "success", message: `${parsed.name} saved.` };
   } catch (error) {
     const message = error instanceof Error && !error.message.startsWith("Failed query:")
@@ -1227,8 +1232,10 @@ export async function removeDaypartAction(formData: FormData): Promise<Residency
     const result = await removeDaypart(actor, parsed.residencyId, parsed.daypartId);
     revalidatePath("/app/setup");
     revalidatePath("/app/calendar");
+    revalidatePath("/app/dayparts");
     revalidatePath("/app");
     revalidatePath("/residency/calendar");
+    revalidatePath("/residency/dayparts");
     return {
       status: "success",
       message: result.mode === "archived"
@@ -1387,6 +1394,7 @@ const residencyBookingPayloadSchema = z.object({
     startMinute: z.number().int().min(0).max(1439),
     endMinute: z.number().int().min(1).max(2879),
     clientRateOverrideCents: z.number().int().min(0).nullable().optional(),
+    requestHfy: z.boolean().optional(),
     assignments: z.array(z.object({
       talentId: z.uuid().nullable().optional(),
       startsAtMinute: z.number().int().min(0).max(2879).optional(),
@@ -1414,7 +1422,7 @@ export async function bookResidencyDateAction(_previous: ResidencyActionState, f
         clientRateOverrideCents: null,
         assignments: slot.assignments.map((assignment) => ({
           ...assignment,
-          compensationType: "hourly" as const,
+          compensationType: "na" as const,
           talentRateOverrideCents: null,
           fixedFeeCents: null,
         })),
@@ -1431,6 +1439,89 @@ export async function bookResidencyDateAction(_previous: ResidencyActionState, f
     return { status: "success", message: `${count} calendar slot${count === 1 ? "" : "s"} scheduled.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to book this date." };
+  }
+}
+
+export async function cancelHfyTalentRequestAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      shiftId: z.uuid(),
+      daypartId: z.uuid(),
+      serviceDate: z.iso.date(),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    await cancelHfyTalentRequest(actor, parsed);
+    revalidateResidencyCalendars();
+    revalidatePath("/app");
+    return { status: "success", message: "HFY request cancelled for this date only. The date is Client Managed again." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to cancel this HFY request." };
+  }
+}
+
+export async function fulfillHfyTalentRequestAction(
+  _previous: ResidencyActionState,
+  formData: FormData,
+): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      requestId: z.uuid(),
+      talentId: z.uuid(),
+      clientRate: z.coerce.number().min(0).max(1_000_000),
+      artistRate: z.coerce.number().positive().max(1_000_000),
+    }).parse(Object.fromEntries(formData));
+    const result = await fulfillHfyTalentRequest(actor, {
+      requestId: parsed.requestId,
+      talentId: parsed.talentId,
+      clientRateCents: Math.round(parsed.clientRate * 100),
+      artistRateCents: Math.round(parsed.artistRate * 100),
+    });
+    revalidatePath("/app");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/payouts");
+    revalidatePath("/app/invoices");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/payouts");
+    revalidatePath("/residency/invoices");
+    return { status: "success", message: `${result.artistName} assigned and moved into HFY billing.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to fulfill this HFY request." };
+  }
+}
+
+export async function updateClientPaymentStatusVisibilityAction(
+  _previous: ResidencyActionState,
+  formData: FormData,
+): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const residencyId = z.uuid().parse(formData.get("residencyId"));
+    const visible = formData.get("visible") === "on";
+    const [updated] = await getDb().update(residencies).set({
+      clientPaymentStatusVisible: visible,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(residencies.id, residencyId),
+      eq(residencies.operatingMode, "operations"),
+    )).returning({ id: residencies.id });
+    if (!updated) throw new Error("Residency not found.");
+    await getDb().insert(auditLog).values({
+      residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "client_payment_status_visibility_updated",
+      entityType: "residency",
+      entityId: residencyId,
+      details: { visible },
+    });
+    revalidatePath("/app/setup");
+    revalidatePath("/residency");
+    revalidatePath("/residency/payouts");
+    return { status: "success", message: visible ? "Payment Status is visible to this client." : "Payment Status is hidden from this client." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update client visibility." };
   }
 }
 

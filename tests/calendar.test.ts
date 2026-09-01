@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { monthGrid, monthRange, normalizeMonthKey, shiftMonthKey } from "../src/lib/calendar";
+import { calendarDaypartsHref, monthGrid, monthRange, normalizeMonthKey, shiftMonthKey } from "../src/lib/calendar";
 
 describe("company calendar helpers", () => {
   it("builds a complete Sunday-first month grid", () => {
@@ -21,5 +21,12 @@ describe("company calendar helpers", () => {
 
   it("rejects malformed month query values", () => {
     expect(normalizeMonthKey("not-a-month", "2026-08")).toBe("2026-08");
+  });
+
+  it("routes Create New Daypart to the Day Parts tab without opening its create dialog", () => {
+    expect(calendarDaypartsHref("test-residency", true)).toBe("/residency/dayparts");
+    expect(calendarDaypartsHref("test-residency", false)).toBe("/app/dayparts?mode=hfy&residency=test-residency");
+    expect(calendarDaypartsHref("test-residency", true)).not.toContain("create=1");
+    expect(calendarDaypartsHref("test-residency", false)).not.toContain("create=1");
   });
 });

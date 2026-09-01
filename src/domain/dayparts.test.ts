@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  HFY_BOOKED_COLOR,
+  HFY_PENDING_COLOR,
+  calendarColorForEconomics,
+  calendarColorForShift,
   clockToMinute,
+  daypartDateKey,
   daypartBookingRecordKind,
   formatLocalMinute,
   formatCompactMinuteRange,
@@ -15,6 +20,18 @@ import {
 } from "./dayparts";
 
 describe("Daypart weekly rules", () => {
+  it("lets a fulfilled HFY request override its Client Managed Daypart color", () => {
+    expect(calendarColorForShift("#2783DC", HFY_BOOKED_COLOR)).toBe(HFY_BOOKED_COLOR);
+    expect(calendarColorForShift("#2783DC", null)).toBe("#2783DC");
+    expect(calendarColorForShift(null, "#7A65D1")).toBe("#7A65D1");
+  });
+
+  it("gives pending and fulfilled HFY slots distinct reserved colors", () => {
+    expect(calendarColorForEconomics("#2783DC", HFY_BOOKED_COLOR, "hfy_request")).toBe(HFY_PENDING_COLOR);
+    expect(calendarColorForEconomics("#2783DC", null, "hfy")).toBe(HFY_BOOKED_COLOR);
+    expect(calendarColorForEconomics("#2783DC", null, "client_owned")).toBe("#2783DC");
+  });
+
   it("routes billed and tracking-only Dayparts to separate record chains", () => {
     expect(daypartBookingRecordKind("dj_artist", "billed_by_hfy")).toBe("financial_shift");
     expect(daypartBookingRecordKind("dj_artist", "tracking_only")).toBe("tracking_occurrence");
@@ -173,5 +190,35 @@ describe("Daypart weekly rules", () => {
       { date: "2026-09-20", start: 720, end: 1140 },
     ]);
     expect(daypart.rules[0]).toMatchObject({ startMinute: 720, endMinute: 1140 });
+  });
+
+  it("scopes Request HFY to one Client Managed date and leaves sibling occurrences unchanged", () => {
+    const daypart = {
+      id: "sunset",
+      name: "Sunset DJ Set",
+      room: "Terrace",
+      color: "#2783DC",
+      type: "dj_artist" as const,
+      billingMode: "tracking_only" as const,
+      active: true,
+      activeUntil: null,
+      defaultTalentRateCents: null,
+      rules: [{ weekday: 5, startMinute: 1080, endMinute: 1260, defaultDjCount: null }],
+    };
+    const requestedDate = daypartDateKey(daypart.id, "2026-09-04");
+
+    const whileRequested = projectDaypartSlots(
+      [daypart],
+      "2026-09-04",
+      "2026-09-18",
+      new Set([requestedDate]),
+    );
+    expect(whileRequested.map((slot) => slot.date)).toEqual(["2026-09-11", "2026-09-18"]);
+    expect(whileRequested.every((slot) => slot.billingMode === "tracking_only")).toBe(true);
+    expect(daypart.billingMode).toBe("tracking_only");
+
+    const afterCancellation = projectDaypartSlots([daypart], "2026-09-04", "2026-09-18", new Set());
+    expect(afterCancellation.map((slot) => slot.date)).toEqual(["2026-09-04", "2026-09-11", "2026-09-18"]);
+    expect(afterCancellation.filter((slot) => slot.date !== "2026-09-04")).toEqual(whileRequested);
   });
 });

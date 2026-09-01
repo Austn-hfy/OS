@@ -13,24 +13,47 @@ describe("public calendar trust boundary", () => {
   });
 
   it("drops every non-allow-listed field even when the privileged query row expands", () => {
-    const entries = projectPublicCalendarRows([{
-      instagramHandle: "dj-safe",
-      serviceDate: "2026-09-04",
-      startsAt: new Date("2026-09-04T19:00:00Z"),
-      endsAt: new Date("2026-09-04T22:00:00Z"),
-      timezone: "America/Los_Angeles",
-      fullName: "Private Person",
-      email: "private@example.test",
-      phone: "555-0100",
-      talentRateCents: 9000,
-      totalCompensationCents: 27000,
-      internalNotes: "never public",
-    }]);
+    const entries = projectPublicCalendarRows([
+      {
+        daypartName: "Sunset DJ Set",
+        room: "Rooftop",
+        color: "#2783DC",
+        artistName: "DJ Safe",
+        instagramHandle: "dj-safe",
+        serviceDate: "2026-09-04",
+        startsAt: new Date("2026-09-04T19:00:00Z"),
+        endsAt: new Date("2026-09-04T22:00:00Z"),
+        timezone: "America/Los_Angeles",
+        fullName: "Private Person",
+        email: "private@example.test",
+        phone: "555-0100",
+        talentRateCents: 9000,
+        totalCompensationCents: 27000,
+        internalNotes: "never public",
+      },
+      {
+        daypartName: "Sunset DJ Set",
+        room: "Rooftop",
+        color: "#2783DC",
+        artistName: "Second Artist",
+        instagramHandle: "@second",
+        serviceDate: "2026-09-04",
+        startsAt: new Date("2026-09-04T19:00:00Z"),
+        endsAt: new Date("2026-09-04T22:00:00Z"),
+        timezone: "America/Los_Angeles",
+      },
+    ]);
     expect(entries).toEqual([{
-      instagramHandle: "dj-safe",
+      daypartName: "Sunset DJ Set",
+      room: "Rooftop",
+      color: "#2783DC",
       date: "2026-09-04",
       startTime: "12:00 PM",
       endTime: "3:00 PM",
+      artists: [
+        { name: "DJ Safe", instagramHandle: "dj-safe" },
+        { name: "Second Artist", instagramHandle: "@second" },
+      ],
     }]);
     expect(JSON.stringify(entries)).not.toMatch(/Private Person|private@example|555-0100|9000|27000|never public/);
   });
@@ -46,19 +69,35 @@ describe("public calendar trust boundary", () => {
 
   it("re-applies the same exact allow-list at the response boundary", () => {
     const response = enforcePublicCalendarResponse({
-      residencyName: "Private Hotel",
+      residencyName: "Test 1",
+      billingEmail: "billing@private.test",
       entries: [{
-        instagramHandle: "@safe",
+        daypartName: "Sunset DJ Set",
+        room: "Rooftop",
+        color: "#2783DC",
         date: "2026-09-04",
         startTime: "12:00 PM",
         endTime: "3:00 PM",
+        artists: [{ name: "DJ Safe", instagramHandle: "@safe", email: "private@example.test" }],
         email: "private@example.test",
         rate: 500,
         notes: "private",
       }],
     });
-    expect(response).toEqual({ entries: [{ instagramHandle: "@safe", date: "2026-09-04", startTime: "12:00 PM", endTime: "3:00 PM" }] });
-    expect(Object.keys(response)).toEqual(["entries"]);
-    expect(Object.keys(response.entries[0])).toEqual(["instagramHandle", "date", "startTime", "endTime"]);
+    expect(response).toEqual({
+      residencyName: "Test 1",
+      entries: [{
+        daypartName: "Sunset DJ Set",
+        room: "Rooftop",
+        color: "#2783DC",
+        date: "2026-09-04",
+        startTime: "12:00 PM",
+        endTime: "3:00 PM",
+        artists: [{ name: "DJ Safe", instagramHandle: "@safe" }],
+      }],
+    });
+    expect(Object.keys(response)).toEqual(["residencyName", "entries"]);
+    expect(Object.keys(response.entries[0])).toEqual(["daypartName", "room", "color", "date", "startTime", "endTime", "artists"]);
+    expect(JSON.stringify(response)).not.toMatch(/billing@private|private@example|500|notes/);
   });
 });

@@ -15,6 +15,7 @@ export type MonthCalendarEvent = {
   tone?: MonthCalendarTone;
   color?: string;
   schedulingStatus?: SlotSchedulingStatus;
+  bookingState?: "hfy_pending" | "hfy_confirmed";
 };
 
 export type MonthCalendarTone = CalendarTone;
@@ -37,7 +38,7 @@ export function MonthCalendar({ monthKey, events, selectedDate, onDateClick, onE
             {onDateClick ? <button className="calendar-date-trigger" type="button" aria-label={`Add to ${day.iso}`} onClick={() => onDateClick(day.iso)}><span className="calendar-day-header"><time dateTime={day.iso}>{day.day}</time>{day.inMonth ? <span className="calendar-add-icon" aria-hidden="true">+</span> : null}</span></button> : <div className="calendar-day-header"><time dateTime={day.iso}>{day.day}</time></div>}
             <div className="calendar-events">{visibleEvents.map((event) => {
               const eventStyle = event.color ? { "--daypart-color": event.color } as CSSProperties : undefined;
-              const eventClassName = `calendar-event ${event.schedulingStatus ? `schedule-${event.schedulingStatus}` : event.color ? "custom-color" : event.tone ?? "blue"}`;
+              const eventClassName = `calendar-event ${event.schedulingStatus ? `schedule-${event.schedulingStatus}` : event.color ? "custom-color" : event.tone ?? "blue"} ${event.bookingState ? event.bookingState.replace("_", "-") : ""}`;
               return onEventClick
                 ? <button className={eventClassName} style={eventStyle} type="button" aria-label={`Open ${event.title} on ${event.date}`} onClick={() => onEventClick(event)} key={event.id}><span className="calendar-event-line"><strong>{event.title}</strong><span>{event.time}</span></span>{compact ? null : <small>{event.residencyName}</small>}</button>
                 : <div className={eventClassName} style={eventStyle} key={event.id}><span className="calendar-event-line"><strong>{event.title}</strong><span>{event.time}</span></span>{compact ? null : <small>{event.residencyName}</small>}</div>;

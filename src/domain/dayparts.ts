@@ -1,6 +1,9 @@
 import { addDays } from "./airtable-parity";
 
 export const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+export const HFY_BOOKED_COLOR = "#EC4899";
+export const HFY_PENDING_COLOR = "#F9A8D4";
+export const DEFAULT_DAYPART_COLOR = "#2783DC";
 
 export type DaypartRuleInput = {
   weekday: number;
@@ -12,6 +15,21 @@ export type DaypartRuleInput = {
 export type DaypartType = "dj_artist" | "house_activity";
 export type DaypartBillingMode = "billed_by_hfy" | "tracking_only";
 export type DaypartBookingRecordKind = "financial_shift" | "tracking_occurrence";
+
+export function calendarColorForShift(daypartColor: string | null, shiftCalendarColor: string | null): string | undefined {
+  if (shiftCalendarColor?.toUpperCase() === HFY_BOOKED_COLOR) return HFY_BOOKED_COLOR;
+  return daypartColor ?? shiftCalendarColor ?? undefined;
+}
+
+export function calendarColorForEconomics(
+  daypartColor: string | null,
+  shiftCalendarColor: string | null,
+  economicsMode: "hfy" | "client_owned" | "hfy_request" | undefined,
+): string | undefined {
+  if (economicsMode === "hfy_request") return HFY_PENDING_COLOR;
+  if (economicsMode === "hfy") return HFY_BOOKED_COLOR;
+  return calendarColorForShift(daypartColor, shiftCalendarColor);
+}
 
 export function daypartBookingRecordKind(type: DaypartType, billingMode: DaypartBillingMode | null): DaypartBookingRecordKind {
   if (type === "house_activity") return "tracking_occurrence";
@@ -55,6 +73,11 @@ export type DaypartDateException = {
 };
 
 export type SlotSchedulingStatus = "empty" | "partial" | "filled";
+
+export function daypartDateKey(daypartId: string, serviceDate: string): string {
+  weekdayForDate(serviceDate);
+  return `${daypartId}:${serviceDate}`;
+}
 
 export function weekdayForDate(serviceDate: string): number {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(serviceDate);
@@ -192,7 +215,7 @@ export function projectDaypartSlots(
 
   const slots: ProjectedDaypartSlot[] = [];
   const exceptionsByDaypartDate = new Map(
-    dateExceptions.map((exception) => [`${exception.daypartId}:${exception.serviceDate}`, exception] as const),
+    dateExceptions.map((exception) => [daypartDateKey(exception.daypartId, exception.serviceDate), exception] as const),
   );
   let date = rangeStart;
   let daysVisited = 0;
@@ -202,8 +225,9 @@ export function projectDaypartSlots(
     for (const daypart of dayparts) {
       if (!daypart.active || (daypart.activeUntil && date > daypart.activeUntil)) continue;
       const rule = daypart.rules.find((item) => item.weekday === weekday);
-      if (!rule || existingDaypartDates.has(`${daypart.id}:${date}`)) continue;
-      const dateException = exceptionsByDaypartDate.get(`${daypart.id}:${date}`);
+      const dateKey = daypartDateKey(daypart.id, date);
+      if (!rule || existingDaypartDates.has(dateKey)) continue;
+      const dateException = exceptionsByDaypartDate.get(dateKey);
       if (dateException?.kind === "skip") continue;
       const startMinute = dateException?.kind === "override" ? dateException.startMinute : rule.startMinute;
       const endMinute = dateException?.kind === "override" ? dateException.endMinute : rule.endMinute;
