@@ -94,7 +94,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
               {contextResidencies.map((item) => mode === "developer" ? (
                 <form action={enterViewAsAction} key={item.id}>
                   <input name="residencyId" type="hidden" value={item.id} />
-                  <button type="submit" onClick={() => setSwitcherOpen(false)}>
+                  <button type="submit">
                     <span className="context-option-icon hotel">{item.name.slice(0, 1)}</span><span><strong>{item.name}</strong><small>{item.active ? item.cityState || "Location pending" : `Inactive · ${item.cityState || "Location pending"}`}</small></span>
                   </button>
                 </form>

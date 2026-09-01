@@ -45,6 +45,13 @@ describe("Owner Developer and HFY business modes", () => {
     expect(hotelMemberships).toContain("eq(residencies.active, true)");
   });
 
+  it("keeps the Developer workspace form mounted until its server action submits", async () => {
+    const shell = await readFile(new URL("../src/components/internal-shell.tsx", import.meta.url), "utf8");
+    expect(shell).toContain('<form action={enterViewAsAction} key={item.id}>');
+    expect(shell).toContain('<button type="submit">');
+    expect(shell).not.toContain('<button type="submit" onClick={() => setSwitcherOpen(false)}>');
+  });
+
   it("gives each owner mode a distinct visual system while preserving the global banners", async () => {
     const [styles, rootLayout, residencyShell] = await Promise.all([
       readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
