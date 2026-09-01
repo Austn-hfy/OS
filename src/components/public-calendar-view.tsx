@@ -74,12 +74,10 @@ export function PublicCalendarView({ token, monthKey, calendar }: {
     <section className="calendar-main public-calendar-shell" aria-label="Shared programming calendar">
       <div className="calendar-page client-calendar-page public-calendar-grid-page">
         <header className="public-calendar-heading">
-          <div>
-            <p className="eyebrow">{calendar.residencyName}</p>
-            <h1>{monthLabel(monthKey)}</h1>
-          </div>
+          <p className="eyebrow">{calendar.residencyName}</p>
           <nav className="month-navigation" aria-label="Shared calendar month">
             <Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link>
+            <h1 className="public-calendar-month-title">{monthLabel(monthKey)}</h1>
             <Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link>
           </nav>
         </header>

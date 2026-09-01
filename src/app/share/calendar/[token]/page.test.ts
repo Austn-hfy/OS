@@ -49,6 +49,7 @@ describe("public shared calendar page", () => {
     const html = renderToStaticMarkup(view);
 
     expect(html).toContain("September 2026");
+    expect(html).toContain("public-calendar-month-title");
     expect(html).toContain("Test 1");
     expect(html).not.toContain(">Calendar<");
     expect(html).toContain('role="grid"');
