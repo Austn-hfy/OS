@@ -8,11 +8,13 @@ export function DaypartRouteManager({
   dayparts,
   hideFinancials = false,
   initialCreate = false,
+  fullProgrammingClient = false,
 }: {
   residencyId: string;
   dayparts: DaypartRow[];
   hideFinancials?: boolean;
   initialCreate?: boolean;
+  fullProgrammingClient?: boolean;
 }) {
   const router = useRouter();
   return <DaypartManager
@@ -20,6 +22,7 @@ export function DaypartRouteManager({
     dayparts={dayparts}
     hideFinancials={hideFinancials}
     initialCreate={initialCreate}
+    fullProgrammingClient={fullProgrammingClient}
     onSaved={() => router.refresh()}
   />;
 }

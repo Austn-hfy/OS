@@ -8,7 +8,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendApprovedInvoice } from "@/services/invoice-delivery";
 import { getInvoiceBrandingSettings, loadInvoiceLogoDataUrl } from "@/services/invoice-branding";
 import { renderHtmlToPdf } from "@/services/invoice-pdf/runtime";
-import { renderInvoiceHtml } from "@/services/invoice-pdf/template";
+import { renderTalentInvoiceHtml } from "@/services/invoice-pdf/template";
 
 export { sendApprovedInvoice } from "@/services/invoice-delivery";
 
@@ -136,7 +136,7 @@ async function renderDraftInvoicePdf(invoiceId: string) {
   const { source, snapshot } = await buildInvoiceSnapshot(invoiceId);
   const sourceHash = invoiceSourceHash(snapshot);
   const logoDataUrl = await loadInvoiceLogoDataUrl(snapshot.issuer.logo);
-  const pdf = await renderHtmlToPdf(renderInvoiceHtml(snapshot, { logoDataUrl }));
+  const pdf = await renderHtmlToPdf(renderTalentInvoiceHtml(snapshot, { logoDataUrl }));
   if (pdf.length <= 0 || pdf.length > MAX_INVOICE_PDF_BYTES || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") {
     throw new Error("Native Invoice PDF generation returned an invalid document.");
   }

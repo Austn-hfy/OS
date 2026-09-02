@@ -218,6 +218,13 @@
       "when": 1788317870499,
       "tag": "0030_warm_newton_destine",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788347996616,
+      "tag": "0031_dazzling_jack_power",
+      "breakpoints": true
     }
   ]
 }

@@ -38,7 +38,7 @@ function addressLines(lines: string[]) {
   return lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
 }
 
-export function renderInvoiceHtml(snapshot: InvoiceDocumentSnapshot, options: { logoDataUrl?: string | null } = {}) {
+export function renderTalentInvoiceHtml(snapshot: InvoiceDocumentSnapshot, options: { logoDataUrl?: string | null } = {}) {
   type DisplayLine = InvoiceDocumentSnapshot["serviceLines"][number] & { rateDisplayCents: number | null };
   const scheduled = snapshot.serviceLines.filter((line) => line.source === "scheduled");
   const custom = snapshot.serviceLines.filter((line) => line.source === "custom");
@@ -137,7 +137,7 @@ export function renderInvoiceHtml(snapshot: InvoiceDocumentSnapshot, options: { 
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>Invoice ${escapeHtml(snapshot.invoice.number)}</title>
+    <title>HFY Talent Invoice ${escapeHtml(snapshot.invoice.number)}</title>
     <style>
       @page { size: Letter; margin: 0; }
       * { box-sizing: border-box; }
@@ -200,7 +200,7 @@ export function renderInvoiceHtml(snapshot: InvoiceDocumentSnapshot, options: { 
           ${brandVisual}
           <div><div class="brand-name">${escapeHtml(snapshot.issuer.name)}</div><div class="brand-email">${escapeHtml(snapshot.issuer.email)}</div></div>
         </div>
-        <div><div class="invoice-label">Invoice</div><h1>${escapeHtml(snapshot.invoice.number)}</h1></div>
+        <div><div class="invoice-label">HFY Talent Invoice</div><h1>${escapeHtml(snapshot.invoice.number)}</h1></div>
       </header>
 
       <section class="summary">
@@ -241,3 +241,5 @@ export function renderInvoiceHtml(snapshot: InvoiceDocumentSnapshot, options: { 
   </body>
 </html>`;
 }
+
+export const renderInvoiceHtml = renderTalentInvoiceHtml;

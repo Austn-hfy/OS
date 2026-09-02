@@ -1,12 +1,12 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, scheduleOccurrences, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
+import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments, talentPaymentProfiles, talentScheduleLocks, users } from "@/db/schema";
 import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
@@ -21,6 +21,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { issuePublicCalendarToken } from "@/domain/public-calendar";
 import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
 import { requestOrigin } from "@/lib/request-origin";
+import { isFullCalendarMonth } from "@/domain/talent-invoicing";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
@@ -110,6 +111,7 @@ export async function createResidencyAction(_previous: ResidencyActionState, for
         defaultTalentRateCents: centsFromDollars(formData.get("defaultTalentRate")),
         clientHourlyRateCents: centsFromDollars(formData.get("clientHourlyRate")),
         paymentTermsDays: parsed.paymentTermsDays,
+        invoiceFrequency: parsed.tier === "complete" ? "monthly" : "weekly",
         billingContactEmail: parsed.billingContactEmail,
         billingContactName: parsed.billingContactName,
         invoicePrefix: parsed.invoicePrefix.toUpperCase(),
@@ -309,7 +311,7 @@ export async function updateLeadAction(_previous: ResidencyActionState, formData
           billingContactEmail: conversion.billingContactEmail,
           billingAddress: conversion.billingAddress,
           paymentTermsDays: conversion.paymentTermsDays,
-          invoiceFrequency: conversion.invoiceFrequency,
+          invoiceFrequency: conversion.tier === "complete" ? "monthly" : conversion.invoiceFrequency,
           billingCycleStartWeekday: conversion.billingCycleStartWeekday,
           billingCycleLengthDays: conversion.billingCycleLengthDays,
           invoiceLinePresentation: conversion.invoiceLinePresentation,
@@ -997,10 +999,15 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
     const database = getDb();
     const [residency] = await database.select({
       id: residencies.id,
+      tier: residencies.tier,
       paymentTermsDays: residencies.paymentTermsDays,
       defaultInvoiceNote: residencies.defaultInvoiceNote,
     }).from(residencies).where(eq(residencies.id, parsed.residencyId)).limit(1);
     if (!residency) throw new Error("Residency not found.");
+    const fullProgramming = residency.tier === "complete";
+    if (fullProgramming && parsed.kind !== "scheduled_period") throw new Error("Full Programming talent invoices must use a monthly scheduled period.");
+    if (fullProgramming && !isFullCalendarMonth(parsed.billingPeriodStart, parsed.billingPeriodEnd)) throw new Error("Full Programming talent invoices must cover one full calendar month.");
+    if (fullProgramming && parsed.invoiceDate > parsed.billingPeriodStart) throw new Error("Full Programming talent invoices must be dated on or before the service month begins.");
 
     const shiftIds = z.array(z.uuid()).parse(formData.getAll("shiftIds"));
     const customLines = parsed.kind === "custom"
@@ -1010,6 +1017,16 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
 
     await database.transaction(async (tx) => {
       let scheduledRows: Array<{ id: string; serviceDate: string; startsAt: Date; endsAt: Date; clientRateCents: number }> = [];
+      const pendingAdjustments = fullProgramming ? await tx.select({
+        id: talentInvoiceAdjustments.id,
+        serviceDate: talentInvoiceAdjustments.serviceDate,
+        reason: talentInvoiceAdjustments.reason,
+        description: talentInvoiceAdjustments.description,
+        amountCents: talentInvoiceAdjustments.amountCents,
+      }).from(talentInvoiceAdjustments).where(and(
+        eq(talentInvoiceAdjustments.residencyId, parsed.residencyId),
+        eq(talentInvoiceAdjustments.status, "pending"),
+      )) : [];
       if (parsed.kind === "scheduled_period") {
         scheduledRows = await tx.select({
           id: shifts.id,
@@ -1025,10 +1042,24 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
         for (const shift of scheduledRows) {
           if (shift.serviceDate < parsed.billingPeriodStart || shift.serviceDate > parsed.billingPeriodEnd) throw new Error("Every selected service must fall inside the billing period.");
         }
-        const occupied = await tx.select({ id: shifts.id }).from(shifts).where(and(inArray(shifts.id, shiftIds), inArray(shifts.billingStatus, ["invoiced", "not_billable"])));
+        const occupied = await tx.select({ id: shifts.id }).from(shifts).where(and(inArray(shifts.id, shiftIds), inArray(shifts.billingStatus, ["invoiced", "pending_adjustment", "not_billable"])));
         if (occupied.length) throw new Error("One or more selected services is already invoiced or marked not billable.");
         const alreadyLinked = await tx.select({ id: shifts.id }).from(shifts).where(and(inArray(shifts.id, shiftIds), isNotNull(shifts.invoiceId)));
         if (alreadyLinked.length) throw new Error("One or more selected services is already linked to an Invoice.");
+        if (fullProgramming) {
+          const eligible = await tx.select({ id: shifts.id }).from(shifts).where(and(
+            eq(shifts.residencyId, parsed.residencyId),
+            eq(shifts.economicsMode, "hfy"),
+            eq(shifts.billingStatus, "pending"),
+            isNull(shifts.invoiceId),
+            sql`${shifts.serviceDate} >= ${parsed.billingPeriodStart}`,
+            sql`${shifts.serviceDate} <= ${parsed.billingPeriodEnd}`,
+          ));
+          const selected = new Set(shiftIds);
+          if (eligible.length !== selected.size || eligible.some((shift) => !selected.has(shift.id))) {
+            throw new Error("A Full Programming invoice must lock every billable talent service in the service month.");
+          }
+        }
       }
 
       const manualValues = customLines.map((line, index) => {
@@ -1045,10 +1076,12 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
           sortOrder: index,
         };
       });
+      const adjustmentTotalCents = pendingAdjustments.reduce((sum, adjustment) => sum + adjustment.amountCents, 0);
       const totalCents = parsed.kind === "scheduled_period"
         ? scheduledRows.reduce((sum, shift) => sum + calculateBillableAmountCents(shift.startsAt, shift.endsAt, shift.clientRateCents), 0)
         : manualValues.reduce((sum, line) => sum + line.totalCents, 0);
-      if (totalCents <= 0) throw new Error("The Invoice total must be greater than zero.");
+      const finalTotalCents = totalCents + adjustmentTotalCents;
+      if (finalTotalCents <= 0) throw new Error("The Invoice total must be greater than zero.");
 
       const [invoice] = await tx.insert(invoices).values({
         residencyId: parsed.residencyId,
@@ -1059,7 +1092,7 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
         paymentTermsDays: residency.paymentTermsDays,
         kind: parsed.kind,
         notes: parsed.notes || residency.defaultInvoiceNote,
-        totalCents,
+        totalCents: finalTotalCents,
         status: "draft",
       }).returning({ id: invoices.id });
 
@@ -1071,6 +1104,36 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
           invoiceLinkNote: "",
           updatedAt: new Date(),
         }).where(inArray(shifts.id, shiftIds));
+        if (pendingAdjustments.length) {
+          await tx.insert(invoiceLineItems).values(pendingAdjustments.map((adjustment, index) => ({
+            invoiceId: invoice.id,
+            type: "manual_adjustment" as const,
+            serviceDate: adjustment.serviceDate,
+            description: adjustment.description,
+            quantityThousandths: 1_000,
+            unitLabel: "adjustment",
+            unitAmountCents: adjustment.amountCents,
+            totalCents: adjustment.amountCents,
+            adjustmentReason: adjustment.reason,
+            sortOrder: scheduledRows.length + index,
+          })));
+          await tx.update(talentInvoiceAdjustments).set({
+            status: "applied",
+            appliedInvoiceId: invoice.id,
+            appliedAt: new Date(),
+            updatedAt: new Date(),
+          }).where(inArray(talentInvoiceAdjustments.id, pendingAdjustments.map((adjustment) => adjustment.id)));
+        }
+        if (fullProgramming) {
+          await tx.insert(talentScheduleLocks).values({
+            residencyId: parsed.residencyId,
+            serviceMonth: parsed.billingPeriodStart,
+            billingPeriodStart: parsed.billingPeriodStart,
+            billingPeriodEnd: parsed.billingPeriodEnd,
+            invoiceId: invoice.id,
+            lockedByUserId: actor.userId,
+          });
+        }
       } else {
         await tx.insert(invoiceLineItems).values(manualValues.map((line) => ({ ...line, invoiceId: invoice.id })));
       }
@@ -1081,7 +1144,7 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
         action: "invoice_created",
         entityType: "invoice",
         entityId: invoice.id,
-        details: { invoiceNumber: parsed.invoiceNumber, kind: parsed.kind, totalCents, shiftCount: scheduledRows.length, lineCount: manualValues.length },
+        details: { invoiceNumber: parsed.invoiceNumber, kind: parsed.kind, totalCents: finalTotalCents, shiftCount: scheduledRows.length, lineCount: manualValues.length + pendingAdjustments.length, fullProgrammingScheduleLocked: fullProgramming, appliedAdjustmentCount: pendingAdjustments.length },
       });
     });
     revalidatePath("/app/invoices");
@@ -1113,6 +1176,11 @@ export async function updateResidencyInvoiceSettingsAction(_previous: ResidencyA
     const autoSendReason = autoSendInvoices ? "Enabled for approved Invoices" : (parsed.autoSendReason || "Manual send");
     const database = getDb();
     await database.transaction(async (tx) => {
+      const [residency] = await tx.select({ tier: residencies.tier }).from(residencies).where(eq(residencies.id, parsed.residencyId)).limit(1);
+      if (!residency) throw new Error("Residency not found.");
+      if (residency.tier === "complete" && parsed.invoiceFrequency !== "monthly") {
+        throw new Error("Full Programming talent invoices must use a monthly frequency.");
+      }
       const [updated] = await tx.update(residencies).set({
         billingContactName: parsed.billingContactName,
         billingContactEmail: parsed.billingContactEmail,
@@ -1301,8 +1369,7 @@ export async function skipDaypartDateAction(formData: FormData): Promise<Residen
     const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
     await skipDaypartDate(actor, parsed);
     revalidateResidencyCalendars();
-    revalidatePath("/residency/payouts");
-    revalidatePath("/residency/invoices");
+    revalidatePath("/residency/finances");
     revalidatePath("/app/payouts");
     revalidatePath("/app/invoices");
     return { status: "success", message: "This date was skipped. The standing Daypart remains unchanged." };
@@ -1380,6 +1447,7 @@ export async function updateResidencyProfileAction(_previous: ResidencyActionSta
       cityState: parsed.cityState,
       timezone: parsed.timezone,
       tier: parsed.tier,
+      ...(parsed.tier === "complete" ? { invoiceFrequency: "monthly", billingCycleLengthDays: 31 } : {}),
       internalNotes: parsed.internalNotes,
       updatedAt: new Date(),
     }).where(and(eq(residencies.id, parsed.residencyId), eq(residencies.operatingMode, "operations"))).returning({ id: residencies.id });
@@ -1467,7 +1535,7 @@ export async function bookResidencyDateAction(_previous: ResidencyActionState, f
     revalidatePath("/app/invoices");
     revalidatePath("/app");
     revalidatePath("/residency/calendar");
-    revalidatePath("/residency/payouts");
+    revalidatePath("/residency/finances");
     const count = created.shiftIds.length + created.occurrenceIds.length;
     return { status: "success", message: `${count} calendar slot${count === 1 ? "" : "s"} scheduled.` };
   } catch (error) {
@@ -1517,45 +1585,10 @@ export async function fulfillHfyTalentRequestAction(
     revalidatePath("/app/payouts");
     revalidatePath("/app/invoices");
     revalidatePath("/residency/calendar");
-    revalidatePath("/residency/payouts");
-    revalidatePath("/residency/invoices");
+    revalidatePath("/residency/finances");
     return { status: "success", message: `${result.artistNames.join(" + ")} assigned using the Residency rates.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to fulfill this HFY request." };
-  }
-}
-
-export async function updateClientPaymentStatusVisibilityAction(
-  _previous: ResidencyActionState,
-  formData: FormData,
-): Promise<ResidencyActionState> {
-  try {
-    const actor = await requireInternalActor();
-    const residencyId = z.uuid().parse(formData.get("residencyId"));
-    const visible = formData.get("visible") === "on";
-    const [updated] = await getDb().update(residencies).set({
-      clientPaymentStatusVisible: visible,
-      updatedAt: new Date(),
-    }).where(and(
-      eq(residencies.id, residencyId),
-      eq(residencies.operatingMode, "operations"),
-    )).returning({ id: residencies.id });
-    if (!updated) throw new Error("Residency not found.");
-    await getDb().insert(auditLog).values({
-      residencyId,
-      actorUserId: actor.userId,
-      actorLabel: actor.email,
-      action: "client_payment_status_visibility_updated",
-      entityType: "residency",
-      entityId: residencyId,
-      details: { visible },
-    });
-    revalidatePath("/app/setup");
-    revalidatePath("/residency");
-    revalidatePath("/residency/payouts");
-    return { status: "success", message: visible ? "Payment Status is visible to this client." : "Payment Status is hidden from this client." };
-  } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to update client visibility." };
   }
 }
 
@@ -1633,8 +1666,7 @@ export async function deleteCalendarShiftAction(formData: FormData): Promise<Res
     revalidatePath("/app/invoices");
     revalidatePath("/app");
     revalidatePath("/residency/calendar");
-    revalidatePath("/residency/payouts");
-    revalidatePath("/residency/invoices");
+    revalidatePath("/residency/finances");
     return { status: "success", message: "Shift deleted." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to delete this Shift." };
@@ -1658,8 +1690,7 @@ function revalidateOneTimeRecordViews() {
   revalidatePath("/app/payouts");
   revalidatePath("/app/invoices");
   revalidatePath("/residency/calendar");
-  revalidatePath("/residency/payouts");
-  revalidatePath("/residency/invoices");
+  revalidatePath("/residency/finances");
 }
 
 export async function updateOneTimeShiftAction(formData: FormData): Promise<ResidencyActionState> {

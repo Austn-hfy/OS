@@ -1,9 +1,11 @@
 import { and, asc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
+import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { HFY_BOOKED_COLOR, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType } from "@/domain/dayparts";
 import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import type { AuditActor } from "@/lib/auth";
+import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
 
 export type SaveDaypartInput = {
   id?: string;
@@ -130,7 +132,8 @@ export async function skipDaypartDate(
 ) {
   weekdayForDate(input.serviceDate);
   return getDb().transaction(async (tx) => {
-    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name }).from(dayparts)
+    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name, residencyTier: residencies.tier }).from(dayparts)
+      .innerJoin(residencies, eq(dayparts.residencyId, residencies.id))
       .where(and(eq(dayparts.id, input.daypartId), eq(dayparts.residencyId, input.residencyId)))
       .limit(1);
     if (!daypart) throw new Error("Daypart not found in this Residency.");
@@ -139,24 +142,43 @@ export async function skipDaypartDate(
       invoiceId: shifts.invoiceId,
       invoiceStatus: invoices.status,
       economicsMode: shifts.economicsMode,
+      startsAt: shifts.startsAt,
+      endsAt: shifts.endsAt,
+      clientRateCents: shifts.clientRateCents,
+      name: shifts.name,
     }).from(shifts)
       .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
       .where(and(eq(shifts.daypartId, input.daypartId), eq(shifts.serviceDate, input.serviceDate)))
       .limit(1);
     if (shift) {
-      if (actor.kind === "residency" && shift.economicsMode === "hfy") throw new Error("HFY-managed Shifts cannot be skipped by the client.");
+      const finalizedFullProgrammingShift = daypart.residencyTier === "complete" && Boolean(shift.invoiceId && shift.invoiceStatus && shift.invoiceStatus !== "draft");
+      if (actor.kind === "residency" && shift.economicsMode === "hfy" && daypart.residencyTier !== "complete") throw new Error("HFY-managed Shifts cannot be skipped by the client.");
       if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned and pending-request Shifts are controlled through their own workflow.");
       const assignmentRows = await tx.select({
         bookingStatus: assignments.bookingStatus,
         payoutStatus: assignments.payoutStatus,
       }).from(assignments).where(eq(assignments.shiftId, shift.id));
-      const blockReason = shiftDeletionBlockReason(shift.invoiceStatus, assignmentRows);
+      const blockReason = shiftDeletionBlockReason(finalizedFullProgrammingShift ? null : shift.invoiceStatus, assignmentRows);
       if (blockReason) throw new Error(blockReason);
+      if (finalizedFullProgrammingShift && shift.invoiceId) {
+        const adjustmentCents = calculateBillableAmountCents(shift.startsAt, shift.endsAt, shift.clientRateCents);
+        if (adjustmentCents <= 0) throw new Error("This invoiced service has no billable amount to credit.");
+        await tx.insert(talentInvoiceAdjustments).values({
+          residencyId: input.residencyId,
+          sourceInvoiceId: shift.invoiceId,
+          sourceShiftId: shift.id,
+          serviceDate: input.serviceDate,
+          reason: "schedule_cancelled_after_invoice",
+          description: carryForwardAdjustmentDescription({ serviceDate: input.serviceDate, shiftName: shift.name, kind: "cancelled" }),
+          amountCents: -adjustmentCents,
+          createdByUserId: actor.userId,
+        });
+      }
       await tx.delete(hfyTalentRequests).where(eq(hfyTalentRequests.shiftId, shift.id));
       await tx.delete(assignments).where(eq(assignments.shiftId, shift.id));
-      await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
+      if (!finalizedFullProgrammingShift) await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
       await tx.delete(shifts).where(eq(shifts.id, shift.id));
-      if (shift.invoiceId) {
+      if (shift.invoiceId && !finalizedFullProgrammingShift) {
         const [remaining] = await tx.select({ total: sql<number>`coalesce(sum(${invoiceLineItems.totalCents}), 0)` })
           .from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, shift.invoiceId));
         await tx.update(invoices).set({ totalCents: Number(remaining?.total ?? 0), updatedAt: new Date() }).where(eq(invoices.id, shift.invoiceId));
@@ -184,7 +206,7 @@ export async function skipDaypartDate(
       action: "daypart_date_skipped",
       entityType: "daypart",
       entityId: input.daypartId,
-      details: { serviceDate: input.serviceDate, name: daypart.name, removedShiftId: shift?.id ?? null },
+      details: { serviceDate: input.serviceDate, name: daypart.name, removedShiftId: shift?.id ?? null, pendingTalentInvoiceAdjustment: Boolean(shift?.invoiceId && shift.invoiceStatus && shift.invoiceStatus !== "draft" && daypart.residencyTier === "complete") },
     });
   });
 }
@@ -218,13 +240,13 @@ export async function clearDaypartDateException(
 export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
   const name = input.name.trim();
   const room = input.room.trim();
-  const billingMode = input.type === "house_activity" ? null : input.billingMode;
+  let billingMode = input.type === "house_activity" ? null : input.billingMode;
   const requestedColor = input.color.trim().toUpperCase();
-  const color = billingMode === "billed_by_hfy" ? HFY_BOOKED_COLOR : requestedColor;
-  const defaultTalentRateCents = input.type === "dj_artist" && billingMode === "billed_by_hfy"
+  let color = billingMode === "billed_by_hfy" ? HFY_BOOKED_COLOR : requestedColor;
+  let defaultTalentRateCents = input.type === "dj_artist" && billingMode === "billed_by_hfy"
     ? input.defaultTalentRateCents ?? null
     : null;
-  const clientDefaultRateCents = input.type === "dj_artist" && billingMode === "tracking_only"
+  let clientDefaultRateCents = input.type === "dj_artist" && billingMode === "tracking_only"
     ? input.clientDefaultRateCents ?? null
     : null;
   const activeUntil = input.activeUntil || null;
@@ -248,14 +270,21 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
   const suggestedEndMinute = input.scheduleMode === "calendar_only" ? input.suggestedEndMinute ?? null : null;
   if (input.scheduleMode === "calendar_only" && (!Number.isInteger(suggestedStartMinute) || !Number.isInteger(suggestedEndMinute)
     || suggestedStartMinute! < 0 || suggestedStartMinute! >= 1440 || suggestedEndMinute! <= suggestedStartMinute! || suggestedEndMinute! > suggestedStartMinute! + 1440)) {
-    throw new Error("Choose valid suggested hours for this as-needed Daypart.");
+    throw new Error("Choose valid suggested hours for this One-off / Occasional activity.");
   }
   const database = getDb();
 
   return database.transaction(async (tx) => {
-    const [residency] = await tx.select({ id: residencies.id }).from(residencies)
+    const [residency] = await tx.select({ id: residencies.id, tier: residencies.tier }).from(residencies)
       .where(and(eq(residencies.id, input.residencyId), eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).limit(1);
     if (!residency) throw new Error("Residency not found.");
+    if (residency.tier === "complete" && input.type === "dj_artist") {
+      if (actor.kind === "residency") throw new Error("HFY manages Talent Activities for Full Programming accounts.");
+      billingMode = "billed_by_hfy";
+      color = HFY_BOOKED_COLOR;
+      clientDefaultRateCents = null;
+      defaultTalentRateCents = input.defaultTalentRateCents ?? null;
+    }
 
     const duplicateNameWhere = input.id
       ? and(eq(dayparts.residencyId, residency.id), sql`lower(${dayparts.name}) = lower(${name})`, ne(dayparts.id, input.id))
@@ -324,7 +353,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
 export async function removeDaypart(actor: AuditActor, residencyId: string, daypartId: string) {
   const database = getDb();
   return database.transaction(async (tx) => {
-    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name }).from(dayparts)
+    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name, type: dayparts.type, residencyTier: residencies.tier }).from(dayparts)
       .innerJoin(residencies, eq(dayparts.residencyId, residencies.id))
       .where(and(
         eq(dayparts.id, daypartId),
@@ -333,6 +362,9 @@ export async function removeDaypart(actor: AuditActor, residencyId: string, dayp
         eq(residencies.operatingMode, "operations"),
       )).limit(1);
     if (!daypart) throw new Error("Daypart not found in this Residency.");
+    if (actor.kind === "residency" && daypart.residencyTier === "complete" && daypart.type === "dj_artist") {
+      throw new Error("HFY manages Talent Activities for Full Programming accounts.");
+    }
 
     const [shiftUsage, occurrenceUsage] = await Promise.all([
       tx.select({ id: shifts.id }).from(shifts).where(eq(shifts.daypartId, daypartId)).limit(1),

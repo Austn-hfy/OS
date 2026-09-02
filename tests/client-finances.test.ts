@@ -1,24 +1,23 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
-describe("client Payment Status boundaries", () => {
-  it("queries and displays only client-owned assignments and their Residency-owned amounts", async () => {
-    const [query, page, workspace] = await Promise.all([
+describe("client Finances boundaries", () => {
+  it("keeps direct talent obligations read-only and separate from HFY talent invoices", async () => {
+    const [query, finances, legacyPayouts, legacyInvoices] = await Promise.all([
       readFile(new URL("../src/data/residency-client.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/finances/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/payouts/page.tsx", import.meta.url), "utf8"),
-      readFile(new URL("../src/app/residency/payouts/client-payouts-workspace.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/invoices/page.tsx", import.meta.url), "utf8"),
     ]);
     expect(query).toContain('eq(assignments.source, "client_owned")');
-    expect(query).toContain("eq(shifts.residencyId, residencyId)");
     expect(query).toContain("innerJoin(clientAssignmentTerms");
-    expect(page).not.toContain("HFY-provided artists");
-    expect(page).toContain("owedTotalCents");
-    expect(workspace).toContain("Amount Owed");
-    expect(workspace).toContain("ClientRateForm");
-    expect(workspace).not.toContain("getPayoutQueue");
-    expect(workspace).not.toContain("talentPaymentProfiles");
-    expect(workspace).not.toContain("paymentMethod");
-    expect(workspace).not.toContain("W-9");
+    expect(finances).toContain("Owed to HFY");
+    expect(finances).toContain("Owed to Your Talent");
+    expect(finances).toContain("hasHfyManagedTalentActivity");
+    expect(finances).not.toContain("ClientRateForm");
+    expect(finances).not.toContain("talentPaymentProfiles");
+    expect(legacyPayouts).toContain('redirect("/residency/finances")');
+    expect(legacyInvoices).toContain('redirect("/residency/finances")');
   });
 
   it("keeps client Daypart defaults separate from HFY talent rates", async () => {

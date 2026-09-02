@@ -18,6 +18,8 @@ import {
   residencyContacts,
   publicCalendarLinkDayparts,
   publicCalendarLinks,
+  platformSubscriptionInvoices,
+  platformSubscriptions,
   scheduleOccurrences,
   scheduleOccurrenceTalent,
   users,
@@ -31,6 +33,7 @@ import {
   marginPercentage,
 } from "@/domain/airtable-parity";
 import { getInvoiceBrandingSettings } from "@/services/invoice-branding";
+import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents } from "@/domain/platform-billing";
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
@@ -77,6 +80,46 @@ export const getDeveloperResidencyList = cache(async function getDeveloperReside
     .where(eq(residencies.operatingMode, "operations"))
     .orderBy(desc(residencies.active), asc(residencies.name));
 });
+
+export async function getPlatformRevenueDashboard() {
+  const plans = await getDb().select({
+    id: platformSubscriptions.id,
+    residencyId: residencies.id,
+    residencyName: residencies.name,
+    residencyActive: residencies.active,
+    status: platformSubscriptions.status,
+    cadence: platformSubscriptions.cadence,
+    talentProgramSessions: platformSubscriptions.talentProgramSessions,
+    talentSessionUnitAmountCents: platformSubscriptions.talentSessionUnitAmountCents,
+    housePrograms: platformSubscriptions.housePrograms,
+    houseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
+    cardBrand: platformSubscriptions.cardBrand,
+    cardLast4: platformSubscriptions.cardLast4,
+    nextChargeAt: platformSubscriptions.nextChargeAt,
+  }).from(platformSubscriptions)
+    .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
+    .where(eq(residencies.operatingMode, "operations"))
+    .orderBy(desc(residencies.active), asc(residencies.name));
+  const latestInvoiceRows = plans.length ? await getDb().select({
+    platformSubscriptionId: platformSubscriptionInvoices.platformSubscriptionId,
+    status: platformSubscriptionInvoices.status,
+    invoiceDate: platformSubscriptionInvoices.invoiceDate,
+    amountDueCents: platformSubscriptionInvoices.amountDueCents,
+  }).from(platformSubscriptionInvoices)
+    .where(inArray(platformSubscriptionInvoices.platformSubscriptionId, plans.map((plan) => plan.id)))
+    .orderBy(desc(platformSubscriptionInvoices.invoiceDate), desc(platformSubscriptionInvoices.createdAt)) : [];
+
+  return plans.map((plan) => {
+    const monthlyAmountCents = calculatePlatformMonthlyAmountCents(plan);
+    return {
+      ...plan,
+      nextChargeAt: plan.nextChargeAt?.toISOString() ?? null,
+      monthlyAmountCents,
+      cadenceChargeCents: platformCadenceChargeCents(monthlyAmountCents, plan.cadence),
+      latestInvoice: latestInvoiceRows.find((invoice) => invoice.platformSubscriptionId === plan.id) ?? null,
+    };
+  });
+}
 
 export async function getBilledByHfyWorkQueue() {
   const rows = await getDb().select({
@@ -667,6 +710,7 @@ export async function getInvoiceWorkspace(residencyId: string) {
   const [residency] = await database.select({
     id: residencies.id,
     name: residencies.name,
+    tier: residencies.tier,
     timezone: residencies.timezone,
     billingContactName: residencies.billingContactName,
     billingContactEmail: residencies.billingContactEmail,
@@ -729,7 +773,6 @@ export async function getSetupData() {
       internalNotes: residencies.internalNotes,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
       clientHourlyRateCents: residencies.clientHourlyRateCents,
-      clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
     }).from(residencies).where(eq(residencies.operatingMode, "operations")).orderBy(desc(residencies.active), asc(residencies.name)),
     database.select({ id: talent.id, stageName: talent.stageName, homeMarket: talent.homeMarket, exclusiveResidencyId: talent.exclusiveResidencyId }).from(talent).where(and(eq(talent.ownership, "hfy"), eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
     database.select({ residencyId: residencyTalent.residencyId, talentId: residencyTalent.talentId }).from(residencyTalent).where(eq(residencyTalent.active, true)),

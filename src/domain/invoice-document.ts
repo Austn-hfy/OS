@@ -92,7 +92,7 @@ export type InvoiceDocumentSource = {
     startsAt: Date;
     endsAt: Date;
     clientRateCents: number;
-    billingStatus: "pending" | "reviewed" | "invoiced" | "not_billable";
+    billingStatus: "pending" | "reviewed" | "invoiced" | "pending_adjustment" | "not_billable";
     invoiceLinkIssue: boolean;
     invoiceLinkNote: string;
   }>;

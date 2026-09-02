@@ -48,17 +48,19 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
     { label: "Overview", href: `/app${residencySuffix}`, description: "Program snapshot", icon: "overview" },
     { label: "Calendar", href: `/app/calendar${residencySuffix}`, description: "Schedule and bookings", icon: "calendar" },
     { label: "Day Parts", href: `/app/dayparts${residencySuffix}`, description: "Standing schedule", icon: "dayparts" },
+    { label: "Owed to Us", href: `/app/invoices${residencySuffix}`, description: "Talent receivables", icon: "invoices" },
     { label: "Payouts", href: `/app/payouts${residencySuffix}`, description: "Artist payments", icon: "payouts" },
-    { label: "Invoices", href: `/app/invoices${residencySuffix}`, description: "Billing and delivery", icon: "invoices" },
     { label: "Setup", href: `/app/setup${residencySuffix}`, description: "Program configuration", icon: "setup" },
   ] : mode === "developer" ? [
     { label: "Residencies", href: "/app?mode=developer", description: "Platform workspaces", icon: "residencies" },
+    { label: "Committed Plans", href: "/app?mode=developer#committed-plans", description: "Platform revenue", icon: "invoices" },
     { label: "Admin Settings", href: "/app/setup?mode=developer", description: "Company identity", icon: "settings" },
   ] : [
     { label: "Work Queue", href: "/app?mode=hfy", description: "Requests and standing work", icon: "workqueue" },
     { label: "Operations", href: "/app?mode=hfy&view=operations", description: "Residencies and programs", icon: "operations" },
     { label: "Pipeline", href: "/app/leads?mode=hfy", description: "Leads and conversions", icon: "pipeline" },
     { label: "Calendar", href: "/app/calendar?mode=hfy", description: "All Residency schedules", icon: "calendar" },
+    { label: "Owed to Us", href: "/app/invoices?mode=hfy", description: "Talent receivables", icon: "invoices" },
     { label: "Payouts", href: "/app/payouts?mode=hfy", description: "Company artist payments", icon: "payouts" },
     { label: "Talent", href: "/app/talent?mode=hfy", description: "Artist lookup", icon: "talent" },
   ];

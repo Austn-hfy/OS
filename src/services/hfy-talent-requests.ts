@@ -1,11 +1,12 @@
-import { and, eq, gt, inArray, isNull, lt, or, gte, lte } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, ne, or, gte, lte } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, hfyTalentRequests, invoices, residencies, residencyTalent, shifts, talent } from "@/db/schema";
-import { calculateCompensationCents } from "@/domain/airtable-parity";
+import { assignments, auditLog, hfyTalentRequests, invoices, residencies, residencyTalent, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
+import { calculateBillableAmountCents, calculateCompensationCents } from "@/domain/airtable-parity";
 import { localDateTimeForMinute, weekdayForDate } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import type { AuditActor, InternalActor } from "@/lib/auth";
 import { assertResidencyClientRateConfigured, assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
+import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
 
 export type FulfillHfyTalentRequestInput = {
   requestId: string;
@@ -35,8 +36,10 @@ export async function cancelHfyTalentRequest(actor: AuditActor, input: CancelHfy
       daypartId: shifts.daypartId,
       serviceDate: shifts.serviceDate,
       economicsMode: shifts.economicsMode,
+      residencyTier: residencies.tier,
     }).from(hfyTalentRequests)
       .innerJoin(shifts, eq(hfyTalentRequests.shiftId, shifts.id))
+      .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
       .where(and(
         eq(hfyTalentRequests.shiftId, input.shiftId),
         eq(shifts.residencyId, input.residencyId),
@@ -48,6 +51,7 @@ export async function cancelHfyTalentRequest(actor: AuditActor, input: CancelHfy
     if (!request || request.status !== "pending" || request.economicsMode !== "hfy_request") {
       throw new Error("This dated HFY request is no longer pending.");
     }
+    if (request.residencyTier === "complete") throw new Error("HFY manages talent scheduling for Full Programming accounts.");
 
     const cancelledAt = new Date();
     const [claimed] = await tx.update(hfyTalentRequests).set({
@@ -101,6 +105,7 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
       timezone: residencies.timezone,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
       clientHourlyRateCents: residencies.clientHourlyRateCents,
+      residencyTier: residencies.tier,
     }).from(hfyTalentRequests)
       .innerJoin(shifts, eq(hfyTalentRequests.shiftId, shifts.id))
       .innerJoin(residencies, eq(hfyTalentRequests.residencyId, residencies.id))
@@ -190,25 +195,41 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
       };
     })).returning({ id: assignments.id, talentId: assignments.talentId });
 
-    const coveringInvoices = await tx.select({ id: invoices.id }).from(invoices).where(and(
+    const coveringInvoices = await tx.select({ id: invoices.id, status: invoices.status }).from(invoices).where(and(
       eq(invoices.residencyId, request.residencyId),
       eq(invoices.kind, "scheduled_period"),
       lte(invoices.billingPeriodStart, request.serviceDate),
       gte(invoices.billingPeriodEnd, request.serviceDate),
-      eq(invoices.status, "draft"),
+      ne(invoices.status, "void"),
     ));
-    const invoiceLinkNote = coveringInvoices.length === 1
+    const draftInvoice = coveringInvoices.length === 1 && coveringInvoices[0].status === "draft" ? coveringInvoices[0] : null;
+    const finalizedInvoice = request.residencyTier === "complete" && coveringInvoices.length === 1 && coveringInvoices[0].status !== "draft" ? coveringInvoices[0] : null;
+    const invoiceLinkNote = finalizedInvoice
+      ? "Added after the service month was invoiced; carried to the next HFY Talent Invoice."
+      : draftInvoice
       ? ""
       : coveringInvoices.length
         ? "More than one Invoice covers this Shift."
         : "No Invoice period covers this Shift.";
+    if (finalizedInvoice) {
+      await tx.insert(talentInvoiceAdjustments).values({
+        residencyId: request.residencyId,
+        sourceInvoiceId: finalizedInvoice.id,
+        sourceShiftId: request.shiftId,
+        serviceDate: request.serviceDate,
+        reason: "schedule_added_after_invoice",
+        description: carryForwardAdjustmentDescription({ serviceDate: request.serviceDate, shiftName: request.shiftName, kind: "added" }),
+        amountCents: calculateBillableAmountCents(request.startsAt, request.endsAt, request.clientHourlyRateCents),
+        createdByUserId: actor.userId,
+      });
+    }
     await tx.update(shifts).set({
       economicsMode: "hfy",
-      invoiceId: coveringInvoices.length === 1 ? coveringInvoices[0].id : null,
+      invoiceId: draftInvoice?.id ?? null,
       clientRateOverrideCents: null,
       clientRateCents: request.clientHourlyRateCents,
-      billingStatus: "pending",
-      invoiceLinkIssue: coveringInvoices.length !== 1,
+      billingStatus: finalizedInvoice ? "pending_adjustment" : "pending",
+      invoiceLinkIssue: !finalizedInvoice && !draftInvoice,
       invoiceLinkNote,
       updatedAt: new Date(),
     }).where(eq(shifts.id, request.shiftId));

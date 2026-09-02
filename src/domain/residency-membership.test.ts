@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { clientVisibleAccessContacts, selectResidencyMembership, type ResidencyMembershipOption } from "./residency-membership";
 
 const memberships: ResidencyMembershipOption[] = [
-  { residencyId: "ace", residencyName: "Ace Hotel", residencyTimezone: "America/Los_Angeles", clientPaymentStatusVisible: true, accessRole: "manager", contactId: null, invitationStatus: null },
-  { residencyId: "hotel-v", residencyName: "Hotel V", residencyTimezone: "America/Los_Angeles", clientPaymentStatusVisible: false, accessRole: "manager", contactId: null, invitationStatus: null },
+  { residencyId: "ace", residencyName: "Ace Hotel", residencyTimezone: "America/Los_Angeles", residencyTier: "operations_only", accessRole: "manager", contactId: null, invitationStatus: null },
+  { residencyId: "hotel-v", residencyName: "Hotel V", residencyTimezone: "America/Los_Angeles", residencyTier: "complete", accessRole: "manager", contactId: null, invitationStatus: null },
 ];
 
 describe("Residency membership selection", () => {

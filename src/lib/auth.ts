@@ -25,7 +25,7 @@ export type ResidencyActor = {
   residencyId: string;
   residencyName: string;
   residencyTimezone: string;
-  clientPaymentStatusVisible: boolean;
+  residencyTier: "operations_only" | "complete";
   accessRole: "manager" | "calendar_viewer";
   isViewAs: boolean;
   isInternalTest: boolean;
@@ -92,7 +92,7 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
       residencyId: residencies.id,
       residencyName: residencies.name,
       residencyTimezone: residencies.timezone,
-      clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
+      residencyTier: residencies.tier,
       needsDaypartRateAttention: sql<boolean>`count(${dayparts.id}) > 0`,
     }).from(residencies)
       .leftJoin(dayparts, and(eq(dayparts.residencyId, residencies.id), clientManagedDaypartRateAttentionCondition()))
@@ -120,7 +120,7 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
     residencyId: residencyMemberships.residencyId,
     residencyName: residencies.name,
     residencyTimezone: residencies.timezone,
-    clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
+    residencyTier: residencies.tier,
     accessRole: residencyMemberships.accessRole,
     contactId: residencyContacts.id,
     invitationStatus: residencyContacts.invitationStatus,
@@ -159,7 +159,7 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
     residencyId: membership.residencyId,
     residencyName: membership.residencyName,
     residencyTimezone: membership.residencyTimezone,
-    clientPaymentStatusVisible: membership.clientPaymentStatusVisible,
+    residencyTier: membership.residencyTier,
     accessRole: membership.accessRole,
     isViewAs: false,
     isInternalTest: current.profile.isInternalTest,
@@ -211,7 +211,7 @@ export async function requireActorForResidency(
     residencyId: residencyMemberships.residencyId,
     residencyName: residencies.name,
     residencyTimezone: residencies.timezone,
-    clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
+    residencyTier: residencies.tier,
     accessRole: residencyMemberships.accessRole,
   }).from(residencyMemberships)
     .innerJoin(residencies, eq(residencyMemberships.residencyId, residencies.id))
@@ -235,7 +235,7 @@ export async function requireActorForResidency(
     residencyId: membership.residencyId,
     residencyName: membership.residencyName,
     residencyTimezone: membership.residencyTimezone,
-    clientPaymentStatusVisible: membership.clientPaymentStatusVisible,
+    residencyTier: membership.residencyTier,
     accessRole: membership.accessRole,
     isViewAs: false,
     isInternalTest: current.profile.isInternalTest,

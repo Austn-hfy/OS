@@ -9,3 +9,7 @@ export function formatServiceTier(tier: string) {
   if (tier === "operations_only" || tier === "complete") return serviceTierLabels[tier];
   return tier.replaceAll("_", " ");
 }
+
+export function isFullProgrammingTier(tier: string): tier is "complete" {
+  return tier === "complete";
+}

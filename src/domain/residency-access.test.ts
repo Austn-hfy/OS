@@ -6,8 +6,7 @@ describe("Residency client access", () => {
     expect(canResidencyRoleAccess("manager", "overview")).toBe(true);
     expect(canResidencyRoleAccess("manager", "calendar")).toBe(true);
     expect(canResidencyRoleAccess("manager", "talent")).toBe(true);
-    expect(canResidencyRoleAccess("manager", "payout_status")).toBe(true);
-    expect(canResidencyRoleAccess("manager", "invoices")).toBe(true);
+    expect(canResidencyRoleAccess("manager", "finances")).toBe(true);
     expect(canResidencyRoleAccess("manager", "settings")).toBe(true);
     expect(canResidencyRoleAccess("manager", "manage_dayparts")).toBe(true);
     expect(canResidencyRoleAccess("manager", "share_calendar")).toBe(true);
@@ -17,8 +16,7 @@ describe("Residency client access", () => {
     expect(canResidencyRoleAccess("calendar_viewer", "calendar")).toBe(true);
     expect(canResidencyRoleAccess("calendar_viewer", "overview")).toBe(false);
     expect(canResidencyRoleAccess("calendar_viewer", "talent")).toBe(false);
-    expect(canResidencyRoleAccess("calendar_viewer", "payout_status")).toBe(false);
-    expect(canResidencyRoleAccess("calendar_viewer", "invoices")).toBe(false);
+    expect(canResidencyRoleAccess("calendar_viewer", "finances")).toBe(false);
     expect(canResidencyRoleAccess("calendar_viewer", "settings")).toBe(false);
     expect(canResidencyRoleAccess("calendar_viewer", "manage_dayparts")).toBe(false);
   });

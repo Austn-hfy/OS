@@ -5,8 +5,8 @@ import { projectDaypartSlots } from "@/domain/dayparts";
 describe("Calendar Only Dayparts", () => {
   it("uses plain schedule labels throughout the shared Daypart manager", async () => {
     const manager = await readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8");
-    expect(manager).toContain("<strong>Weekly</strong>");
-    expect(manager).toContain("<strong>As needed</strong>");
+    expect(manager).toContain("<strong>Recurring Daypart</strong>");
+    expect(manager).toContain("<strong>One-off / Occasional activity</strong>");
     expect(manager).not.toContain("<strong>Standing weekly</strong>");
     expect(manager).not.toContain("<strong>Calendar Only</strong>");
   });
@@ -32,7 +32,7 @@ describe("Calendar Only Dayparts", () => {
     const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
     expect(calendar).toContain('daypart.scheduleMode === "calendar_only"');
     expect(calendar).toContain("suggestedStartMinute");
-    expect(calendar).toContain("This as-needed Daypart will be added only to");
+    expect(calendar).toContain("This One-off / Occasional Daypart will be added only to");
   });
 
   it("keeps client artist selection and Request HFY mutually exclusive", async () => {

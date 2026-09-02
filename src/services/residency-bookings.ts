@@ -1,11 +1,12 @@
 import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAssignmentTerms, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
-import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
+import { assignments, auditLog, clientAssignmentTerms, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
+import { calculateBillableAmountCents, calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
 import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 import type { AuditActor } from "@/lib/auth";
+import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
 
 export type BookingAssignmentInput = {
   talentId?: string | null;
@@ -83,6 +84,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       eq(residencies.operatingMode, "operations"),
     )).limit(1);
     if (!residency) throw new Error("Residency not found.");
+    const fullProgrammingClient = actor.kind === "residency" && residency.tier === "complete";
 
     const ruleRows = requestedIds.length ? await tx.select({
       daypartId: dayparts.id,
@@ -116,7 +118,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
     ]) : [[], []];
     if (existingShifts.length || existingOccurrences.length) throw new Error("One of these Dayparts is already scheduled on this date.");
 
-    const talentIds = [...new Set(input.dayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
+    const talentIds = fullProgrammingClient ? [] : [...new Set(input.dayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
     if (actor.kind === "internal" && talentIds.length) assertResidencyTalentRateConfigured(residency.defaultTalentRateCents);
     const talentRows = talentIds.length ? await tx.select({
       id: talent.id,
@@ -166,25 +168,28 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       }
       const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.startMinute), residency.timezone);
       const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.endMinute), residency.timezone);
-      const recordKind = actor.kind === "residency" && rule.type === "dj_artist"
+      const fullProgrammingAutoRequest = fullProgrammingClient && (rule.type === "dj_artist" || requested.assignments.some((assignment) => Boolean(assignment.talentId)));
+      const requestHfy = Boolean(requested.requestHfy || fullProgrammingAutoRequest);
+      const effectiveAssignments = fullProgrammingAutoRequest ? [] : requested.assignments;
+      const recordKind = requestHfy || (actor.kind === "residency" && rule.type === "dj_artist")
         ? "financial_shift" as const
         : daypartBookingRecordKind(rule.type, rule.billingMode);
-      if (requested.requestHfy && (actor.kind !== "residency" || rule.type !== "dj_artist" || requested.assignments.length)) {
+      if (requested.requestHfy && !fullProgrammingAutoRequest && (actor.kind !== "residency" || rule.type !== "dj_artist" || requested.assignments.length)) {
         throw new Error("Request HFY must be a client-created DJ slot without a selected artist.");
       }
-      if (requested.daypartId && actor.kind === "residency" && rule.type === "dj_artist" && rule.billingMode === "billed_by_hfy") {
+      if (!fullProgrammingClient && requested.daypartId && actor.kind === "residency" && rule.type === "dj_artist" && rule.billingMode === "billed_by_hfy") {
         throw new Error("Standing HFY Booking dates are managed by HFY automatically.");
       }
       if (!requested.daypartId && rule.color.toUpperCase() === HFY_BOOKED_COLOR) {
         throw new Error("HFY pink is reserved for fulfilled HFY bookings. Choose another calendar color.");
       }
-      if (actor.kind === "residency" && recordKind === "financial_shift" && !requested.requestHfy && !requested.assignments.length) {
+      if (actor.kind === "residency" && recordKind === "financial_shift" && !requestHfy && !effectiveAssignments.length) {
         throw new Error("Choose one of your artists or use Request HFY.");
       }
       const notes = requested.notes?.trim() ?? "";
       const programDetails = requested.programDetails?.trim() ?? "";
       const manualHostName = requested.manualHostName?.trim() ?? "";
-      const assignmentWindows = requested.assignments.map((assignment) => ({
+      const assignmentWindows = effectiveAssignments.map((assignment) => ({
         startMinute: assignment.startsAtMinute ?? requested.startMinute,
         endMinute: assignment.endsAtMinute ?? requested.endMinute,
       }));
@@ -195,8 +200,8 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         throw new Error("Artist times cannot overlap within the same Daypart.");
       }
 
-      for (let index = 0; index < requested.assignments.length; index += 1) {
-        const selectedTalent = requested.assignments[index].talentId ? talentRows.find((item) => item.id === requested.assignments[index].talentId) : null;
+      for (let index = 0; index < effectiveAssignments.length; index += 1) {
+        const selectedTalent = effectiveAssignments[index].talentId ? talentRows.find((item) => item.id === effectiveAssignments[index].talentId) : null;
         if (!selectedTalent) continue;
         const assignmentStartsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentWindows[index].startMinute), residency.timezone);
         const assignmentEndsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentWindows[index].endMinute), residency.timezone);
@@ -233,8 +238,8 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
           createdByUserId: actor.userId,
         }).returning({ id: scheduleOccurrences.id });
         createdOccurrenceIds.push(occurrence.id);
-        for (let index = 0; index < requested.assignments.length; index += 1) {
-          const talentId = requested.assignments[index].talentId;
+        for (let index = 0; index < effectiveAssignments.length; index += 1) {
+          const talentId = effectiveAssignments[index].talentId;
           if (!talentId) continue;
           await tx.insert(scheduleOccurrenceTalent).values({
             occurrenceId: occurrence.id,
@@ -250,29 +255,34 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
           action: "tracking_only_booking_created",
           entityType: "schedule_occurrence",
           entityId: occurrence.id,
-          details: { daypartId: rule.daypartId, serviceDate: input.serviceDate, programDetails, manualHostName, talentIds: requested.assignments.map((item) => item.talentId) },
+          details: { daypartId: rule.daypartId, serviceDate: input.serviceDate, programDetails, manualHostName, talentIds: effectiveAssignments.map((item) => item.talentId) },
         });
         continue;
       }
 
       const economicsMode = actor.kind === "residency"
-        ? requested.requestHfy ? "hfy_request" as const : "client_owned" as const
+        ? requestHfy ? "hfy_request" as const : "client_owned" as const
         : "hfy" as const;
-      const coveringInvoices = economicsMode === "hfy" ? await tx.select({ id: invoices.id }).from(invoices).where(and(
+      const coveringInvoices = economicsMode === "hfy" ? await tx.select({ id: invoices.id, status: invoices.status }).from(invoices).where(and(
           eq(invoices.residencyId, residency.id),
           lte(invoices.billingPeriodStart, input.serviceDate),
           gte(invoices.billingPeriodEnd, input.serviceDate),
           ne(invoices.status, "void"),
         )) : [];
-      const invoiceLinkNote = coveringInvoices.length === 1
+      const finalizedInvoice = residency.tier === "complete" && coveringInvoices.length === 1 && coveringInvoices[0].status !== "draft" ? coveringInvoices[0] : null;
+      const linkedInvoice = finalizedInvoice ? null : coveringInvoices.length === 1 ? coveringInvoices[0] : null;
+      const invoiceLinkNote = finalizedInvoice
+        ? "Added after the service month was invoiced; carried to the next HFY Talent Invoice."
+        : linkedInvoice
         ? ""
         : coveringInvoices.length
           ? "More than one Invoice covers this Shift."
           : "No Invoice period covers this Shift.";
+      const clientRateCents = economicsMode === "hfy" ? resolveRateCents(requested.clientRateOverrideCents, residency.clientHourlyRateCents) : 0;
       const [shift] = await tx.insert(shifts).values({
         residencyId: residency.id,
         daypartId: rule.daypartId,
-        invoiceId: coveringInvoices.length === 1 ? coveringInvoices[0].id : null,
+        invoiceId: linkedInvoice?.id ?? null,
         name: rule.name,
         serviceDate: input.serviceDate,
         room: rule.room,
@@ -284,12 +294,27 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         manualHostName,
         economicsMode,
         clientRateOverrideCents: economicsMode === "hfy" ? requested.clientRateOverrideCents ?? null : null,
-        clientRateCents: economicsMode === "hfy" ? resolveRateCents(requested.clientRateOverrideCents, residency.clientHourlyRateCents) : 0,
-        billingStatus: economicsMode === "hfy" ? "pending" : "not_billable",
-        invoiceLinkIssue: economicsMode === "hfy" && coveringInvoices.length !== 1,
+        clientRateCents,
+        billingStatus: economicsMode === "hfy" ? finalizedInvoice ? "pending_adjustment" : "pending" : "not_billable",
+        invoiceLinkIssue: economicsMode === "hfy" && !finalizedInvoice && !linkedInvoice,
         invoiceLinkNote: economicsMode === "hfy" ? invoiceLinkNote : "",
       }).returning({ id: shifts.id });
       createdShiftIds.push(shift.id);
+
+      if (finalizedInvoice) {
+        const adjustmentCents = calculateBillableAmountCents(startsAt, endsAt, clientRateCents);
+        if (adjustmentCents <= 0) throw new Error("A positive client talent rate is required before adding service to an invoiced Full Programming month.");
+        await tx.insert(talentInvoiceAdjustments).values({
+          residencyId: residency.id,
+          sourceInvoiceId: finalizedInvoice.id,
+          sourceShiftId: shift.id,
+          serviceDate: input.serviceDate,
+          reason: "schedule_added_after_invoice",
+          description: carryForwardAdjustmentDescription({ serviceDate: input.serviceDate, shiftName: rule.name, kind: "added" }),
+          amountCents: adjustmentCents,
+          createdByUserId: actor.userId,
+        });
+      }
 
       if (economicsMode === "hfy_request") {
         const [request] = await tx.insert(hfyTalentRequests).values({
@@ -304,13 +329,13 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
           action: "hfy_talent_requested",
           entityType: "hfy_talent_request",
           entityId: request.id,
-          details: { shiftId: shift.id, serviceDate: input.serviceDate, daypartId: rule.daypartId },
+          details: { shiftId: shift.id, serviceDate: input.serviceDate, daypartId: rule.daypartId, sourceDaypartType: rule.type, autoTriggeredByFullProgramming: fullProgrammingAutoRequest },
         });
         continue;
       }
 
-      for (let index = 0; index < requested.assignments.length; index += 1) {
-        const assignmentInput = requested.assignments[index];
+      for (let index = 0; index < effectiveAssignments.length; index += 1) {
+        const assignmentInput = effectiveAssignments[index];
         const { startMinute: assignmentStartMinute, endMinute: assignmentEndMinute } = assignmentWindows[index];
         const assignmentStartsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentStartMinute), residency.timezone);
         const assignmentEndsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, assignmentEndMinute), residency.timezone);
@@ -396,6 +421,11 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       invoiceId: shifts.invoiceId,
       invoiceStatus: invoices.status,
       timezone: residencies.timezone,
+      residencyTier: residencies.tier,
+      startsAt: shifts.startsAt,
+      endsAt: shifts.endsAt,
+      clientRateCents: shifts.clientRateCents,
+      shiftName: shifts.name,
     }).from(shifts)
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
       .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
@@ -405,7 +435,8 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
     if (shift.economicsMode === "hfy_request") throw new Error("Cancel the pending HFY request before changing this one-time slot.");
     if (actor.kind === "residency" && shift.economicsMode !== "client_owned") throw new Error("HFY-managed slots cannot be edited by the client.");
     if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned slots are managed only by the client.");
-    if (shift.invoiceStatus && shift.invoiceStatus !== "draft") throw new Error("This one-time slot is locked because its Invoice is finalized.");
+    const finalizedFullProgrammingShift = shift.residencyTier === "complete" && Boolean(shift.invoiceId && shift.invoiceStatus && shift.invoiceStatus !== "draft");
+    if (shift.invoiceStatus && shift.invoiceStatus !== "draft" && !finalizedFullProgrammingShift) throw new Error("This one-time slot is locked because its Invoice is finalized.");
 
     const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.startMinute), shift.timezone);
     const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.endMinute), shift.timezone);
@@ -416,6 +447,22 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
     )).limit(1);
     if (outsideAssignments.length) throw new Error("Adjust or remove artist hours that fall outside the new slot window first.");
 
+    const adjustmentCents = finalizedFullProgrammingShift
+      ? calculateBillableAmountCents(startsAt, endsAt, shift.clientRateCents) - calculateBillableAmountCents(shift.startsAt, shift.endsAt, shift.clientRateCents)
+      : 0;
+    if (finalizedFullProgrammingShift && shift.invoiceId && adjustmentCents !== 0) {
+      await tx.insert(talentInvoiceAdjustments).values({
+        residencyId: shift.residencyId,
+        sourceInvoiceId: shift.invoiceId,
+        sourceShiftId: shift.id,
+        serviceDate: shift.serviceDate,
+        reason: "schedule_hours_changed_after_invoice",
+        description: carryForwardAdjustmentDescription({ serviceDate: shift.serviceDate, shiftName: shift.shiftName, kind: "hours_changed" }),
+        amountCents: adjustmentCents,
+        createdByUserId: actor.userId,
+      });
+    }
+
     await tx.update(shifts).set({
       name: clean.name,
       room: clean.room,
@@ -425,9 +472,15 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       notes: input.notes?.trim() ?? "",
       programDetails: input.programDetails?.trim() ?? "",
       manualHostName: input.manualHostName?.trim() ?? "",
+      ...(finalizedFullProgrammingShift && adjustmentCents !== 0 ? {
+        invoiceId: null,
+        billingStatus: "pending_adjustment" as const,
+        invoiceLinkIssue: false,
+        invoiceLinkNote: "Schedule changed after the service month was invoiced; carried to the next HFY Talent Invoice.",
+      } : {}),
       updatedAt: new Date(),
     }).where(eq(shifts.id, shift.id));
-    if (shift.invoiceId) {
+    if (shift.invoiceId && !finalizedFullProgrammingShift) {
       await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
       const [remaining] = await tx.select({ total: sql<number>`coalesce(sum(${invoiceLineItems.totalCents}), 0)` }).from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, shift.invoiceId));
       await tx.update(invoices).set({ totalCents: Number(remaining?.total ?? 0), updatedAt: new Date() }).where(eq(invoices.id, shift.invoiceId));
@@ -439,7 +492,7 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       action: "one_time_shift_updated",
       entityType: "shift",
       entityId: shift.id,
-      details: { serviceDate: shift.serviceDate, name: clean.name, room: clean.room, calendarColor: clean.calendarColor, startMinute: input.startMinute, endMinute: input.endMinute },
+      details: { serviceDate: shift.serviceDate, name: clean.name, room: clean.room, calendarColor: clean.calendarColor, startMinute: input.startMinute, endMinute: input.endMinute, pendingTalentInvoiceAdjustmentCents: adjustmentCents },
     });
     return { id: shift.id };
   });
@@ -525,6 +578,7 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
       startsAt: shifts.startsAt,
       endsAt: shifts.endsAt,
       timezone: residencies.timezone,
+      residencyTier: residencies.tier,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
       daypartDefaultTalentRateCents: dayparts.defaultTalentRateCents,
       clientDaypartDefaultRateCents: dayparts.clientDefaultRateCents,
@@ -536,6 +590,7 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
       .limit(1);
     if (!shift) throw new Error("Shift not found.");
 
+    if (actor.kind === "residency" && shift.residencyTier === "complete") throw new Error("HFY manages all talent for Full Programming accounts.");
     if (actor.kind === "residency" && shift.economicsMode !== "client_owned") throw new Error("HFY-managed slots cannot be edited by the client.");
     if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned slots are managed only by the client.");
     if (actor.kind === "internal") assertResidencyTalentRateConfigured(shift.defaultTalentRateCents);

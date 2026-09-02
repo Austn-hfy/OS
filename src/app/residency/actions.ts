@@ -5,10 +5,16 @@ import { z } from "zod";
 import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, clientAssignmentTerms, residencies, residencyTalent, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
-import { requireResidencyActor } from "@/lib/auth";
+import { requireResidencyActor, type ResidencyActor } from "@/lib/auth";
 import { resolveClientArtistGenre } from "@/domain/talent-genres";
 
 export type ClientSettingsActionState = { status: "idle" | "success" | "error"; message: string };
+
+function requireSelfServeTalentAccess(actor: ResidencyActor) {
+  if (actor.residencyTier === "complete") {
+    throw new Error("HFY manages all talent for Full Programming accounts.");
+  }
+}
 
 export async function createClientOwnedArtistAction(
   _previous: ClientSettingsActionState,
@@ -17,6 +23,7 @@ export async function createClientOwnedArtistAction(
   try {
     const actor = await requireResidencyActor();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    requireSelfServeTalentAccess(actor);
     const parsed = z.object({
       name: z.string().trim().min(1).max(200),
       contact: z.string().trim().max(300),
@@ -80,6 +87,7 @@ export async function updateClientOwnedArtistAction(
   try {
     const actor = await requireResidencyActor();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    requireSelfServeTalentAccess(actor);
     const parsed = z.object({
       artistId: z.uuid(),
       name: z.string().trim().min(1).max(200),
@@ -139,6 +147,7 @@ export async function archiveClientOwnedArtistAction(
   try {
     const actor = await requireResidencyActor();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    requireSelfServeTalentAccess(actor);
     const parsed = z.object({ artistId: z.uuid() }).parse(Object.fromEntries(formData));
     const database = getDb();
     await database.transaction(async (tx) => {
@@ -182,6 +191,7 @@ export async function restoreClientOwnedArtistAction(
   try {
     const actor = await requireResidencyActor();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    requireSelfServeTalentAccess(actor);
     const parsed = z.object({ artistId: z.uuid() }).parse(Object.fromEntries(formData));
     const database = getDb();
     await database.transaction(async (tx) => {
@@ -225,6 +235,7 @@ export async function permanentlyDeleteClientOwnedArtistAction(
   try {
     const actor = await requireResidencyActor();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    requireSelfServeTalentAccess(actor);
     const parsed = z.object({ artistId: z.uuid() }).parse(Object.fromEntries(formData));
     const database = getDb();
     await database.transaction(async (tx) => {
@@ -274,6 +285,7 @@ export async function updateClientOwnedRateAction(
   try {
     const actor = await requireResidencyActor();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    requireSelfServeTalentAccess(actor);
     const parsed = z.object({
       assignmentId: z.uuid(),
       rate: z.union([z.literal(""), z.coerce.number().min(0).max(1_000_000)]),
@@ -302,7 +314,7 @@ export async function updateClientOwnedRateAction(
       entityId: parsed.assignmentId,
       details: { ledger: "client_only" },
     });
-    revalidatePath("/residency/payouts");
+    revalidatePath("/residency/finances");
     return { status: "success", message: "Rate saved." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to save this rate." };

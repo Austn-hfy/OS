@@ -35,7 +35,8 @@ describe("Residency-owned artist management", () => {
       readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/client-owned-artist-card.tsx", import.meta.url), "utf8"),
     ]);
-    expect(page).toContain('canManage={actor.accessRole === "manager"}');
+    expect(page).toContain('canManage={!fullProgramming && actor.accessRole === "manager"}');
+    expect(page).toContain('fullProgramming={fullProgramming}');
     expect(card).toContain("updateClientOwnedArtistAction");
     expect(card).toContain("archiveClientOwnedArtistAction");
     expect(card).toContain("restoreClientOwnedArtistAction");
