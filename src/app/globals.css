@@ -599,6 +599,9 @@ tr:last-child td { border-bottom: 0; }
 .week-rule-intro { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .week-rule-intro > div { display: grid; gap: 3px; }
 .week-rule-intro small { color: var(--muted); }
+.week-rule-selection { display: grid; gap: 8px; padding: 8px; margin: -8px; border: 1px solid transparent; border-radius: 18px; }
+.week-rule-selection.invalid { border-color: rgba(183, 75, 82, .42); background: rgba(183, 75, 82, .07); }
+.week-rule-validation { margin: 0; color: var(--danger); font-size: 12px; font-weight: 800; }
 .week-rule-grid { display: grid; grid-template-columns: repeat(7, minmax(128px, 1fr)); align-items: start; gap: 8px; }
 .week-rule { min-width: 0; min-height: 230px; display: grid; grid-template-rows: auto 1fr; align-items: start; gap: 8px; padding: 7px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.48); }
 .week-rule.enabled { border-color: rgba(2,116,222,.24); background: #f5f9ff; }

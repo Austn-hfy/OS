@@ -107,6 +107,9 @@ function displayRange(dayparts: DaypartRow[]) {
 export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = false, hideFinancials = false, initialCreate = false }: { residencyId: string; dayparts: DaypartRow[]; onSaved?: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean }) {
   const [draft, setDraft] = useState<EditorDraft | null>(null);
   const openedInitialDraft = useRef(false);
+  const dateSectionRef = useRef<HTMLDivElement>(null);
+  const draftOpenRef = useRef(false);
+  const [dateValidationRequested, setDateValidationRequested] = useState(false);
   const [removePending, setRemovePending] = useState(false);
   const [removeState, setRemoveState] = useState<ResidencyActionState>(initialActionState);
   const submitDaypart = async (previous: ResidencyActionState, formData: FormData) => {
@@ -121,6 +124,9 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
   const rooms = useMemo(() => [...new Set(dayparts.map((daypart) => daypart.room))].sort(), [dayparts]);
   const range = useMemo(() => displayRange(dayparts), [dayparts]);
   const rangeMinutes = range.end - range.start;
+  const hasSelectedDay = draft?.rules.some((rule) => rule.enabled && rule.start && rule.end) ?? false;
+  const missingDateServerError = state.status === "error" && state.message === "Select at least one operating day.";
+  const showDateValidation = Boolean(draft) && !hasSelectedDay && (dateValidationRequested || missingDateServerError);
 
   useEffect(() => {
     if (!initialCreate || readOnly || openedInitialDraft.current) return;
@@ -139,6 +145,20 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [draft]);
+
+  useEffect(() => {
+    const draftIsOpen = Boolean(draft);
+    if (draftIsOpen !== draftOpenRef.current) {
+      setDateValidationRequested(false);
+      draftOpenRef.current = draftIsOpen;
+    }
+  }, [draft]);
+
+  useEffect(() => {
+    if (!showDateValidation) return;
+    dateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    dateSectionRef.current?.querySelector<HTMLButtonElement>(".week-toggle")?.focus({ preventScroll: true });
+  }, [showDateValidation]);
 
   const payload = useMemo(() => {
     if (!draft) return "";
@@ -171,6 +191,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
   }
 
   function toggleRule(weekday: number) {
+    if (draft && !draft.rules[weekday].enabled) setDateValidationRequested(false);
     setDraft((current) => {
       if (!current) return current;
       const rule = current.rules[weekday];
@@ -278,7 +299,11 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
       {draft ? (
         <div className="daypart-drawer-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setDraft(null); }}>
           <aside className="daypart-drawer" role="dialog" aria-modal="true" aria-labelledby="daypart-editor-title">
-            <form className="daypart-editor" action={formAction}>
+            <form className="daypart-editor" action={formAction} onSubmit={(event) => {
+              if (draft.rules.some((rule) => rule.enabled && rule.start && rule.end)) return;
+              event.preventDefault();
+              setDateValidationRequested(true);
+            }}>
               <input name="payload" type="hidden" value={payload} />
               <div className="daypart-editor-heading"><div><p className="eyebrow">{draft.id ? "Edit Daypart" : "New Daypart"}</p><h2 id="daypart-editor-title">{draft.id ? draft.name : "Add standing hours"}</h2></div><button className="quick-modal-close" type="button" aria-label="Close Daypart editor" onClick={() => setDraft(null)}>×</button></div>
               <div className="daypart-editor-scroll">
@@ -292,7 +317,9 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                   <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this Daypart continues indefinitely.</small></div>
                 </div>
                 <label className="checkbox-row"><input checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} type="checkbox" /> Active Daypart</label>
-                <div className="week-rule-intro"><div><strong>Weekly hours</strong><small>Select every day this Daypart runs. Each day can keep different hours.</small></div><button className="button secondary" type="button" title="Copy the first selected day’s start and end times to the other selected days" onClick={applyToAllSelected}>Sync times to selected days</button></div>
+                <div className={`week-rule-selection ${showDateValidation ? "invalid" : ""}`} ref={dateSectionRef} role="group" aria-labelledby="daypart-weekly-hours-label" aria-describedby={showDateValidation ? "daypart-date-validation" : undefined}>
+                <div className="week-rule-intro"><div><strong id="daypart-weekly-hours-label">Weekly hours</strong><small>Select every day this Daypart runs. Each day can keep different hours.</small></div><button className="button secondary" type="button" title="Copy the first selected day’s start and end times to the other selected days" onClick={applyToAllSelected}>Sync times to selected days</button></div>
+                {showDateValidation ? <p className="week-rule-validation" id="daypart-date-validation" role="alert">Please pick a date.</p> : null}
                 <div className="week-rule-grid">
                   {draft.rules.map((rule, weekday) => (
                     <div className={`week-rule ${rule.enabled ? "enabled" : ""}`} key={weekdayNames[weekday]}>
@@ -301,10 +328,11 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                     </div>
                   ))}
                 </div>
+                </div>
                 {draft.type === "dj_artist" ? <p className="privacy-note">Talent count is optional. Leave it at 0 when the number of registered artists changes by date.</p> : <p className="privacy-note">House Activities never create Artist, Assignment, Payout, or Invoice records.</p>}
                 {draft.id ? <div className="daypart-danger-zone"><div><strong>Remove Daypart</strong><small>Unused Dayparts are deleted. Anything with scheduled or historical records is archived so its history stays intact.</small></div><button className="remove-dj-button" type="button" disabled={removePending} onClick={removeCurrentDaypart}>{removePending ? "Removing…" : "Delete / archive Daypart"}</button></div> : null}
                 </> : <div className="card empty daypart-type-gate">{draft.type === "dj_artist" ? "Choose Standing HFY Booking or Client Managed to continue." : "Choose Talent Activity or House Activity to continue."}</div>}
-                {state.status === "error" ? <p className="error" aria-live="polite">{state.message}</p> : null}
+                {state.status === "error" && !missingDateServerError ? <p className="error" aria-live="polite">{state.message}</p> : null}
                 {removeState.status === "error" ? <p className="error" aria-live="polite">{removeState.message}</p> : null}
               </div>
               <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button>{draft.type && (draft.type === "house_activity" || draft.billingMode) ? <button className="button" disabled={pending} type="submit">{pending ? "Saving…" : "Save Daypart"}</button> : null}</div>
