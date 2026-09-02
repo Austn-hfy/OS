@@ -23,9 +23,11 @@ describe("site-wide workspace surface consistency", () => {
     ]);
 
     expect(component).toContain("workspace-surface");
-    for (const source of [dashboard, pipeline, payouts, invoices, invoiceManager, setup, talent, roster, clientTalent, clientRoster, clientPayouts, clientInvoices, clientSettings]) {
+    for (const source of [dashboard, pipeline, payouts, invoices, invoiceManager, setup, talent, clientTalent, clientPayouts, clientInvoices, clientSettings]) {
       expect(source).toContain("<WorkspaceSurface");
     }
+    expect(roster).toContain('redirect("/app/talent?mode=hfy")');
+    expect(clientRoster).toContain('redirect("/residency/talent")');
   });
 
   it("keeps Calendar and Day Parts on their purpose-built integrated layouts", async () => {
@@ -67,6 +69,7 @@ describe("site-wide workspace surface consistency", () => {
     expect(ownerShell).toContain("WorkspaceNavLink");
     expect(ownerShell).toContain('className="sidebar owner-sidebar"');
     expect(ownerShell).toContain("WorkspaceNavIcon");
+    expect(ownerShell).not.toContain("talentExpanded");
     expect(workspaceNav).toContain("residency-nav-icon");
     expect(dashboard).not.toContain("Live Dayparts");
     expect(dashboard).not.toContain('<h1>Operations</h1>');

@@ -56,7 +56,7 @@ describe("Residency workspace boundaries", () => {
     ]);
     const calendar = shell.indexOf('label="Calendar"');
     const dayParts = shell.indexOf('label="Day Parts"');
-    const talent = shell.indexOf("<strong>Talent</strong>");
+    const talent = shell.indexOf('label="Talent"');
     const payouts = shell.indexOf('label="Payouts"');
     const invoices = shell.indexOf('label="Invoices"');
     const settings = shell.indexOf('label="Settings"');
@@ -68,8 +68,8 @@ describe("Residency workspace boundaries", () => {
     expect(settings).toBeGreaterThan(invoices);
     expect(shell).toContain("residency-workspace-nav");
     expect(shell).toContain("residency-sidebar-settings");
-    expect(shell).toContain("<span>Artist Lookup</span>");
-    expect(shell).toContain("<span>Roster</span>");
+    expect(shell).toContain('href="/residency/talent" label="Talent"');
+    expect(shell).not.toContain('href="/residency/talent/roster"');
     expect(styles).toContain(".residency-workspace-nav .residency-nav-item");
     expect(styles).toContain(".residency-sidebar-settings .residency-nav-item");
     expect(styles).toContain("grid-template-columns: 32px minmax(0, 1fr) auto");
@@ -87,9 +87,10 @@ describe("Residency workspace boundaries", () => {
       readFile(new URL("../src/app/residency/settings/page.tsx", import.meta.url), "utf8"),
     ]);
     expect(sharedHeader).toContain('className="page-header client-page-header residency-page-header"');
-    for (const source of [artistLookup, roster, payouts, invoices, settings]) {
+    for (const source of [artistLookup, payouts, invoices, settings]) {
       expect(source).toContain("<ResidencyPageHeader");
     }
+    expect(roster).toContain('redirect("/residency/talent")');
     expect(calendar).not.toContain("<ResidencyPageHeader");
     expect(dayparts).not.toContain("<ResidencyPageHeader");
   });

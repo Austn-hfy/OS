@@ -2,14 +2,12 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("Company Operations workspace", () => {
-  it("exposes company-wide Payouts and an expandable Talent section with Artist Lookup and Roster", async () => {
+  it("exposes company-wide Payouts and one direct Talent destination", async () => {
     const shell = await readFile(new URL("../src/components/internal-shell.tsx", import.meta.url), "utf8");
     expect(shell).toContain('{ label: "Payouts", href: "/app/payouts?mode=hfy"');
     expect(shell).toContain('{ label: "Talent", href: "/app/talent?mode=hfy"');
-    expect(shell).toContain('<strong>Talent</strong>');
-    expect(shell).toContain('href="/app/talent?mode=hfy"><span>Artist Lookup</span>');
-    expect(shell).toContain('href="/app/talent/roster?mode=hfy"><span>Roster</span>');
-    expect(shell).toContain("talentExpanded");
+    expect(shell).not.toContain('href="/app/talent/roster?mode=hfy"');
+    expect(shell).not.toContain("talentExpanded");
   });
 
   it("provides a Residency filter on the company-wide Payouts roll-up", async () => {
@@ -24,14 +22,14 @@ describe("Company Operations workspace", () => {
     expect(data).toContain("residencyId: residencies.id");
   });
 
-  it("keeps the quick Roster focused on scheduling data and explicit placement", async () => {
-    const [page, roster] = await Promise.all([
+  it("redirects the retired Roster page to Talent while Artist Lookup keeps placement controls", async () => {
+    const [page, lookup] = await Promise.all([
       readFile(new URL("../src/app/app/talent/roster/page.tsx", import.meta.url), "utf8"),
-      readFile(new URL("../src/app/app/talent/roster/company-roster.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/talent/artist-lookup.tsx", import.meta.url), "utf8"),
     ]);
-    expect(page).toContain("Shared artists may be assigned to more than one Residency");
-    expect(roster).toContain("updateArtistRosterPlacementAction");
-    expect(roster).not.toMatch(/payout|w-9|payment|owed/i);
+    expect(page).toContain('redirect("/app/talent?mode=hfy")');
+    expect(lookup).toContain("updateArtistResidenciesAction");
+    expect(lookup).toContain("Add to Residency");
   });
 
   it("labels eligibility separately from explicit Residency assignments", async () => {
