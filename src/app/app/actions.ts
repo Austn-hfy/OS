@@ -22,11 +22,14 @@ import { issuePublicCalendarToken } from "@/domain/public-calendar";
 import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
 import { requestOrigin } from "@/lib/request-origin";
 import { isFullCalendarMonth } from "@/domain/talent-invoicing";
+import { sendResidencyAccountSetupEmail } from "@/services/account-setup-email";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
 export type CredentialLinkActionState = ResidencyActionState & { setupLink?: string };
 export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_client_roster" | "remove_from_client_roster";
+
+type InternalActor = Awaited<ReturnType<typeof requireInternalActor>>;
 
 function centsFromDollars(value: FormDataEntryValue | null): number {
   const amount = Number(value);
@@ -933,60 +936,113 @@ export async function inviteResidencyContactAction(input: { contactId: string })
   }
 }
 
+async function issueResidencySetupCredential(actor: InternalActor, input: { contactId: string }) {
+  const { contactId } = z.object({ contactId: z.uuid() }).parse(input);
+  const database = getDb();
+  const [contact] = await database.select({
+    id: residencyContacts.id,
+    residencyId: residencyContacts.residencyId,
+    name: residencyContacts.name,
+    email: residencyContacts.email,
+    userId: residencyContacts.userId,
+    residencyName: residencies.name,
+  }).from(residencyContacts)
+    .innerJoin(users, eq(residencyContacts.userId, users.id))
+    .innerJoin(residencies, eq(residencyContacts.residencyId, residencies.id))
+    .where(and(
+      eq(residencyContacts.id, contactId),
+      eq(residencyContacts.active, true),
+      eq(residencies.active, true),
+      eq(users.active, true),
+      eq(users.role, "hotel_user"),
+    ))
+    .limit(1);
+  if (!contact?.userId || !contact.email) throw new Error("This contact does not have an active login account.");
+
+  const issuedAt = new Date();
+  const credential = issueAccountSetupToken(issuedAt);
+  const [setupToken] = await database.transaction(async (tx) => {
+    await tx.update(accountSetupTokens).set({ revokedAt: issuedAt }).where(and(
+      eq(accountSetupTokens.userId, contact.userId!),
+      isNull(accountSetupTokens.usedAt),
+      isNull(accountSetupTokens.revokedAt),
+    ));
+    return tx.insert(accountSetupTokens).values({
+      userId: contact.userId!,
+      residencyId: contact.residencyId,
+      contactId: contact.id,
+      tokenHash: credential.tokenHash,
+      expiresAt: credential.expiresAt,
+      createdByUserId: actor.userId,
+      createdAt: issuedAt,
+    }).returning({ id: accountSetupTokens.id });
+  });
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hfy.app";
+  return {
+    contact,
+    setupTokenId: setupToken.id,
+    expiresAt: credential.expiresAt,
+    setupLink: buildAccountSetupUrl(siteUrl, credential.token),
+  };
+}
+
 export async function generateResidencySetupLinkAction(input: { contactId: string }): Promise<CredentialLinkActionState> {
   try {
     const actor = await requireInternalActor();
-    const { contactId } = z.object({ contactId: z.uuid() }).parse(input);
-    const [contact] = await getDb().select({
-      id: residencyContacts.id,
-      residencyId: residencyContacts.residencyId,
-      email: residencyContacts.email,
-      userId: residencyContacts.userId,
-    }).from(residencyContacts)
-      .innerJoin(users, eq(residencyContacts.userId, users.id))
-      .where(and(
-        eq(residencyContacts.id, contactId),
-        eq(residencyContacts.active, true),
-        eq(users.active, true),
-        eq(users.role, "hotel_user"),
-      ))
-      .limit(1);
-    if (!contact?.userId || !contact.email) throw new Error("This contact does not have an active login account.");
-    const issuedAt = new Date();
-    const credential = issueAccountSetupToken(issuedAt);
-    await getDb().transaction(async (tx) => {
-      await tx.update(accountSetupTokens).set({ revokedAt: issuedAt }).where(and(
-        eq(accountSetupTokens.userId, contact.userId!),
-        isNull(accountSetupTokens.usedAt),
-        isNull(accountSetupTokens.revokedAt),
-      ));
-      const [setupToken] = await tx.insert(accountSetupTokens).values({
-        userId: contact.userId!,
-        residencyId: contact.residencyId,
-        contactId: contact.id,
-        tokenHash: credential.tokenHash,
-        expiresAt: credential.expiresAt,
-        createdByUserId: actor.userId,
-        createdAt: issuedAt,
-      }).returning({ id: accountSetupTokens.id });
-      await tx.insert(auditLog).values({
-        residencyId: contact.residencyId,
-        actorUserId: actor.userId,
-        actorLabel: actor.email,
-        action: "residency_setup_link_generated",
-        entityType: "residency_contact",
-        entityId: contact.id,
-        details: { userId: contact.userId, setupTokenId: setupToken.id, expiresAt: credential.expiresAt.toISOString() },
-      });
+    const credential = await issueResidencySetupCredential(actor, input);
+    await getDb().insert(auditLog).values({
+      residencyId: credential.contact.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "residency_setup_link_generated",
+      entityType: "residency_contact",
+      entityId: credential.contact.id,
+      details: {
+        userId: credential.contact.userId,
+        setupTokenId: credential.setupTokenId,
+        expiresAt: credential.expiresAt.toISOString(),
+      },
     });
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hfy.app";
     return {
       status: "success",
       message: "A one-time setup link was copied. It expires in 7 days and is used only after a password is saved.",
-      setupLink: buildAccountSetupUrl(siteUrl, credential.token),
+      setupLink: credential.setupLink,
     };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to create a setup link." };
+  }
+}
+
+export async function sendResidencySetupEmailAction(input: { contactId: string }): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const credential = await issueResidencySetupCredential(actor, input);
+    const delivery = await sendResidencyAccountSetupEmail({
+      to: credential.contact.email,
+      contactName: credential.contact.name,
+      residencyName: credential.contact.residencyName,
+      setupUrl: credential.setupLink,
+      idempotencyKey: `residency-setup/${credential.contact.id}/${credential.setupTokenId}`,
+    });
+    await getDb().insert(auditLog).values({
+      residencyId: credential.contact.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "residency_setup_email_sent",
+      entityType: "residency_contact",
+      entityId: credential.contact.id,
+      details: {
+        userId: credential.contact.userId,
+        setupTokenId: credential.setupTokenId,
+        expiresAt: credential.expiresAt.toISOString(),
+        providerMessageId: delivery.providerMessageId,
+      },
+    });
+    revalidatePath("/app/setup");
+    return { status: "success", message: `Setup email sent to ${credential.contact.email}.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to send the setup email." };
   }
 }
 
