@@ -71,9 +71,14 @@ export function calendarColorForEconomics(
   daypartColor: string | null,
   shiftCalendarColor: string | null,
   economicsMode: "hfy" | "client_owned" | "hfy_request" | undefined,
+  audience: "client" | "internal" = "client",
 ): string | undefined {
   if (economicsMode === "hfy_request") return HFY_PENDING_COLOR;
-  if (economicsMode === "hfy") return HFY_BOOKED_COLOR;
+  if (economicsMode === "hfy") {
+    if (audience === "client") return HFY_BOOKED_COLOR;
+    const internalShiftColor = shiftCalendarColor?.toUpperCase() === HFY_BOOKED_COLOR ? null : shiftCalendarColor;
+    return daypartColor ?? internalShiftColor ?? DEFAULT_DAYPART_COLOR;
+  }
   return calendarColorForShift(daypartColor, shiftCalendarColor);
 }
 

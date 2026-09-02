@@ -57,7 +57,7 @@ async function HfyWorkQueue() {
   }
 
   return <>
-    <header className="page-header owner-mode-header hfy-mode-header"><div><p className="eyebrow">HFY · Programming</p><h1>Work Queue</h1><p className="subhead">Every Standing HFY Booking, across every Residency. This is the programming work that directly represents HFY revenue.</p></div><Link className="button secondary" href="/app?mode=hfy&view=operations">Open Operations</Link></header>
+    <header className="page-header owner-mode-header hfy-mode-header"><div><p className="eyebrow">HFY · Programming</p><h1>Work Queue</h1><p className="subhead">Schedule pending client requests quickly, then scan every Standing HFY Booking across all Residencies.</p></div><Link className="button secondary" href="/app?mode=hfy&view=operations">Open Operations</Link></header>
     <section className="owner-mode-summary hfy-summary" aria-label="HFY Programming summary">
       <article><strong>{liveQueue.length}</strong><span>Live Dayparts</span></article>
       <article><strong>{queue.length}</strong><span>Standing HFY Bookings</span></article>
@@ -77,7 +77,6 @@ async function HfyWorkQueue() {
               <span className="queue-color" style={{ background: daypart.color }} aria-hidden="true" />
               <div className="queue-daypart-name"><strong>{daypart.name}</strong><span>{daypart.room || "Room not set"}</span></div>
               <div className="queue-daypart-schedule">{daypart.rules.length ? daypart.rules.map((rule) => <span key={rule.weekday}><strong>{weekdayLabels[rule.weekday]}</strong> {formatLocalMinute(rule.startMinute)}–{formatLocalMinute(rule.endMinute)}{rule.defaultDjCount ? ` · ${rule.defaultDjCount} talent` : ""}</span>) : <span>No standing schedule</span>}</div>
-              <div className="queue-daypart-rate"><small>Default talent rate</small><strong><PrivateValue>{daypart.defaultTalentRateCents === null ? "Residency default" : formatMoney(daypart.defaultTalentRateCents)}</PrivateValue></strong></div>
               <div className="queue-daypart-actions"><span className={`platform-status ${live ? "active" : "inactive"}`}>{live ? daypart.activeUntil ? `Live until ${daypart.activeUntil}` : "Live" : daypart.activeUntil && daypart.activeUntil < today ? `Ended ${daypart.activeUntil}` : "Inactive"}</span><Link href={`/app/calendar?${new URLSearchParams({ mode: "hfy", view: "operations", residency: daypart.residencyId }).toString()}`}>Open Calendar →</Link></div>
             </article>;
           })}</div>

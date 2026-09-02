@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { SlotSchedulingStatus } from "@/domain/dayparts";
 import { monthGrid, type CalendarTone } from "@/lib/calendar";
@@ -16,6 +17,7 @@ export type MonthCalendarEvent = {
   color?: string;
   schedulingStatus?: SlotSchedulingStatus;
   bookingState?: "hfy_pending" | "hfy_confirmed";
+  href?: string;
 };
 
 export type MonthCalendarTone = CalendarTone;
@@ -39,9 +41,10 @@ export function MonthCalendar({ monthKey, events, selectedDate, onDateClick, onE
             <div className="calendar-events">{visibleEvents.map((event) => {
               const eventStyle = event.color ? { "--daypart-color": event.color } as CSSProperties : undefined;
               const eventClassName = `calendar-event ${event.schedulingStatus ? `schedule-${event.schedulingStatus}` : event.color ? "custom-color" : event.tone ?? "blue"} ${event.bookingState ? event.bookingState.replace("_", "-") : ""}`;
-              return onEventClick
-                ? <button className={eventClassName} style={eventStyle} type="button" aria-label={`Open ${event.title} on ${event.date}`} onClick={() => onEventClick(event)} key={event.id}><span className="calendar-event-line"><strong>{event.title}</strong><span>{event.time}</span></span>{compact ? null : <small>{event.residencyName}</small>}</button>
-                : <div className={eventClassName} style={eventStyle} key={event.id}><span className="calendar-event-line"><strong>{event.title}</strong><span>{event.time}</span></span>{compact ? null : <small>{event.residencyName}</small>}</div>;
+              const content = <><span className="calendar-event-line"><strong>{event.title}</strong><span>{event.time}</span></span>{compact ? null : <small>{event.residencyName}</small>}</>;
+              if (onEventClick) return <button className={eventClassName} style={eventStyle} type="button" aria-label={`Open ${event.title} on ${event.date}`} onClick={() => onEventClick(event)} key={event.id}>{content}</button>;
+              if (event.href) return <Link className={eventClassName} style={eventStyle} aria-label={`Open ${event.title} on ${event.date}`} href={event.href} key={event.id}>{content}</Link>;
+              return <div className={eventClassName} style={eventStyle} key={event.id}>{content}</div>;
             })}{hiddenCount > 0 ? onDateClick
               ? <button className="calendar-more-events" type="button" onClick={() => onDateClick(day.iso)}>+{hiddenCount} more</button>
               : <div className="calendar-more-events">+{hiddenCount} more</div> : null}</div>

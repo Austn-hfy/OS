@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { addCalendarAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, deleteCalendarShiftAction, fulfillHfyTalentRequestAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, type ResidencyActionState } from "@/app/app/actions";
+import { addCalendarAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, deleteCalendarShiftAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, type ResidencyActionState } from "@/app/app/actions";
+import { HfyRequestFulfillment } from "@/app/app/hfy-request-fulfillment";
 import { ArtistSearchPicker } from "@/components/artist-search-picker";
 import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
@@ -68,6 +69,7 @@ type ResidencyCalendarProps = {
   dateExceptions: DaypartDateException[];
   residencyOptions?: Array<{ id: string; name: string }>;
   residencySelectionParam?: "residency" | "calendarResidency";
+  initialEventId?: string;
   previewMode?: boolean;
   calendarBasePath?: string;
   daypartsHref?: string;
@@ -77,7 +79,6 @@ type ResidencyCalendarProps = {
 type SlotDraft = { id: string; talentId: string; start: string; end: string; confirmed: boolean; compensationType: "hourly" | "fixed" | "na"; rateOverride: string; fixedFee: string };
 type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; exceptionKind: "skip" | "override" | null; name: string; room: string; color: string; type: DaypartType | null; billingMode: DaypartBillingMode | null; defaultTalentRateCents: number | null; defaultDjCount: number | null; existing: boolean; start: string; end: string; clientRateOverride: string; notes: string; programDetails: string; manualHostName: string; requestHfy: boolean; slots: SlotDraft[] };
 type ReplacementDraft = { assignmentId: string; talentId: string; start: string; end: string };
-type HfyRequestDraft = { talentId: string; clientRate: string; artistRate: string };
 type ModalState = { type: "add"; date: string } | { type: "edit"; eventId: string } | null;
 type StatusFilter = "needs" | "all" | "filled";
 type AddMode = "choose" | "daypart" | "one-time";
@@ -93,16 +94,16 @@ function emptySlot(talentId: string, start: string, end: string): SlotDraft {
   return { id: crypto.randomUUID(), talentId, start, end, confirmed: false, compensationType: "hourly", rateOverride: "", fixedFee: "" };
 }
 
-export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", previewMode = false, calendarBasePath = "/app/calendar", daypartsHref, canManage = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, previewMode = false, calendarBasePath = "/app/calendar", daypartsHref, canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
-  const [modal, setModal] = useState<ModalState>(null);
+  const initialEditingEvent = initialEventId ? events.find((event) => event.id === initialEventId && !event.projected) : undefined;
+  const [modal, setModal] = useState<ModalState>(() => initialEditingEvent ? { type: "edit", eventId: initialEditingEvent.id } : null);
   const [suggestions, setSuggestions] = useState<SuggestionDraft[]>([]);
   const [activeDaypartId, setActiveDaypartId] = useState("");
   const [addMode, setAddMode] = useState<AddMode>("choose");
   const [directDaypartSelection, setDirectDaypartSelection] = useState(false);
   const [replacementDraft, setReplacementDraft] = useState<ReplacementDraft | null>(null);
   const [newAssignmentDraft, setNewAssignmentDraft] = useState<SlotDraft | null>(null);
-  const [hfyRequestDraft, setHfyRequestDraft] = useState<HfyRequestDraft>({ talentId: "", clientRate: "", artistRate: "" });
   const [editState, setEditState] = useState<ResidencyActionState>(initialActionState);
   const [editPending, setEditPending] = useState(false);
   const [dateActionState, setDateActionState] = useState<ResidencyActionState>(initialActionState);
@@ -238,7 +239,6 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     setDirectDaypartSelection(Boolean(preferred));
     setReplacementDraft(null);
     setNewAssignmentDraft(null);
-    setHfyRequestDraft({ talentId: "", clientRate: "", artistRate: "" });
     setEditState(initialActionState);
     setDateActionState(initialActionState);
     setModal({ type: "add", date });
@@ -252,7 +252,6 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     }
     setReplacementDraft(null);
     setNewAssignmentDraft(null);
-    setHfyRequestDraft({ talentId: "", clientRate: "", artistRate: "" });
     setEditState(initialActionState);
     setDateActionState(initialActionState);
     setModal({ type: "edit", eventId: event.id });
@@ -501,23 +500,6 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     if (result.status === "success") setNewAssignmentDraft(null);
   }
 
-  async function fulfillPendingHfyRequest() {
-    if (!editingEvent?.hfyRequestId || !hfyRequestDraft.talentId || !hfyRequestDraft.clientRate || !hfyRequestDraft.artistRate) return;
-    const formData = new FormData();
-    formData.set("requestId", editingEvent.hfyRequestId);
-    formData.set("talentId", hfyRequestDraft.talentId);
-    formData.set("clientRate", hfyRequestDraft.clientRate);
-    formData.set("artistRate", hfyRequestDraft.artistRate);
-    setEditPending(true);
-    const result = await fulfillHfyTalentRequestAction(initialActionState, formData);
-    setEditPending(false);
-    setEditState(result);
-    if (result.status === "success") {
-      setModal(null);
-      router.refresh();
-    }
-  }
-
   async function saveReplacement() {
     if (!editingEvent || !replacementDraft?.talentId || !replacementDraft.start || !replacementDraft.end || replacementWarning) return;
     const window = resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, replacementDraft.start, replacementDraft.end);
@@ -676,7 +658,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           <div className="calendar-command-actions">
             {canManage ? <Link className="button secondary calendar-daypart-setup-button" href={createDaypartHref}>+ Create New Daypart</Link> : null}
             {canManage ? <CalendarShareButton residencyId={residency.id} residencyName={residency.name} linkSettings={residency.calendarLinkSettings} dayparts={dayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} /> : null}
-            <CalendarStatusLegend />
+            <CalendarStatusLegend internal={!previewMode} />
           </div>
         </div>
       </header>
@@ -741,7 +723,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
             </> : <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
               {editingEvent.programDetails || editingEvent.manualHostName ? <div className="quick-program-fields">{editingEvent.programDetails ? <div><span>Program / activity</span><strong>{editingEvent.programDetails}</strong></div> : null}{editingEvent.manualHostName ? <div><span>Host / guest</span><strong>{editingEvent.manualHostName}</strong></div> : null}</div> : null}
-              {pendingHfyRequest ? <section className="replacement-editor new-assignment-editor"><div className="replacement-step"><span>1</span><div><strong>Choose the HFY artist</strong><small>Fulfilling this request assigns the artist and moves this date into HFY billing.</small></div></div>{hfyRequestDraft.talentId ? <div className="replacement-selected"><div><span>Selected DJ</span><strong>{requestTalent.find((item) => item.id === hfyRequestDraft.talentId)?.stageName}</strong></div><button type="button" onClick={() => setHfyRequestDraft({ ...hfyRequestDraft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose DJ" artists={requestTalent.map((artist) => ({ id: artist.id, name: artist.stageName, meta: [artist.homeMarket, artist.genres.join(" ")].filter(Boolean).join(" · ") }))} excludedIds={[]} onSelect={(talentId) => setHfyRequestDraft({ ...hfyRequestDraft, talentId })} />}<div className="replacement-step"><span>2</span><div><strong>Set HFY rates</strong><small>The client does not see either rate here.</small></div></div><div className="quick-more-fields"><div className="field"><label>Client-billed rate / hr</label><SensitiveInput type="number" min="0" step="0.01" value={hfyRequestDraft.clientRate} onChange={(event) => setHfyRequestDraft({ ...hfyRequestDraft, clientRate: event.target.value })} /></div><div className="field"><label>Artist-paid rate / hr</label><SensitiveInput type="number" min="0.01" step="0.01" value={hfyRequestDraft.artistRate} onChange={(event) => setHfyRequestDraft({ ...hfyRequestDraft, artistRate: event.target.value })} /></div></div>{!residencyTalentRateConfigured ? <p className="error" aria-live="polite">{MISSING_RESIDENCY_TALENT_RATE_MESSAGE}</p> : null}<div className="replacement-actions"><button className="button" type="button" disabled={editPending || !residencyTalentRateConfigured || !editingEvent.hfyRequestId || !hfyRequestDraft.talentId || !hfyRequestDraft.clientRate || !hfyRequestDraft.artistRate} onClick={fulfillPendingHfyRequest}>{editPending ? "Fulfilling…" : "Assign & bill"}</button></div></section> : editingEventCanManageAssignments ? <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours{previewMode ? "." : " because those hours determine pay."}</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft) || (!previewMode && !residencyTalentRateConfigured)} onClick={startAddingAssignment}>+ Add another DJ</button></div> : <div className="request-hfy-selection"><div><span>{editingEvent.economicsMode === "hfy_request" ? "Pending request" : editingEvent.economicsMode === "client_owned" ? "Client-managed slot" : "HFY-managed slot"}</span><strong>{editingEvent.economicsMode === "hfy_request" ? "Request HFY is awaiting fulfillment" : "This slot is read-only here"}</strong><small>{editingEvent.economicsMode === "client_owned" ? "The client controls its artist assignments and private rates." : previewMode ? "HFY controls staffing and both HFY rates. Your Invoice will show the resulting billed total." : "This slot is not editable here."}</small></div></div>}
+              {pendingHfyRequest && editingEvent.hfyRequestId ? <section className="replacement-editor new-assignment-editor hfy-request-calendar-editor"><div className="replacement-step"><span>1</span><div><strong>Schedule the requested shift</strong><small>Choose one artist or split the full service window. Residency rates apply automatically.</small></div></div><HfyRequestFulfillment requestId={editingEvent.hfyRequestId} shiftName={editingEvent.title} shiftStartMinute={editingEvent.shiftStartMinute} shiftEndMinute={editingEvent.shiftEndMinute} artists={requestTalent.map((artist) => ({ id: artist.id, stageName: artist.stageName, homeMarket: artist.homeMarket }))} ratesConfigured={residencyTalentRateConfigured && residency.clientHourlyRateCents > 0} onSuccess={() => { setModal(null); router.refresh(); }} /></section> : editingEventCanManageAssignments ? <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours{previewMode ? "." : " because those hours determine pay."}</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft) || (!previewMode && !residencyTalentRateConfigured)} onClick={startAddingAssignment}>+ Add another DJ</button></div> : <div className="request-hfy-selection"><div><span>{editingEvent.economicsMode === "hfy_request" ? "Pending request" : editingEvent.economicsMode === "client_owned" ? "Client-managed slot" : "HFY-managed slot"}</span><strong>{editingEvent.economicsMode === "hfy_request" ? "Request HFY is awaiting fulfillment" : "This slot is read-only here"}</strong><small>{editingEvent.economicsMode === "client_owned" ? "The client controls its artist assignments and private rates." : previewMode ? "HFY controls staffing and both HFY rates. Your Invoice will show the resulting billed total." : "This slot is not editable here."}</small></div></div>}
               {editingEventCanManageAssignments && !previewMode && !residencyTalentRateConfigured ? <p className="error" aria-live="polite">{MISSING_RESIDENCY_TALENT_RATE_MESSAGE}</p> : null}
               {newAssignmentDraft ? <section className="replacement-editor new-assignment-editor">
                 <div className="replacement-step"><span>1</span><div><strong>Choose the DJ</strong><small>Only artists approved for this Residency appear here.</small></div></div>

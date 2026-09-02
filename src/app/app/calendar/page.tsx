@@ -9,7 +9,7 @@ import { getActiveTalentLookup, getDaypartDateExceptionsForResidencies, getDaypa
 import { isHfyManagedEconomicsMode, isStandingHfyDaypart } from "@/domain/hfy-programming";
 import { ResidencyCalendar } from "./residency-calendar";
 
-export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ residency?: string; calendarResidency?: string; month?: string }> }) {
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ residency?: string; calendarResidency?: string; month?: string; event?: string }> }) {
   const params = await searchParams;
   const residencyList = await getResidencyList();
   const workspaceResidency = residencyList.find((item) => item.id === params.residency);
@@ -45,11 +45,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         title: `${shift.name} · ${shift.residencyName}`,
         time: `${formatCompactMinuteRange(shiftStartMinute, shiftEndMinute)} · ${statusLabel}`,
         residencyName: shift.residencyName,
-        color: calendarColorForEconomics(shift.daypartColor, shift.shiftCalendarColor, shift.economicsMode),
+        color: calendarColorForEconomics(shift.daypartColor, shift.shiftCalendarColor, shift.economicsMode, "internal"),
         bookingState: shift.economicsMode === "hfy_request" ? "hfy_pending" as const : shift.economicsMode === "hfy" ? "hfy_confirmed" as const : undefined,
         tone: calendarToneForSlot(shift.room, tones[Math.max(0, residencyList.findIndex((item) => item.id === shift.residencyId)) % tones.length]),
         schedulingStatus,
         startMinute: shiftStartMinute,
+        href: `/app/calendar?${new URLSearchParams({ mode: "hfy", calendarResidency: shift.residencyId, month: monthKey, event: shift.id }).toString()}`,
       };
     });
     const existingDaypartDates = new Set(hfyCalendar.flatMap((shift) => shift.daypartId ? [daypartDateKey(shift.daypartId, shift.serviceDate)] : []));
@@ -69,6 +70,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       tone: calendarToneForSlot(slot.room, tones[Math.max(0, residencyList.findIndex((item) => item.id === residency.id)) % tones.length]),
       schedulingStatus: "empty" as const,
       startMinute: slot.startMinute,
+      href: `/app/calendar?${new URLSearchParams({ mode: "hfy", calendarResidency: residency.id, month: monthKey }).toString()}`,
     })));
     const events: MonthCalendarEvent[] = [...savedShiftEvents, ...projectedEvents]
       .sort((left, right) => left.date.localeCompare(right.date) || left.startMinute - right.startMinute);
@@ -87,7 +89,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <div className="field calendar-filter"><label htmlFor="calendar-residency">Residency calendar</label><select id="calendar-residency" name="calendarResidency" defaultValue=""><option value="">All residencies</option>{residencyList.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div>
             <button className="button secondary" type="submit">View</button>
           </form>
-          <CalendarStatusLegend />
+          <CalendarStatusLegend internal />
           <div className="calendar-month-cluster"><div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div><div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link></div></div>
         </div></header>
         <MonthCalendar compact monthKey={monthKey} events={events} ariaLabel="HFY company programming calendar" />
@@ -133,7 +135,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     title: matchedDaypart?.name ?? shift.name,
     time: `${formatCompactMinuteRange(shiftStartMinute, shiftEndMinute)} · ${schedulingLabel}`,
     residencyName: artistNames.length ? artistNames.join(" + ") : shift.manualHostName || shift.programDetails || shift.name,
-    color: calendarColorForEconomics(matchedDaypart?.color ?? shift.daypartColor, shift.shiftCalendarColor, shift.economicsMode),
+    color: calendarColorForEconomics(matchedDaypart?.color ?? shift.daypartColor, shift.shiftCalendarColor, shift.economicsMode, "internal"),
     bookingState: shift.economicsMode === "hfy_request" ? "hfy_pending" as const : shift.economicsMode === "hfy" ? "hfy_confirmed" as const : undefined,
     tone: calendarToneForSlot(shift.room, daypartTones[Math.max(0, daypartIndex) % daypartTones.length]),
     daypartId: shift.daypartId,
@@ -197,6 +199,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         dateExceptions={dateExceptions}
         residencyOptions={residencyList.map((item) => ({ id: item.id, name: item.name }))}
         residencySelectionParam={workspaceResidency ? "residency" : "calendarResidency"}
+        initialEventId={params.event}
       />
     </div>
   );

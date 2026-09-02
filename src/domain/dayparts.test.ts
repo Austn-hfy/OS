@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_DAYPART_COLOR,
   HFY_BOOKED_COLOR,
   HFY_PENDING_COLOR,
   calendarColorForEconomics,
@@ -29,6 +30,8 @@ describe("Daypart weekly rules", () => {
   it("gives pending and fulfilled HFY slots distinct reserved colors", () => {
     expect(calendarColorForEconomics("#2783DC", HFY_BOOKED_COLOR, "hfy_request")).toBe(HFY_PENDING_COLOR);
     expect(calendarColorForEconomics("#2783DC", null, "hfy")).toBe(HFY_BOOKED_COLOR);
+    expect(calendarColorForEconomics("#2783DC", HFY_BOOKED_COLOR, "hfy", "internal")).toBe("#2783DC");
+    expect(calendarColorForEconomics(null, HFY_BOOKED_COLOR, "hfy", "internal")).toBe(DEFAULT_DAYPART_COLOR);
     expect(calendarColorForEconomics("#2783DC", null, "client_owned")).toBe("#2783DC");
   });
 

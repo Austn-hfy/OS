@@ -1477,17 +1477,18 @@ export async function fulfillHfyTalentRequestAction(
 ): Promise<ResidencyActionState> {
   try {
     const actor = await requireInternalActor();
+    const raw = z.string().min(2).parse(formData.get("payload"));
     const parsed = z.object({
       requestId: z.uuid(),
-      talentId: z.uuid(),
-      clientRate: z.coerce.number().min(0).max(1_000_000),
-      artistRate: z.coerce.number().positive().max(1_000_000),
-    }).parse(Object.fromEntries(formData));
+      assignments: z.array(z.object({
+        talentId: z.uuid(),
+        startsAtMinute: z.number().int().min(0).max(2879),
+        endsAtMinute: z.number().int().min(1).max(2879),
+      })).min(1).max(20),
+    }).parse(JSON.parse(raw));
     const result = await fulfillHfyTalentRequest(actor, {
       requestId: parsed.requestId,
-      talentId: parsed.talentId,
-      clientRateCents: Math.round(parsed.clientRate * 100),
-      artistRateCents: Math.round(parsed.artistRate * 100),
+      assignments: parsed.assignments,
     });
     revalidatePath("/app");
     revalidatePath("/app/calendar");
@@ -1496,7 +1497,7 @@ export async function fulfillHfyTalentRequestAction(
     revalidatePath("/residency/calendar");
     revalidatePath("/residency/payouts");
     revalidatePath("/residency/invoices");
-    return { status: "success", message: `${result.artistName} assigned and moved into HFY billing.` };
+    return { status: "success", message: `${result.artistNames.join(" + ")} assigned using the Residency rates.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to fulfill this HFY request." };
   }

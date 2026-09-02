@@ -521,6 +521,7 @@ tr:last-child td { border-bottom: 0; }
 .calendar-status-legend i.scheduled::after { content: "✓"; position: relative; left: 6px; top: -4px; color: #2783dc; font-style: normal; font-size: 7px; }
 .calendar-status-legend i.hfy-pending { border-left-color: #f9a8d4; background: color-mix(in srgb, #f9a8d4 20%, white); }
 .calendar-status-legend i.hfy-confirmed { border-left-color: #ec4899; background: color-mix(in srgb, #ec4899 42%, white); }
+.calendar-status-legend i.daypart-confirmed { border-left-color: #2783dc; background: color-mix(in srgb, #2783dc 14%, white); }
 .calendar-event strong, .calendar-event span, .calendar-event small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-event-line { min-width: 0; display: flex; align-items: baseline; gap: 4px; }
 .calendar-event-line strong { flex: 0 1 auto; font-size: 9px; }

@@ -1993,3 +1993,137 @@
   .hfy-style-system .client-add-artist form,
   .hfy-style-system .quick-inline-time-fields { grid-template-columns: 1fr; }
 }
+
+/* HFY Programming: compact page hierarchy and list-first request scheduling. */
+.hfy-style-system .owner-mode-hfy .main .page-header:not(.calendar-page-header) {
+  min-height: 90px;
+  margin-bottom: var(--hfy-space-5);
+  padding: 18px 22px;
+  align-items: center;
+}
+.hfy-style-system .owner-mode-hfy .main .page-header:not(.calendar-page-header) .eyebrow { margin-bottom: 4px; font-size: 8px; }
+.hfy-style-system .owner-mode-hfy .main .page-header:not(.calendar-page-header) h1 { margin: 0; font-size: clamp(23px, 2.2vw, 29px); }
+.hfy-style-system .owner-mode-hfy .main .page-header:not(.calendar-page-header) .subhead { max-width: 720px; margin-top: 5px; font-size: 10px; line-height: 1.45; }
+
+.hfy-style-system .hfy-request-section-heading {
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-card);
+  background: rgba(250, 252, 253, 0.76);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+}
+.hfy-style-system .hfy-request-pending-count,
+.hfy-style-system .hfy-request-pending {
+  border-color: rgba(236, 72, 153, 0.22);
+  color: #a81f66;
+  background: rgba(249, 168, 212, 0.3);
+}
+.hfy-style-system .hfy-request-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(430px, 1.35fr) minmax(190px, 220px);
+  gap: var(--hfy-space-5);
+  align-items: start;
+  padding: 18px;
+  overflow: hidden;
+  border-left: 5px solid #f9a8d4;
+}
+.hfy-style-system .hfy-request-details { min-width: 0; }
+.hfy-style-system .hfy-request-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hfy-style-system .hfy-request-label-row .eyebrow { margin: 0; }
+.hfy-style-system .hfy-request-details h3 { margin: 8px 0 0; font-size: 18px; }
+.hfy-style-system .hfy-request-details dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.hfy-style-system .hfy-request-details dl div:last-child { grid-column: 1 / -1; }
+
+.hfy-style-system .hfy-request-fulfillment-form {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  align-items: stretch;
+  padding: 13px;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  background: rgba(255, 255, 255, 0.58);
+}
+.hfy-style-system .hfy-request-assignment-heading,
+.hfy-style-system .hfy-request-assignment-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hfy-style-system .hfy-request-assignment-heading > div { display: grid; gap: 2px; }
+.hfy-style-system .hfy-request-assignment-heading strong { font-size: 12px; }
+.hfy-style-system .hfy-request-assignment-heading span,
+.hfy-style-system .hfy-request-assignment-heading small { color: var(--hfy-muted); font-size: 9px; }
+.hfy-style-system .hfy-request-assignment-heading small { text-align: right; }
+.hfy-style-system .hfy-request-assignment-list { display: grid; gap: 7px; }
+.hfy-style-system .hfy-request-assignment-row {
+  display: grid;
+  grid-template-columns: 28px minmax(150px, 1fr) minmax(92px, 0.48fr) minmax(92px, 0.48fr) auto;
+  align-items: end;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--hfy-line);
+  border-radius: 12px;
+  background: rgba(248, 250, 251, 0.78);
+}
+.hfy-style-system .hfy-request-assignment-number { align-self: center; color: #c82f7b; font-size: 9px; font-weight: 820; }
+.hfy-style-system .hfy-request-assignment-row .field { gap: 3px; }
+.hfy-style-system .hfy-request-assignment-row :is(input, select) { min-height: 36px; padding-block: 7px; }
+.hfy-style-system .hfy-request-remove-artist {
+  min-height: 36px;
+  padding: 7px 8px;
+  border: 0;
+  color: var(--hfy-error);
+  background: transparent;
+  font-size: 9px;
+  font-weight: 760;
+}
+.hfy-style-system .hfy-request-assignment-actions { justify-content: flex-end; flex-wrap: wrap; }
+.hfy-style-system .hfy-request-assignment-actions .button { min-height: 36px; padding: 8px 12px; font-size: 10px; }
+.hfy-style-system .hfy-request-fulfillment-form > p { grid-column: auto; }
+
+.hfy-style-system .hfy-request-date-context {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  background: rgba(244, 247, 249, 0.8);
+}
+.hfy-style-system .hfy-request-date-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hfy-style-system .hfy-request-date-heading span { color: var(--hfy-muted); font-size: 8px; font-weight: 760; letter-spacing: 0.06em; text-transform: uppercase; }
+.hfy-style-system .hfy-request-date-heading strong { font-size: 11px; }
+.hfy-style-system .hfy-request-mini-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.hfy-style-system .hfy-request-mini-calendar > span { min-height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--hfy-ink-soft); font-size: 8px; }
+.hfy-style-system .hfy-request-mini-calendar > span.outside { opacity: 0.24; }
+.hfy-style-system .hfy-request-mini-calendar > span.hfy-request-mini-weekday { min-height: 16px; color: var(--hfy-muted); font-size: 7px; font-weight: 800; }
+.hfy-style-system .hfy-request-mini-calendar > span.selected { color: #6d163f; background: #f9a8d4; box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.2); font-weight: 850; }
+.hfy-style-system .hfy-request-date-context > time { color: var(--hfy-ink); font-size: 10px; font-weight: 720; text-align: center; }
+.hfy-style-system .hfy-request-calendar-editor .hfy-request-fulfillment-form { padding: 0; border: 0; background: transparent; }
+
+.hfy-style-system .hfy-work-queue-list > article { grid-template-columns: minmax(150px, 0.9fr) minmax(250px, 1.7fr) minmax(150px, 0.8fr); }
+.hfy-style-system .calendar-event { text-decoration: none; }
+
+@media (max-width: 1240px) {
+  .hfy-style-system .hfy-request-card { grid-template-columns: minmax(0, 1fr) 210px; }
+  .hfy-style-system .hfy-request-fulfillment-form { grid-column: 1 / -1; grid-row: 2; }
+  .hfy-style-system .hfy-request-date-context { grid-column: 2; grid-row: 1; }
+}
+
+@media (max-width: 780px) {
+  .hfy-style-system .owner-mode-hfy .main .page-header:not(.calendar-page-header) { min-height: 0; padding: 16px 18px; align-items: flex-start; flex-direction: column; }
+  .hfy-style-system .hfy-request-card { grid-template-columns: 1fr; }
+  .hfy-style-system .hfy-request-date-context,
+  .hfy-style-system .hfy-request-fulfillment-form { grid-column: auto; grid-row: auto; }
+  .hfy-style-system .hfy-request-date-context { max-width: 280px; }
+  .hfy-style-system .hfy-request-assignment-row { grid-template-columns: 24px minmax(0, 1fr) minmax(88px, 0.55fr) minmax(88px, 0.55fr); }
+  .hfy-style-system .hfy-request-remove-artist { grid-column: 2 / -1; justify-self: end; min-height: 24px; }
+}
+
+@media (max-width: 560px) {
+  .hfy-style-system .hfy-request-assignment-heading,
+  .hfy-style-system .hfy-request-assignment-actions { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .hfy-request-assignment-heading small { text-align: left; }
+  .hfy-style-system .hfy-request-assignment-row { grid-template-columns: 24px 1fr; }
+  .hfy-style-system .hfy-request-assignment-row .field { grid-column: 2; }
+  .hfy-style-system .hfy-request-remove-artist { grid-column: 2; }
+}

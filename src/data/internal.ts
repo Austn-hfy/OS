@@ -130,6 +130,8 @@ export async function getPendingHfyTalentRequests() {
       startsAt: shifts.startsAt,
       endsAt: shifts.endsAt,
       createdAt: hfyTalentRequests.createdAt,
+      defaultTalentRateCents: residencies.defaultTalentRateCents,
+      clientHourlyRateCents: residencies.clientHourlyRateCents,
     }).from(hfyTalentRequests)
       .innerJoin(shifts, eq(hfyTalentRequests.shiftId, shifts.id))
       .innerJoin(residencies, eq(hfyTalentRequests.residencyId, residencies.id))
@@ -147,12 +149,16 @@ export async function getPendingHfyTalentRequests() {
     )).orderBy(asc(talent.stageName)),
   ]);
   return {
-    requests: requests.map((request) => ({
-      ...request,
-      startsAt: request.startsAt.toISOString(),
-      endsAt: request.endsAt.toISOString(),
-      createdAt: request.createdAt.toISOString(),
-    })),
+    requests: requests.map((request) => {
+      const { defaultTalentRateCents, clientHourlyRateCents, ...publicRequest } = request;
+      return {
+        ...publicRequest,
+        startsAt: request.startsAt.toISOString(),
+        endsAt: request.endsAt.toISOString(),
+        createdAt: request.createdAt.toISOString(),
+        ratesConfigured: defaultTalentRateCents > 0 && clientHourlyRateCents > 0,
+      };
+    }),
     artists,
   };
 }
