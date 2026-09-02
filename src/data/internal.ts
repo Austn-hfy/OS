@@ -336,7 +336,7 @@ export async function getScheduleOccurrenceData(residencyId?: string, range?: { 
 export async function getTalentDirectory(residencyId?: string) {
   const database = getDb();
   if (!residencyId) return database.select().from(talent)
-    .where(and(eq(talent.talentStatus, "active"), isNull(talent.archivedAt)))
+    .where(and(eq(talent.ownership, "hfy"), eq(talent.talentStatus, "active"), isNull(talent.archivedAt)))
     .orderBy(desc(talent.priority), asc(talent.stageName));
   const approvals = await database.select({ talentId: residencyTalent.talentId })
     .from(residencyTalent)
@@ -367,7 +367,9 @@ export async function getArtistLookupData(residencyId?: string) {
         or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residencyId!)),
       )).orderBy(desc(talent.priority), asc(talent.stageName))
       : []
-    : await database.select().from(talent).orderBy(desc(talent.priority), asc(talent.stageName));
+    : await database.select().from(talent)
+      .where(eq(talent.ownership, "hfy"))
+      .orderBy(desc(talent.priority), asc(talent.stageName));
   const artistIds = artistRows.map((artist) => artist.id);
   if (!artistIds.length) return [];
 

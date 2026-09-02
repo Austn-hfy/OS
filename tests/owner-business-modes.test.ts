@@ -23,6 +23,14 @@ describe("Owner Developer and HFY business modes", () => {
     expect(operationalList).toContain("eq(residencies.active, true)");
   });
 
+  it("keeps Residency-owned artists out of HFY Programming talent lists", async () => {
+    const data = await readFile(new URL("../src/data/internal.ts", import.meta.url), "utf8");
+    const directory = data.slice(data.indexOf("export async function getTalentDirectory"), data.indexOf("export async function getArtistLookupData"));
+    const lookup = data.slice(data.indexOf("export async function getArtistLookupData"), data.indexOf("export async function getPayoutQueue"));
+    expect(directory).toContain('eq(talent.ownership, "hfy")');
+    expect(lookup).toContain('.where(eq(talent.ownership, "hfy"))');
+  });
+
   it("builds the HFY queue from every Billed-by-HFY Daypart regardless of Residency status", async () => {
     const data = await readFile(new URL("../src/data/internal.ts", import.meta.url), "utf8");
     const queue = data.slice(data.indexOf("export async function getBilledByHfyWorkQueue"), data.indexOf("export type PublicCalendarLinkSettings"));

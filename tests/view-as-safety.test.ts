@@ -41,4 +41,19 @@ describe("owner View As safety", () => {
     expect(source).toContain("if (await viewAsResidencyId() === residencyId)");
     expect(source).toContain("return previewActor");
   });
+
+  it("lets the developer perform the same Residency-scoped manager actions while View As is active", async () => {
+    const [actions, shell] = await Promise.all([
+      readFile(new URL("../src/app/residency/actions.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/residency-shell.tsx", import.meta.url), "utf8"),
+    ]);
+    expect(actions).toContain('actor.accessRole !== "manager"');
+    expect(actions).not.toContain("if (actor.isViewAs)");
+    expect(actions).not.toContain("Exit client preview");
+    expect(actions).toContain('ownership: "residency"');
+    expect(actions).toContain("owningResidencyId: actor.residencyId");
+    expect(actions).toContain("exclusiveResidencyId: actor.residencyId");
+    expect(actions).toContain("residencyId: actor.residencyId");
+    expect(shell).toContain("Changes made here are live for this Residency.");
+  });
 });

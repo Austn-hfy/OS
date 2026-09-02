@@ -26,6 +26,6 @@ export function ResidencyShell({ actor, children }: { actor: ResidencyActor; chi
       <nav className="nav"><p className="nav-label">Workspace</p>{links.map(([label, href]) => <span className="client-nav-slot" key={href}><Link className={pathname === href ? "active" : ""} href={href}>{label}</Link></span>)}</nav>
       <div className="sidebar-footer"><p>{actor.displayName}<br />{actor.email}</p>{actor.isViewAs ? <form action={exitViewAsAction}><button className="button secondary" type="submit">Exit preview</button></form> : <form action={signOut}><button className="button secondary" type="submit">Sign out</button></form>}</div>
     </aside>
-    <main className={`main ${pathname === "/residency/calendar" ? "calendar-main" : ""}`}>{actor.isViewAs ? <div className="view-as-banner" role="status"><strong>Viewing as: {actor.residencyName}</strong><form action={exitViewAsAction}><button type="submit">Exit preview</button></form></div> : null}{children}</main>
+    <main className={`main ${pathname === "/residency/calendar" ? "calendar-main" : ""}`}>{actor.isViewAs ? <div className="view-as-banner" role="status"><strong>Viewing as: {actor.residencyName}</strong><span>Changes made here are live for this Residency.</span><form action={exitViewAsAction}><button type="submit">Exit preview</button></form></div> : null}{children}</main>
   </div>;
 }

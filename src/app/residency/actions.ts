@@ -17,7 +17,6 @@ export async function createClientOwnedArtistAction(
   try {
     const actor = await requireResidencyActor();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
-    if (actor.isViewAs) throw new Error("Exit client preview before creating a client-owned artist.");
     const parsed = z.object({
       name: z.string().trim().min(1).max(200),
       contact: z.string().trim().max(300),
@@ -73,7 +72,6 @@ export async function updateClientOwnedRateAction(
   try {
     const actor = await requireResidencyActor();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
-    if (actor.isViewAs) throw new Error("Exit client preview before changing a client-owned rate.");
     const parsed = z.object({
       assignmentId: z.uuid(),
       rate: z.union([z.literal(""), z.coerce.number().min(0).max(1_000_000)]),
