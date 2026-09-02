@@ -54,7 +54,9 @@ describe("Daypart default-rate attention", () => {
     expect(ownerShell).toContain('hasDaypartRateAttention ? "needs-attention"');
     expect(ownerShell).toContain("hasDaypartRateAttention ? <span className=\"residency-nav-attention\">!</span>");
     expect(auth).toContain("coalesce(${dayparts.clientDefaultRateCents}, 0) <= 0");
+    expect(auth).toContain("count(${dayparts.id}) > 0");
     expect(internalData).toContain("coalesce(${dayparts.defaultTalentRateCents}, 0) <= 0");
+    expect(internalData).toContain("count(${dayparts.id}) > 0");
     expect(internalData).not.toContain("coalesce(${dayparts.clientDefaultRateCents}, 0) <= 0");
     expect(residencyPage).toContain("defaultTalentRateCents: null");
     expect(styles.lastIndexOf(".residency-nav-item.needs-attention")).toBeGreaterThan(styles.lastIndexOf(".owner-workspace-nav .residency-nav-item:is(.active, .active-section)"));
