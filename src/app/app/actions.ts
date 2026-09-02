@@ -1210,7 +1210,7 @@ const daypartPayloadSchema = z.object({
     context.addIssue({ code: "custom", message: "Select at least one operating day." });
   }
   if (daypart.scheduleMode === "calendar_only" && (daypart.rules.length || daypart.suggestedStartMinute == null || daypart.suggestedEndMinute == null || daypart.suggestedEndMinute <= daypart.suggestedStartMinute)) {
-    context.addIssue({ code: "custom", message: "Calendar Only Dayparts need valid suggested hours and no weekly rules." });
+    context.addIssue({ code: "custom", message: "As-needed Dayparts need valid suggested hours and no weekly rules." });
   }
 });
 

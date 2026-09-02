@@ -24,7 +24,7 @@ describe("Calendar Only Dayparts", () => {
     const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
     expect(calendar).toContain('daypart.scheduleMode === "calendar_only"');
     expect(calendar).toContain("suggestedStartMinute");
-    expect(calendar).toContain("This Calendar Only Daypart will be added only to");
+    expect(calendar).toContain("This as-needed Daypart will be added only to");
   });
 
   it("keeps client artist selection and Request HFY mutually exclusive", async () => {

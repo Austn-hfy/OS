@@ -248,7 +248,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
   const suggestedEndMinute = input.scheduleMode === "calendar_only" ? input.suggestedEndMinute ?? null : null;
   if (input.scheduleMode === "calendar_only" && (!Number.isInteger(suggestedStartMinute) || !Number.isInteger(suggestedEndMinute)
     || suggestedStartMinute! < 0 || suggestedStartMinute! >= 1440 || suggestedEndMinute! <= suggestedStartMinute! || suggestedEndMinute! > suggestedStartMinute! + 1440)) {
-    throw new Error("Choose valid suggested hours for this Calendar Only Daypart.");
+    throw new Error("Choose valid suggested hours for this as-needed Daypart.");
   }
   const database = getDb();
 
