@@ -46,11 +46,10 @@ export function ResidencyShell({ actor, children }: { actor: ResidencyActor; chi
         {canManage ? <>
           <WorkspaceNavLink href="/residency/dayparts" label="Day Parts" description="Standing schedule" icon="dayparts" active={pathname === "/residency/dayparts"} attention={needsDaypartRateAttention} />
           <WorkspaceNavLink href="/residency/talent" label="Talent" description="Artist lookup" icon="talent" active={pathname === "/residency/talent"} />
-          {actor.clientPaymentStatusVisible ? <WorkspaceNavLink href="/residency/payouts" label="Payouts" description="What this Residency owes" icon="payouts" active={pathname === "/residency/payouts"} /> : null}
-          <WorkspaceNavLink href="/residency/invoices" label="Invoices" description="Approved and sent" icon="invoices" active={pathname === "/residency/invoices"} />
+          <WorkspaceNavLink href="/residency/finances" label="Finances" description="Talent invoices and obligations" icon="invoices" active={pathname === "/residency/finances"} />
         </> : null}
       </nav>
-      {canManage ? <div className="residency-sidebar-settings"><WorkspaceNavLink href="/residency/settings" label="Settings" description="Residency details and contacts" icon="settings" active={pathname === "/residency/settings"} /></div> : null}
+      {canManage ? <div className="residency-sidebar-settings"><WorkspaceNavLink href="/residency/settings" label="Settings" description="Account and Platform billing" icon="settings" active={pathname.startsWith("/residency/settings")} /></div> : null}
       <div className="sidebar-footer"><p>{actor.displayName}<br />{actor.email}</p>{actor.isViewAs ? <form action={exitViewAsAction}><button className="button secondary" type="submit">Exit preview</button></form> : <form action={signOut}><button className="button secondary" type="submit">Sign out</button></form>}</div>
     </aside>
     <main className={`main ${pathname === "/residency/calendar" ? "calendar-main" : ""}`}>{actor.isViewAs ? <div className="view-as-banner" role="status"><strong>Viewing as: {actor.residencyName}</strong><span>Changes made here are live for this Residency.</span><form action={exitViewAsAction}><button type="submit">Exit preview</button></form></div> : null}{children}</main>

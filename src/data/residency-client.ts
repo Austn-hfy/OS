@@ -2,10 +2,11 @@ import "server-only";
 
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAssignmentTerms, dayparts, invoices, residencies, residencyContacts, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent, users } from "@/db/schema";
+import { assignments, auditLog, clientAssignmentTerms, dayparts, invoices, platformSubscriptionInvoices, platformSubscriptions, residencies, residencyContacts, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent, users } from "@/db/schema";
 import { calculateClientOwedCents, resolveClientHourlyRateCents } from "@/domain/client-rates";
 import { projectClientSafeRoster, projectClientSafeTalent, type ClientSafeManagedTalent } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
+import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents } from "@/domain/platform-billing";
 
 export async function getResidencyClientCalendar(residencyId: string, range: { from: string; to: string }) {
   const database = getDb();
@@ -76,6 +77,7 @@ export async function getResidencyClientSafeRoster(residencyId: string) {
       eq(residencyTalent.talentId, talent.id),
       eq(residencyTalent.residencyId, residencyId),
       eq(residencyTalent.active, true),
+      eq(residencyTalent.clientVisible, true),
     ))
     .where(and(
       eq(talent.talentStatus, "active"),
@@ -161,7 +163,7 @@ export async function getResidencyClientVisibleAccessContacts(residencyId: strin
     .orderBy(asc(residencyContacts.name));
 }
 
-export async function getResidencyClientPayoutStatus(residencyId: string) {
+export async function getResidencyClientTalentLedger(residencyId: string) {
   const rows = await getDb().select({
     id: assignments.id,
     talentId: assignments.talentId,
@@ -207,7 +209,7 @@ export async function getResidencyClientTalentWorkspace(residencyId: string) {
   const [activeRoster, managedArtists, payoutRows] = await Promise.all([
     getResidencyClientSafeRoster(residencyId),
     getResidencyClientOwnedArtistManagement(residencyId),
-    getResidencyClientPayoutStatus(residencyId),
+    getResidencyClientTalentLedger(residencyId),
   ]);
   const managedById = new Map(managedArtists.map((artist) => [artist.id, artist]));
   const allArtists = [
@@ -312,6 +314,65 @@ export async function getResidencyClientInvoices(residencyId: string) {
     ))
     .orderBy(desc(invoices.invoiceDate), desc(invoices.createdAt));
   return rows.map((row) => projectClientSafeInvoice({ ...row, sentAt: row.sentAt?.toISOString() ?? null }));
+}
+
+export async function getResidencyClientFinances(residencyId: string) {
+  const [talentInvoices, clientTalent, hfyActivity] = await Promise.all([
+    getResidencyClientInvoices(residencyId),
+    getResidencyClientTalentLedger(residencyId),
+    getDb().select({ id: shifts.id }).from(shifts).where(and(
+      eq(shifts.residencyId, residencyId),
+      inArray(shifts.economicsMode, ["hfy", "hfy_request"]),
+    )).limit(1),
+  ]);
+  return {
+    talentInvoices,
+    clientTalent,
+    hasHfyManagedTalentActivity: hfyActivity.length > 0 || talentInvoices.length > 0,
+  };
+}
+
+export async function getResidencyPlatformBilling(residencyId: string) {
+  const [subscription] = await getDb().select({
+    id: platformSubscriptions.id,
+    status: platformSubscriptions.status,
+    cadence: platformSubscriptions.cadence,
+    talentProgramSessions: platformSubscriptions.talentProgramSessions,
+    talentSessionUnitAmountCents: platformSubscriptions.talentSessionUnitAmountCents,
+    housePrograms: platformSubscriptions.housePrograms,
+    houseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
+    cardBrand: platformSubscriptions.cardBrand,
+    cardLast4: platformSubscriptions.cardLast4,
+    nextChargeAt: platformSubscriptions.nextChargeAt,
+  }).from(platformSubscriptions).where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
+  if (!subscription) return { subscription: null, invoices: [] };
+
+  const invoiceRows = await getDb().select({
+    id: platformSubscriptionInvoices.id,
+    stripeInvoiceId: platformSubscriptionInvoices.stripeInvoiceId,
+    billingPeriodStart: platformSubscriptionInvoices.billingPeriodStart,
+    billingPeriodEnd: platformSubscriptionInvoices.billingPeriodEnd,
+    invoiceDate: platformSubscriptionInvoices.invoiceDate,
+    amountDueCents: platformSubscriptionInvoices.amountDueCents,
+    amountPaidCents: platformSubscriptionInvoices.amountPaidCents,
+    status: platformSubscriptionInvoices.status,
+    hostedInvoiceUrl: platformSubscriptionInvoices.hostedInvoiceUrl,
+  }).from(platformSubscriptionInvoices)
+    .where(and(
+      eq(platformSubscriptionInvoices.platformSubscriptionId, subscription.id),
+      eq(platformSubscriptionInvoices.residencyId, residencyId),
+    ))
+    .orderBy(desc(platformSubscriptionInvoices.invoiceDate), desc(platformSubscriptionInvoices.createdAt));
+  const monthlyAmountCents = calculatePlatformMonthlyAmountCents(subscription);
+  return {
+    subscription: {
+      ...subscription,
+      nextChargeAt: subscription.nextChargeAt?.toISOString() ?? null,
+      monthlyAmountCents,
+      nextChargeAmountCents: platformCadenceChargeCents(monthlyAmountCents, subscription.cadence),
+    },
+    invoices: invoiceRows,
+  };
 }
 
 export async function getResidencyClientSettings(residencyId: string) {

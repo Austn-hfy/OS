@@ -1,9 +1,10 @@
 import { and, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, hfyTalentRequests, invoiceLineItems, invoices, residencies, shifts } from "@/db/schema";
-import { resolveRateCents } from "@/domain/airtable-parity";
+import { assignments, auditLog, hfyTalentRequests, invoiceLineItems, invoices, residencies, shifts, talentInvoiceAdjustments } from "@/db/schema";
+import { calculateBillableAmountCents, resolveRateCents } from "@/domain/airtable-parity";
 import type { AuditActor, InternalActor } from "@/lib/auth";
 import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
+import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
 
 export type CreateShiftInput = {
   residencyId: string;
@@ -24,17 +25,20 @@ export async function createShift(actor: InternalActor, input: CreateShiftInput)
       .where(and(eq(residencies.id, input.residencyId), eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).limit(1);
     if (!residency) throw new Error("Residency not found.");
 
-    const coveringInvoices = await tx.select({ id: invoices.id }).from(invoices).where(and(
+    const coveringInvoices = await tx.select({ id: invoices.id, status: invoices.status }).from(invoices).where(and(
       eq(invoices.residencyId, residency.id),
       eq(invoices.kind, "scheduled_period"),
       lte(invoices.billingPeriodStart, input.serviceDate),
       gte(invoices.billingPeriodEnd, input.serviceDate),
       ne(invoices.status, "void"),
     ));
+    const draftInvoice = coveringInvoices.length === 1 && coveringInvoices[0].status === "draft" ? coveringInvoices[0] : null;
+    const finalizedInvoice = residency.tier === "complete" && coveringInvoices.length === 1 && coveringInvoices[0].status !== "draft" ? coveringInvoices[0] : null;
+    const clientRateCents = resolveRateCents(input.clientRateOverrideCents, residency.clientHourlyRateCents);
     const [shift] = await tx.insert(shifts).values({
       residencyId: residency.id,
       daypartId: input.daypartId ?? null,
-      invoiceId: coveringInvoices.length === 1 ? coveringInvoices[0].id : null,
+      invoiceId: draftInvoice?.id ?? null,
       name: input.name.trim(),
       serviceDate: input.serviceDate,
       room: input.room.trim(),
@@ -42,15 +46,31 @@ export async function createShift(actor: InternalActor, input: CreateShiftInput)
       endsAt: input.endsAt,
       notes: input.notes?.trim() ?? "",
       clientRateOverrideCents: input.clientRateOverrideCents ?? null,
-      clientRateCents: resolveRateCents(input.clientRateOverrideCents, residency.clientHourlyRateCents),
-      billingStatus: "pending",
-      invoiceLinkIssue: coveringInvoices.length !== 1,
-      invoiceLinkNote: coveringInvoices.length === 1
+      clientRateCents,
+      billingStatus: finalizedInvoice ? "pending_adjustment" : "pending",
+      invoiceLinkIssue: !finalizedInvoice && !draftInvoice,
+      invoiceLinkNote: finalizedInvoice
+        ? "Added after the service month was invoiced; carried to the next HFY Talent Invoice."
+        : draftInvoice
         ? ""
         : coveringInvoices.length
           ? "More than one Invoice covers this Shift."
           : "No Invoice period covers this Shift.",
     }).returning({ id: shifts.id });
+    if (finalizedInvoice) {
+      const adjustmentCents = calculateBillableAmountCents(input.startsAt, input.endsAt, clientRateCents);
+      if (adjustmentCents <= 0) throw new Error("A positive client talent rate is required before adding service to an invoiced Full Programming month.");
+      await tx.insert(talentInvoiceAdjustments).values({
+        residencyId: residency.id,
+        sourceInvoiceId: finalizedInvoice.id,
+        sourceShiftId: shift.id,
+        serviceDate: input.serviceDate,
+        reason: "schedule_added_after_invoice",
+        description: carryForwardAdjustmentDescription({ serviceDate: input.serviceDate, shiftName: input.name.trim(), kind: "added" }),
+        amountCents: adjustmentCents,
+        createdByUserId: actor.userId,
+      });
+    }
     await tx.insert(auditLog).values({
       residencyId: residency.id,
       actorUserId: actor.userId,
@@ -60,8 +80,9 @@ export async function createShift(actor: InternalActor, input: CreateShiftInput)
       entityId: shift.id,
       details: {
         daypartId: input.daypartId ?? null,
-        invoiceId: coveringInvoices.length === 1 ? coveringInvoices[0].id : null,
-        invoiceLinkIssue: coveringInvoices.length !== 1,
+        invoiceId: draftInvoice?.id ?? null,
+        invoiceLinkIssue: !finalizedInvoice && !draftInvoice,
+        pendingAdjustmentSourceInvoiceId: finalizedInvoice?.id ?? null,
       },
     });
     return shift;
@@ -78,24 +99,44 @@ export async function deleteShift(actor: AuditActor, shiftId: string) {
       serviceDate: shifts.serviceDate,
       name: shifts.name,
       economicsMode: shifts.economicsMode,
+      startsAt: shifts.startsAt,
+      endsAt: shifts.endsAt,
+      clientRateCents: shifts.clientRateCents,
+      residencyTier: residencies.tier,
     }).from(shifts)
+      .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
       .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
       .where(eq(shifts.id, shiftId))
       .limit(1);
     if (!shift) throw new Error("Shift not found.");
-    if (actor.kind === "residency" && shift.economicsMode === "hfy") throw new Error("HFY-managed Shifts cannot be deleted by the client.");
+    const finalizedFullProgrammingShift = shift.residencyTier === "complete" && Boolean(shift.invoiceId && shift.invoiceStatus && shift.invoiceStatus !== "draft");
+    if (actor.kind === "residency" && shift.economicsMode === "hfy" && shift.residencyTier !== "complete") throw new Error("HFY-managed Shifts cannot be deleted by the client.");
     if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned and pending-request Shifts are controlled through their own workflow.");
     const assignmentRows = await tx.select({
       bookingStatus: assignments.bookingStatus,
       payoutStatus: assignments.payoutStatus,
     }).from(assignments).where(eq(assignments.shiftId, shift.id));
-    const blockReason = shiftDeletionBlockReason(shift.invoiceStatus, assignmentRows);
+    const blockReason = shiftDeletionBlockReason(finalizedFullProgrammingShift ? null : shift.invoiceStatus, assignmentRows);
     if (blockReason) throw new Error(blockReason);
+    if (finalizedFullProgrammingShift && shift.invoiceId) {
+      const adjustmentCents = calculateBillableAmountCents(shift.startsAt, shift.endsAt, shift.clientRateCents);
+      if (adjustmentCents <= 0) throw new Error("This invoiced service has no billable amount to credit.");
+      await tx.insert(talentInvoiceAdjustments).values({
+        residencyId: shift.residencyId,
+        sourceInvoiceId: shift.invoiceId,
+        sourceShiftId: shift.id,
+        serviceDate: shift.serviceDate,
+        reason: "schedule_cancelled_after_invoice",
+        description: carryForwardAdjustmentDescription({ serviceDate: shift.serviceDate, shiftName: shift.name, kind: "cancelled" }),
+        amountCents: -adjustmentCents,
+        createdByUserId: actor.userId,
+      });
+    }
     await tx.delete(hfyTalentRequests).where(eq(hfyTalentRequests.shiftId, shift.id));
     await tx.delete(assignments).where(eq(assignments.shiftId, shift.id));
-    await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
+    if (!finalizedFullProgrammingShift) await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
     await tx.delete(shifts).where(eq(shifts.id, shift.id));
-    if (shift.invoiceId) {
+    if (shift.invoiceId && !finalizedFullProgrammingShift) {
       const [remaining] = await tx.select({ total: sql<number>`coalesce(sum(${invoiceLineItems.totalCents}), 0)` }).from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, shift.invoiceId));
       await tx.update(invoices).set({ totalCents: Number(remaining?.total ?? 0), updatedAt: new Date() }).where(eq(invoices.id, shift.invoiceId));
     }
@@ -106,7 +147,7 @@ export async function deleteShift(actor: AuditActor, shiftId: string) {
       action: "shift_deleted",
       entityType: "shift",
       entityId: shift.id,
-      details: { serviceDate: shift.serviceDate, name: shift.name, draftInvoiceId: shift.invoiceId },
+      details: { serviceDate: shift.serviceDate, name: shift.name, draftInvoiceId: finalizedFullProgrammingShift ? null : shift.invoiceId, pendingTalentInvoiceAdjustment: finalizedFullProgrammingShift },
     });
     return shift;
   });

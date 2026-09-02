@@ -23,6 +23,14 @@ const ids = {
   clientOwnedAssignment: "00000000-0000-4000-8000-000000000072",
   hfyRequestShift: "00000000-0000-4000-8000-000000000073",
   hfyRequest: "00000000-0000-4000-8000-000000000074",
+  platformSubscription: "00000000-0000-4000-8000-000000000080",
+  platformInvoice: "00000000-0000-4000-8000-000000000081",
+  finalizedMonthlyInvoice: "00000000-0000-4000-8000-000000000082",
+  laterMonthlyInvoice: "00000000-0000-4000-8000-000000000083",
+  talentAdjustment: "00000000-0000-4000-8000-000000000084",
+  talentScheduleLock: "00000000-0000-4000-8000-000000000085",
+  privateEligibleTalent: "00000000-0000-4000-8000-000000000086",
+  privateEligibleShift: "00000000-0000-4000-8000-000000000087",
 };
 
 let database: PGlite;
@@ -57,6 +65,8 @@ beforeAll(async () => {
   const oneTimeHouseActivities = await readFile(new URL("../drizzle/0028_one_time_house_activities.sql", import.meta.url), "utf8");
   const calendarOnlyDayparts = await readFile(new URL("../drizzle/0029_calendar_only_dayparts.sql", import.meta.url), "utf8");
   const clientDaypartRates = await readFile(new URL("../drizzle/0030_warm_newton_destine.sql", import.meta.url), "utf8");
+  const separatedFinancials = await readFile(new URL("../drizzle/0031_dazzling_jack_power.sql", import.meta.url), "utf8");
+  const clientArtistVisibility = await readFile(new URL("../drizzle/0032_fast_surge.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -93,6 +103,8 @@ beforeAll(async () => {
   await database.exec(oneTimeHouseActivities.replaceAll("--> statement-breakpoint", ""));
   await database.exec(calendarOnlyDayparts.replaceAll("--> statement-breakpoint", ""));
   await database.exec(clientDaypartRates.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(separatedFinancials.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(clientArtistVisibility.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -146,6 +158,50 @@ describe("database replacements for Airtable audit formulas", () => {
         AND NOT relrowsecurity;
     `);
     expect(result.rows).toEqual([]);
+  });
+
+  it("keeps Platform subscription invoices in a Residency-scoped ledger", async () => {
+    await database.exec(`
+      INSERT INTO platform_subscriptions
+        (id, residency_id, status, cadence, talent_program_sessions, talent_session_unit_amount_cents, house_programs, house_program_unit_amount_cents)
+      VALUES ('${ids.platformSubscription}', '${ids.residencyA}', 'active', 'monthly', 8, 2500, 3, 1000);
+      INSERT INTO platform_subscription_invoices
+        (id, platform_subscription_id, residency_id, stripe_invoice_id, billing_period_start, billing_period_end, invoice_date, amount_due_cents, amount_paid_cents, status)
+      VALUES ('${ids.platformInvoice}', '${ids.platformSubscription}', '${ids.residencyA}', 'in_test_platform_001', '2026-09-01', '2026-09-30', '2026-09-01', 23000, 23000, 'paid');
+    `);
+    const record = await database.query<{ amount_due_cents: number }>(`
+      SELECT amount_due_cents FROM platform_subscription_invoices WHERE id = '${ids.platformInvoice}';
+    `);
+    expect(record.rows[0]?.amount_due_cents).toBe(23000);
+    await expect(database.exec(`
+      UPDATE platform_subscription_invoices SET residency_id = '${ids.residencyB}' WHERE id = '${ids.platformInvoice}';
+    `)).rejects.toThrow(/must match its subscription Residency/);
+  });
+
+  it("locks monthly talent schedules and scopes carry-forward adjustments to their Residency", async () => {
+    await database.exec(`
+      INSERT INTO invoices
+        (id, residency_id, invoice_number, billing_period_start, billing_period_end, invoice_date, payment_terms_days, status, total_cents, pdf_storage_path)
+      VALUES
+        ('${ids.finalizedMonthlyInvoice}', '${ids.residencyA}', 'HTLA-JAN-FULL', '2027-01-01', '2027-01-31', '2027-01-01', 7, 'approved', 100000, 'invoices/finalized-monthly.pdf'),
+        ('${ids.laterMonthlyInvoice}', '${ids.residencyA}', 'HTLA-FEB-FULL', '2027-02-01', '2027-02-28', '2027-02-01', 7, 'draft', 50000, NULL);
+      INSERT INTO talent_schedule_locks
+        (id, residency_id, service_month, billing_period_start, billing_period_end, invoice_id, locked_by_user_id)
+      VALUES ('${ids.talentScheduleLock}', '${ids.residencyA}', '2027-01-01', '2027-01-01', '2027-01-31', '${ids.finalizedMonthlyInvoice}', '${ids.admin}');
+      INSERT INTO talent_invoice_adjustments
+        (id, residency_id, source_invoice_id, service_date, reason, description, amount_cents, created_by_user_id)
+      VALUES ('${ids.talentAdjustment}', '${ids.residencyA}', '${ids.finalizedMonthlyInvoice}', '2027-01-10', 'schedule_cancelled_after_invoice', 'Credit for cancellation', -10000, '${ids.admin}');
+      UPDATE talent_invoice_adjustments
+      SET status = 'applied', applied_invoice_id = '${ids.laterMonthlyInvoice}', applied_at = now()
+      WHERE id = '${ids.talentAdjustment}';
+    `);
+    const adjustment = await database.query<{ status: string; applied_invoice_id: string }>(`
+      SELECT status, applied_invoice_id FROM talent_invoice_adjustments WHERE id = '${ids.talentAdjustment}';
+    `);
+    expect(adjustment.rows[0]).toEqual({ status: "applied", applied_invoice_id: ids.laterMonthlyInvoice });
+    await expect(database.exec(`
+      UPDATE talent_invoice_adjustments SET residency_id = '${ids.residencyB}' WHERE id = '${ids.talentAdjustment}';
+    `)).rejects.toThrow(/finalized source Invoice for the same Residency/);
   });
 
   it("stores a separate contact and an explicit client access role", async () => {
@@ -417,6 +473,37 @@ describe("database replacements for Airtable audit formulas", () => {
       VALUES
         ('${ids.shiftA}', '${ids.talent}', 'internal', 'Unassigned internal', '2026-09-05T20:00:00Z', '2026-09-05T22:00:00Z', 'confirmed', 'hourly', 8000);
     `)).rejects.toThrow(/explicitly assigned/);
+  });
+
+  it("keeps HFY booking eligibility independent from client roster visibility", async () => {
+    await database.exec(`
+      INSERT INTO talent (id, stage_name, roster_status, talent_status)
+      VALUES ('${ids.privateEligibleTalent}', 'Private Eligible DJ', 'ready', 'active');
+      INSERT INTO residency_talent (residency_id, talent_id, active)
+      VALUES ('${ids.residencyA}', '${ids.privateEligibleTalent}', true);
+      INSERT INTO shifts
+        (id, residency_id, name, service_date, room, starts_at, ends_at, client_rate_cents)
+      VALUES
+        ('${ids.privateEligibleShift}', '${ids.residencyA}', 'Private HFY Slot', '2026-09-06', 'Pool', '2026-09-06T20:00:00Z', '2026-09-06T23:00:00Z', 10000);
+      INSERT INTO assignments
+        (shift_id, talent_id, source, set_name, starts_at, ends_at, booking_status, compensation_type, talent_rate_cents)
+      VALUES
+        ('${ids.privateEligibleShift}', '${ids.privateEligibleTalent}', 'internal', 'Private Eligible DJ', '2026-09-06T20:00:00Z', '2026-09-06T23:00:00Z', 'confirmed', 'hourly', 8000);
+    `);
+    const before = await database.query<{ active: boolean; client_visible: boolean }>(`
+      SELECT active, client_visible FROM residency_talent
+      WHERE residency_id = '${ids.residencyA}' AND talent_id = '${ids.privateEligibleTalent}';
+    `);
+    expect(before.rows[0]).toEqual({ active: true, client_visible: false });
+    await database.exec(`
+      UPDATE residency_talent SET client_visible = true
+      WHERE residency_id = '${ids.residencyA}' AND talent_id = '${ids.privateEligibleTalent}';
+    `);
+    const after = await database.query<{ active: boolean; client_visible: boolean }>(`
+      SELECT active, client_visible FROM residency_talent
+      WHERE residency_id = '${ids.residencyA}' AND talent_id = '${ids.privateEligibleTalent}';
+    `);
+    expect(after.rows[0]).toEqual({ active: true, client_visible: true });
   });
 
   it("prevents an exclusive artist from being assigned to another Residency roster", async () => {

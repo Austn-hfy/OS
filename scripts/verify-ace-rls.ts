@@ -60,12 +60,12 @@ try {
       (${rosterFixtures.aceExclusive}, ${`RLS Primary Exclusive ${marker}`}, 'ready', 'active', ${ace.id})
   `;
   await sql`
-    INSERT INTO residency_talent (residency_id, talent_id, active) VALUES
-      (${ace.id}, ${rosterFixtures.aceOnly}, true),
-      (${other.id}, ${rosterFixtures.otherOnly}, true),
-      (${ace.id}, ${rosterFixtures.both}, true),
-      (${other.id}, ${rosterFixtures.both}, true),
-      (${ace.id}, ${rosterFixtures.aceExclusive}, true)
+    INSERT INTO residency_talent (residency_id, talent_id, active, client_visible) VALUES
+      (${ace.id}, ${rosterFixtures.aceOnly}, true, true),
+      (${other.id}, ${rosterFixtures.otherOnly}, true, true),
+      (${ace.id}, ${rosterFixtures.both}, true, true),
+      (${other.id}, ${rosterFixtures.both}, true, true),
+      (${ace.id}, ${rosterFixtures.aceExclusive}, true, true)
   `;
 
   const aceResidencies = await aceClient.from("residencies").select("id,name");

@@ -13,6 +13,7 @@ export default async function ResidencyDaypartsPage({ searchParams }: { searchPa
     residencyId={actor.residencyId}
     dayparts={dayparts.map((daypart) => ({ ...daypart, defaultTalentRateCents: null }))}
     hideFinancials
+    fullProgrammingClient={actor.residencyTier === "complete"}
     initialCreate={actor.accessRole === "manager" && params.create === "1"}
   />;
 }

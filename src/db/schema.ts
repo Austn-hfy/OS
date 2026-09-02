@@ -44,7 +44,7 @@ export const bookingStatus = pgEnum("booking_status", [
 ]);
 export const compensationType = pgEnum("compensation_type", ["hourly", "fixed", "na"]);
 export const payoutStatus = pgEnum("payout_status", ["not_ready", "ready_to_pay", "paid", "na"]);
-export const billingStatus = pgEnum("billing_status", ["pending", "reviewed", "invoiced", "not_billable"]);
+export const billingStatus = pgEnum("billing_status", ["pending", "reviewed", "invoiced", "pending_adjustment", "not_billable"]);
 export const invoiceStatus = pgEnum("invoice_status", ["draft", "approved", "sent", "paid", "void"]);
 export const deliveryStatus = pgEnum("delivery_status", ["pending", "sent", "failed"]);
 export const invoiceKind = pgEnum("invoice_kind", ["scheduled_period", "custom"]);
@@ -67,6 +67,10 @@ export const daypartDateExceptionKind = pgEnum("daypart_date_exception_kind", ["
 export const talentOwnership = pgEnum("talent_ownership", ["hfy", "residency"]);
 export const shiftEconomicsMode = pgEnum("shift_economics_mode", ["hfy", "client_owned", "hfy_request"]);
 export const hfyTalentRequestStatus = pgEnum("hfy_talent_request_status", ["pending", "fulfilled", "cancelled"]);
+export const platformBillingCadence = pgEnum("platform_billing_cadence", ["monthly", "quarterly", "annual"]);
+export const platformSubscriptionStatus = pgEnum("platform_subscription_status", ["incomplete", "trialing", "active", "past_due", "unpaid", "paused", "cancelled"]);
+export const platformSubscriptionInvoiceStatus = pgEnum("platform_subscription_invoice_status", ["open", "paid", "void", "uncollectible"]);
+export const talentInvoiceAdjustmentStatus = pgEnum("talent_invoice_adjustment_status", ["pending", "applied", "void"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -157,6 +161,51 @@ export const residencies = pgTable("residencies", {
   check("residencies_rates_nonnegative", sql`${table.defaultTalentRateCents} >= 0 AND ${table.clientHourlyRateCents} >= 0`),
   check("residencies_payment_terms_valid", sql`${table.paymentTermsDays} >= 0 AND ${table.paymentTermsDays} <= 365`),
   check("residencies_billing_cycle_valid", sql`${table.billingCycleStartWeekday} >= 0 AND ${table.billingCycleStartWeekday} <= 6 AND ${table.billingCycleLengthDays} >= 1 AND ${table.billingCycleLengthDays} <= 31`),
+]);
+
+export const platformSubscriptions = pgTable("platform_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  status: platformSubscriptionStatus("status").notNull().default("incomplete"),
+  cadence: platformBillingCadence("cadence").notNull().default("monthly"),
+  talentProgramSessions: integer("talent_program_sessions").notNull().default(0),
+  talentSessionUnitAmountCents: integer("talent_session_unit_amount_cents").notNull().default(0),
+  housePrograms: integer("house_programs").notNull().default(0),
+  houseProgramUnitAmountCents: integer("house_program_unit_amount_cents").notNull().default(0),
+  currency: text("currency").notNull().default("USD"),
+  cardBrand: text("card_brand").notNull().default(""),
+  cardLast4: text("card_last4").notNull().default(""),
+  nextChargeAt: timestamp("next_charge_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("platform_subscriptions_residency_unique").on(table.residencyId),
+  uniqueIndex("platform_subscriptions_stripe_subscription_unique").on(table.stripeSubscriptionId).where(sql`${table.stripeSubscriptionId} IS NOT NULL`),
+  check("platform_subscriptions_program_counts_nonnegative", sql`${table.talentProgramSessions} >= 0 AND ${table.housePrograms} >= 0`),
+  check("platform_subscriptions_unit_amounts_nonnegative", sql`${table.talentSessionUnitAmountCents} >= 0 AND ${table.houseProgramUnitAmountCents} >= 0`),
+  check("platform_subscriptions_currency_valid", sql`${table.currency} = 'USD'`),
+  check("platform_subscriptions_card_complete", sql`(${table.cardBrand} = '' AND ${table.cardLast4} = '') OR (${table.cardBrand} <> '' AND ${table.cardLast4} ~ '^[0-9]{4}$')`),
+]);
+
+export const platformSubscriptionInvoices = pgTable("platform_subscription_invoices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  platformSubscriptionId: uuid("platform_subscription_id").notNull().references(() => platformSubscriptions.id, { onDelete: "cascade" }),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "restrict" }),
+  stripeInvoiceId: text("stripe_invoice_id").notNull(),
+  billingPeriodStart: date("billing_period_start", { mode: "string" }).notNull(),
+  billingPeriodEnd: date("billing_period_end", { mode: "string" }).notNull(),
+  invoiceDate: date("invoice_date", { mode: "string" }).notNull(),
+  amountDueCents: integer("amount_due_cents").notNull(),
+  amountPaidCents: integer("amount_paid_cents").notNull().default(0),
+  status: platformSubscriptionInvoiceStatus("status").notNull().default("open"),
+  hostedInvoiceUrl: text("hosted_invoice_url"),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("platform_subscription_invoices_stripe_invoice_unique").on(table.stripeInvoiceId),
+  index("platform_subscription_invoices_residency_period_idx").on(table.residencyId, table.billingPeriodStart, table.billingPeriodEnd),
+  check("platform_subscription_invoices_period_valid", sql`${table.billingPeriodEnd} >= ${table.billingPeriodStart}`),
+  check("platform_subscription_invoices_amounts_nonnegative", sql`${table.amountDueCents} >= 0 AND ${table.amountPaidCents} >= 0`),
 ]);
 
 export const publicCalendarLinks = pgTable("public_calendar_links", {
@@ -435,11 +484,13 @@ export const residencyTalent = pgTable("residency_talent", {
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
   talentId: uuid("talent_id").notNull().references(() => talent.id, { onDelete: "cascade" }),
   active: boolean("active").notNull().default(true),
+  clientVisible: boolean("client_visible").notNull().default(false),
   approvedByUserId: uuid("approved_by_user_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("residency_talent_residency_talent_unique").on(table.residencyId, table.talentId),
   index("residency_talent_talent_idx").on(table.talentId),
+  index("residency_talent_client_visibility_idx").on(table.residencyId, table.clientVisible, table.active),
 ]);
 
 export const invoices = pgTable("invoices", {
@@ -477,6 +528,22 @@ export const invoices = pgTable("invoices", {
   check("invoices_paid_has_date", sql`${table.status} <> 'paid' OR ${table.paidAt} IS NOT NULL`),
 ]);
 
+export const talentScheduleLocks = pgTable("talent_schedule_locks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "restrict" }),
+  serviceMonth: date("service_month", { mode: "string" }).notNull(),
+  billingPeriodStart: date("billing_period_start", { mode: "string" }).notNull(),
+  billingPeriodEnd: date("billing_period_end", { mode: "string" }).notNull(),
+  invoiceId: uuid("invoice_id").notNull().references(() => invoices.id, { onDelete: "restrict" }),
+  lockedByUserId: uuid("locked_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  lockedAt: timestamp("locked_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("talent_schedule_locks_residency_month_unique").on(table.residencyId, table.serviceMonth),
+  uniqueIndex("talent_schedule_locks_invoice_unique").on(table.invoiceId),
+  check("talent_schedule_locks_month_valid", sql`${table.serviceMonth} = date_trunc('month', ${table.serviceMonth}::timestamp)::date`),
+  check("talent_schedule_locks_period_valid", sql`${table.billingPeriodStart} = ${table.serviceMonth} AND ${table.billingPeriodEnd} = (${table.serviceMonth} + interval '1 month - 1 day')::date`),
+]);
+
 export const shifts = pgTable("shifts", {
   id: uuid("id").primaryKey().defaultRandom(),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "restrict" }),
@@ -510,6 +577,31 @@ export const shifts = pgTable("shifts", {
     ${table.economicsMode} = 'hfy'
     OR
     (${table.invoiceId} IS NULL AND ${table.billingStatus} = 'not_billable' AND ${table.clientRateOverrideCents} IS NULL AND ${table.clientRateCents} = 0)
+  `),
+]);
+
+export const talentInvoiceAdjustments = pgTable("talent_invoice_adjustments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "restrict" }),
+  sourceInvoiceId: uuid("source_invoice_id").notNull().references(() => invoices.id, { onDelete: "restrict" }),
+  sourceShiftId: uuid("source_shift_id").references(() => shifts.id, { onDelete: "set null" }),
+  appliedInvoiceId: uuid("applied_invoice_id").references(() => invoices.id, { onDelete: "restrict" }),
+  serviceDate: date("service_date", { mode: "string" }).notNull(),
+  reason: text("reason").notNull(),
+  description: text("description").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  status: talentInvoiceAdjustmentStatus("status").notNull().default("pending"),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  index("talent_invoice_adjustments_pending_idx").on(table.residencyId, table.status, table.createdAt),
+  index("talent_invoice_adjustments_source_invoice_idx").on(table.sourceInvoiceId),
+  check("talent_invoice_adjustments_amount_nonzero", sql`${table.amountCents} <> 0`),
+  check("talent_invoice_adjustments_application_valid", sql`
+    (${table.status} = 'applied' AND ${table.appliedInvoiceId} IS NOT NULL AND ${table.appliedAt} IS NOT NULL)
+    OR
+    (${table.status} <> 'applied' AND ${table.appliedInvoiceId} IS NULL AND ${table.appliedAt} IS NULL)
   `),
 ]);
 

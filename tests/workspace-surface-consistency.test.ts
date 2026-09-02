@@ -5,7 +5,7 @@ const readSource = (path: string) => readFile(new URL(path, import.meta.url), "u
 
 describe("site-wide workspace surface consistency", () => {
   it("uses the shared frame across Developer, HFY Programming, and Residency detail routes", async () => {
-    const [component, dashboard, pipeline, payouts, invoices, invoiceManager, setup, talent, roster, clientTalent, clientRoster, clientPayouts, clientInvoices, clientSettings] = await Promise.all([
+    const [component, dashboard, pipeline, payouts, invoices, invoiceManager, setup, talent, roster, clientTalent, clientRoster, clientFinances, clientPayouts, clientInvoices, clientSettings] = await Promise.all([
       readSource("../src/components/workspace-surface.tsx"),
       readSource("../src/app/app/page.tsx"),
       readSource("../src/app/app/leads/leads-workspace.tsx"),
@@ -17,15 +17,18 @@ describe("site-wide workspace surface consistency", () => {
       readSource("../src/app/app/talent/roster/page.tsx"),
       readSource("../src/app/residency/talent/page.tsx"),
       readSource("../src/app/residency/talent/roster/page.tsx"),
+      readSource("../src/app/residency/finances/page.tsx"),
       readSource("../src/app/residency/payouts/page.tsx"),
       readSource("../src/app/residency/invoices/page.tsx"),
       readSource("../src/app/residency/settings/page.tsx"),
     ]);
 
     expect(component).toContain("workspace-surface");
-    for (const source of [dashboard, pipeline, payouts, invoices, invoiceManager, setup, talent, clientTalent, clientPayouts, clientInvoices, clientSettings]) {
+    for (const source of [dashboard, pipeline, payouts, invoices, invoiceManager, setup, talent, clientTalent, clientFinances, clientSettings]) {
       expect(source).toContain("<WorkspaceSurface");
     }
+    expect(clientPayouts).toContain('redirect("/residency/finances")');
+    expect(clientInvoices).toContain('redirect("/residency/finances")');
     expect(roster).toContain('redirect("/app/talent?mode=hfy")');
     expect(clientRoster).toContain('redirect("/residency/talent")');
   });

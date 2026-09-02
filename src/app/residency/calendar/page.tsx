@@ -92,8 +92,8 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
   return <div className="calendar-page client-calendar-page"><ResidencyCalendar
     residency={{ id: actor.residencyId, name: actor.residencyName, timezone: actor.residencyTimezone, defaultTalentRateCents: 0, clientHourlyRateCents: 0, calendarLinkSettings }}
     monthKey={monthKey} events={events} dayparts={safeDayparts}
-    talent={roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
+    talent={actor.residencyTier === "complete" ? [] : roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
     dateExceptions={dateExceptions}
-    previewMode calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}
+    previewMode fullProgramming={actor.residencyTier === "complete"} calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}
   /></div>;
 }

@@ -21,7 +21,7 @@ describe("Residency-owned artist management", () => {
     const remove = source.slice(source.indexOf("export async function permanentlyDeleteClientOwnedArtistAction"), source.indexOf("export async function updateClientOwnedRateAction"));
     expect(archive).toContain('talentStatus: "inactive"');
     expect(archive).toContain("archivedAt: new Date()");
-    expect(archive).toContain("tx.update(residencyTalent).set({ active: false })");
+    expect(archive).toContain("tx.update(residencyTalent).set({ active: false, clientVisible: false })");
     expect(archive).not.toContain("tx.delete(talent)");
     expect(archive).toContain("historyPreserved: true");
     expect(remove).toContain("assignmentHistory.length || occurrenceHistory.length");
@@ -35,7 +35,8 @@ describe("Residency-owned artist management", () => {
       readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/client-owned-artist-card.tsx", import.meta.url), "utf8"),
     ]);
-    expect(page).toContain('canManage={actor.accessRole === "manager"}');
+    expect(page).toContain('canManage={!fullProgramming && actor.accessRole === "manager"}');
+    expect(page).toContain('fullProgramming={fullProgramming}');
     expect(card).toContain("updateClientOwnedArtistAction");
     expect(card).toContain("archiveClientOwnedArtistAction");
     expect(card).toContain("restoreClientOwnedArtistAction");

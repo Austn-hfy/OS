@@ -30,7 +30,7 @@ describe("Residency workspace boundaries", () => {
       readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8"),
     ]);
     expect(source).toContain("getResidencyClientSafeRoster(actor.residencyId)");
-    expect(source).toContain('talent={roster.filter((artist) => artist.ownership === "residency").map');
+    expect(source).toContain('talent={actor.residencyTier === "complete" ? [] : roster.filter');
     expect(rosterQuery).toContain(".innerJoin(residencyTalent");
     expect(rosterQuery).toContain("eq(residencyTalent.residencyId, residencyId)");
     expect(ownerPicker).toContain(".innerJoin(residencyTalent");
@@ -57,15 +57,13 @@ describe("Residency workspace boundaries", () => {
     const calendar = shell.indexOf('label="Calendar"');
     const dayParts = shell.indexOf('label="Day Parts"');
     const talent = shell.indexOf('label="Talent"');
-    const payouts = shell.indexOf('label="Payouts"');
-    const invoices = shell.indexOf('label="Invoices"');
+    const finances = shell.indexOf('label="Finances"');
     const settings = shell.indexOf('label="Settings"');
     expect(calendar).toBeGreaterThan(-1);
     expect(dayParts).toBeGreaterThan(calendar);
     expect(talent).toBeGreaterThan(dayParts);
-    expect(payouts).toBeGreaterThan(talent);
-    expect(invoices).toBeGreaterThan(payouts);
-    expect(settings).toBeGreaterThan(invoices);
+    expect(finances).toBeGreaterThan(talent);
+    expect(settings).toBeGreaterThan(finances);
     expect(shell).toContain("residency-workspace-nav");
     expect(shell).toContain("residency-sidebar-settings");
     expect(shell).toContain('href="/residency/talent" label="Talent"');
@@ -76,56 +74,53 @@ describe("Residency workspace boundaries", () => {
   });
 
   it("uses one shared compact header on detail workspaces while Calendar and Day Parts keep integrated headings", async () => {
-    const [sharedHeader, calendar, dayparts, artistLookup, roster, payouts, invoices, settings] = await Promise.all([
+    const [sharedHeader, calendar, dayparts, artistLookup, roster, finances, payouts, invoices, settings] = await Promise.all([
       readFile(new URL("../src/components/residency-page-header.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/calendar/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/dayparts/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/roster/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/finances/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/payouts/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/invoices/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/settings/page.tsx", import.meta.url), "utf8"),
     ]);
     expect(sharedHeader).toContain('className="page-header client-page-header residency-page-header"');
-    for (const source of [artistLookup, payouts, invoices, settings]) {
+    for (const source of [artistLookup, finances, settings]) {
       expect(source).toContain("<ResidencyPageHeader");
     }
+    expect(payouts).toContain('redirect("/residency/finances")');
+    expect(invoices).toContain('redirect("/residency/finances")');
     expect(roster).toContain('redirect("/residency/talent")');
     expect(calendar).not.toContain("<ResidencyPageHeader");
     expect(dayparts).not.toContain("<ResidencyPageHeader");
   });
 
-  it("consolidates Residency Talent and Payouts into single workspace surfaces", async () => {
-    const [artistLookup, payouts, payoutWorkspace, styles] = await Promise.all([
+  it("consolidates Residency Talent and Finances into single workspace surfaces", async () => {
+    const [artistLookup, finances, styles] = await Promise.all([
       readFile(new URL("../src/app/residency/talent/page.tsx", import.meta.url), "utf8"),
-      readFile(new URL("../src/app/residency/payouts/page.tsx", import.meta.url), "utf8"),
-      readFile(new URL("../src/app/residency/payouts/client-payouts-workspace.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/finances/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
     ]);
     expect(artistLookup).toContain("residency-talent-workspace-surface");
-    expect(payouts).toContain("residency-payout-workspace-surface");
+    expect(finances).toContain("workspace-surface-finances");
+    expect(finances).toContain("finance-accordions");
     expect(styles).toContain(".residency-workspace-surface");
     expect(styles).toContain(".residency-talent-workspace-surface :is(.artist-roster-panel, .artist-detail-panel)");
-    expect(styles).toContain(".residency-payout-workspace-surface .payout-list-panel");
-
-    const artist = payoutWorkspace.indexOf('htmlFor="client-payout-artist-search">Artists');
-    const sort = payoutWorkspace.indexOf('className="payout-sort-controls"');
-    const dates = payoutWorkspace.indexOf('className="payout-date-range"');
-    expect(artist).toBeGreaterThan(-1);
-    expect(sort).toBeGreaterThan(artist);
-    expect(dates).toBeGreaterThan(sort);
+    expect(styles).toContain(".finance-accordion");
   });
 
-  it("uses the same Talent and Payout workspace frames in HFY and Residency modes", async () => {
-    const [hfyTalent, clientTalent, hfyPayouts, clientPayouts] = await Promise.all([
+  it("uses the shared Talent frame while keeping HFY Payouts and client Finances distinct", async () => {
+    const [hfyTalent, clientTalent, hfyPayouts, clientFinances] = await Promise.all([
       readFile(new URL("../src/app/app/talent/artist-lookup.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/app/payouts/payouts-workspace.tsx", import.meta.url), "utf8"),
-      readFile(new URL("../src/app/residency/payouts/client-payouts-workspace.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/finances/page.tsx", import.meta.url), "utf8"),
     ]);
     expect(hfyTalent).toContain("TalentWorkspaceShell");
     expect(clientTalent).toContain("TalentWorkspaceShell");
     expect(hfyPayouts).toContain("PayoutWorkspaceFrame");
-    expect(clientPayouts).toContain("PayoutWorkspaceFrame");
+    expect(clientFinances).not.toContain("PayoutWorkspaceFrame");
+    expect(clientFinances).toContain("Owed to Your Talent");
   });
 });

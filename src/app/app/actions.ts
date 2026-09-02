@@ -1,12 +1,12 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, scheduleOccurrences, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
+import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments, talentPaymentProfiles, talentScheduleLocks, users } from "@/db/schema";
 import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
@@ -21,11 +21,12 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { issuePublicCalendarToken } from "@/domain/public-calendar";
 import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
 import { requestOrigin } from "@/lib/request-origin";
+import { isFullCalendarMonth } from "@/domain/talent-invoicing";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
 export type CredentialLinkActionState = ResidencyActionState & { setupLink?: string };
-export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_residency";
+export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_client_roster" | "remove_from_client_roster";
 
 function centsFromDollars(value: FormDataEntryValue | null): number {
   const amount = Number(value);
@@ -110,6 +111,7 @@ export async function createResidencyAction(_previous: ResidencyActionState, for
         defaultTalentRateCents: centsFromDollars(formData.get("defaultTalentRate")),
         clientHourlyRateCents: centsFromDollars(formData.get("clientHourlyRate")),
         paymentTermsDays: parsed.paymentTermsDays,
+        invoiceFrequency: parsed.tier === "complete" ? "monthly" : "weekly",
         billingContactEmail: parsed.billingContactEmail,
         billingContactName: parsed.billingContactName,
         invoicePrefix: parsed.invoicePrefix.toUpperCase(),
@@ -309,7 +311,7 @@ export async function updateLeadAction(_previous: ResidencyActionState, formData
           billingContactEmail: conversion.billingContactEmail,
           billingAddress: conversion.billingAddress,
           paymentTermsDays: conversion.paymentTermsDays,
-          invoiceFrequency: conversion.invoiceFrequency,
+          invoiceFrequency: conversion.tier === "complete" ? "monthly" : conversion.invoiceFrequency,
           billingCycleStartWeekday: conversion.billingCycleStartWeekday,
           billingCycleLengthDays: conversion.billingCycleLengthDays,
           invoiceLinePresentation: conversion.invoiceLinePresentation,
@@ -463,30 +465,32 @@ export async function bulkUpdateArtistsAction(input: {
     const actor = await requireInternalActor();
     const parsed = z.object({
       talentIds: z.array(z.uuid()).min(1).max(250).transform((ids) => [...new Set(ids)]),
-      operation: z.enum(["active", "inactive", "archive", "restore", "add_to_residency"]),
+      operation: z.enum(["active", "inactive", "archive", "restore", "add_to_client_roster", "remove_from_client_roster"]),
       residencyId: z.uuid().optional(),
     }).parse(input);
     const database = getDb();
     const artistRows = await database.select({
       id: talent.id,
       stageName: talent.stageName,
+      ownership: talent.ownership,
       archivedAt: talent.archivedAt,
       exclusiveResidencyId: talent.exclusiveResidencyId,
     })
       .from(talent)
       .where(inArray(talent.id, parsed.talentIds));
     if (artistRows.length !== parsed.talentIds.length) throw new Error("One or more artists could not be found.");
+    if (artistRows.some((artist) => artist.ownership !== "hfy")) throw new Error("Client visibility can only be changed for HFY artists here.");
 
     let residencyName = "";
-    if (parsed.operation === "add_to_residency") {
+    if (parsed.operation === "add_to_client_roster" || parsed.operation === "remove_from_client_roster") {
       if (!parsed.residencyId) throw new Error("Choose a Residency first.");
       const [residency] = await database.select({ id: residencies.id, name: residencies.name })
         .from(residencies)
         .where(and(eq(residencies.id, parsed.residencyId), eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
         .limit(1);
       if (!residency) throw new Error("Residency not found.");
-      if (artistRows.some((artist) => artist.archivedAt)) throw new Error("Restore archived artists before adding them to a Residency.");
-      if (artistRows.some((artist) => artist.exclusiveResidencyId && artist.exclusiveResidencyId !== parsed.residencyId)) {
+      if (parsed.operation === "add_to_client_roster" && artistRows.some((artist) => artist.archivedAt)) throw new Error("Restore archived artists before adding them to a client roster.");
+      if (parsed.operation === "add_to_client_roster" && artistRows.some((artist) => artist.exclusiveResidencyId && artist.exclusiveResidencyId !== parsed.residencyId)) {
         throw new Error("One or more exclusive artists can only be assigned to their exclusive Residency.");
       }
       residencyName = residency.name;
@@ -499,19 +503,25 @@ export async function bulkUpdateArtistsAction(input: {
         await tx.update(talent).set({ talentStatus: "inactive", updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
       } else if (parsed.operation === "archive") {
         await tx.update(talent).set({ talentStatus: "inactive", archivedAt: new Date(), updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
-        await tx.update(residencyTalent).set({ active: false }).where(inArray(residencyTalent.talentId, parsed.talentIds));
+        await tx.update(residencyTalent).set({ active: false, clientVisible: false }).where(inArray(residencyTalent.talentId, parsed.talentIds));
       } else if (parsed.operation === "restore") {
         await tx.update(talent).set({ talentStatus: "inactive", archivedAt: null, updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
-      } else if (parsed.residencyId) {
+      } else if (parsed.operation === "add_to_client_roster" && parsed.residencyId) {
         await tx.insert(residencyTalent).values(parsed.talentIds.map((talentId) => ({
           residencyId: parsed.residencyId!,
           talentId,
           approvedByUserId: actor.userId,
           active: true,
+          clientVisible: true,
         }))).onConflictDoUpdate({
           target: [residencyTalent.residencyId, residencyTalent.talentId],
-          set: { active: true, approvedByUserId: actor.userId },
+          set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
         });
+      } else if (parsed.operation === "remove_from_client_roster" && parsed.residencyId) {
+        await tx.update(residencyTalent).set({ clientVisible: false }).where(and(
+          eq(residencyTalent.residencyId, parsed.residencyId),
+          inArray(residencyTalent.talentId, parsed.talentIds),
+        ));
       }
 
       await tx.insert(auditLog).values(parsed.talentIds.map((talentId) => ({
@@ -520,8 +530,8 @@ export async function bulkUpdateArtistsAction(input: {
         action: `talent_${parsed.operation}`,
         entityType: "talent",
         entityId: talentId,
-        residencyId: parsed.operation === "add_to_residency" ? parsed.residencyId : null,
-        details: { operation: parsed.operation, residencyName: residencyName || undefined },
+        residencyId: parsed.operation === "add_to_client_roster" || parsed.operation === "remove_from_client_roster" ? parsed.residencyId : null,
+        details: { operation: parsed.operation, residencyName: residencyName || undefined, bookingsPreserved: parsed.operation === "remove_from_client_roster" || undefined },
       })));
     });
 
@@ -531,8 +541,10 @@ export async function bulkUpdateArtistsAction(input: {
     revalidatePath("/app/setup");
     const count = parsed.talentIds.length;
     const subject = `${count} artist${count === 1 ? "" : "s"}`;
-    const message = parsed.operation === "add_to_residency"
-      ? `${subject} added to ${residencyName}.`
+    const message = parsed.operation === "add_to_client_roster"
+      ? `${subject} added to ${residencyName}'s client roster.`
+      : parsed.operation === "remove_from_client_roster"
+        ? `${subject} removed from ${residencyName}'s client roster. Existing bookings and payout history were preserved.`
       : parsed.operation === "active"
         ? `${subject} set to Active.`
         : parsed.operation === "inactive"
@@ -560,6 +572,7 @@ export async function updateArtistResidenciesAction(input: {
     const [artist] = await database.select({
       id: talent.id,
       stageName: talent.stageName,
+      ownership: talent.ownership,
       archivedAt: talent.archivedAt,
       exclusiveResidencyId: talent.exclusiveResidencyId,
     })
@@ -567,6 +580,7 @@ export async function updateArtistResidenciesAction(input: {
       .where(eq(talent.id, parsed.talentId))
       .limit(1);
     if (!artist) throw new Error("Artist not found.");
+    if (artist.ownership !== "hfy") throw new Error("Client visibility can only be changed for HFY artists here.");
     if (artist.archivedAt && parsed.residencyIds.length) throw new Error("Restore this artist before adding Residency access.");
     if (artist.exclusiveResidencyId && parsed.residencyIds.some((residencyId) => residencyId !== artist.exclusiveResidencyId)) {
       throw new Error("An exclusive artist can only be assigned to their exclusive Residency.");
@@ -578,22 +592,23 @@ export async function updateArtistResidenciesAction(input: {
     if (validResidencies.length !== parsed.residencyIds.length) throw new Error("One or more Residencies could not be found.");
 
     await database.transaction(async (tx) => {
-      await tx.update(residencyTalent).set({ active: false }).where(eq(residencyTalent.talentId, parsed.talentId));
+      await tx.update(residencyTalent).set({ clientVisible: false }).where(eq(residencyTalent.talentId, parsed.talentId));
       if (parsed.residencyIds.length) {
         await tx.insert(residencyTalent).values(parsed.residencyIds.map((residencyId) => ({
           residencyId,
           talentId: parsed.talentId,
           approvedByUserId: actor.userId,
           active: true,
+          clientVisible: true,
         }))).onConflictDoUpdate({
           target: [residencyTalent.residencyId, residencyTalent.talentId],
-          set: { active: true, approvedByUserId: actor.userId },
+          set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
         });
       }
       await tx.insert(auditLog).values({
         actorUserId: actor.userId,
         actorLabel: actor.email,
-        action: "talent_residencies_updated",
+        action: "talent_client_visibility_updated",
         entityType: "talent",
         entityId: parsed.talentId,
         details: { residencyIds: parsed.residencyIds },
@@ -603,9 +618,9 @@ export async function updateArtistResidenciesAction(input: {
     revalidatePath("/app/talent/roster");
     revalidatePath("/app/calendar");
     revalidatePath("/app/setup");
-    return { status: "success", message: `${artist.stageName}'s Residency assignments were saved.` };
+    return { status: "success", message: `${artist.stageName}'s client visibility was saved.` };
   } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to update Residency access." };
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update client visibility." };
   }
 }
 
@@ -649,16 +664,17 @@ export async function updateArtistRosterPlacementAction(input: {
       // Clear prior exclusivity before changing assignment rows so moving an
       // exclusive artist remains one atomic, database-valid operation.
       await tx.update(talent).set({ exclusiveResidencyId: null, updatedAt: new Date() }).where(eq(talent.id, parsed.talentId));
-      await tx.update(residencyTalent).set({ active: false }).where(eq(residencyTalent.talentId, parsed.talentId));
+      await tx.update(residencyTalent).set({ active: false, clientVisible: false }).where(eq(residencyTalent.talentId, parsed.talentId));
       if (desiredResidencyIds.length) {
         await tx.insert(residencyTalent).values(desiredResidencyIds.map((residencyId) => ({
           residencyId,
           talentId: parsed.talentId,
           approvedByUserId: actor.userId,
           active: true,
+          clientVisible: true,
         }))).onConflictDoUpdate({
           target: [residencyTalent.residencyId, residencyTalent.talentId],
-          set: { active: true, approvedByUserId: actor.userId },
+          set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
         });
       }
       await tx.update(talent).set({
@@ -703,9 +719,10 @@ export async function approveResidencyTalentAction(formData: FormData) {
     talentId: parsed.talentId,
     approvedByUserId: actor.userId,
     active: true,
+    clientVisible: true,
   }).onConflictDoUpdate({
     target: [residencyTalent.residencyId, residencyTalent.talentId],
-    set: { active: true, approvedByUserId: actor.userId },
+    set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
   });
   revalidatePath("/app/setup");
   revalidatePath("/app/talent/roster");
@@ -732,16 +749,17 @@ export async function updateResidencyApprovedTalentAction(_previous: ResidencyAc
     )) : [];
     if (validTalent.length !== parsed.talentIds.length) throw new Error("One or more selected DJs are no longer active.");
     await database.transaction(async (tx) => {
-      await tx.update(residencyTalent).set({ active: false }).where(eq(residencyTalent.residencyId, residency.id));
+      await tx.update(residencyTalent).set({ clientVisible: false }).where(eq(residencyTalent.residencyId, residency.id));
       if (parsed.talentIds.length) {
         await tx.insert(residencyTalent).values(parsed.talentIds.map((talentId) => ({
           residencyId: residency.id,
           talentId,
           active: true,
+          clientVisible: true,
           approvedByUserId: actor.userId,
         }))).onConflictDoUpdate({
           target: [residencyTalent.residencyId, residencyTalent.talentId],
-          set: { active: true, approvedByUserId: actor.userId },
+          set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
         });
       }
       await tx.insert(auditLog).values({
@@ -997,10 +1015,15 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
     const database = getDb();
     const [residency] = await database.select({
       id: residencies.id,
+      tier: residencies.tier,
       paymentTermsDays: residencies.paymentTermsDays,
       defaultInvoiceNote: residencies.defaultInvoiceNote,
     }).from(residencies).where(eq(residencies.id, parsed.residencyId)).limit(1);
     if (!residency) throw new Error("Residency not found.");
+    const fullProgramming = residency.tier === "complete";
+    if (fullProgramming && parsed.kind !== "scheduled_period") throw new Error("Full Programming talent invoices must use a monthly scheduled period.");
+    if (fullProgramming && !isFullCalendarMonth(parsed.billingPeriodStart, parsed.billingPeriodEnd)) throw new Error("Full Programming talent invoices must cover one full calendar month.");
+    if (fullProgramming && parsed.invoiceDate > parsed.billingPeriodStart) throw new Error("Full Programming talent invoices must be dated on or before the service month begins.");
 
     const shiftIds = z.array(z.uuid()).parse(formData.getAll("shiftIds"));
     const customLines = parsed.kind === "custom"
@@ -1010,6 +1033,16 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
 
     await database.transaction(async (tx) => {
       let scheduledRows: Array<{ id: string; serviceDate: string; startsAt: Date; endsAt: Date; clientRateCents: number }> = [];
+      const pendingAdjustments = fullProgramming ? await tx.select({
+        id: talentInvoiceAdjustments.id,
+        serviceDate: talentInvoiceAdjustments.serviceDate,
+        reason: talentInvoiceAdjustments.reason,
+        description: talentInvoiceAdjustments.description,
+        amountCents: talentInvoiceAdjustments.amountCents,
+      }).from(talentInvoiceAdjustments).where(and(
+        eq(talentInvoiceAdjustments.residencyId, parsed.residencyId),
+        eq(talentInvoiceAdjustments.status, "pending"),
+      )) : [];
       if (parsed.kind === "scheduled_period") {
         scheduledRows = await tx.select({
           id: shifts.id,
@@ -1025,10 +1058,24 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
         for (const shift of scheduledRows) {
           if (shift.serviceDate < parsed.billingPeriodStart || shift.serviceDate > parsed.billingPeriodEnd) throw new Error("Every selected service must fall inside the billing period.");
         }
-        const occupied = await tx.select({ id: shifts.id }).from(shifts).where(and(inArray(shifts.id, shiftIds), inArray(shifts.billingStatus, ["invoiced", "not_billable"])));
+        const occupied = await tx.select({ id: shifts.id }).from(shifts).where(and(inArray(shifts.id, shiftIds), inArray(shifts.billingStatus, ["invoiced", "pending_adjustment", "not_billable"])));
         if (occupied.length) throw new Error("One or more selected services is already invoiced or marked not billable.");
         const alreadyLinked = await tx.select({ id: shifts.id }).from(shifts).where(and(inArray(shifts.id, shiftIds), isNotNull(shifts.invoiceId)));
         if (alreadyLinked.length) throw new Error("One or more selected services is already linked to an Invoice.");
+        if (fullProgramming) {
+          const eligible = await tx.select({ id: shifts.id }).from(shifts).where(and(
+            eq(shifts.residencyId, parsed.residencyId),
+            eq(shifts.economicsMode, "hfy"),
+            eq(shifts.billingStatus, "pending"),
+            isNull(shifts.invoiceId),
+            sql`${shifts.serviceDate} >= ${parsed.billingPeriodStart}`,
+            sql`${shifts.serviceDate} <= ${parsed.billingPeriodEnd}`,
+          ));
+          const selected = new Set(shiftIds);
+          if (eligible.length !== selected.size || eligible.some((shift) => !selected.has(shift.id))) {
+            throw new Error("A Full Programming invoice must lock every billable talent service in the service month.");
+          }
+        }
       }
 
       const manualValues = customLines.map((line, index) => {
@@ -1045,10 +1092,12 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
           sortOrder: index,
         };
       });
+      const adjustmentTotalCents = pendingAdjustments.reduce((sum, adjustment) => sum + adjustment.amountCents, 0);
       const totalCents = parsed.kind === "scheduled_period"
         ? scheduledRows.reduce((sum, shift) => sum + calculateBillableAmountCents(shift.startsAt, shift.endsAt, shift.clientRateCents), 0)
         : manualValues.reduce((sum, line) => sum + line.totalCents, 0);
-      if (totalCents <= 0) throw new Error("The Invoice total must be greater than zero.");
+      const finalTotalCents = totalCents + adjustmentTotalCents;
+      if (finalTotalCents <= 0) throw new Error("The Invoice total must be greater than zero.");
 
       const [invoice] = await tx.insert(invoices).values({
         residencyId: parsed.residencyId,
@@ -1059,7 +1108,7 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
         paymentTermsDays: residency.paymentTermsDays,
         kind: parsed.kind,
         notes: parsed.notes || residency.defaultInvoiceNote,
-        totalCents,
+        totalCents: finalTotalCents,
         status: "draft",
       }).returning({ id: invoices.id });
 
@@ -1071,6 +1120,36 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
           invoiceLinkNote: "",
           updatedAt: new Date(),
         }).where(inArray(shifts.id, shiftIds));
+        if (pendingAdjustments.length) {
+          await tx.insert(invoiceLineItems).values(pendingAdjustments.map((adjustment, index) => ({
+            invoiceId: invoice.id,
+            type: "manual_adjustment" as const,
+            serviceDate: adjustment.serviceDate,
+            description: adjustment.description,
+            quantityThousandths: 1_000,
+            unitLabel: "adjustment",
+            unitAmountCents: adjustment.amountCents,
+            totalCents: adjustment.amountCents,
+            adjustmentReason: adjustment.reason,
+            sortOrder: scheduledRows.length + index,
+          })));
+          await tx.update(talentInvoiceAdjustments).set({
+            status: "applied",
+            appliedInvoiceId: invoice.id,
+            appliedAt: new Date(),
+            updatedAt: new Date(),
+          }).where(inArray(talentInvoiceAdjustments.id, pendingAdjustments.map((adjustment) => adjustment.id)));
+        }
+        if (fullProgramming) {
+          await tx.insert(talentScheduleLocks).values({
+            residencyId: parsed.residencyId,
+            serviceMonth: parsed.billingPeriodStart,
+            billingPeriodStart: parsed.billingPeriodStart,
+            billingPeriodEnd: parsed.billingPeriodEnd,
+            invoiceId: invoice.id,
+            lockedByUserId: actor.userId,
+          });
+        }
       } else {
         await tx.insert(invoiceLineItems).values(manualValues.map((line) => ({ ...line, invoiceId: invoice.id })));
       }
@@ -1081,7 +1160,7 @@ export async function createResidencyInvoiceAction(_previous: ResidencyActionSta
         action: "invoice_created",
         entityType: "invoice",
         entityId: invoice.id,
-        details: { invoiceNumber: parsed.invoiceNumber, kind: parsed.kind, totalCents, shiftCount: scheduledRows.length, lineCount: manualValues.length },
+        details: { invoiceNumber: parsed.invoiceNumber, kind: parsed.kind, totalCents: finalTotalCents, shiftCount: scheduledRows.length, lineCount: manualValues.length + pendingAdjustments.length, fullProgrammingScheduleLocked: fullProgramming, appliedAdjustmentCount: pendingAdjustments.length },
       });
     });
     revalidatePath("/app/invoices");
@@ -1113,6 +1192,11 @@ export async function updateResidencyInvoiceSettingsAction(_previous: ResidencyA
     const autoSendReason = autoSendInvoices ? "Enabled for approved Invoices" : (parsed.autoSendReason || "Manual send");
     const database = getDb();
     await database.transaction(async (tx) => {
+      const [residency] = await tx.select({ tier: residencies.tier }).from(residencies).where(eq(residencies.id, parsed.residencyId)).limit(1);
+      if (!residency) throw new Error("Residency not found.");
+      if (residency.tier === "complete" && parsed.invoiceFrequency !== "monthly") {
+        throw new Error("Full Programming talent invoices must use a monthly frequency.");
+      }
       const [updated] = await tx.update(residencies).set({
         billingContactName: parsed.billingContactName,
         billingContactEmail: parsed.billingContactEmail,
@@ -1301,8 +1385,7 @@ export async function skipDaypartDateAction(formData: FormData): Promise<Residen
     const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
     await skipDaypartDate(actor, parsed);
     revalidateResidencyCalendars();
-    revalidatePath("/residency/payouts");
-    revalidatePath("/residency/invoices");
+    revalidatePath("/residency/finances");
     revalidatePath("/app/payouts");
     revalidatePath("/app/invoices");
     return { status: "success", message: "This date was skipped. The standing Daypart remains unchanged." };
@@ -1380,6 +1463,7 @@ export async function updateResidencyProfileAction(_previous: ResidencyActionSta
       cityState: parsed.cityState,
       timezone: parsed.timezone,
       tier: parsed.tier,
+      ...(parsed.tier === "complete" ? { invoiceFrequency: "monthly", billingCycleLengthDays: 31 } : {}),
       internalNotes: parsed.internalNotes,
       updatedAt: new Date(),
     }).where(and(eq(residencies.id, parsed.residencyId), eq(residencies.operatingMode, "operations"))).returning({ id: residencies.id });
@@ -1467,7 +1551,7 @@ export async function bookResidencyDateAction(_previous: ResidencyActionState, f
     revalidatePath("/app/invoices");
     revalidatePath("/app");
     revalidatePath("/residency/calendar");
-    revalidatePath("/residency/payouts");
+    revalidatePath("/residency/finances");
     const count = created.shiftIds.length + created.occurrenceIds.length;
     return { status: "success", message: `${count} calendar slot${count === 1 ? "" : "s"} scheduled.` };
   } catch (error) {
@@ -1517,45 +1601,10 @@ export async function fulfillHfyTalentRequestAction(
     revalidatePath("/app/payouts");
     revalidatePath("/app/invoices");
     revalidatePath("/residency/calendar");
-    revalidatePath("/residency/payouts");
-    revalidatePath("/residency/invoices");
+    revalidatePath("/residency/finances");
     return { status: "success", message: `${result.artistNames.join(" + ")} assigned using the Residency rates.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to fulfill this HFY request." };
-  }
-}
-
-export async function updateClientPaymentStatusVisibilityAction(
-  _previous: ResidencyActionState,
-  formData: FormData,
-): Promise<ResidencyActionState> {
-  try {
-    const actor = await requireInternalActor();
-    const residencyId = z.uuid().parse(formData.get("residencyId"));
-    const visible = formData.get("visible") === "on";
-    const [updated] = await getDb().update(residencies).set({
-      clientPaymentStatusVisible: visible,
-      updatedAt: new Date(),
-    }).where(and(
-      eq(residencies.id, residencyId),
-      eq(residencies.operatingMode, "operations"),
-    )).returning({ id: residencies.id });
-    if (!updated) throw new Error("Residency not found.");
-    await getDb().insert(auditLog).values({
-      residencyId,
-      actorUserId: actor.userId,
-      actorLabel: actor.email,
-      action: "client_payment_status_visibility_updated",
-      entityType: "residency",
-      entityId: residencyId,
-      details: { visible },
-    });
-    revalidatePath("/app/setup");
-    revalidatePath("/residency");
-    revalidatePath("/residency/payouts");
-    return { status: "success", message: visible ? "Payment Status is visible to this client." : "Payment Status is hidden from this client." };
-  } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to update client visibility." };
   }
 }
 
@@ -1633,8 +1682,7 @@ export async function deleteCalendarShiftAction(formData: FormData): Promise<Res
     revalidatePath("/app/invoices");
     revalidatePath("/app");
     revalidatePath("/residency/calendar");
-    revalidatePath("/residency/payouts");
-    revalidatePath("/residency/invoices");
+    revalidatePath("/residency/finances");
     return { status: "success", message: "Shift deleted." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to delete this Shift." };
@@ -1658,8 +1706,7 @@ function revalidateOneTimeRecordViews() {
   revalidatePath("/app/payouts");
   revalidatePath("/app/invoices");
   revalidatePath("/residency/calendar");
-  revalidatePath("/residency/payouts");
-  revalidatePath("/residency/invoices");
+  revalidatePath("/residency/finances");
 }
 
 export async function updateOneTimeShiftAction(formData: FormData): Promise<ResidencyActionState> {

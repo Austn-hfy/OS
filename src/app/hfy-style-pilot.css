@@ -2990,3 +2990,88 @@
   box-shadow: 0 0 0 3px rgba(232, 141, 122, 0.2), inset 3px 0 #dc715f, inset 0 1px rgba(255, 255, 255, 0.78);
   animation: hfy-rate-nav-glow 2.4s ease-in-out infinite;
 }
+
+/* Financial surfaces keep Platform subscription records visually and structurally separate from talent money. */
+.hfy-style-system .settings-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .settings-tabs a {
+  padding: 10px 14px;
+  border-bottom: 2px solid transparent;
+  color: var(--hfy-muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.hfy-style-system .settings-tabs a.active {
+  border-bottom-color: var(--owner-accent, #2783dc);
+  color: var(--hfy-ink);
+}
+
+.hfy-style-system .finance-accordions,
+.hfy-style-system .platform-invoice-history,
+.hfy-style-system .developer-platform-plans {
+  display: grid;
+  gap: 16px;
+}
+
+.hfy-style-system .finance-accordion {
+  padding: 0;
+  overflow: clip;
+}
+
+.hfy-style-system .finance-accordion > summary {
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.hfy-style-system .finance-accordion > summary::-webkit-details-marker { display: none; }
+.hfy-style-system .finance-accordion > summary > span { display: grid; gap: 4px; }
+.hfy-style-system .finance-accordion > summary > span:last-child { text-align: right; }
+.hfy-style-system .finance-accordion > summary small { color: var(--hfy-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.hfy-style-system .finance-accordion > summary strong { font-size: 18px; }
+.hfy-style-system .finance-accordion-body { padding: 0 22px 22px; border-top: 1px solid var(--hfy-line); }
+.hfy-style-system .finance-accordion-body > p { margin: 16px 0; color: var(--hfy-muted); }
+
+.hfy-style-system .platform-billing-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.hfy-style-system .platform-billing-summary article { display: grid; gap: 7px; }
+.hfy-style-system .platform-billing-summary article > small { color: var(--hfy-muted); text-transform: uppercase; letter-spacing: .08em; }
+.hfy-style-system .platform-billing-summary article > strong { font-size: clamp(18px, 2vw, 26px); }
+.hfy-style-system .platform-billing-summary article > span:not(.status) { color: var(--hfy-muted); }
+
+.hfy-style-system .platform-plan-breakdown {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, .8fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.hfy-style-system .platform-plan-breakdown dl { margin: 0; display: grid; gap: 10px; }
+.hfy-style-system .platform-plan-breakdown dl div { display: flex; justify-content: space-between; gap: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--hfy-line); }
+.hfy-style-system .platform-plan-breakdown dd { margin: 0; font-weight: 750; }
+.hfy-style-system .full-programming-notice { padding: 14px 16px; border: 1px solid color-mix(in srgb, #2783dc 35%, var(--hfy-line)); border-radius: 12px; background: color-mix(in srgb, #2783dc 7%, white); }
+.hfy-style-system .full-programming-notice p { margin: 5px 0 0; color: var(--hfy-muted); }
+.hfy-style-system .developer-platform-plans { scroll-margin-top: 24px; }
+.hfy-style-system .developer-platform-plans td { vertical-align: top; }
+.hfy-style-system .developer-platform-plans td > small { display: block; margin-top: 3px; color: var(--hfy-muted); }
+
+@media (max-width: 850px) {
+  .hfy-style-system .platform-billing-summary,
+  .hfy-style-system .platform-plan-breakdown { grid-template-columns: 1fr; }
+  .hfy-style-system .finance-accordion > summary { align-items: flex-start; }
+}

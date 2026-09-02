@@ -201,6 +201,7 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
         eq(residencyTalent.residencyId, current.residencyId),
         eq(residencyTalent.talentId, replacement.id),
         eq(residencyTalent.active, true),
+        eq(residencyTalent.clientVisible, true),
       )).limit(1);
       if (!approved) throw new Error("This DJ is unavailable to this Residency.");
     } else {
@@ -208,6 +209,7 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
         residencyId: current.residencyId,
         talentId: replacement.id,
         active: true,
+        clientVisible: false,
         approvedByUserId: actor.userId,
       }).onConflictDoUpdate({
         target: [residencyTalent.residencyId, residencyTalent.talentId],
@@ -306,6 +308,7 @@ export async function rescheduleAssignment(
         eq(residencyTalent.residencyId, current.residencyId),
         eq(residencyTalent.talentId, replacement.id),
         eq(residencyTalent.active, true),
+        eq(residencyTalent.clientVisible, true),
       )).limit(1);
       if (!approved) throw new Error("This DJ is unavailable to this Residency.");
     } else {
@@ -313,6 +316,7 @@ export async function rescheduleAssignment(
         residencyId: current.residencyId,
         talentId: replacement.id,
         active: true,
+        clientVisible: false,
         approvedByUserId: actor.userId,
       }).onConflictDoUpdate({
         target: [residencyTalent.residencyId, residencyTalent.talentId],
