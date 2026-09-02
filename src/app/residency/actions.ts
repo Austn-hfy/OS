@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, clientAssignmentTerms, residencies, residencyTalent, shifts, talent } from "@/db/schema";
 import { requireResidencyActor } from "@/lib/auth";
@@ -20,6 +20,8 @@ export async function createClientOwnedArtistAction(
     const parsed = z.object({
       name: z.string().trim().min(1).max(200),
       contact: z.string().trim().max(300),
+      homeMarket: z.string().trim().max(200),
+      instagramHandle: z.string().trim().max(160),
       genre: z.string(),
       customGenre: z.string().default(""),
     }).parse(Object.fromEntries(formData));
@@ -34,6 +36,8 @@ export async function createClientOwnedArtistAction(
       const [artist] = await tx.insert(talent).values({
         stageName: parsed.name,
         clientContact: parsed.contact,
+        homeMarket: parsed.homeMarket,
+        instagramHandle: parsed.instagramHandle,
         genres: [genre],
         ownership: "residency",
         owningResidencyId: actor.residencyId,
@@ -62,6 +66,108 @@ export async function createClientOwnedArtistAction(
     return { status: "success", message: `${parsed.name} added to your roster.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to add this artist." };
+  }
+}
+
+export async function updateClientOwnedArtistAction(
+  _previous: ClientSettingsActionState,
+  formData: FormData,
+): Promise<ClientSettingsActionState> {
+  try {
+    const actor = await requireResidencyActor();
+    if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    const parsed = z.object({
+      artistId: z.uuid(),
+      name: z.string().trim().min(1).max(200),
+      contact: z.string().trim().max(300),
+      homeMarket: z.string().trim().max(200),
+      instagramHandle: z.string().trim().max(160),
+      genre: z.string(),
+      customGenre: z.string().default(""),
+    }).parse(Object.fromEntries(formData));
+    const genre = resolveClientArtistGenre(parsed.genre, parsed.customGenre);
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const duplicate = await tx.select({ id: talent.id }).from(talent).where(and(
+        eq(talent.ownership, "residency"),
+        eq(talent.owningResidencyId, actor.residencyId),
+        ne(talent.id, parsed.artistId),
+        isNull(talent.archivedAt),
+        sql`lower(${talent.stageName}) = lower(${parsed.name})`,
+      )).limit(1);
+      if (duplicate.length) throw new Error("An artist with this name is already in your roster.");
+      const [artist] = await tx.update(talent).set({
+        stageName: parsed.name,
+        clientContact: parsed.contact,
+        homeMarket: parsed.homeMarket,
+        instagramHandle: parsed.instagramHandle,
+        genres: [genre],
+        updatedAt: new Date(),
+      }).where(and(
+        eq(talent.id, parsed.artistId),
+        eq(talent.ownership, "residency"),
+        eq(talent.owningResidencyId, actor.residencyId),
+        isNull(talent.archivedAt),
+      )).returning({ id: talent.id, stageName: talent.stageName });
+      if (!artist) throw new Error("Artist not found in this Residency.");
+      await tx.insert(auditLog).values({
+        residencyId: actor.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "client_owned_artist_updated",
+        entityType: "talent",
+        entityId: artist.id,
+        details: { stageName: artist.stageName },
+      });
+    });
+    revalidatePath("/residency/talent");
+    revalidatePath("/residency/calendar");
+    return { status: "success", message: `${parsed.name} updated.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this artist." };
+  }
+}
+
+export async function deleteClientOwnedArtistAction(
+  _previous: ClientSettingsActionState,
+  formData: FormData,
+): Promise<ClientSettingsActionState> {
+  try {
+    const actor = await requireResidencyActor();
+    if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    const parsed = z.object({ artistId: z.uuid() }).parse(Object.fromEntries(formData));
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [artist] = await tx.update(talent).set({
+        talentStatus: "inactive",
+        archivedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(and(
+        eq(talent.id, parsed.artistId),
+        eq(talent.ownership, "residency"),
+        eq(talent.owningResidencyId, actor.residencyId),
+        isNull(talent.archivedAt),
+      )).returning({ id: talent.id, stageName: talent.stageName });
+      if (!artist) throw new Error("Artist not found in this Residency.");
+      await tx.update(residencyTalent).set({ active: false }).where(and(
+        eq(residencyTalent.residencyId, actor.residencyId),
+        eq(residencyTalent.talentId, artist.id),
+      ));
+      await tx.insert(auditLog).values({
+        residencyId: actor.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "client_owned_artist_deleted",
+        entityType: "talent",
+        entityId: artist.id,
+        details: { stageName: artist.stageName, historyPreserved: true },
+      });
+    });
+    revalidatePath("/residency/talent");
+    revalidatePath("/residency/calendar");
+    return { status: "success", message: "Artist deleted from this Residency roster." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to delete this artist." };
   }
 }
 

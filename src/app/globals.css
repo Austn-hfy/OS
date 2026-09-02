@@ -170,12 +170,19 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .client-safe-roster-boundary span { color: var(--muted); font-size: 11px; }
 .client-safe-roster { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
 .client-safe-talent-card { display: grid; gap: 16px; }
+.client-owned-artist-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.client-owned-artist-header .button { min-height: 36px; padding: 8px 12px; }
 .client-safe-talent-card h2 { margin: 0 0 3px; font-size: 20px; }
 .client-safe-talent-card p { margin: 0; color: var(--muted); }
 .client-safe-talent-card dl { display: grid; gap: 10px; margin: 0; }
 .client-safe-talent-card dl > div { display: grid; gap: 2px; }
 .client-safe-talent-card dt { color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
 .client-safe-talent-card dd { margin: 0; color: var(--dark); font-size: 11px; }
+.client-owned-artist-form { display: grid; gap: 12px; }
+.client-owned-artist-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.client-owned-artist-delete { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.client-owned-artist-delete .button { justify-self: start; }
+.client-owned-artist-delete small { color: var(--muted); font-size: 9px; line-height: 1.45; }
 .client-payout-table table { min-width: 650px; }
 .client-invoice-table table { min-width: 780px; }
 .danger-button { color: var(--danger) !important; border-color: rgba(183,67,55,.26) !important; background: rgba(250,233,229,.72) !important; }
