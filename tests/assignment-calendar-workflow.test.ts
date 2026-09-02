@@ -13,8 +13,8 @@ describe("calendar assignment workflow safeguards", () => {
     const source = await readFile(new URL("../src/app/app/actions.ts", import.meta.url), "utf8");
 
     expect(source).toContain('error.message.startsWith("Failed query:") ? fallback : error.message');
-    expect(source).toContain('calendarAssignmentErrorMessage(error, "Unable to update this DJ. Refresh the page and try again.")');
-    expect(source).toContain('calendarAssignmentErrorMessage(error, "Unable to remove this DJ. Refresh the page and try again.")');
+    expect(source).toContain('calendarAssignmentErrorMessage(error, "Unable to update this DJ. Refresh the page and try again.", "reschedule")');
+    expect(source).toContain('calendarAssignmentErrorMessage(error, "Unable to remove this DJ. Refresh the page and try again.", "remove")');
   });
 
   it("normalizes legacy hotel assignments before HFY edits them", async () => {
