@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { projectDaypartSlots } from "@/domain/dayparts";
 
 describe("Calendar Only Dayparts", () => {
+  it("uses plain schedule labels throughout the shared Daypart manager", async () => {
+    const manager = await readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8");
+    expect(manager).toContain("<strong>Weekly</strong>");
+    expect(manager).toContain("<strong>As needed</strong>");
+    expect(manager).not.toContain("<strong>Standing weekly</strong>");
+    expect(manager).not.toContain("<strong>Calendar Only</strong>");
+  });
+
   it("never projects recurring calendar slots", () => {
     const slots = projectDaypartSlots([{
       id: "calendar-only",
