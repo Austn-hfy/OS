@@ -49,6 +49,9 @@ describe("Daypart default-rate attention", () => {
     expect(calendar).not.toContain("daypart-rate-attention");
     expect(residencyShell).toContain("attention={Boolean(actor.needsDaypartRateAttention)}");
     expect(ownerShell).toContain('label === "Day Parts"');
+    expect(ownerShell).toContain("residencies.some((item) => item.needsDaypartRateAttention)");
+    expect(ownerShell).toContain('hasDaypartRateAttention ? "needs-attention"');
+    expect(ownerShell).toContain("hasDaypartRateAttention ? <span className=\"residency-nav-attention\">!</span>");
     expect(auth).toContain("coalesce(${dayparts.clientDefaultRateCents}, 0) <= 0");
     expect(internalData).toContain("coalesce(${dayparts.defaultTalentRateCents}, 0) <= 0");
     expect(residencyPage).toContain("defaultTalentRateCents: null");
