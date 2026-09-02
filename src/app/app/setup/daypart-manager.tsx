@@ -123,7 +123,7 @@ function displayRange(dayparts: DaypartRow[]) {
   };
 }
 
-export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = false, hideFinancials = false, initialCreate = false }: { residencyId: string; dayparts: DaypartRow[]; onSaved?: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean }) {
+export function DaypartManager({ residencyId, dayparts, onSaved, onClose, readOnly = false, hideFinancials = false, initialCreate = false }: { residencyId: string; dayparts: DaypartRow[]; onSaved?: () => void; onClose?: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean }) {
   const [draft, setDraft] = useState<EditorDraft | null>(null);
   const openedInitialDraft = useRef(false);
   const dateSectionRef = useRef<HTMLDivElement>(null);
@@ -287,7 +287,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
 
   return (
     <section className="daypart-manager">
-      <div className="section-heading daypart-workspace-heading"><div><p className="eyebrow">Standing schedule</p><h2>Weekly Daypart grid</h2><p className="subhead">Every colored block projects onto the calendar until it is scheduled.</p></div>{readOnly ? null : <button className="button" type="button" onClick={() => setDraft(blankDraft({ color: rotatingPresetColor(dayparts.length) }))}>+ Add Daypart</button>}</div>
+      <div className="section-heading daypart-workspace-heading"><div><p className="eyebrow">Standing schedule</p><h2>Weekly Daypart grid</h2><p className="subhead">Every colored block projects onto the calendar until it is scheduled.</p></div><div className="daypart-workspace-actions">{readOnly ? null : <button className="button" type="button" onClick={() => setDraft(blankDraft({ color: rotatingPresetColor(dayparts.length) }))}>+ Add Daypart</button>}{onClose ? <button className="quick-modal-close" type="button" aria-label="Close Day Parts" onClick={onClose}>×</button> : null}</div></div>
 
       {missingRateDayparts.length ? <div className="daypart-rate-attention-banner" role="status"><span aria-hidden="true">!</span><div><strong>{missingRateDayparts.length} default artist {missingRateDayparts.length === 1 ? "rate needs" : "rates need"} attention</strong><p>Open every highlighted Talent Activity and enter a rate above $0. You can keep building the schedule, but HFY OS cannot calculate what the artist is owed until these rates are saved.</p></div></div> : null}
 

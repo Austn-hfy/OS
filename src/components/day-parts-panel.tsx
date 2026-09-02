@@ -47,10 +47,9 @@ export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = 
   }, [onClose]);
 
   return <div className="day-parts-panel-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-    <aside className="day-parts-panel" role="dialog" aria-modal="true" aria-labelledby="day-parts-panel-title">
-      <header className="day-parts-panel-header"><div><p className="eyebrow">{residencyName}</p><h2 id="day-parts-panel-title">Day Parts</h2><p>{readOnly ? "Weekly schedule for this Residency." : "Review and edit the weekly schedule without leaving the calendar."}</p></div><button className="quick-modal-close" type="button" aria-label="Close Day Parts" onClick={onClose}>×</button></header>
+    <aside className="day-parts-panel" role="dialog" aria-modal="true" aria-label={`${residencyName} Day Parts`}>
       <div className="day-parts-panel-scroll">
-        {loading ? <div className="card empty">Loading Day Parts…</div> : error ? <div className="card empty error">{error}<button className="button secondary" type="button" onClick={() => void load()}>Try again</button></div> : <DaypartManager residencyId={residencyId} dayparts={dayparts} onSaved={() => void load()} readOnly={readOnly} hideFinancials={hideFinancials} initialCreate={initialCreate} />}
+        {loading ? <div className="card empty">Loading Day Parts…</div> : error ? <div className="card empty error">{error}<button className="button secondary" type="button" onClick={() => void load()}>Try again</button></div> : <DaypartManager residencyId={residencyId} dayparts={dayparts} onSaved={() => void load()} onClose={onClose} readOnly={readOnly} hideFinancials={hideFinancials} initialCreate={initialCreate} />}
       </div>
     </aside>
   </div>;
