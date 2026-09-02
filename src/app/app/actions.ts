@@ -851,6 +851,81 @@ export async function saveResidencyContactAction(_previous: ResidencyActionState
   }
 }
 
+export async function removeResidencyContactAction(input: { contactId: string }): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const { contactId } = z.object({ contactId: z.uuid() }).parse(input);
+    const database = getDb();
+    const [contact] = await database.select({
+      id: residencyContacts.id,
+      residencyId: residencyContacts.residencyId,
+      name: residencyContacts.name,
+      email: residencyContacts.email,
+      accessRole: residencyContacts.accessRole,
+      isPrimary: residencyContacts.isPrimary,
+      userId: residencyContacts.userId,
+      residencyName: residencies.name,
+    }).from(residencyContacts)
+      .innerJoin(residencies, eq(residencyContacts.residencyId, residencies.id))
+      .where(and(
+        eq(residencyContacts.id, contactId),
+        eq(residencyContacts.active, true),
+        eq(residencies.active, true),
+      ))
+      .limit(1);
+    if (!contact) throw new Error("Contact not found.");
+
+    const removedAt = new Date();
+    await database.transaction(async (tx) => {
+      if (contact.userId) {
+        await tx.update(residencyMemberships).set({ active: false })
+          .where(and(
+            eq(residencyMemberships.userId, contact.userId),
+            eq(residencyMemberships.residencyId, contact.residencyId),
+          ));
+        await tx.update(accountSetupTokens).set({ revokedAt: removedAt })
+          .where(and(
+            eq(accountSetupTokens.contactId, contact.id),
+            isNull(accountSetupTokens.usedAt),
+            isNull(accountSetupTokens.revokedAt),
+          ));
+        const [remainingMembership] = await tx.select({ userId: residencyMemberships.userId })
+          .from(residencyMemberships)
+          .where(and(
+            eq(residencyMemberships.userId, contact.userId),
+            eq(residencyMemberships.active, true),
+          ))
+          .limit(1);
+        if (!remainingMembership) {
+          await tx.update(users).set({ active: false, updatedAt: removedAt })
+            .where(and(eq(users.id, contact.userId), eq(users.role, "hotel_user")));
+        }
+      }
+      await tx.insert(auditLog).values({
+        residencyId: contact.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_contact_removed",
+        entityType: "residency_contact",
+        entityId: contact.id,
+        details: {
+          name: contact.name,
+          email: contact.email,
+          userId: contact.userId,
+          accessRole: contact.accessRole,
+          wasPrimary: contact.isPrimary,
+        },
+      });
+      await tx.delete(residencyContacts).where(eq(residencyContacts.id, contact.id));
+    });
+    revalidatePath("/app/setup");
+    revalidatePath("/residency/settings");
+    return { status: "success", message: `${contact.name} was removed from ${contact.residencyName}.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to remove this contact." };
+  }
+}
+
 export async function inviteResidencyContactAction(input: { contactId: string }): Promise<ResidencyActionState> {
   try {
     const actor = await requireInternalActor();
