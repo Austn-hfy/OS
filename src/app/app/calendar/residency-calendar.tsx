@@ -80,7 +80,6 @@ type ResidencyCalendarProps = {
   calendarBasePath?: string;
   daypartsHref?: string;
   canManage?: boolean;
-  showTitle?: boolean;
 };
 
 type SlotDraft = { id: string; talentId: string; start: string; end: string; confirmed: boolean; compensationType: "hourly" | "fixed" | "na"; rateOverride: string; fixedFee: string };
@@ -115,7 +114,7 @@ function oneTimeDraftFromEvent(event: ResidencyEvent): OneTimeEditDraft {
   };
 }
 
-export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, previewMode = false, calendarBasePath = "/app/calendar", daypartsHref, canManage = true, showTitle = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, previewMode = false, calendarBasePath = "/app/calendar", daypartsHref, canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
   const initialEditingEvent = initialEventId ? events.find((event) => event.id === initialEventId && !event.projected) : undefined;
   const [modal, setModal] = useState<ModalState>(() => initialEditingEvent ? { type: "edit", eventId: initialEditingEvent.id } : null);
@@ -739,9 +738,9 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
 
   return (
     <>
-      <header className={`page-header calendar-page-header calendar-command-bar ${showTitle ? "" : "calendar-title-hidden"}`}>
+      <header className="page-header calendar-page-header calendar-command-bar">
         <div className="calendar-command-primary">
-          {showTitle ? <div className="calendar-title"><p className="eyebrow">{residency.name}</p><h1>Calendar</h1></div> : null}
+          <div className="calendar-title"><p className="eyebrow">{residency.name}</p><h1>Calendar</h1></div>
           <div className="calendar-month-cluster">
             <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div>
             <div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={previousHref}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={nextHref}>→</Link></div>

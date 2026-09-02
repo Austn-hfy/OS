@@ -1305,10 +1305,6 @@
 
 .hfy-style-system .residency-page-summary strong { color: var(--hfy-ink); }
 
-.hfy-style-system .calendar-command-bar.calendar-title-hidden .calendar-command-primary {
-  justify-content: flex-end;
-}
-
 .hfy-style-system .client-page-header-stat {
   min-width: 180px;
   padding: 10px 14px;
