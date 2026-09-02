@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAssignmentTerms, residencies, residencyTalent, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, clientAssignmentTerms, residencies, residencyTalent, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { requireResidencyActor } from "@/lib/auth";
 import { resolveClientArtistGenre } from "@/domain/talent-genres";
 
@@ -58,7 +58,11 @@ export async function createClientOwnedArtistAction(
         action: "client_owned_artist_created",
         entityType: "talent",
         entityId: artist.id,
-        details: { ownership: "residency" },
+        details: {
+          ownership: "residency",
+          creationSource: actor.isViewAs ? "hfy_on_behalf" : "residency_member",
+          createdForResidencyId: actor.residencyId,
+        },
       });
     });
     revalidatePath("/residency/talent");
@@ -128,7 +132,7 @@ export async function updateClientOwnedArtistAction(
   }
 }
 
-export async function deleteClientOwnedArtistAction(
+export async function archiveClientOwnedArtistAction(
   _previous: ClientSettingsActionState,
   formData: FormData,
 ): Promise<ClientSettingsActionState> {
@@ -157,7 +161,7 @@ export async function deleteClientOwnedArtistAction(
         residencyId: actor.residencyId,
         actorUserId: actor.userId,
         actorLabel: actor.email,
-        action: "client_owned_artist_deleted",
+        action: "client_owned_artist_archived",
         entityType: "talent",
         entityId: artist.id,
         details: { stageName: artist.stageName, historyPreserved: true },
@@ -165,9 +169,101 @@ export async function deleteClientOwnedArtistAction(
     });
     revalidatePath("/residency/talent");
     revalidatePath("/residency/calendar");
-    return { status: "success", message: "Artist deleted from this Residency roster." };
+    return { status: "success", message: "Artist archived. Existing booking history was preserved." };
   } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to delete this artist." };
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to archive this artist." };
+  }
+}
+
+export async function restoreClientOwnedArtistAction(
+  _previous: ClientSettingsActionState,
+  formData: FormData,
+): Promise<ClientSettingsActionState> {
+  try {
+    const actor = await requireResidencyActor();
+    if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    const parsed = z.object({ artistId: z.uuid() }).parse(Object.fromEntries(formData));
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [artist] = await tx.update(talent).set({
+        talentStatus: "active",
+        archivedAt: null,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(talent.id, parsed.artistId),
+        eq(talent.ownership, "residency"),
+        eq(talent.owningResidencyId, actor.residencyId),
+        isNotNull(talent.archivedAt),
+      )).returning({ id: talent.id, stageName: talent.stageName });
+      if (!artist) throw new Error("Archived artist not found in this Residency.");
+      await tx.update(residencyTalent).set({ active: true }).where(and(
+        eq(residencyTalent.residencyId, actor.residencyId),
+        eq(residencyTalent.talentId, artist.id),
+      ));
+      await tx.insert(auditLog).values({
+        residencyId: actor.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "client_owned_artist_restored",
+        entityType: "talent",
+        entityId: artist.id,
+        details: { stageName: artist.stageName },
+      });
+    });
+    revalidatePath("/residency/talent");
+    revalidatePath("/residency/calendar");
+    return { status: "success", message: "Artist restored to the active roster." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to restore this artist." };
+  }
+}
+
+export async function permanentlyDeleteClientOwnedArtistAction(
+  _previous: ClientSettingsActionState,
+  formData: FormData,
+): Promise<ClientSettingsActionState> {
+  try {
+    const actor = await requireResidencyActor();
+    if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    const parsed = z.object({ artistId: z.uuid() }).parse(Object.fromEntries(formData));
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [artist] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent).where(and(
+        eq(talent.id, parsed.artistId),
+        eq(talent.ownership, "residency"),
+        eq(talent.owningResidencyId, actor.residencyId),
+        isNotNull(talent.archivedAt),
+      )).limit(1);
+      if (!artist) throw new Error("Archived artist not found in this Residency.");
+      const [assignmentHistory, occurrenceHistory] = await Promise.all([
+        tx.select({ id: assignments.id }).from(assignments).where(eq(assignments.talentId, artist.id)).limit(1),
+        tx.select({ id: scheduleOccurrenceTalent.id }).from(scheduleOccurrenceTalent).where(eq(scheduleOccurrenceTalent.talentId, artist.id)).limit(1),
+      ]);
+      if (assignmentHistory.length || occurrenceHistory.length) {
+        throw new Error("This artist has booking history and must remain archived so those records stay accurate.");
+      }
+      const [deleted] = await tx.delete(talent).where(and(
+        eq(talent.id, artist.id),
+        eq(talent.ownership, "residency"),
+        eq(talent.owningResidencyId, actor.residencyId),
+        isNotNull(talent.archivedAt),
+      )).returning({ id: talent.id });
+      if (!deleted) throw new Error("Archived artist could not be deleted.");
+      await tx.insert(auditLog).values({
+        residencyId: actor.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "client_owned_artist_permanently_deleted",
+        entityType: "talent",
+        entityId: artist.id,
+        details: { stageName: artist.stageName, bookingHistory: false },
+      });
+    });
+    revalidatePath("/residency/talent");
+    revalidatePath("/residency/calendar");
+    return { status: "success", message: "Archived artist permanently deleted." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to permanently delete this artist." };
   }
 }
 

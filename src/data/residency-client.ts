@@ -2,8 +2,8 @@ import "server-only";
 
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, clientAssignmentTerms, dayparts, invoices, residencies, residencyContacts, residencyTalent, shifts, talent, users } from "@/db/schema";
-import { projectClientSafeRoster } from "@/domain/client-safe-talent";
+import { assignments, auditLog, clientAssignmentTerms, dayparts, invoices, residencies, residencyContacts, residencyTalent, scheduleOccurrenceTalent, shifts, talent, users } from "@/db/schema";
+import { projectClientSafeRoster, projectClientSafeTalent, type ClientSafeManagedTalent } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
 
 export async function getResidencyClientCalendar(residencyId: string, range: { from: string; to: string }) {
@@ -83,6 +83,65 @@ export async function getResidencyClientSafeRoster(residencyId: string) {
     ))
     .orderBy(asc(talent.stageName));
   return projectClientSafeRoster(rows);
+}
+
+export async function getResidencyClientOwnedArtistManagement(residencyId: string): Promise<ClientSafeManagedTalent[]> {
+  const database = getDb();
+  const artistRows = await database.select({
+    id: talent.id,
+    stageName: talent.stageName,
+    homeMarket: talent.homeMarket,
+    genres: talent.genres,
+    instagramHandle: talent.instagramHandle,
+    clientContact: talent.clientContact,
+    ownership: talent.ownership,
+    archivedAt: talent.archivedAt,
+  }).from(talent).where(and(
+    eq(talent.ownership, "residency"),
+    eq(talent.owningResidencyId, residencyId),
+  )).orderBy(asc(talent.stageName));
+  const artistIds = artistRows.map((artist) => artist.id);
+  if (!artistIds.length) return [];
+  const [creationRows, assignmentRows, occurrenceRows] = await Promise.all([
+    database.select({
+      artistId: auditLog.entityId,
+      actorRole: users.role,
+      details: auditLog.details,
+      createdAt: auditLog.createdAt,
+    }).from(auditLog)
+      .leftJoin(users, eq(auditLog.actorUserId, users.id))
+      .where(and(
+        eq(auditLog.residencyId, residencyId),
+        eq(auditLog.entityType, "talent"),
+        eq(auditLog.action, "client_owned_artist_created"),
+        inArray(auditLog.entityId, artistIds),
+      )).orderBy(desc(auditLog.createdAt)),
+    database.select({ artistId: assignments.talentId }).from(assignments)
+      .where(inArray(assignments.talentId, artistIds)),
+    database.select({ artistId: scheduleOccurrenceTalent.talentId }).from(scheduleOccurrenceTalent)
+      .where(inArray(scheduleOccurrenceTalent.talentId, artistIds)),
+  ]);
+  const artistsWithHistory = new Set([
+    ...assignmentRows.flatMap((row) => row.artistId ? [row.artistId] : []),
+    ...occurrenceRows.map((row) => row.artistId),
+  ]);
+  return artistRows.map((artist) => {
+    const creation = creationRows.find((row) => row.artistId === artist.id);
+    const explicitSource = creation?.details.creationSource;
+    const creationSource = explicitSource === "hfy_on_behalf" || explicitSource === "residency_member"
+      ? explicitSource
+      : creation?.actorRole === "internal_admin"
+        ? "hfy_on_behalf"
+        : creation?.actorRole === "hotel_user"
+          ? "residency_member"
+          : "unknown";
+    return {
+      ...projectClientSafeTalent(artist),
+      archivedAt: artist.archivedAt?.toISOString() ?? null,
+      creationSource,
+      hasBookingHistory: artistsWithHistory.has(artist.id),
+    };
+  });
 }
 
 export async function getResidencyClientVisibleAccessContacts(residencyId: string) {

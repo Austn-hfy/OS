@@ -20,6 +20,12 @@ export type ClientSafeTalent = Readonly<{
   ownership: "hfy" | "residency";
 }>;
 
+export type ClientSafeManagedTalent = ClientSafeTalent & Readonly<{
+  archivedAt: string | null;
+  creationSource: "hfy_on_behalf" | "residency_member" | "unknown";
+  hasBookingHistory: boolean;
+}>;
+
 /** The only projection from privileged Talent rows into a hotel-facing roster. */
 export function projectClientSafeTalent(candidate: unknown): ClientSafeTalent {
   const row = sourceTalentSchema.parse(candidate);
