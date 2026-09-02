@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, shifts, talent } from "@/db/schema";
-import { HFY_BOOKED_COLOR, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartType } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType } from "@/domain/dayparts";
 import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import type { AuditActor } from "@/lib/auth";
 
@@ -13,6 +13,9 @@ export type SaveDaypartInput = {
   color: string;
   type: DaypartType;
   billingMode: DaypartBillingMode | null;
+  scheduleMode: DaypartScheduleMode;
+  suggestedStartMinute?: number | null;
+  suggestedEndMinute?: number | null;
   defaultTalentRateCents?: number | null;
   activeUntil?: string | null;
   active: boolean;
@@ -233,7 +236,13 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
     throw new Error("Daypart talent rate must be blank or a nonnegative amount.");
   }
   if (activeUntil) weekdayForDate(activeUntil);
-  const rules = validateDaypartRules(input.rules);
+  const rules = input.scheduleMode === "standing_weekly" ? validateDaypartRules(input.rules) : [];
+  const suggestedStartMinute = input.scheduleMode === "calendar_only" ? input.suggestedStartMinute ?? null : null;
+  const suggestedEndMinute = input.scheduleMode === "calendar_only" ? input.suggestedEndMinute ?? null : null;
+  if (input.scheduleMode === "calendar_only" && (!Number.isInteger(suggestedStartMinute) || !Number.isInteger(suggestedEndMinute)
+    || suggestedStartMinute! < 0 || suggestedStartMinute! >= 1440 || suggestedEndMinute! <= suggestedStartMinute! || suggestedEndMinute! > suggestedStartMinute! + 1440)) {
+    throw new Error("Choose valid suggested hours for this Calendar Only Daypart.");
+  }
   const database = getDb();
 
   return database.transaction(async (tx) => {
@@ -260,6 +269,9 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
         color,
         type: input.type,
         billingMode,
+        scheduleMode: input.scheduleMode,
+        suggestedStartMinute,
+        suggestedEndMinute,
         defaultTalentRateCents,
         activeUntil,
         active: input.active,
@@ -275,6 +287,9 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
         color,
         type: input.type,
         billingMode,
+        scheduleMode: input.scheduleMode,
+        suggestedStartMinute,
+        suggestedEndMinute,
         defaultTalentRateCents,
         activeUntil,
         active: input.active,
@@ -283,7 +298,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
       daypartId = created.id;
     }
 
-    await tx.insert(daypartDayRules).values(rules.map((rule) => ({ daypartId, ...rule })));
+    if (rules.length) await tx.insert(daypartDayRules).values(rules.map((rule) => ({ daypartId, ...rule })));
     await tx.insert(auditLog).values({
       residencyId: residency.id,
       actorUserId: actor.userId,
@@ -291,7 +306,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
       action: input.id ? "daypart_updated" : "daypart_created",
       entityType: "daypart",
       entityId: daypartId,
-      details: { name, room, color, type: input.type, billingMode, defaultTalentRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
+      details: { name, room, color, type: input.type, billingMode, scheduleMode: input.scheduleMode, suggestedStartMinute, suggestedEndMinute, defaultTalentRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
     });
     return { id: daypartId };
   });

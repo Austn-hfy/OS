@@ -2,21 +2,24 @@ import { and, eq, gt, inArray, isNull, lt, or, gte, lte } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, hfyTalentRequests, invoices, residencies, residencyTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents } from "@/domain/airtable-parity";
-import { HFY_BOOKED_COLOR, weekdayForDate } from "@/domain/dayparts";
+import { localDateTimeForMinute, weekdayForDate } from "@/domain/dayparts";
+import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import type { AuditActor, InternalActor } from "@/lib/auth";
-import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
+import { assertResidencyClientRateConfigured, assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 
 export type FulfillHfyTalentRequestInput = {
   requestId: string;
-  talentId: string;
-  clientRateCents: number;
-  artistRateCents: number;
+  assignments: Array<{
+    talentId: string;
+    startsAtMinute: number;
+    endsAtMinute: number;
+  }>;
 };
 
 export type CancelHfyTalentRequestInput = {
   residencyId: string;
   shiftId: string;
-  daypartId: string;
+  daypartId: string | null;
   serviceDate: string;
 };
 
@@ -37,7 +40,7 @@ export async function cancelHfyTalentRequest(actor: AuditActor, input: CancelHfy
       .where(and(
         eq(hfyTalentRequests.shiftId, input.shiftId),
         eq(shifts.residencyId, input.residencyId),
-        eq(shifts.daypartId, input.daypartId),
+        input.daypartId ? eq(shifts.daypartId, input.daypartId) : isNull(shifts.daypartId),
         eq(shifts.serviceDate, input.serviceDate),
       ))
       .limit(1)
@@ -59,7 +62,7 @@ export async function cancelHfyTalentRequest(actor: AuditActor, input: CancelHfy
     await tx.delete(shifts).where(and(
       eq(shifts.id, input.shiftId),
       eq(shifts.residencyId, input.residencyId),
-      eq(shifts.daypartId, input.daypartId),
+      input.daypartId ? eq(shifts.daypartId, input.daypartId) : isNull(shifts.daypartId),
       eq(shifts.serviceDate, input.serviceDate),
       eq(shifts.economicsMode, "hfy_request"),
     ));
@@ -81,8 +84,8 @@ export async function cancelHfyTalentRequest(actor: AuditActor, input: CancelHfy
 }
 
 export async function fulfillHfyTalentRequest(actor: InternalActor, input: FulfillHfyTalentRequestInput) {
-  if (!Number.isInteger(input.clientRateCents) || input.clientRateCents < 0) throw new Error("Enter a valid client-billed hourly rate.");
-  if (!Number.isInteger(input.artistRateCents) || input.artistRateCents <= 0) throw new Error("Enter an artist-paid hourly rate greater than $0.");
+  if (!input.assignments.length) throw new Error("Choose at least one artist for this request.");
+  if (input.assignments.length > 20) throw new Error("A request can include up to 20 artist segments.");
 
   return getDb().transaction(async (tx) => {
     const [request] = await tx.select({
@@ -95,7 +98,9 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
       endsAt: shifts.endsAt,
       shiftName: shifts.name,
       economicsMode: shifts.economicsMode,
+      timezone: residencies.timezone,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
+      clientHourlyRateCents: residencies.clientHourlyRateCents,
     }).from(hfyTalentRequests)
       .innerJoin(shifts, eq(hfyTalentRequests.shiftId, shifts.id))
       .innerJoin(residencies, eq(hfyTalentRequests.residencyId, residencies.id))
@@ -106,56 +111,84 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
       throw new Error("This HFY request is no longer pending.");
     }
     assertResidencyTalentRateConfigured(request.defaultTalentRateCents);
+    assertResidencyClientRateConfigured(request.clientHourlyRateCents);
 
-    const [selectedTalent] = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent).where(and(
-      eq(talent.id, input.talentId),
+    const talentIds = input.assignments.map((assignment) => assignment.talentId);
+    if (new Set(talentIds).size !== talentIds.length) throw new Error("Choose each artist only once for this request.");
+    const windows = input.assignments.map((assignment) => {
+      if (!Number.isInteger(assignment.startsAtMinute) || !Number.isInteger(assignment.endsAtMinute)
+        || assignment.startsAtMinute < 0 || assignment.endsAtMinute > 2879
+        || assignment.endsAtMinute <= assignment.startsAtMinute) {
+        throw new Error("Choose valid start and end times for every artist.");
+      }
+      const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(request.serviceDate, assignment.startsAtMinute), request.timezone);
+      const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(request.serviceDate, assignment.endsAtMinute), request.timezone);
+      if (startsAt < request.startsAt || endsAt > request.endsAt || endsAt <= startsAt) {
+        throw new Error("Every artist's hours must stay inside the client request.");
+      }
+      return { ...assignment, startsAt, endsAt };
+    }).sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
+    if (windows[0].startsAt.getTime() !== request.startsAt.getTime()
+      || windows.at(-1)?.endsAt.getTime() !== request.endsAt.getTime()
+      || windows.some((window, index) => index > 0 && window.startsAt.getTime() !== windows[index - 1].endsAt.getTime())) {
+      throw new Error("Artist times must cover the full client request without gaps or overlaps.");
+    }
+
+    const selectedTalent = await tx.select({ id: talent.id, stageName: talent.stageName }).from(talent).where(and(
+      inArray(talent.id, talentIds),
       eq(talent.ownership, "hfy"),
       eq(talent.talentStatus, "active"),
       isNull(talent.archivedAt),
       or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, request.residencyId)),
-    )).limit(1);
-    if (!selectedTalent) throw new Error("Choose an active HFY artist available to this Residency.");
+    ));
+    if (selectedTalent.length !== talentIds.length) throw new Error("Choose active HFY artists available to this Residency.");
+    const talentById = new Map(selectedTalent.map((artist) => [artist.id, artist]));
 
-    const conflict = await tx.select({ id: assignments.id }).from(assignments).where(and(
-      eq(assignments.talentId, selectedTalent.id),
+    const conflicts = await tx.select({ talentId: assignments.talentId, startsAt: assignments.startsAt, endsAt: assignments.endsAt }).from(assignments).where(and(
+      inArray(assignments.talentId, talentIds),
       inArray(assignments.bookingStatus, ["pending_hfy_confirmation", "offered", "confirmed"]),
       lt(assignments.startsAt, request.endsAt),
       gt(assignments.endsAt, request.startsAt),
-    )).limit(1);
-    if (conflict.length) throw new Error(`${selectedTalent.stageName} already has an overlapping active booking.`);
+    ));
+    const conflictedWindow = windows.find((window) => conflicts.some((conflict) => (
+      conflict.talentId === window.talentId && conflict.startsAt < window.endsAt && conflict.endsAt > window.startsAt
+    )));
+    if (conflictedWindow) throw new Error(`${talentById.get(conflictedWindow.talentId)?.stageName ?? "That artist"} already has an overlapping active booking.`);
 
-    await tx.insert(residencyTalent).values({
+    await tx.insert(residencyTalent).values(selectedTalent.map((artist) => ({
       residencyId: request.residencyId,
-      talentId: selectedTalent.id,
+      talentId: artist.id,
       approvedByUserId: actor.userId,
       active: true,
-    }).onConflictDoUpdate({
+    }))).onConflictDoUpdate({
       target: [residencyTalent.residencyId, residencyTalent.talentId],
       set: { active: true, approvedByUserId: actor.userId },
     });
 
-    const totalCompensationCents = calculateCompensationCents({
-      compensationType: "hourly",
-      startsAt: request.startsAt,
-      endsAt: request.endsAt,
-      talentRateCents: input.artistRateCents,
-      fixedFeeCents: null,
-    });
-    const [assignment] = await tx.insert(assignments).values({
-      shiftId: request.shiftId,
-      talentId: selectedTalent.id,
-      createdByUserId: actor.userId,
-      source: "hfy_request",
-      setName: selectedTalent.stageName,
-      startsAt: request.startsAt,
-      endsAt: request.endsAt,
-      bookingStatus: "confirmed",
-      compensationType: "hourly",
-      talentRateOverrideCents: input.artistRateCents,
-      talentRateCents: input.artistRateCents,
-      totalCompensationCents,
-      payoutStatus: "not_ready",
-    }).returning({ id: assignments.id });
+    const createdAssignments = await tx.insert(assignments).values(windows.map((window) => {
+      const selectedArtist = talentById.get(window.talentId)!;
+      return {
+        shiftId: request.shiftId,
+        talentId: selectedArtist.id,
+        createdByUserId: actor.userId,
+        source: "hfy_request",
+        setName: selectedArtist.stageName,
+        startsAt: window.startsAt,
+        endsAt: window.endsAt,
+        bookingStatus: "confirmed" as const,
+        compensationType: "hourly" as const,
+        talentRateOverrideCents: null,
+        talentRateCents: request.defaultTalentRateCents,
+        totalCompensationCents: calculateCompensationCents({
+          compensationType: "hourly",
+          startsAt: window.startsAt,
+          endsAt: window.endsAt,
+          talentRateCents: request.defaultTalentRateCents,
+          fixedFeeCents: null,
+        }),
+        payoutStatus: "not_ready" as const,
+      };
+    })).returning({ id: assignments.id, talentId: assignments.talentId });
 
     const coveringInvoices = await tx.select({ id: invoices.id }).from(invoices).where(and(
       eq(invoices.residencyId, request.residencyId),
@@ -171,10 +204,9 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
         : "No Invoice period covers this Shift.";
     await tx.update(shifts).set({
       economicsMode: "hfy",
-      calendarColor: HFY_BOOKED_COLOR,
       invoiceId: coveringInvoices.length === 1 ? coveringInvoices[0].id : null,
-      clientRateOverrideCents: input.clientRateCents,
-      clientRateCents: input.clientRateCents,
+      clientRateOverrideCents: null,
+      clientRateCents: request.clientHourlyRateCents,
       billingStatus: "pending",
       invoiceLinkIssue: coveringInvoices.length !== 1,
       invoiceLinkNote,
@@ -183,7 +215,7 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
     const fulfilledAt = new Date();
     await tx.update(hfyTalentRequests).set({
       status: "fulfilled",
-      fulfilledAssignmentId: assignment.id,
+      fulfilledAssignmentId: createdAssignments[0].id,
       fulfilledByUserId: actor.userId,
       fulfilledAt,
       updatedAt: fulfilledAt,
@@ -197,12 +229,15 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
       entityId: request.id,
       details: {
         shiftId: request.shiftId,
-        assignmentId: assignment.id,
-        talentId: selectedTalent.id,
-        clientRateCents: input.clientRateCents,
-        artistRateCents: input.artistRateCents,
+        assignmentIds: createdAssignments.map((assignment) => assignment.id),
+        talentIds,
+        clientRateCents: request.clientHourlyRateCents,
+        artistRateCents: request.defaultTalentRateCents,
       },
     });
-    return { assignmentId: assignment.id, artistName: selectedTalent.stageName };
+    return {
+      assignmentIds: createdAssignments.map((assignment) => assignment.id),
+      artistNames: windows.map((window) => talentById.get(window.talentId)!.stageName),
+    };
   });
 }

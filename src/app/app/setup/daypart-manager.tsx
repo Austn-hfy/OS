@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { removeDaypartAction, saveDaypartAction, type ResidencyActionState } from "@/app/app/actions";
-import { DAYPART_COLOR_PRESETS, DEFAULT_DAYPART_COLOR, HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, weekdayNames, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
+import { DAYPART_COLOR_PRESETS, DEFAULT_DAYPART_COLOR, HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, weekdayNames, type DaypartBillingMode, type DaypartScheduleMode, type DaypartType } from "@/domain/dayparts";
 import { DaypartColorPicker } from "@/components/daypart-color-picker";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
@@ -14,6 +14,9 @@ export type DaypartRow = {
   color: string;
   type: DaypartType;
   billingMode: DaypartBillingMode | null;
+  scheduleMode: DaypartScheduleMode;
+  suggestedStartMinute: number | null;
+  suggestedEndMinute: number | null;
   defaultTalentRateCents: number | null;
   activeUntil: string | null;
   active: boolean;
@@ -29,6 +32,9 @@ type EditorDraft = {
   color: string;
   type: DaypartType | null;
   billingMode: DaypartBillingMode | null;
+  scheduleMode: DaypartScheduleMode | null;
+  suggestedStart: string;
+  suggestedEnd: string;
   defaultTalentRate: string;
   activeUntil: string;
   active: boolean;
@@ -63,6 +69,9 @@ function blankDraft(options: { room?: string; weekday?: number; startMinute?: nu
     color: options.color ?? DAYPART_COLOR_PRESETS[0].value,
     type: null,
     billingMode: null,
+    scheduleMode: null,
+    suggestedStart: "18:00",
+    suggestedEnd: "21:00",
     defaultTalentRate: "",
     activeUntil: "",
     active: true,
@@ -81,6 +90,9 @@ function draftFromDaypart(daypart: DaypartRow): EditorDraft {
     color: daypart.billingMode === "billed_by_hfy" ? HFY_BOOKED_COLOR : daypart.color,
     type: daypart.type,
     billingMode: daypart.type === "house_activity" ? null : daypart.billingMode ?? "billed_by_hfy",
+    scheduleMode: daypart.scheduleMode,
+    suggestedStart: minuteToClock(daypart.suggestedStartMinute ?? daypart.rules[0]?.startMinute ?? 1080),
+    suggestedEnd: minuteToClock(daypart.suggestedEndMinute ?? daypart.rules[0]?.endMinute ?? 1260),
     defaultTalentRate: daypart.defaultTalentRateCents === null ? "" : (daypart.defaultTalentRateCents / 100).toFixed(2),
     activeUntil: daypart.activeUntil ?? "",
     active: daypart.active,
@@ -122,10 +134,12 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
     return result;
   };
   const [state, formAction, pending] = useActionState(submitDaypart, initialActionState);
-  const rooms = useMemo(() => [...new Set(dayparts.map((daypart) => daypart.room))].sort(), [dayparts]);
-  const range = useMemo(() => displayRange(dayparts), [dayparts]);
+  const standingDayparts = useMemo(() => dayparts.filter((daypart) => daypart.scheduleMode === "standing_weekly"), [dayparts]);
+  const calendarOnlyDayparts = useMemo(() => dayparts.filter((daypart) => daypart.scheduleMode === "calendar_only"), [dayparts]);
+  const rooms = useMemo(() => [...new Set(standingDayparts.map((daypart) => daypart.room))].sort(), [standingDayparts]);
+  const range = useMemo(() => displayRange(standingDayparts), [standingDayparts]);
   const rangeMinutes = range.end - range.start;
-  const hasSelectedDay = draft?.rules.some((rule) => rule.enabled && rule.start && rule.end) ?? false;
+  const hasSelectedDay = draft?.scheduleMode === "calendar_only" || (draft?.rules.some((rule) => rule.enabled && rule.start && rule.end) ?? false);
   const missingDateServerError = state.status === "error" && state.message === "Select at least one operating day.";
   const showDateValidation = Boolean(draft) && !hasSelectedDay && (dateValidationRequested || missingDateServerError);
 
@@ -164,6 +178,9 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
   const payload = useMemo(() => {
     if (!draft) return "";
     if (!draft.type || (draft.type === "dj_artist" && !draft.billingMode)) return "";
+    if (!draft.scheduleMode) return "";
+    const suggestedStartMinute = draft.scheduleMode === "calendar_only" ? clockToMinute(draft.suggestedStart) : null;
+    const suggestedEndMinute = draft.scheduleMode === "calendar_only" ? resolveEndMinute(suggestedStartMinute!, draft.suggestedEnd) : null;
     return JSON.stringify({
       id: draft.id,
       residencyId,
@@ -172,11 +189,14 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
       color: draft.color,
       type: draft.type,
       billingMode: draft.type === "house_activity" ? null : draft.billingMode,
+      scheduleMode: draft.scheduleMode,
+      suggestedStartMinute,
+      suggestedEndMinute,
       defaultTalentRateCents: draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? centsFromOptionalDollars(draft.defaultTalentRate) : null,
       activeUntil: draft.activeUntil || null,
       active: draft.active,
       sortOrder: draft.sortOrder,
-      rules: draft.rules.flatMap((rule, weekday) => {
+      rules: draft.scheduleMode === "calendar_only" ? [] : draft.rules.flatMap((rule, weekday) => {
         if (!rule.enabled || !rule.start || !rule.end) return [];
         const startMinute = clockToMinute(rule.start);
         return [{ weekday, startMinute, endMinute: resolveEndMinute(startMinute, rule.end), defaultDjCount: draft.type === "dj_artist" ? optionalDjCount(rule.defaultDjCount) : null }];
@@ -220,10 +240,10 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
 
   function addFromGrid(room: string, weekday: number) {
     const roomRule = dayparts
-      .filter((daypart) => daypart.room === room)
+      .filter((daypart) => daypart.scheduleMode === "standing_weekly" && daypart.room === room)
       .flatMap((daypart) => daypart.rules)
       .find((rule) => rule.weekday === weekday)
-      ?? dayparts.find((daypart) => daypart.room === room)?.rules[0];
+      ?? standingDayparts.find((daypart) => daypart.room === room)?.rules[0];
     const nextColor = rotatingPresetColor(dayparts.length);
     setDraft(blankDraft({
       room,
@@ -261,7 +281,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
         {rooms.map((room) => <div className="daypart-week-row" key={room}>
           <div className="daypart-room-label"><strong>{room}</strong><span>Click open space to add</span></div>
           {weekdayNames.map((weekdayName, weekday) => {
-            const blocks = dayparts.flatMap((daypart) => {
+            const blocks = standingDayparts.flatMap((daypart) => {
               if (daypart.room !== room) return [];
               const rule = daypart.rules.find((item) => item.weekday === weekday);
               return rule ? [{ daypart, rule }] : [];
@@ -295,13 +315,15 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
             </div>;
           })}
         </div>)}
-      </div> : readOnly ? <div className="card empty daypart-empty-grid">No Dayparts are configured for this Residency.</div> : <button className="card empty daypart-empty-grid" type="button" onClick={() => setDraft(blankDraft())}>No Dayparts yet. Click to create the first room schedule.</button>}
+      </div> : readOnly ? <div className="card empty daypart-empty-grid">No standing weekly Dayparts are configured for this Residency.</div> : <button className="card empty daypart-empty-grid" type="button" onClick={() => setDraft(blankDraft())}>No standing weekly Dayparts yet. Click to create one, or manage Calendar Only choices below.</button>}
+
+      {calendarOnlyDayparts.length ? <section className="calendar-only-dayparts"><div className="section-heading"><div><p className="eyebrow">Calendar only</p><h3>On-demand Dayparts</h3><p className="subhead">Saved choices that appear when scheduling a date but never project onto the weekly calendar.</p></div></div><div className="calendar-only-daypart-list">{calendarOnlyDayparts.map((daypart) => <button className="calendar-only-daypart-card" type="button" disabled={readOnly} onClick={readOnly ? undefined : () => setDraft(draftFromDaypart(daypart))} key={daypart.id} style={{ "--daypart-color": daypart.billingMode === "billed_by_hfy" ? HFY_BOOKED_COLOR : daypart.color } as CSSProperties}><span aria-hidden="true" /><div><strong>{daypart.name}</strong><small>{daypart.room} · {formatLocalMinute(daypart.suggestedStartMinute ?? 1080)}–{formatLocalMinute(daypart.suggestedEndMinute ?? 1260)}</small></div><em>{daypart.type === "house_activity" ? "House Activity" : daypart.billingMode === "tracking_only" ? "Client Managed" : "HFY Booking"}</em></button>)}</div></section> : null}
 
       {draft ? (
         <div className="daypart-drawer-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setDraft(null); }}>
           <aside className="daypart-drawer" role="dialog" aria-modal="true" aria-labelledby="daypart-editor-title">
             <form className="daypart-editor" action={formAction} onSubmit={(event) => {
-              if (draft.rules.some((rule) => rule.enabled && rule.start && rule.end)) return;
+              if (draft.scheduleMode === "calendar_only" || draft.rules.some((rule) => rule.enabled && rule.start && rule.end)) return;
               event.preventDefault();
               setDateValidationRequested(true);
             }}>
@@ -310,7 +332,8 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
               <div className="daypart-editor-scroll">
                 <div className="field"><label>Type</label><div className="daypart-type-options"><button className={draft.type === "dj_artist" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "dj_artist", billingMode: draft.type === "dj_artist" ? draft.billingMode : null })}><strong>Talent Activity</strong><small>Schedule programming with talent. Assignments and financial tracking follow the billing choice you select next.</small></button><button className={draft.type === "house_activity" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "house_activity", billingMode: null, color: draft.color === HFY_BOOKED_COLOR ? DEFAULT_DAYPART_COLOR : draft.color, defaultTalentRate: "", rules: draft.rules.map((rule) => ({ ...rule, defaultDjCount: "0" })) })}><strong>House Activity</strong><small>Schedule an activity, optional host, or registered talent without financial records.</small></button></div></div>
                 {draft.type === "dj_artist" ? <div className="field daypart-billing-step"><label>Billing</label><div className="daypart-type-options"><button className={draft.billingMode === "billed_by_hfy" ? "active standing-hfy" : "standing-hfy"} type="button" onClick={() => setDraft({ ...draft, billingMode: "billed_by_hfy", color: HFY_BOOKED_COLOR })}><strong>Standing HFY Booking</strong><small>HFY handles talent and billing for every occurrence of this Daypart automatically — no per-date request needed.</small></button><button className={draft.billingMode === "tracking_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "tracking_only", color: draft.color === HFY_BOOKED_COLOR ? DEFAULT_DAYPART_COLOR : draft.color, defaultTalentRate: "" })}><strong>Client Managed</strong><small>You handle talent and billing yourself. You can still request HFY for individual dates from the Calendar.</small></button></div></div> : null}
-                {draft.type && (draft.type === "house_activity" || draft.billingMode) ? <>
+                {draft.type && (draft.type === "house_activity" || draft.billingMode) ? <div className="field daypart-schedule-step"><label>When does this run?</label><div className="daypart-type-options"><button className={draft.scheduleMode === "standing_weekly" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, scheduleMode: "standing_weekly" })}><strong>Standing weekly</strong><small>Choose one or more weekdays. These dates project onto the Calendar automatically.</small></button><button className={draft.scheduleMode === "calendar_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, scheduleMode: "calendar_only" })}><strong>Calendar Only</strong><small>Save this Daypart for occasional use. It appears in the date picker and never repeats automatically.</small></button></div></div> : null}
+                {draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <>
                 <div className="row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /></div><div className="field"><label>Room / space</label><input value={draft.room} onChange={(event) => setDraft({ ...draft, room: event.target.value })} placeholder="Amigo Room" required /></div></div>
                 <div className="daypart-definition-row">
                   {draft.billingMode === "billed_by_hfy" ? <div className="field daypart-color-field"><label>Calendar color</label><div className="daypart-color-control hfy-reserved-color"><span style={{ background: HFY_BOOKED_COLOR }} aria-hidden="true" /><strong>HFY booked</strong></div><small>Reserved pink is applied automatically and cannot be used by Client Managed Dayparts.</small></div> : <div className="field daypart-color-field"><label>Calendar color</label><DaypartColorPicker ariaLabel="Calendar color presets" value={draft.color} onChange={(color) => setDraft({ ...draft, color })} /><small>Colors run left to right by hue, with dark, medium, and light rows. HFY pink remains reserved.</small></div>}
@@ -318,6 +341,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                   <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this Daypart continues indefinitely.</small></div>
                 </div>
                 <label className="checkbox-row"><input checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} type="checkbox" /> Active Daypart</label>
+                {draft.scheduleMode === "calendar_only" ? <div className="week-rule-selection calendar-only-hours"><div className="week-rule-intro"><div><strong>Suggested hours</strong><small>These prefill each date and can be adjusted when the Daypart is scheduled.</small></div></div><div className="quick-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel="Calendar Only suggested start time" value={draft.suggestedStart} onChange={(suggestedStart) => setDraft({ ...draft, suggestedStart })} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel="Calendar Only suggested end time" value={draft.suggestedEnd} onChange={(suggestedEnd) => setDraft({ ...draft, suggestedEnd })} stepMinutes={15} required /></div></div></div> : <>
                 <div className={`week-rule-selection ${showDateValidation ? "invalid" : ""}`} ref={dateSectionRef} role="group" aria-labelledby="daypart-weekly-hours-label" aria-describedby={showDateValidation ? "daypart-date-validation" : undefined}>
                 <div className="week-rule-intro"><div><strong id="daypart-weekly-hours-label">Weekly hours</strong><small>Select every day this Daypart runs. Each day can keep different hours.</small></div><button className="button secondary" type="button" title="Copy the first selected day’s start and end times to the other selected days" onClick={applyToAllSelected}>Sync times to selected days</button></div>
                 {showDateValidation ? <p className="week-rule-validation" id="daypart-date-validation" role="alert">Please pick a date.</p> : null}
@@ -330,13 +354,14 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                   ))}
                 </div>
                 </div>
-                {draft.type === "dj_artist" ? <p className="privacy-note">Talent count is optional. Leave it at 0 when the number of registered artists changes by date.</p> : <p className="privacy-note">House Activities never create Artist, Assignment, Payout, or Invoice records.</p>}
+                </>}
+                {draft.type === "dj_artist" ? <p className="privacy-note">{draft.scheduleMode === "calendar_only" ? "Calendar Only Dayparts never appear until someone schedules a specific date." : "Talent count is optional. Leave it at 0 when the number of registered artists changes by date."}</p> : <p className="privacy-note">House Activities never create Artist, Assignment, Payout, or Invoice records.</p>}
                 {draft.id ? <div className="daypart-danger-zone"><div><strong>Remove Daypart</strong><small>Unused Dayparts are deleted. Anything with scheduled or historical records is archived so its history stays intact.</small></div><button className="remove-dj-button" type="button" disabled={removePending} onClick={removeCurrentDaypart}>{removePending ? "Removing…" : "Delete / archive Daypart"}</button></div> : null}
-                </> : <div className="card empty daypart-type-gate">{draft.type === "dj_artist" ? "Choose Standing HFY Booking or Client Managed to continue." : "Choose Talent Activity or House Activity to continue."}</div>}
+                </> : <div className="card empty daypart-type-gate">{!draft.type ? "Choose Talent Activity or House Activity to continue." : draft.type === "dj_artist" && !draft.billingMode ? "Choose Standing HFY Booking or Client Managed to continue." : "Choose Standing weekly or Calendar Only to continue."}</div>}
                 {state.status === "error" && !missingDateServerError ? <p className="error" aria-live="polite">{state.message}</p> : null}
                 {removeState.status === "error" ? <p className="error" aria-live="polite">{removeState.message}</p> : null}
               </div>
-              <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button>{draft.type && (draft.type === "house_activity" || draft.billingMode) ? <button className="button" disabled={pending} type="submit">{pending ? "Saving…" : "Save Daypart"}</button> : null}</div>
+              <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button>{draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <button className="button" disabled={pending} type="submit">{pending ? "Saving…" : "Save Daypart"}</button> : null}</div>
             </form>
           </aside>
         </div>

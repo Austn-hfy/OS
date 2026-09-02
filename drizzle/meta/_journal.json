@@ -204,6 +204,13 @@
       "when": 1788306982000,
       "tag": "0028_one_time_house_activities",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788312000000,
+      "tag": "0029_calendar_only_dayparts",
+      "breakpoints": true
     }
   ]
 }

@@ -39,7 +39,8 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
       bookingState: pendingHfy ? "hfy_pending" : shift.economicsMode === "hfy" ? "hfy_confirmed" : undefined,
       tone: calendarToneForSlot(shift.room, "blue"), daypartId: shift.daypartId, shiftStartMinute: start, shiftEndMinute: end,
       projected: false, recordType: "financial_shift", daypartType: "dj_artist", billingMode: matchedDaypart?.billingMode ?? "billed_by_hfy",
-      programDetails: "", manualHostName: "", schedulingStatus: status,
+      room: shift.room, notes: shift.notes, editableColor: shift.shiftCalendarColor ?? matchedDaypart?.color ?? shift.daypartColor ?? undefined,
+      programDetails: shift.programDetails, manualHostName: shift.manualHostName, schedulingStatus: status,
       economicsMode: shift.economicsMode,
       assignments: activeAssignments.map((assignment) => ({
         id: assignment.id, talentId: assignment.talentId, talentName: assignment.talentName, guestName: assignment.guestName,
@@ -59,6 +60,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
       residencyName: occurrence.assignments.map((assignment) => assignment.talentName).join(" + ") || occurrence.manualHostName || occurrence.programDetails || "Scheduled activity",
       color: occurrence.color, daypartId: occurrence.daypartId, shiftStartMinute: start, shiftEndMinute: end,
       projected: false, recordType: "nonfinancial_occurrence", daypartType: occurrence.type, billingMode: occurrence.billingMode,
+      room: occurrence.room, notes: occurrence.notes, editableColor: occurrence.color,
       programDetails: occurrence.programDetails, manualHostName: occurrence.manualHostName, schedulingStatus: "filled",
       assignments: occurrence.assignments.map((assignment) => ({
         id: assignment.id, talentId: assignment.talentId, talentName: assignment.talentName, guestName: "",
@@ -82,6 +84,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
   const events = [...savedShifts, ...savedOccurrences, ...projected].sort((left, right) => left.date.localeCompare(right.date) || left.shiftStartMinute - right.shiftStartMinute);
   const safeDayparts = dayparts.map((daypart) => ({
     id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode,
+    scheduleMode: daypart.scheduleMode, suggestedStartMinute: daypart.suggestedStartMinute, suggestedEndMinute: daypart.suggestedEndMinute,
     defaultTalentRateCents: null, activeUntil: daypart.activeUntil, active: daypart.active,
     rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })),
   }));

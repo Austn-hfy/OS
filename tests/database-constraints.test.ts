@@ -55,6 +55,7 @@ beforeAll(async () => {
   const explicitResidencyRoster = await readFile(new URL("../drizzle/0025_explicit_residency_roster_visibility.sql", import.meta.url), "utf8");
   const clientOwnershipBoundary = await readFile(new URL("../drizzle/0026_fine_tyrannus.sql", import.meta.url), "utf8");
   const oneTimeHouseActivities = await readFile(new URL("../drizzle/0028_one_time_house_activities.sql", import.meta.url), "utf8");
+  const calendarOnlyDayparts = await readFile(new URL("../drizzle/0029_calendar_only_dayparts.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -89,6 +90,7 @@ beforeAll(async () => {
   await database.exec(explicitResidencyRoster.replaceAll("--> statement-breakpoint", ""));
   await database.exec(clientOwnershipBoundary.replaceAll("--> statement-breakpoint", ""));
   await database.exec(oneTimeHouseActivities.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(calendarOnlyDayparts.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -358,6 +360,25 @@ describe("database replacements for Airtable audit formulas", () => {
       SELECT daypart_id, type FROM schedule_occurrences WHERE name = 'Movie Night';
     `);
     expect(result.rows[0]).toEqual({ daypart_id: null, type: "house_activity" });
+  });
+
+  it("stores Calendar Only Dayparts with suggested hours and rejects incomplete scheduling fields", async () => {
+    await database.exec(`
+      INSERT INTO dayparts
+        (residency_id, name, room, color, type, billing_mode, schedule_mode, suggested_start_minute, suggested_end_minute)
+      VALUES
+        ('${ids.residencyA}', 'Commune Pool', 'Pool', '#7A65D1', 'house_activity', NULL, 'calendar_only', 720, 1020);
+    `);
+    const result = await database.query<{ schedule_mode: string; suggested_start_minute: number; suggested_end_minute: number }>(`
+      SELECT schedule_mode::text, suggested_start_minute, suggested_end_minute FROM dayparts WHERE name = 'Commune Pool';
+    `);
+    expect(result.rows[0]).toEqual({ schedule_mode: "calendar_only", suggested_start_minute: 720, suggested_end_minute: 1020 });
+    await expect(database.exec(`
+      INSERT INTO dayparts
+        (residency_id, name, room, color, type, billing_mode, schedule_mode)
+      VALUES
+        ('${ids.residencyA}', 'Broken On Demand', 'Pool', '#7A65D1', 'house_activity', NULL, 'calendar_only');
+    `)).rejects.toThrow();
   });
 
   it("prevents a Shift from using another Residency's Daypart", async () => {

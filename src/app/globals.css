@@ -529,6 +529,7 @@ tr:last-child td { border-bottom: 0; }
 .calendar-status-legend i.scheduled::after { content: "✓"; position: relative; left: 6px; top: -4px; color: #2783dc; font-style: normal; font-size: 7px; }
 .calendar-status-legend i.hfy-pending { border-left-color: #f9a8d4; background: color-mix(in srgb, #f9a8d4 20%, white); }
 .calendar-status-legend i.hfy-confirmed { border-left-color: #ec4899; background: color-mix(in srgb, #ec4899 42%, white); }
+.calendar-status-legend i.daypart-confirmed { border-left-color: #2783dc; background: color-mix(in srgb, #2783dc 14%, white); }
 .calendar-event strong, .calendar-event span, .calendar-event small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-event-line { min-width: 0; display: flex; align-items: baseline; gap: 4px; }
 .calendar-event-line strong { flex: 0 1 auto; font-size: 9px; }
@@ -580,6 +581,17 @@ tr:last-child td { border-bottom: 0; }
 .daypart-week-block strong { font-size: 9px; line-height: 1.1; }
 .daypart-week-block span { font-size: 8px; line-height: 1.1; }
 .daypart-empty-grid { width: 100%; border-style: dashed; }
+.calendar-only-dayparts { display: grid; gap: 12px; margin-top: 22px; padding: 18px; border: 1px solid var(--line); border-radius: 20px; background: rgba(255,255,255,.76); box-shadow: var(--shadow); }
+.calendar-only-dayparts .section-heading { margin: 0; }
+.calendar-only-daypart-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 9px; }
+.calendar-only-daypart-card { appearance: none; min-width: 0; display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: white; text-align: left; }
+.calendar-only-daypart-card:hover { border-color: color-mix(in srgb, var(--daypart-color) 48%, var(--line)); background: color-mix(in srgb, var(--daypart-color) 6%, white); }
+.calendar-only-daypart-card > span { width: 7px; height: 36px; border-radius: 999px; background: var(--daypart-color); }
+.calendar-only-daypart-card > div { min-width: 0; display: grid; gap: 3px; }
+.calendar-only-daypart-card strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-only-daypart-card small { color: var(--muted); font-size: 9px; }
+.calendar-only-daypart-card em { color: var(--muted); font-size: 8px; font-style: normal; font-weight: 800; text-transform: uppercase; }
+.one-time-record-editor { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.72); }
 .daypart-editor { display: grid; gap: 20px; margin-top: 18px; }
 .daypart-drawer-backdrop { position: fixed; inset: 0; z-index: 110; display: flex; justify-content: flex-end; background: rgba(3,16,30,.48); backdrop-filter: blur(6px); }
 .daypart-drawer { width: min(1120px, calc(100% - 54px)); height: 100%; overflow: hidden; background: var(--surface); border-left: 1px solid rgba(255,255,255,.45); box-shadow: -28px 0 90px rgba(3,16,30,.3); }
