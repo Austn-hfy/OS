@@ -1,14 +1,17 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { createClientOwnedArtistAction, type ClientSettingsActionState } from "@/app/residency/actions";
 import { TALENT_GENRES } from "@/domain/talent-genres";
 
 const initialState: ClientSettingsActionState = { status: "idle", message: "" };
 
-export function AddClientArtistForm() {
+export function AddClientArtistForm({ onSuccess }: { onSuccess?: () => void }) {
   const [state, action, pending] = useActionState(createClientOwnedArtistAction, initialState);
   const [genre, setGenre] = useState<string>(TALENT_GENRES[0]);
+  useEffect(() => {
+    if (state.status === "success") onSuccess?.();
+  }, [onSuccess, state.status]);
   return <section className="card client-add-artist">
     <header className="client-add-artist-heading"><div><p className="eyebrow">Talent roster</p><h2>Add an artist</h2></div></header>
     <form action={action}>

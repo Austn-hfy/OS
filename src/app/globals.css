@@ -920,6 +920,8 @@ tr:last-child td { border-bottom: 0; }
 .artist-roster-count span { font-size: 10px; }
 .artist-roster-list { min-height: 0; overflow-y: auto; border-top: 1px solid var(--line); overscroll-behavior: contain; }
 .artist-roster-row-wrap { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: stretch; border-bottom: 1px solid var(--line); }
+.client-artist-roster-list .artist-roster-row-wrap { grid-template-columns: minmax(0, 1fr); }
+.client-artist-roster-list .artist-roster-row { padding-left: 16px; }
 .artist-roster-row { appearance: none; width: 100%; min-width: 0; display: grid; gap: 5px; padding: 14px 16px 14px 4px; border: 0; color: var(--ink); background: transparent; text-align: left; }
 .artist-roster-row:hover { background: rgba(39,131,220,.055); }
 .artist-roster-row-wrap.selected { background: #eaf3ff; box-shadow: inset 3px 0 0 var(--forest); }
@@ -1037,6 +1039,8 @@ tr:last-child td { border-bottom: 0; }
 
 .company-roster-card { padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: rgba(251,251,251,.84); box-shadow: var(--shadow); }
 .company-roster-toolbar { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(210px, .55fr); gap: 12px; }
+.client-roster-toolbar { grid-template-columns: minmax(240px, 1fr) auto; align-items: end; }
+.client-roster-add { min-height: 42px; align-self: end; }
 .company-roster-summary { margin: 15px 0 8px; color: var(--muted); font-size: 11px; }
 .company-roster-list { display: grid; gap: 8px; }
 .company-roster-list > article { display: grid; grid-template-columns: minmax(170px, 1.1fr) minmax(150px, .8fr) minmax(220px, 1.3fr) auto; align-items: center; gap: 15px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.72); }

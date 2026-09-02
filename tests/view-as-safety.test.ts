@@ -22,6 +22,7 @@ describe("owner View As safety", () => {
       "../src/app/residency/page.tsx",
       "../src/app/residency/calendar/page.tsx",
       "../src/app/residency/talent/page.tsx",
+      "../src/app/residency/talent/roster/page.tsx",
       "../src/app/residency/payouts/page.tsx",
       "../src/app/residency/invoices/page.tsx",
       "../src/app/residency/settings/page.tsx",

@@ -54,8 +54,23 @@ describe("Residency workspace boundaries", () => {
       readFile(new URL("../src/components/residency-shell.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
     ]);
-    expect(shell).toContain('["Talent Roster", "/residency/talent"]');
+    expect(shell).toContain('["Talent", "/residency/talent"]');
+    expect(shell).toContain('href="/residency/talent">Artist Lookup</Link>');
+    expect(shell).toContain('href="/residency/talent/roster">Roster</Link>');
     expect(shell).not.toContain('["Talent roster", "/residency/talent"]');
     expect(styles).toMatch(/\.hfy-style-system \.nav a,\s*\.hfy-style-system \.client-dayparts-button,/);
+  });
+
+  it("uses the same Talent and Payout workspace frames in HFY and Residency modes", async () => {
+    const [hfyTalent, clientTalent, hfyPayouts, clientPayouts] = await Promise.all([
+      readFile(new URL("../src/app/app/talent/artist-lookup.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/payouts/payouts-workspace.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/payouts/client-payouts-workspace.tsx", import.meta.url), "utf8"),
+    ]);
+    expect(hfyTalent).toContain("TalentWorkspaceShell");
+    expect(clientTalent).toContain("TalentWorkspaceShell");
+    expect(hfyPayouts).toContain("PayoutWorkspaceFrame");
+    expect(clientPayouts).toContain("PayoutWorkspaceFrame");
   });
 });

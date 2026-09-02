@@ -10,7 +10,9 @@ import {
   type ResidencyActionState,
 } from "@/app/app/actions";
 import { Status } from "@/components/format";
+import { ArtistBookingCalendar } from "@/components/artist-booking-calendar";
 import { PrivateValue, SensitiveInput, usePrivacyMode } from "@/components/privacy-mode";
+import { TalentWorkspaceShell } from "@/components/talent-workspace-shell";
 import type { getArtistLookupData, getResidencyList } from "@/data/internal";
 import {
   artistRosterCounts,
@@ -18,13 +20,11 @@ import {
   type ArtistRosterSort,
   type ArtistRosterView,
 } from "@/domain/artist-roster";
-import { monthGrid, monthLabel, shiftMonthKey } from "@/lib/calendar";
 import { TALENT_GENRES } from "@/domain/talent-genres";
 
 type ArtistRow = Awaited<ReturnType<typeof getArtistLookupData>>[number];
 type ResidencyRow = Awaited<ReturnType<typeof getResidencyList>>[number];
 const initialActionState: ResidencyActionState = { status: "idle", message: "" };
-const weekdayLabels = ["S", "M", "T", "W", "T", "F", "S"];
 
 function currency(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
@@ -36,24 +36,6 @@ function serviceDateLabel(serviceDate: string) {
 
 function timeLabel(value: string, timeZone: string) {
   return new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(new Date(value));
-}
-
-function ArtistBookingCalendar({ artistId, bookings }: { artistId: string; bookings: ArtistRow["upcomingBookings"] }) {
-  const firstMonth = bookings[0]?.serviceDate.slice(0, 7) ?? new Date().toISOString().slice(0, 7);
-  const [selection, setSelection] = useState({ artistId, monthKey: firstMonth });
-  const monthKey = selection.artistId === artistId ? selection.monthKey : firstMonth;
-  const bookingCounts = useMemo(() => bookings.reduce<Record<string, number>>((counts, booking) => {
-    counts[booking.serviceDate] = (counts[booking.serviceDate] ?? 0) + 1;
-    return counts;
-  }, {}), [bookings]);
-
-  return <div className="artist-mini-calendar" aria-label={`${monthLabel(monthKey)} booking calendar`}>
-    <div className="artist-mini-calendar-heading"><button type="button" aria-label="Previous booking month" onClick={() => setSelection({ artistId, monthKey: shiftMonthKey(monthKey, -1) })}>←</button><strong>{monthLabel(monthKey)}</strong><button type="button" aria-label="Next booking month" onClick={() => setSelection({ artistId, monthKey: shiftMonthKey(monthKey, 1) })}>→</button></div>
-    <div className="artist-mini-calendar-grid">{weekdayLabels.map((weekday, index) => <span className="artist-mini-weekday" key={`${weekday}-${index}`}>{weekday}</span>)}{monthGrid(monthKey).map((day) => {
-      const count = bookingCounts[day.iso] ?? 0;
-      return <div className={`artist-mini-day ${day.inMonth ? "" : "outside"} ${count ? "booked" : ""}`} title={count ? `${count} booking${count === 1 ? "" : "s"}` : undefined} key={day.iso}><time dateTime={day.iso}>{day.day}</time>{count ? <span>{count}</span> : null}</div>;
-    })}</div>
-  </div>;
 }
 
 export function ArtistLookup({ artists, residencies, currentResidency }: { artists: ArtistRow[]; residencies: ResidencyRow[]; currentResidency: ResidencyRow | null }) {
@@ -174,8 +156,7 @@ export function ArtistLookup({ artists, residencies, currentResidency }: { artis
     { id: "archived", label: "Archived" },
   ];
 
-  return <div className="artist-lookup-shell">
-    <aside className="artist-roster-panel">
+  return <TalentWorkspaceShell sidebar={<>
       <div className="artist-roster-toolbar">
         <div className="artist-roster-toolbar-heading"><div><p className="eyebrow">Shared roster</p><strong>Find an artist</strong></div><button className="button secondary" type="button" onClick={() => setCreating(true)}>+ New Artist</button></div>
         <div className="artist-search-field"><label htmlFor="artist-lookup-search">Search artists</label><div><span aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg></span><input id="artist-lookup-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by artist name" /></div></div>
@@ -193,9 +174,7 @@ export function ArtistLookup({ artists, residencies, currentResidency }: { artis
           {artist.homeMarket ? <span className="artist-roster-meta">{artist.homeMarket}</span> : null}
         </button>
       </div>)}{!filteredArtists.length ? <div className="empty artist-list-empty"><p>{!artists.length ? "No artists have been added yet." : query ? `No ${view} artists match “${query}”.` : `No ${view} artists to show.`}</p>{searchMatchesOutsideView.length ? <div><span>{searchMatchesOutsideView.length} match{searchMatchesOutsideView.length === 1 ? " exists" : "es exist"} in another view.</span>{searchMatchesOutsideView.some((artist) => artist.archivedAt) ? <button type="button" onClick={() => changeView("archived")}>Search Archived</button> : null}{searchMatchesOutsideView.some((artist) => !artist.archivedAt && artist.talentStatus === "inactive") ? <button type="button" onClick={() => changeView("inactive")}>Search Inactive</button> : null}</div> : null}</div> : null}</div>
-    </aside>
-
-    <section className="artist-detail-panel">
+    </>} detail={<>
       {!selected ? <div className="artist-detail-empty"><span>HFY</span><h2>{artists.length ? "Select an artist" : "Build your roster"}</h2><p>{artists.length ? "Choose someone from the roster to see what they are owed, upcoming bookings, Residency assignments, contact information, and payment details." : "Use New Artist to add the first person to Artist Lookup."}</p></div> : <>
         <header className="artist-detail-header"><div><p className="eyebrow">Artist record</p><h2>{selected.stageName}</h2>{selected.fullName ? <p>{selected.fullName}</p> : null}</div><div className="artist-detail-actions">{selected.archivedAt ? <span className="artist-archived-status">Archived</span> : <Status value={selected.talentStatus} />}<button className="button secondary" type="button" onClick={() => setEditing(true)}>Edit Artist</button></div></header>
 
@@ -214,8 +193,7 @@ export function ArtistLookup({ artists, residencies, currentResidency }: { artis
         {!currentResidency && selected.airtableImportedAt ? <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Historical snapshot</p><h3>Airtable record</h3></div></div><dl className="artist-definition-list"><div><dt>Total earnings (all time)</dt><dd><PrivateValue>{currency(selected.legacyTotalEarningsCents)}</PrivateValue></dd></div><div><dt>Airtable roster status</dt><dd>{selected.airtableRosterStatusLabel || "Blank"}</dd></div><div><dt>Airtable talent status</dt><dd>{selected.airtableTalentStatusLabel || "Blank"}</dd></div><div><dt>Imported</dt><dd>{new Date(selected.airtableImportedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</dd></div><div><dt>Upcoming-bookings snapshot</dt><dd>{selected.legacyUpcomingBookings || "None recorded at import"}</dd></div></dl></section> : null}
         <section className="artist-record-controls"><div><p className="eyebrow">Record controls</p><h3>{selected.archivedAt ? "Restore this artist" : "Archive this artist"}</h3><p>{selected.archivedAt ? "Restoring returns the artist to Inactive so you can review them before making them bookable." : "Archiving removes the artist from standard lookup and future booking selections without deleting history."}</p></div><button className="button secondary" type="button" onClick={() => runBulk(selected.archivedAt ? "restore" : "archive", [selected.id])} disabled={rosterPending}>{selected.archivedAt ? "Restore Artist" : "Archive Artist"}</button></section>
       </>}
-    </section>
-
+    </>} overlays={<>
     {editing && selected ? <div className="artist-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setEditing(false); }}><aside className="artist-editor-drawer" role="dialog" aria-modal="true" aria-labelledby="artist-editor-title"><form action={editAction} className="artist-editor-form">
       <input name="talentId" type="hidden" value={selected.id} />
       <header className="artist-editor-heading"><div><p className="eyebrow">Full Talent record</p><h2 id="artist-editor-title">Edit {selected.stageName}</h2></div><button className="quick-modal-close" type="button" aria-label="Close artist editor" onClick={() => setEditing(false)}>×</button></header>
@@ -240,5 +218,5 @@ export function ArtistLookup({ artists, residencies, currentResidency }: { artis
       <div className="artist-editor-scroll"><div className="artist-residency-options">{residencies.map((residency) => { const bookingCount = selected.upcomingBookings.filter((booking) => booking.residencyId === residency.id).length; const outsideExclusiveResidency = Boolean(selected.exclusiveResidencyId && selected.exclusiveResidencyId !== residency.id); return <label className={outsideExclusiveResidency ? "disabled" : ""} key={residency.id}><input type="checkbox" checked={residencySelection.has(residency.id)} disabled={outsideExclusiveResidency} onChange={() => setResidencySelection((current) => { const next = new Set(current); if (next.has(residency.id)) next.delete(residency.id); else next.add(residency.id); return next; })} /><span><strong>{residency.name}</strong><small>{outsideExclusiveResidency ? "Unavailable — artist is exclusive elsewhere" : residency.cityState || "Location not set"}{bookingCount ? ` · ${bookingCount} upcoming booking${bookingCount === 1 ? "" : "s"}` : ""}</small></span></label>; })}{!residencies.length ? <p className="artist-section-empty">No active Residencies are available yet.</p> : null}</div>{rosterState.status === "error" ? <p className="error" aria-live="polite">{rosterState.message}</p> : null}<p className="privacy-note">An assignment controls roster and booking-picker visibility. Removing one never deletes existing bookings, payout history, or invoices.</p></div>
       <footer className="artist-editor-actions"><button className="button secondary" type="button" onClick={() => setManagingResidencies(false)}>Cancel</button><button className="button" type="button" onClick={saveResidencies} disabled={rosterPending}>{rosterPending ? "Saving…" : "Save Assignments"}</button></footer>
     </div></aside></div> : null}
-  </div>;
+  </>} />;
 }

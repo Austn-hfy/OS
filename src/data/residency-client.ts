@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAssignmentTerms, dayparts, invoices, residencies, residencyContacts, residencyTalent, scheduleOccurrenceTalent, shifts, talent, users } from "@/db/schema";
+import { assignments, auditLog, clientAssignmentTerms, dayparts, invoices, residencies, residencyContacts, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent, users } from "@/db/schema";
 import { calculateClientOwedCents, resolveClientHourlyRateCents } from "@/domain/client-rates";
 import { projectClientSafeRoster, projectClientSafeTalent, type ClientSafeManagedTalent } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
@@ -164,10 +164,13 @@ export async function getResidencyClientVisibleAccessContacts(residencyId: strin
 export async function getResidencyClientPayoutStatus(residencyId: string) {
   const rows = await getDb().select({
     id: assignments.id,
+    talentId: assignments.talentId,
     artist: talent.stageName,
+    shiftName: shifts.name,
     serviceDate: shifts.serviceDate,
     startsAt: assignments.startsAt,
     endsAt: assignments.endsAt,
+    bookingStatus: assignments.bookingStatus,
     defaultRateCents: clientAssignmentTerms.defaultRateCents,
     overrideRateCents: clientAssignmentTerms.rateCents,
   }).from(assignments)
@@ -184,14 +187,110 @@ export async function getResidencyClientPayoutStatus(residencyId: string) {
     const effectiveRateCents = resolveClientHourlyRateCents(row.defaultRateCents, row.overrideRateCents);
     return {
       id: row.id,
+      talentId: row.talentId,
       artist: row.artist ?? "Unassigned",
+      shiftName: row.shiftName,
       serviceDate: row.serviceDate,
       startsAt: row.startsAt.toISOString(),
       endsAt: row.endsAt.toISOString(),
+      bookingStatus: row.bookingStatus,
       defaultRateCents: row.defaultRateCents,
       overrideRateCents: row.overrideRateCents,
       effectiveRateCents,
       owedCents: calculateClientOwedCents(row.startsAt, row.endsAt, effectiveRateCents),
+    };
+  });
+}
+
+export async function getResidencyClientTalentWorkspace(residencyId: string) {
+  const database = getDb();
+  const [activeRoster, managedArtists, payoutRows] = await Promise.all([
+    getResidencyClientSafeRoster(residencyId),
+    getResidencyClientOwnedArtistManagement(residencyId),
+    getResidencyClientPayoutStatus(residencyId),
+  ]);
+  const managedById = new Map(managedArtists.map((artist) => [artist.id, artist]));
+  const allArtists = [
+    ...activeRoster.map((artist) => ({
+      ...artist,
+      archivedAt: null as string | null,
+      creationSource: managedById.get(artist.id)?.creationSource ?? "unknown" as const,
+      hasBookingHistory: managedById.get(artist.id)?.hasBookingHistory ?? false,
+    })),
+    ...managedArtists.filter((artist) => artist.archivedAt && !activeRoster.some((active) => active.id === artist.id)),
+  ];
+  const artistIds = allArtists.map((artist) => artist.id);
+  if (!artistIds.length) return [];
+  const today = new Date().toISOString().slice(0, 10);
+  const [assignmentRows, occurrenceRows] = await Promise.all([
+    database.select({
+      id: assignments.id,
+      talentId: assignments.talentId,
+      serviceDate: shifts.serviceDate,
+      startsAt: assignments.startsAt,
+      endsAt: assignments.endsAt,
+      shiftName: shifts.name,
+      room: shifts.room,
+      bookingStatus: assignments.bookingStatus,
+    }).from(assignments)
+      .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+      .where(and(
+        eq(shifts.residencyId, residencyId),
+        inArray(assignments.talentId, artistIds),
+        gte(shifts.serviceDate, today),
+        inArray(assignments.bookingStatus, ["offered", "pending_hfy_confirmation", "confirmed", "completed"]),
+      ))
+      .orderBy(asc(shifts.serviceDate), asc(assignments.startsAt)),
+    database.select({
+      id: scheduleOccurrenceTalent.id,
+      talentId: scheduleOccurrenceTalent.talentId,
+      serviceDate: scheduleOccurrences.serviceDate,
+      startsAt: scheduleOccurrenceTalent.startsAt,
+      endsAt: scheduleOccurrenceTalent.endsAt,
+      shiftName: scheduleOccurrences.name,
+      room: scheduleOccurrences.room,
+    }).from(scheduleOccurrenceTalent)
+      .innerJoin(scheduleOccurrences, eq(scheduleOccurrenceTalent.occurrenceId, scheduleOccurrences.id))
+      .where(and(
+        eq(scheduleOccurrences.residencyId, residencyId),
+        inArray(scheduleOccurrenceTalent.talentId, artistIds),
+        gte(scheduleOccurrences.serviceDate, today),
+      ))
+      .orderBy(asc(scheduleOccurrences.serviceDate), asc(scheduleOccurrenceTalent.startsAt)),
+  ]);
+
+  return allArtists.map((artist) => {
+    const artistPayouts = payoutRows.filter((row) => row.talentId === artist.id);
+    const upcomingBookings = [
+      ...assignmentRows.filter((row) => row.talentId === artist.id).map((row) => ({
+        id: row.id,
+        serviceDate: row.serviceDate,
+        startsAt: row.startsAt.toISOString(),
+        endsAt: row.endsAt.toISOString(),
+        shiftName: row.shiftName,
+        room: row.room,
+        bookingStatus: row.bookingStatus,
+      })),
+      ...occurrenceRows.filter((row) => row.talentId === artist.id).map((row) => ({
+        id: row.id,
+        serviceDate: row.serviceDate,
+        startsAt: row.startsAt.toISOString(),
+        endsAt: row.endsAt.toISOString(),
+        shiftName: row.shiftName,
+        room: row.room,
+        bookingStatus: "confirmed" as const,
+      })),
+    ].sort((left, right) => left.serviceDate.localeCompare(right.serviceDate) || left.startsAt.localeCompare(right.startsAt));
+    return {
+      ...artist,
+      outstandingOwedCents: artistPayouts.reduce((sum, row) => sum + (row.owedCents ?? 0), 0),
+      outstandingAssignments: artistPayouts.map((row) => ({
+        id: row.id,
+        shiftName: row.shiftName,
+        serviceDate: row.serviceDate,
+        amountCents: row.owedCents,
+      })),
+      upcomingBookings,
     };
   });
 }

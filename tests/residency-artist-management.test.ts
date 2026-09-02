@@ -30,8 +30,9 @@ describe("Residency-owned artist management", () => {
   });
 
   it("shows edit, archive, restore, and protected permanent-delete controls only to Residency managers", async () => {
-    const [page, card] = await Promise.all([
+    const [page, lookup, card] = await Promise.all([
       readFile(new URL("../src/app/residency/talent/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/client-owned-artist-card.tsx", import.meta.url), "utf8"),
     ]);
     expect(page).toContain('canManage={actor.accessRole === "manager"}');
@@ -41,7 +42,8 @@ describe("Residency-owned artist management", () => {
     expect(card).toContain("permanentlyDeleteClientOwnedArtistAction");
     expect(card).toContain("window.confirm");
     expect(card).toContain("Archive Artist");
-    expect(page).toContain("Archived artists");
+    expect(lookup).toContain('{ id: "archived", label: "Archived" }');
+    expect(lookup).toContain("ArchivedClientOwnedArtistCard");
   });
 
   it("records and exposes only the safe creator-source distinction", async () => {
