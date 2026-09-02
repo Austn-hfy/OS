@@ -34,4 +34,13 @@ describe("Ace Residency RLS migration", () => {
     expect(sql).toContain("validate_occurrence_talent_scope");
     expect(sql).not.toContain('"exclusive_residency_id" IS NULL OR "exclusive_residency_id" IN');
   });
+
+  it("requires explicit client visibility without narrowing HFY booking eligibility", async () => {
+    const sql = await readFile(new URL("../../drizzle/0032_fast_surge.sql", import.meta.url), "utf8");
+    expect(sql).toContain('ADD COLUMN "client_visible" boolean DEFAULT false NOT NULL');
+    expect(sql).toContain('AND "client_visible" = true');
+    expect(sql).toContain("AND rt.client_visible = true");
+    expect(sql).toContain("t.\"ownership\" = 'residency'");
+    expect(sql).not.toContain("UPDATE \"residency_talent\" SET \"active\" = false");
+  });
 });

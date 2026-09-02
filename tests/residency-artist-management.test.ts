@@ -21,7 +21,7 @@ describe("Residency-owned artist management", () => {
     const remove = source.slice(source.indexOf("export async function permanentlyDeleteClientOwnedArtistAction"), source.indexOf("export async function updateClientOwnedRateAction"));
     expect(archive).toContain('talentStatus: "inactive"');
     expect(archive).toContain("archivedAt: new Date()");
-    expect(archive).toContain("tx.update(residencyTalent).set({ active: false })");
+    expect(archive).toContain("tx.update(residencyTalent).set({ active: false, clientVisible: false })");
     expect(archive).not.toContain("tx.delete(talent)");
     expect(archive).toContain("historyPreserved: true");
     expect(remove).toContain("assignmentHistory.length || occurrenceHistory.length");

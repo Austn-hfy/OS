@@ -404,7 +404,11 @@ export async function getTalentDirectory(residencyId?: string) {
     .orderBy(desc(talent.priority), asc(talent.stageName));
   const approvals = await database.select({ talentId: residencyTalent.talentId })
     .from(residencyTalent)
-    .where(and(eq(residencyTalent.residencyId, residencyId), eq(residencyTalent.active, true)));
+    .where(and(
+      eq(residencyTalent.residencyId, residencyId),
+      eq(residencyTalent.active, true),
+      eq(residencyTalent.clientVisible, true),
+    ));
   if (!approvals.length) return [];
   return database.select().from(talent)
     .where(and(
@@ -422,6 +426,7 @@ export async function getArtistLookupData(residencyId?: string) {
     ? (await database.select({ talentId: residencyTalent.talentId }).from(residencyTalent).where(and(
       eq(residencyTalent.residencyId, residencyId),
       eq(residencyTalent.active, true),
+      eq(residencyTalent.clientVisible, true),
     ))).map((row) => row.talentId)
     : null;
   const artistRows = scopedTalentIds
@@ -437,7 +442,7 @@ export async function getArtistLookupData(residencyId?: string) {
   const artistIds = artistRows.map((artist) => artist.id);
   if (!artistIds.length) return [];
 
-  const [paymentRows, approvalRows, assignmentRows, trackingRows, documentRows] = await Promise.all([
+  const [paymentRows, visibilityRows, assignmentRows, trackingRows, documentRows] = await Promise.all([
     database.select().from(talentPaymentProfiles).where(inArray(talentPaymentProfiles.talentId, artistIds)),
     database.select({
       talentId: residencyTalent.talentId,
@@ -445,7 +450,12 @@ export async function getArtistLookupData(residencyId?: string) {
       residencyName: residencies.name,
     }).from(residencyTalent)
       .innerJoin(residencies, eq(residencyTalent.residencyId, residencies.id))
-      .where(and(inArray(residencyTalent.talentId, artistIds), eq(residencyTalent.active, true), eq(residencies.active, true)))
+      .where(and(
+        inArray(residencyTalent.talentId, artistIds),
+        eq(residencyTalent.active, true),
+        eq(residencyTalent.clientVisible, true),
+        eq(residencies.active, true),
+      ))
       .orderBy(asc(residencies.name)),
     database.select({
       id: assignments.id,
@@ -539,15 +549,15 @@ export async function getArtistLookupData(residencyId?: string) {
           bookingStatus: "confirmed",
         })))
       .sort((left, right) => left.serviceDate.localeCompare(right.serviceDate) || left.startsAt.localeCompare(right.startsAt));
-    const approvedResidencies = approvalRows.filter((approval) => approval.talentId === artist.id);
+    const clientVisibleResidencies = visibilityRows.filter((visibility) => visibility.talentId === artist.id);
     const paymentProfile = paymentRows.find((profile) => profile.talentId === artist.id);
     const documents = documentRows.filter((document) => document.talentId === artist.id);
     const liveOutstandingOwedCents = outstandingAssignments.reduce((sum, assignment) => sum + assignment.amountCents, 0);
     return {
       ...artist,
-      approvedForCurrentResidency: residencyId ? approvedResidencies.some((approval) => approval.residencyId === residencyId) : null,
+      clientVisibleForCurrentResidency: residencyId ? clientVisibleResidencies.some((visibility) => visibility.residencyId === residencyId) : null,
       scopedResidencyId: residencyId ?? null,
-      approvedResidencies: approvedResidencies.map((approval) => ({ id: approval.residencyId, name: approval.residencyName })),
+      clientVisibleResidencies: clientVisibleResidencies.map((visibility) => ({ id: visibility.residencyId, name: visibility.residencyName })),
       liveOutstandingOwedCents,
       totalOutstandingOwedCents: residencyId ? liveOutstandingOwedCents : liveOutstandingOwedCents + artist.legacyOutstandingOwedCents,
       outstandingAssignments,

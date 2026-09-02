@@ -77,6 +77,7 @@ export async function getResidencyClientSafeRoster(residencyId: string) {
       eq(residencyTalent.talentId, talent.id),
       eq(residencyTalent.residencyId, residencyId),
       eq(residencyTalent.active, true),
+      eq(residencyTalent.clientVisible, true),
     ))
     .where(and(
       eq(talent.talentStatus, "active"),

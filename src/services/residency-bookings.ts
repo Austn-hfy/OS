@@ -130,6 +130,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         eq(residencyTalent.talentId, talent.id),
         eq(residencyTalent.residencyId, residency.id),
         eq(residencyTalent.active, true),
+        actor.kind === "residency" ? eq(residencyTalent.clientVisible, true) : undefined,
       ))
       .where(and(
         inArray(talent.id, talentIds),
@@ -600,6 +601,7 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
         eq(residencyTalent.talentId, talent.id),
         eq(residencyTalent.residencyId, shift.residencyId),
         eq(residencyTalent.active, true),
+        actor.kind === "residency" ? eq(residencyTalent.clientVisible, true) : undefined,
       ))
       .where(and(
         eq(talent.id, input.talentId),

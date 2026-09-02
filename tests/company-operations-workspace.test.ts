@@ -29,14 +29,16 @@ describe("Company Operations workspace", () => {
     ]);
     expect(page).toContain('redirect("/app/talent?mode=hfy")');
     expect(lookup).toContain("updateArtistResidenciesAction");
-    expect(lookup).toContain("Add to Residency");
+    expect(lookup).toContain("Add to Client Roster");
+    expect(lookup).toContain("Remove from Client Roster");
+    expect(lookup).toContain('aria-label="Filter by client roster"');
   });
 
-  it("labels eligibility separately from explicit Residency assignments", async () => {
+  it("labels HFY booking eligibility separately from client visibility", async () => {
     const lookup = await readFile(new URL("../src/app/app/talent/artist-lookup.tsx", import.meta.url), "utf8");
-    expect(lookup).toContain("Residency assignments");
-    expect(lookup).toContain("Shared — eligible to be assigned to multiple Residencies.");
-    expect(lookup).toContain("Not assigned to a Residency.");
-    expect(lookup).not.toContain("Not currently available in any Residency.");
+    expect(lookup).toContain("Client visibility");
+    expect(lookup).toContain("HFY Programming can still book this artist when they are not client-visible.");
+    expect(lookup).toContain("Not visible on any client roster.");
+    expect(lookup).toContain("This does not affect where HFY can book them.");
   });
 });

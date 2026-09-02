@@ -26,7 +26,7 @@ import { isFullCalendarMonth } from "@/domain/talent-invoicing";
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
 export type CredentialLinkActionState = ResidencyActionState & { setupLink?: string };
-export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_residency";
+export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_client_roster" | "remove_from_client_roster";
 
 function centsFromDollars(value: FormDataEntryValue | null): number {
   const amount = Number(value);
@@ -465,30 +465,32 @@ export async function bulkUpdateArtistsAction(input: {
     const actor = await requireInternalActor();
     const parsed = z.object({
       talentIds: z.array(z.uuid()).min(1).max(250).transform((ids) => [...new Set(ids)]),
-      operation: z.enum(["active", "inactive", "archive", "restore", "add_to_residency"]),
+      operation: z.enum(["active", "inactive", "archive", "restore", "add_to_client_roster", "remove_from_client_roster"]),
       residencyId: z.uuid().optional(),
     }).parse(input);
     const database = getDb();
     const artistRows = await database.select({
       id: talent.id,
       stageName: talent.stageName,
+      ownership: talent.ownership,
       archivedAt: talent.archivedAt,
       exclusiveResidencyId: talent.exclusiveResidencyId,
     })
       .from(talent)
       .where(inArray(talent.id, parsed.talentIds));
     if (artistRows.length !== parsed.talentIds.length) throw new Error("One or more artists could not be found.");
+    if (artistRows.some((artist) => artist.ownership !== "hfy")) throw new Error("Client visibility can only be changed for HFY artists here.");
 
     let residencyName = "";
-    if (parsed.operation === "add_to_residency") {
+    if (parsed.operation === "add_to_client_roster" || parsed.operation === "remove_from_client_roster") {
       if (!parsed.residencyId) throw new Error("Choose a Residency first.");
       const [residency] = await database.select({ id: residencies.id, name: residencies.name })
         .from(residencies)
         .where(and(eq(residencies.id, parsed.residencyId), eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
         .limit(1);
       if (!residency) throw new Error("Residency not found.");
-      if (artistRows.some((artist) => artist.archivedAt)) throw new Error("Restore archived artists before adding them to a Residency.");
-      if (artistRows.some((artist) => artist.exclusiveResidencyId && artist.exclusiveResidencyId !== parsed.residencyId)) {
+      if (parsed.operation === "add_to_client_roster" && artistRows.some((artist) => artist.archivedAt)) throw new Error("Restore archived artists before adding them to a client roster.");
+      if (parsed.operation === "add_to_client_roster" && artistRows.some((artist) => artist.exclusiveResidencyId && artist.exclusiveResidencyId !== parsed.residencyId)) {
         throw new Error("One or more exclusive artists can only be assigned to their exclusive Residency.");
       }
       residencyName = residency.name;
@@ -501,19 +503,25 @@ export async function bulkUpdateArtistsAction(input: {
         await tx.update(talent).set({ talentStatus: "inactive", updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
       } else if (parsed.operation === "archive") {
         await tx.update(talent).set({ talentStatus: "inactive", archivedAt: new Date(), updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
-        await tx.update(residencyTalent).set({ active: false }).where(inArray(residencyTalent.talentId, parsed.talentIds));
+        await tx.update(residencyTalent).set({ active: false, clientVisible: false }).where(inArray(residencyTalent.talentId, parsed.talentIds));
       } else if (parsed.operation === "restore") {
         await tx.update(talent).set({ talentStatus: "inactive", archivedAt: null, updatedAt: new Date() }).where(inArray(talent.id, parsed.talentIds));
-      } else if (parsed.residencyId) {
+      } else if (parsed.operation === "add_to_client_roster" && parsed.residencyId) {
         await tx.insert(residencyTalent).values(parsed.talentIds.map((talentId) => ({
           residencyId: parsed.residencyId!,
           talentId,
           approvedByUserId: actor.userId,
           active: true,
+          clientVisible: true,
         }))).onConflictDoUpdate({
           target: [residencyTalent.residencyId, residencyTalent.talentId],
-          set: { active: true, approvedByUserId: actor.userId },
+          set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
         });
+      } else if (parsed.operation === "remove_from_client_roster" && parsed.residencyId) {
+        await tx.update(residencyTalent).set({ clientVisible: false }).where(and(
+          eq(residencyTalent.residencyId, parsed.residencyId),
+          inArray(residencyTalent.talentId, parsed.talentIds),
+        ));
       }
 
       await tx.insert(auditLog).values(parsed.talentIds.map((talentId) => ({
@@ -522,8 +530,8 @@ export async function bulkUpdateArtistsAction(input: {
         action: `talent_${parsed.operation}`,
         entityType: "talent",
         entityId: talentId,
-        residencyId: parsed.operation === "add_to_residency" ? parsed.residencyId : null,
-        details: { operation: parsed.operation, residencyName: residencyName || undefined },
+        residencyId: parsed.operation === "add_to_client_roster" || parsed.operation === "remove_from_client_roster" ? parsed.residencyId : null,
+        details: { operation: parsed.operation, residencyName: residencyName || undefined, bookingsPreserved: parsed.operation === "remove_from_client_roster" || undefined },
       })));
     });
 
@@ -533,8 +541,10 @@ export async function bulkUpdateArtistsAction(input: {
     revalidatePath("/app/setup");
     const count = parsed.talentIds.length;
     const subject = `${count} artist${count === 1 ? "" : "s"}`;
-    const message = parsed.operation === "add_to_residency"
-      ? `${subject} added to ${residencyName}.`
+    const message = parsed.operation === "add_to_client_roster"
+      ? `${subject} added to ${residencyName}'s client roster.`
+      : parsed.operation === "remove_from_client_roster"
+        ? `${subject} removed from ${residencyName}'s client roster. Existing bookings and payout history were preserved.`
       : parsed.operation === "active"
         ? `${subject} set to Active.`
         : parsed.operation === "inactive"
@@ -562,6 +572,7 @@ export async function updateArtistResidenciesAction(input: {
     const [artist] = await database.select({
       id: talent.id,
       stageName: talent.stageName,
+      ownership: talent.ownership,
       archivedAt: talent.archivedAt,
       exclusiveResidencyId: talent.exclusiveResidencyId,
     })
@@ -569,6 +580,7 @@ export async function updateArtistResidenciesAction(input: {
       .where(eq(talent.id, parsed.talentId))
       .limit(1);
     if (!artist) throw new Error("Artist not found.");
+    if (artist.ownership !== "hfy") throw new Error("Client visibility can only be changed for HFY artists here.");
     if (artist.archivedAt && parsed.residencyIds.length) throw new Error("Restore this artist before adding Residency access.");
     if (artist.exclusiveResidencyId && parsed.residencyIds.some((residencyId) => residencyId !== artist.exclusiveResidencyId)) {
       throw new Error("An exclusive artist can only be assigned to their exclusive Residency.");
@@ -580,22 +592,23 @@ export async function updateArtistResidenciesAction(input: {
     if (validResidencies.length !== parsed.residencyIds.length) throw new Error("One or more Residencies could not be found.");
 
     await database.transaction(async (tx) => {
-      await tx.update(residencyTalent).set({ active: false }).where(eq(residencyTalent.talentId, parsed.talentId));
+      await tx.update(residencyTalent).set({ clientVisible: false }).where(eq(residencyTalent.talentId, parsed.talentId));
       if (parsed.residencyIds.length) {
         await tx.insert(residencyTalent).values(parsed.residencyIds.map((residencyId) => ({
           residencyId,
           talentId: parsed.talentId,
           approvedByUserId: actor.userId,
           active: true,
+          clientVisible: true,
         }))).onConflictDoUpdate({
           target: [residencyTalent.residencyId, residencyTalent.talentId],
-          set: { active: true, approvedByUserId: actor.userId },
+          set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
         });
       }
       await tx.insert(auditLog).values({
         actorUserId: actor.userId,
         actorLabel: actor.email,
-        action: "talent_residencies_updated",
+        action: "talent_client_visibility_updated",
         entityType: "talent",
         entityId: parsed.talentId,
         details: { residencyIds: parsed.residencyIds },
@@ -605,9 +618,9 @@ export async function updateArtistResidenciesAction(input: {
     revalidatePath("/app/talent/roster");
     revalidatePath("/app/calendar");
     revalidatePath("/app/setup");
-    return { status: "success", message: `${artist.stageName}'s Residency assignments were saved.` };
+    return { status: "success", message: `${artist.stageName}'s client visibility was saved.` };
   } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to update Residency access." };
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update client visibility." };
   }
 }
 
@@ -651,16 +664,17 @@ export async function updateArtistRosterPlacementAction(input: {
       // Clear prior exclusivity before changing assignment rows so moving an
       // exclusive artist remains one atomic, database-valid operation.
       await tx.update(talent).set({ exclusiveResidencyId: null, updatedAt: new Date() }).where(eq(talent.id, parsed.talentId));
-      await tx.update(residencyTalent).set({ active: false }).where(eq(residencyTalent.talentId, parsed.talentId));
+      await tx.update(residencyTalent).set({ active: false, clientVisible: false }).where(eq(residencyTalent.talentId, parsed.talentId));
       if (desiredResidencyIds.length) {
         await tx.insert(residencyTalent).values(desiredResidencyIds.map((residencyId) => ({
           residencyId,
           talentId: parsed.talentId,
           approvedByUserId: actor.userId,
           active: true,
+          clientVisible: true,
         }))).onConflictDoUpdate({
           target: [residencyTalent.residencyId, residencyTalent.talentId],
-          set: { active: true, approvedByUserId: actor.userId },
+          set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
         });
       }
       await tx.update(talent).set({
@@ -705,9 +719,10 @@ export async function approveResidencyTalentAction(formData: FormData) {
     talentId: parsed.talentId,
     approvedByUserId: actor.userId,
     active: true,
+    clientVisible: true,
   }).onConflictDoUpdate({
     target: [residencyTalent.residencyId, residencyTalent.talentId],
-    set: { active: true, approvedByUserId: actor.userId },
+    set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
   });
   revalidatePath("/app/setup");
   revalidatePath("/app/talent/roster");
@@ -734,16 +749,17 @@ export async function updateResidencyApprovedTalentAction(_previous: ResidencyAc
     )) : [];
     if (validTalent.length !== parsed.talentIds.length) throw new Error("One or more selected DJs are no longer active.");
     await database.transaction(async (tx) => {
-      await tx.update(residencyTalent).set({ active: false }).where(eq(residencyTalent.residencyId, residency.id));
+      await tx.update(residencyTalent).set({ clientVisible: false }).where(eq(residencyTalent.residencyId, residency.id));
       if (parsed.talentIds.length) {
         await tx.insert(residencyTalent).values(parsed.talentIds.map((talentId) => ({
           residencyId: residency.id,
           talentId,
           active: true,
+          clientVisible: true,
           approvedByUserId: actor.userId,
         }))).onConflictDoUpdate({
           target: [residencyTalent.residencyId, residencyTalent.talentId],
-          set: { active: true, approvedByUserId: actor.userId },
+          set: { active: true, clientVisible: true, approvedByUserId: actor.userId },
         });
       }
       await tx.insert(auditLog).values({

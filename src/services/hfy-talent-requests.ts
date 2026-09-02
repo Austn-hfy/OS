@@ -165,6 +165,7 @@ export async function fulfillHfyTalentRequest(actor: InternalActor, input: Fulfi
       talentId: artist.id,
       approvedByUserId: actor.userId,
       active: true,
+      clientVisible: false,
     }))).onConflictDoUpdate({
       target: [residencyTalent.residencyId, residencyTalent.talentId],
       set: { active: true, approvedByUserId: actor.userId },

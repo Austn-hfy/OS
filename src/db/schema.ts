@@ -484,11 +484,13 @@ export const residencyTalent = pgTable("residency_talent", {
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
   talentId: uuid("talent_id").notNull().references(() => talent.id, { onDelete: "cascade" }),
   active: boolean("active").notNull().default(true),
+  clientVisible: boolean("client_visible").notNull().default(false),
   approvedByUserId: uuid("approved_by_user_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("residency_talent_residency_talent_unique").on(table.residencyId, table.talentId),
   index("residency_talent_talent_idx").on(table.talentId),
+  index("residency_talent_client_visibility_idx").on(table.residencyId, table.clientVisible, table.active),
 ]);
 
 export const invoices = pgTable("invoices", {

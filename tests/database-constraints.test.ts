@@ -29,6 +29,8 @@ const ids = {
   laterMonthlyInvoice: "00000000-0000-4000-8000-000000000083",
   talentAdjustment: "00000000-0000-4000-8000-000000000084",
   talentScheduleLock: "00000000-0000-4000-8000-000000000085",
+  privateEligibleTalent: "00000000-0000-4000-8000-000000000086",
+  privateEligibleShift: "00000000-0000-4000-8000-000000000087",
 };
 
 let database: PGlite;
@@ -64,6 +66,7 @@ beforeAll(async () => {
   const calendarOnlyDayparts = await readFile(new URL("../drizzle/0029_calendar_only_dayparts.sql", import.meta.url), "utf8");
   const clientDaypartRates = await readFile(new URL("../drizzle/0030_warm_newton_destine.sql", import.meta.url), "utf8");
   const separatedFinancials = await readFile(new URL("../drizzle/0031_dazzling_jack_power.sql", import.meta.url), "utf8");
+  const clientArtistVisibility = await readFile(new URL("../drizzle/0032_fast_surge.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -101,6 +104,7 @@ beforeAll(async () => {
   await database.exec(calendarOnlyDayparts.replaceAll("--> statement-breakpoint", ""));
   await database.exec(clientDaypartRates.replaceAll("--> statement-breakpoint", ""));
   await database.exec(separatedFinancials.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(clientArtistVisibility.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -469,6 +473,37 @@ describe("database replacements for Airtable audit formulas", () => {
       VALUES
         ('${ids.shiftA}', '${ids.talent}', 'internal', 'Unassigned internal', '2026-09-05T20:00:00Z', '2026-09-05T22:00:00Z', 'confirmed', 'hourly', 8000);
     `)).rejects.toThrow(/explicitly assigned/);
+  });
+
+  it("keeps HFY booking eligibility independent from client roster visibility", async () => {
+    await database.exec(`
+      INSERT INTO talent (id, stage_name, roster_status, talent_status)
+      VALUES ('${ids.privateEligibleTalent}', 'Private Eligible DJ', 'ready', 'active');
+      INSERT INTO residency_talent (residency_id, talent_id, active)
+      VALUES ('${ids.residencyA}', '${ids.privateEligibleTalent}', true);
+      INSERT INTO shifts
+        (id, residency_id, name, service_date, room, starts_at, ends_at, client_rate_cents)
+      VALUES
+        ('${ids.privateEligibleShift}', '${ids.residencyA}', 'Private HFY Slot', '2026-09-06', 'Pool', '2026-09-06T20:00:00Z', '2026-09-06T23:00:00Z', 10000);
+      INSERT INTO assignments
+        (shift_id, talent_id, source, set_name, starts_at, ends_at, booking_status, compensation_type, talent_rate_cents)
+      VALUES
+        ('${ids.privateEligibleShift}', '${ids.privateEligibleTalent}', 'internal', 'Private Eligible DJ', '2026-09-06T20:00:00Z', '2026-09-06T23:00:00Z', 'confirmed', 'hourly', 8000);
+    `);
+    const before = await database.query<{ active: boolean; client_visible: boolean }>(`
+      SELECT active, client_visible FROM residency_talent
+      WHERE residency_id = '${ids.residencyA}' AND talent_id = '${ids.privateEligibleTalent}';
+    `);
+    expect(before.rows[0]).toEqual({ active: true, client_visible: false });
+    await database.exec(`
+      UPDATE residency_talent SET client_visible = true
+      WHERE residency_id = '${ids.residencyA}' AND talent_id = '${ids.privateEligibleTalent}';
+    `);
+    const after = await database.query<{ active: boolean; client_visible: boolean }>(`
+      SELECT active, client_visible FROM residency_talent
+      WHERE residency_id = '${ids.residencyA}' AND talent_id = '${ids.privateEligibleTalent}';
+    `);
+    expect(after.rows[0]).toEqual({ active: true, client_visible: true });
   });
 
   it("prevents an exclusive artist from being assigned to another Residency roster", async () => {

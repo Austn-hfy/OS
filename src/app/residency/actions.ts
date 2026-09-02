@@ -56,6 +56,7 @@ export async function createClientOwnedArtistAction(
         residencyId: actor.residencyId,
         talentId: artist.id,
         active: true,
+        clientVisible: true,
         approvedByUserId: actor.userId,
       });
       await tx.insert(auditLog).values({
@@ -162,7 +163,7 @@ export async function archiveClientOwnedArtistAction(
         isNull(talent.archivedAt),
       )).returning({ id: talent.id, stageName: talent.stageName });
       if (!artist) throw new Error("Artist not found in this Residency.");
-      await tx.update(residencyTalent).set({ active: false }).where(and(
+      await tx.update(residencyTalent).set({ active: false, clientVisible: false }).where(and(
         eq(residencyTalent.residencyId, actor.residencyId),
         eq(residencyTalent.talentId, artist.id),
       ));
@@ -206,7 +207,7 @@ export async function restoreClientOwnedArtistAction(
         isNotNull(talent.archivedAt),
       )).returning({ id: talent.id, stageName: talent.stageName });
       if (!artist) throw new Error("Archived artist not found in this Residency.");
-      await tx.update(residencyTalent).set({ active: true }).where(and(
+      await tx.update(residencyTalent).set({ active: true, clientVisible: true }).where(and(
         eq(residencyTalent.residencyId, actor.residencyId),
         eq(residencyTalent.talentId, artist.id),
       ));
