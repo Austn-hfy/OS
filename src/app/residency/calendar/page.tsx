@@ -71,7 +71,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
 
   const existing = new Set([
     ...calendar.flatMap((shift) => shift.daypartId ? [daypartDateKey(shift.daypartId, shift.serviceDate)] : []),
-    ...occurrences.map((occurrence) => daypartDateKey(occurrence.daypartId, occurrence.serviceDate)),
+    ...occurrences.flatMap((occurrence) => occurrence.daypartId ? [daypartDateKey(occurrence.daypartId, occurrence.serviceDate)] : []),
   ]);
   const projected: ResidencyEvent[] = projectDaypartSlots(dayparts, range.from, range.to, existing, dateExceptions).map((slot) => ({
     id: slot.id, date: slot.date, title: slot.name, time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · Needs scheduling`,

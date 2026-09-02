@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { removeDaypartAction, saveDaypartAction, type ResidencyActionState } from "@/app/app/actions";
-import { DEFAULT_DAYPART_COLOR, HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, weekdayNames, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
+import { DAYPART_COLOR_PRESETS, DEFAULT_DAYPART_COLOR, HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, weekdayNames, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 
@@ -36,35 +36,9 @@ type EditorDraft = {
 };
 
 const initialActionState: ResidencyActionState = { status: "idle", message: "" };
-const colorPresets = [
-  { label: "Ocean blue", value: DEFAULT_DAYPART_COLOR },
-  { label: "Sky blue", value: "#5AA6E8" },
-  { label: "Deep blue", value: "#1B5FA7" },
-  { label: "Tangerine", value: "#E98332" },
-  { label: "Apricot", value: "#F1A35D" },
-  { label: "Burnt orange", value: "#B95A1E" },
-  { label: "Violet", value: "#7A65D1" },
-  { label: "Lavender", value: "#9B8AE0" },
-  { label: "Deep purple", value: "#5542A1" },
-  { label: "Emerald", value: "#2E9E79" },
-  { label: "Mint green", value: "#5DBA91" },
-  { label: "Forest", value: "#24745B" },
-  { label: "Gold", value: "#D6A11D" },
-  { label: "Sunshine", value: "#E5BC3A" },
-  { label: "Ochre", value: "#A97912" },
-  { label: "Navy", value: "#244C76" },
-  { label: "Slate blue", value: "#4B6F91" },
-  { label: "Deep navy", value: "#173650" },
-  { label: "Red", value: "#D45757" },
-  { label: "Coral", value: "#E97868" },
-  { label: "Burgundy", value: "#9C3F4D" },
-  { label: "Teal", value: "#248F94" },
-  { label: "Aqua", value: "#4DAEB1" },
-  { label: "Deep teal", value: "#19686C" },
-] as const;
 
 function rotatingPresetColor(index: number): string {
-  return colorPresets[index % colorPresets.length].value;
+  return DAYPART_COLOR_PRESETS[index % DAYPART_COLOR_PRESETS.length].value;
 }
 
 function optionalDjCount(value: string): number | null {
@@ -85,7 +59,7 @@ function blankDraft(options: { room?: string; weekday?: number; startMinute?: nu
   return {
     name: "",
     room: options.room ?? "",
-    color: options.color ?? colorPresets[0].value,
+    color: options.color ?? DAYPART_COLOR_PRESETS[0].value,
     type: null,
     billingMode: null,
     defaultTalentRate: "",
@@ -313,7 +287,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
                 {draft.type && (draft.type === "house_activity" || draft.billingMode) ? <>
                 <div className="row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /></div><div className="field"><label>Room / space</label><input value={draft.room} onChange={(event) => setDraft({ ...draft, room: event.target.value })} placeholder="Amigo Room" required /></div></div>
                 <div className="daypart-definition-row">
-                  {draft.billingMode === "billed_by_hfy" ? <div className="field daypart-color-field"><label>Calendar color</label><div className="daypart-color-control hfy-reserved-color"><span style={{ background: HFY_BOOKED_COLOR }} aria-hidden="true" /><strong>HFY booked</strong></div><small>Reserved pink is applied automatically and cannot be used by Client Managed Dayparts.</small></div> : <div className="field daypart-color-field"><label>Calendar color</label><div className="daypart-color-presets" aria-label="Calendar color presets">{colorPresets.map((color) => <button aria-label={`Use ${color.label}`} title={color.label} className={draft.color === color.value ? "active" : ""} type="button" style={{ background: color.value }} onClick={() => setDraft({ ...draft, color: color.value })} key={color.value} />)}</div><small>Choose from 24 preset shades. HFY pink is reserved for HFY-booked calendar slots.</small></div>}
+                  {draft.billingMode === "billed_by_hfy" ? <div className="field daypart-color-field"><label>Calendar color</label><div className="daypart-color-control hfy-reserved-color"><span style={{ background: HFY_BOOKED_COLOR }} aria-hidden="true" /><strong>HFY booked</strong></div><small>Reserved pink is applied automatically and cannot be used by Client Managed Dayparts.</small></div> : <div className="field daypart-color-field"><label>Calendar color</label><div className="daypart-color-presets" aria-label="Calendar color presets">{DAYPART_COLOR_PRESETS.map((color) => <button aria-label={`Use ${color.label}`} title={color.label} className={draft.color === color.value ? "active" : ""} type="button" style={{ background: color.value }} onClick={() => setDraft({ ...draft, color: color.value })} key={color.value} />)}</div><small>Choose from 24 preset shades. HFY pink is reserved for HFY-booked calendar slots.</small></div>}
                   {!hideFinancials && draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? <div className="field"><label>Default talent rate ($/hr) <span>optional</span></label><SensitiveInput type="number" min="0" step="0.01" value={draft.defaultTalentRate} onChange={(event) => setDraft({ ...draft, defaultTalentRate: event.target.value })} placeholder="Uses Residency default" /></div> : null}
                   <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this Daypart continues indefinitely.</small></div>
                 </div>
