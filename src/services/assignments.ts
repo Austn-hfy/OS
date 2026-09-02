@@ -1,6 +1,6 @@
-import { and, eq, gt, inArray, lt, ne } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, ne, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, residencies, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, residencies, residencyTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, isPaymentEligible, nextPayoutStatus } from "@/domain/airtable-parity";
 import { localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
@@ -25,6 +25,13 @@ function assertEconomicOwner(actor: AuditActor, source: string) {
   }
 }
 
+function normalizedManagedSource(actor: AuditActor, source: string, economicsMode: string) {
+  if (actor.kind !== "internal") return source;
+  if (economicsMode === "hfy_request") return "hfy_request";
+  if (economicsMode === "hfy") return "internal";
+  return source;
+}
+
 export async function transitionAssignment(
   actor: AuditActor,
   assignmentId: string,
@@ -44,6 +51,7 @@ export async function transitionAssignment(
       fixedFeeCents: assignments.fixedFeeCents,
       payoutStatus: assignments.payoutStatus,
       source: assignments.source,
+      economicsMode: shifts.economicsMode,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .where(eq(assignments.id, assignmentId))
@@ -66,12 +74,19 @@ export async function transitionAssignment(
       ? "na"
       : nextPayoutStatus(current.payoutStatus, eligible);
 
-    await tx.update(assignments).set({
-      bookingStatus: targetStatus,
-      totalCompensationCents,
-      payoutStatus: payoutState,
-      updatedAt: new Date(),
-    }).where(eq(assignments.id, current.id));
+    const normalizedSource = normalizedManagedSource(actor, current.source, current.economicsMode);
+    await tx.update(assignments).set(targetStatus === "cancelled"
+      ? {
+          bookingStatus: targetStatus,
+          updatedAt: new Date(),
+        }
+      : {
+          bookingStatus: targetStatus,
+          source: normalizedSource,
+          totalCompensationCents,
+          payoutStatus: payoutState,
+          updatedAt: new Date(),
+        }).where(eq(assignments.id, current.id));
     await tx.insert(auditLog).values({
       residencyId: current.residencyId,
       actorUserId: actor.userId,
@@ -79,7 +94,7 @@ export async function transitionAssignment(
       action: "assignment_status_changed",
       entityType: "assignment",
       entityId: current.id,
-      details: { from: current.bookingStatus, to: targetStatus, payoutStatus: payoutState },
+      details: { from: current.bookingStatus, to: targetStatus, payoutStatus: targetStatus === "cancelled" ? current.payoutStatus : payoutState },
     });
   });
 }
@@ -97,6 +112,7 @@ export async function markAssignmentPaid(
       payoutStatus: assignments.payoutStatus,
       totalCompensationCents: assignments.totalCompensationCents,
       source: assignments.source,
+      economicsMode: shifts.economicsMode,
     }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .where(and(eq(assignments.id, assignmentId), eq(assignments.payoutStatus, "ready_to_pay"))).limit(1);
     if (!current) throw new Error("Only a Ready to Pay Assignment can be marked Paid.");
@@ -155,6 +171,7 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
       bookingStatus: assignments.bookingStatus,
       payoutStatus: assignments.payoutStatus,
       source: assignments.source,
+      economicsMode: shifts.economicsMode,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
     }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
@@ -172,11 +189,31 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
       .where(and(
         eq(talent.id, talentId),
         eq(talent.talentStatus, "active"),
+        isNull(talent.archivedAt),
+        or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, current.residencyId)),
         actor.kind === "residency"
           ? and(eq(talent.ownership, "residency"), eq(talent.owningResidencyId, current.residencyId))
           : eq(talent.ownership, "hfy"),
       )).limit(1);
     if (!replacement) throw new Error("Choose an active Talent record.");
+    if (actor.kind === "residency") {
+      const [approved] = await tx.select({ id: residencyTalent.id }).from(residencyTalent).where(and(
+        eq(residencyTalent.residencyId, current.residencyId),
+        eq(residencyTalent.talentId, replacement.id),
+        eq(residencyTalent.active, true),
+      )).limit(1);
+      if (!approved) throw new Error("This DJ is unavailable to this Residency.");
+    } else {
+      await tx.insert(residencyTalent).values({
+        residencyId: current.residencyId,
+        talentId: replacement.id,
+        active: true,
+        approvedByUserId: actor.userId,
+      }).onConflictDoUpdate({
+        target: [residencyTalent.residencyId, residencyTalent.talentId],
+        set: { active: true, approvedByUserId: actor.userId },
+      });
+    }
     const conflict = await tx.select({ id: assignments.id }).from(assignments).where(and(
       ne(assignments.id, current.id),
       eq(assignments.talentId, replacement.id),
@@ -189,6 +226,7 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
     await tx.update(assignments).set({
       talentId: replacement.id,
       setName: replacement.stageName,
+      source: normalizedManagedSource(actor, current.source, current.economicsMode),
       bookingStatus: current.bookingStatus === "open" ? "confirmed" : current.bookingStatus,
       updatedAt: new Date(),
     }).where(eq(assignments.id, current.id));
@@ -231,6 +269,7 @@ export async function rescheduleAssignment(
       fixedFeeCents: assignments.fixedFeeCents,
       payoutStatus: assignments.payoutStatus,
       source: assignments.source,
+      economicsMode: shifts.economicsMode,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
@@ -255,11 +294,31 @@ export async function rescheduleAssignment(
       .where(and(
         eq(talent.id, input.talentId),
         eq(talent.talentStatus, "active"),
+        isNull(talent.archivedAt),
+        or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, current.residencyId)),
         actor.kind === "residency"
           ? and(eq(talent.ownership, "residency"), eq(talent.owningResidencyId, current.residencyId))
           : eq(talent.ownership, "hfy"),
       )).limit(1);
     if (!replacement) throw new Error("Choose an active Talent record.");
+    if (actor.kind === "residency") {
+      const [approved] = await tx.select({ id: residencyTalent.id }).from(residencyTalent).where(and(
+        eq(residencyTalent.residencyId, current.residencyId),
+        eq(residencyTalent.talentId, replacement.id),
+        eq(residencyTalent.active, true),
+      )).limit(1);
+      if (!approved) throw new Error("This DJ is unavailable to this Residency.");
+    } else {
+      await tx.insert(residencyTalent).values({
+        residencyId: current.residencyId,
+        talentId: replacement.id,
+        active: true,
+        approvedByUserId: actor.userId,
+      }).onConflictDoUpdate({
+        target: [residencyTalent.residencyId, residencyTalent.talentId],
+        set: { active: true, approvedByUserId: actor.userId },
+      });
+    }
 
     const shiftOverlap = await tx.select({ id: assignments.id }).from(assignments).where(and(
       ne(assignments.id, current.id),
@@ -289,6 +348,7 @@ export async function rescheduleAssignment(
     await tx.update(assignments).set({
       talentId: replacement.id,
       setName: replacement.stageName,
+      source: normalizedManagedSource(actor, current.source, current.economicsMode),
       startsAt,
       endsAt,
       bookingStatus: current.bookingStatus === "open" ? "confirmed" : current.bookingStatus,

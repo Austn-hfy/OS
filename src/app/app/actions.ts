@@ -1578,6 +1578,20 @@ export async function replaceAssignmentTalentAction(formData: FormData) {
   revalidatePath("/app/payouts");
 }
 
+function calendarAssignmentErrorMessage(error: unknown, fallback: string, operation: "reschedule" | "remove") {
+  const cause = error instanceof Error && "cause" in error ? error.cause : undefined;
+  const databaseError = cause && typeof cause === "object" ? cause as Record<string, unknown> : {};
+  console.error("Calendar assignment mutation failed", {
+    operation,
+    code: databaseError.code,
+    constraint: databaseError.constraint_name ?? databaseError.constraint,
+    detail: databaseError.detail,
+    message: cause instanceof Error ? cause.message : undefined,
+  });
+  if (!(error instanceof Error)) return fallback;
+  return error.message.startsWith("Failed query:") ? fallback : error.message;
+}
+
 export async function rescheduleAssignmentAction(formData: FormData): Promise<ResidencyActionState> {
   try {
     const parsed = z.object({
@@ -1592,7 +1606,7 @@ export async function rescheduleAssignmentAction(formData: FormData): Promise<Re
     revalidatePath("/app/payouts");
     return { status: "success", message: "DJ and hours updated." };
   } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this DJ." };
+    return { status: "error", message: calendarAssignmentErrorMessage(error, "Unable to update this DJ. Refresh the page and try again.", "reschedule") };
   }
 }
 
@@ -1605,7 +1619,7 @@ export async function removeCalendarAssignmentAction(formData: FormData): Promis
     revalidatePath("/app/payouts");
     return { status: "success", message: "DJ removed from this Shift." };
   } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to remove this DJ." };
+    return { status: "error", message: calendarAssignmentErrorMessage(error, "Unable to remove this DJ. Refresh the page and try again.", "remove") };
   }
 }
 

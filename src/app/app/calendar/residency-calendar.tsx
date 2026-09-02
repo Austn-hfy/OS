@@ -18,6 +18,7 @@ import { calendarDaypartsHref, monthLabel, shiftMonthKey } from "@/lib/calendar"
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
 import { MISSING_RESIDENCY_TALENT_RATE_MESSAGE } from "@/domain/residency-rates";
+import { replacementDraftFromAssignment } from "@/domain/assignment-editing";
 
 export type CalendarAssignment = {
   id: string;
@@ -544,7 +545,10 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     const result = await rescheduleAssignmentAction(formData);
     setEditPending(false);
     setEditState(result);
-    if (result.status === "success") setReplacementDraft(null);
+    if (result.status === "success") {
+      setReplacementDraft(null);
+      router.refresh();
+    }
   }
 
   async function removeExistingAssignment(assignmentId: string) {
@@ -554,7 +558,10 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     const result = await removeCalendarAssignmentAction(formData);
     setEditPending(false);
     setEditState(result);
-    if (replacementDraft?.assignmentId === assignmentId) setReplacementDraft(null);
+    if (result.status === "success") {
+      if (replacementDraft?.assignmentId === assignmentId) setReplacementDraft(null);
+      router.refresh();
+    }
   }
 
   async function deleteExistingShift() {
@@ -837,7 +844,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                 const replacement = changing ? talent.find((item) => item.id === replacementDraft.talentId) : undefined;
                 return <div className={`quick-reschedule-row ${changing ? "changing" : ""}`} key={assignment.id}>
                   <div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName || assignment.guestName || "Open slot"}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div>
-                  {editingEventCanManageAssignments ? <div className="quick-existing-actions"><button className="button secondary" type="button" disabled={editPending} onClick={() => { setNewAssignmentDraft(null); setEditState(initialActionState); setReplacementDraft({ assignmentId: assignment.id, talentId: "", start: "", end: "" }); }}>Change DJ</button><button className="remove-dj-button" type="button" disabled={editPending} onClick={() => removeExistingAssignment(assignment.id)}>Remove DJ</button></div> : null}
+                  {editingEventCanManageAssignments ? <div className="quick-existing-actions"><button className="button secondary" type="button" disabled={editPending} onClick={() => { setNewAssignmentDraft(null); setEditState(initialActionState); setReplacementDraft(replacementDraftFromAssignment(assignment)); }}>Change DJ</button><button className="remove-dj-button" type="button" disabled={editPending} onClick={() => removeExistingAssignment(assignment.id)}>Remove DJ</button></div> : null}
                   {changing && replacementDraft ? <div className="replacement-editor">
                     <div className="replacement-step"><span>1</span><div><strong>Choose the replacement DJ</strong><small>The current DJ remains unchanged until you save.</small></div></div>
                     {replacement ? <div className="replacement-selected"><div><span>Replacement</span><strong>{replacement.stageName}</strong></div><button type="button" onClick={() => setReplacementDraft({ ...replacementDraft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose replacement" artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} onSelect={(talentId) => setReplacementDraft({ ...replacementDraft, talentId })} />}
