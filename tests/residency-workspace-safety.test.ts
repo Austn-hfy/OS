@@ -49,16 +49,30 @@ describe("Residency workspace boundaries", () => {
     expect(setup).not.toContain("standing hours");
   });
 
-  it("uses title case and one shared type treatment for every Residency navigation item", async () => {
+  it("uses one primary treatment, the intended order, and a separate Settings zone in Residency navigation", async () => {
     const [shell, styles] = await Promise.all([
       readFile(new URL("../src/components/residency-shell.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
     ]);
-    expect(shell).toContain('["Talent", "/residency/talent"]');
-    expect(shell).toContain('href="/residency/talent">Artist Lookup</Link>');
-    expect(shell).toContain('href="/residency/talent/roster">Roster</Link>');
-    expect(shell).not.toContain('["Talent roster", "/residency/talent"]');
-    expect(styles).toMatch(/\.hfy-style-system \.nav a,\s*\.hfy-style-system \.client-dayparts-button,/);
+    const calendar = shell.indexOf('label="Calendar"');
+    const dayParts = shell.indexOf('label="Day Parts"');
+    const talent = shell.indexOf("<strong>Talent</strong>");
+    const payouts = shell.indexOf('label="Payouts"');
+    const invoices = shell.indexOf('label="Invoices"');
+    const settings = shell.indexOf('label="Settings"');
+    expect(calendar).toBeGreaterThan(-1);
+    expect(dayParts).toBeGreaterThan(calendar);
+    expect(talent).toBeGreaterThan(dayParts);
+    expect(payouts).toBeGreaterThan(talent);
+    expect(invoices).toBeGreaterThan(payouts);
+    expect(settings).toBeGreaterThan(invoices);
+    expect(shell).toContain("residency-workspace-nav");
+    expect(shell).toContain("residency-sidebar-settings");
+    expect(shell).toContain("<span>Artist Lookup</span>");
+    expect(shell).toContain("<span>Roster</span>");
+    expect(styles).toContain(".residency-workspace-nav .residency-nav-item");
+    expect(styles).toContain(".residency-sidebar-settings .residency-nav-item");
+    expect(styles).toContain("grid-template-columns: 32px minmax(0, 1fr) auto");
   });
 
   it("uses the same Talent and Payout workspace frames in HFY and Residency modes", async () => {

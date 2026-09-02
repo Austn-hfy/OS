@@ -486,6 +486,172 @@
   background: var(--hfy-action-soft);
   box-shadow: inset 3px 0 var(--hfy-action-strong), inset 0 1px rgba(255, 255, 255, 0.65);
 }
+
+/* Residency navigation uses one visual hierarchy for every primary destination. */
+.hfy-style-system .client-sidebar .residency-workspace-nav {
+  gap: 4px;
+}
+
+.hfy-style-system .client-sidebar .residency-workspace-nav .nav-label {
+  margin: 0 0 7px 9px;
+}
+
+.hfy-style-system .client-sidebar .residency-workspace-nav .residency-nav-item,
+.hfy-style-system .client-sidebar .residency-sidebar-settings .residency-nav-item {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  min-height: 54px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: var(--hfy-muted);
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--hfy-motion), border-color var(--hfy-motion), background var(--hfy-motion), transform var(--hfy-motion);
+}
+
+.hfy-style-system .client-sidebar .residency-workspace-nav .residency-nav-item:hover,
+.hfy-style-system .client-sidebar .residency-sidebar-settings .residency-nav-item:hover {
+  transform: translateY(-1px);
+  color: var(--hfy-ink);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.hfy-style-system .client-sidebar .residency-workspace-nav .residency-nav-item.active,
+.hfy-style-system .client-sidebar .residency-workspace-nav .residency-nav-item.active-section,
+.hfy-style-system .client-sidebar .residency-sidebar-settings .residency-nav-item.active {
+  border-color: rgba(52, 127, 187, 0.24);
+  color: var(--hfy-action-ink);
+  background: linear-gradient(110deg, rgba(184, 220, 244, 0.88), rgba(217, 237, 250, 0.68));
+  box-shadow: inset 3px 0 var(--hfy-action-strong), inset 0 1px rgba(255, 255, 255, 0.76), 0 8px 20px rgba(54, 116, 162, 0.09);
+}
+
+.hfy-style-system .client-sidebar .residency-nav-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 10px;
+  color: var(--hfy-ink-soft);
+  background: rgba(250, 252, 253, 0.58);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.78);
+}
+
+.hfy-style-system .client-sidebar .residency-nav-item:is(.active, .active-section) .residency-nav-icon {
+  color: var(--hfy-action-ink);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.hfy-style-system .client-sidebar .residency-nav-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hfy-style-system .client-sidebar .residency-nav-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.hfy-style-system .client-sidebar .residency-nav-copy strong {
+  overflow: hidden;
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hfy-style-system .client-sidebar .residency-nav-copy small {
+  overflow: hidden;
+  color: var(--hfy-muted);
+  font-size: 8px;
+  font-weight: 560;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hfy-style-system .client-sidebar .residency-nav-arrow,
+.hfy-style-system .client-sidebar .residency-nav-caret {
+  color: var(--hfy-muted);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.hfy-style-system .client-sidebar .residency-talent-nav {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.hfy-style-system .client-sidebar .residency-nav-caret {
+  transform: translateY(-1px);
+  transition: transform var(--hfy-motion);
+}
+
+.hfy-style-system .client-sidebar .residency-talent-nav.expanded .residency-nav-caret {
+  transform: translateY(1px) rotate(180deg);
+}
+
+.hfy-style-system .client-sidebar .residency-talent-links {
+  margin: 0 7px 2px 25px;
+  padding: 2px 0 2px 13px;
+  display: grid;
+  gap: 2px;
+  border-left: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .client-sidebar .residency-workspace-nav .residency-talent-links a {
+  min-width: 0;
+  min-height: 31px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--hfy-muted);
+  background: transparent;
+  box-shadow: none;
+  font-size: 9px;
+  font-weight: 680;
+}
+
+.hfy-style-system .client-sidebar .residency-workspace-nav .residency-talent-links a:hover,
+.hfy-style-system .client-sidebar .residency-workspace-nav .residency-talent-links a.active {
+  transform: none;
+  color: var(--hfy-action-ink);
+  background: rgba(217, 237, 250, 0.66);
+}
+
+.hfy-style-system .client-sidebar.residency-sidebar-with-settings .residency-sidebar-settings {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .client-sidebar.residency-sidebar-with-settings .sidebar-footer {
+  margin-top: 12px;
+}
+
 .hfy-style-system .day-parts-nav-toggle {
   color: var(--hfy-muted);
 }
@@ -1058,6 +1224,34 @@
   .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) { margin-right: 0; }
   .hfy-style-system .calendar-month-cluster { align-self: stretch; margin-left: 0; }
   .hfy-style-system .login-art { min-height: 34vh; }
+
+  .hfy-style-system .client-sidebar .residency-workspace-nav {
+    align-items: flex-start;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+
+  .hfy-style-system .client-sidebar .residency-workspace-nav > .residency-nav-item,
+  .hfy-style-system .client-sidebar .residency-talent-nav {
+    flex: 0 0 154px;
+  }
+
+  .hfy-style-system .client-sidebar .residency-workspace-nav .residency-nav-item,
+  .hfy-style-system .client-sidebar .residency-sidebar-settings .residency-nav-item {
+    min-width: 0;
+    box-shadow: none;
+  }
+
+  .hfy-style-system .client-sidebar .residency-workspace-nav .residency-nav-item.active,
+  .hfy-style-system .client-sidebar .residency-workspace-nav .residency-nav-item.active-section,
+  .hfy-style-system .client-sidebar .residency-sidebar-settings .residency-nav-item.active {
+    box-shadow: inset 0 -2px var(--hfy-action-strong), inset 0 1px rgba(255, 255, 255, 0.76);
+  }
+
+  .hfy-style-system .client-sidebar.residency-sidebar-with-settings .residency-sidebar-settings {
+    margin-top: 9px;
+    padding-top: 9px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
