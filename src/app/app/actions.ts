@@ -1388,6 +1388,8 @@ const residencyBookingPayloadSchema = z.object({
     name: z.string().trim().min(1).optional(),
     room: z.string().trim().min(1).optional(),
     calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+    type: z.enum(["dj_artist", "house_activity"]).optional(),
+    billingMode: z.enum(["billed_by_hfy", "tracking_only"]).nullable().optional(),
     notes: z.string().trim().max(2_000).optional().default(""),
     programDetails: z.string().trim().max(500).optional().default(""),
     manualHostName: z.string().trim().max(160).optional().default(""),
@@ -1406,6 +1408,15 @@ const residencyBookingPayloadSchema = z.object({
   }).superRefine((slot, context) => {
     if (slot.daypartId === null && (!slot.name || !slot.room || !slot.calendarColor)) {
       context.addIssue({ code: "custom", message: "A one-time slot needs a name, room, and calendar color." });
+    }
+    if (slot.daypartId === null && !slot.type) {
+      context.addIssue({ code: "custom", message: "Choose Talent Activity or House Activity for this one-time slot." });
+    }
+    if (slot.daypartId === null && slot.type === "house_activity" && slot.billingMode != null) {
+      context.addIssue({ code: "custom", message: "House Activities do not have a billing mode." });
+    }
+    if (slot.daypartId === null && slot.type === "dj_artist" && !slot.billingMode) {
+      context.addIssue({ code: "custom", message: "Choose how this one-time Talent Activity is handled." });
     }
   })).min(1),
 });

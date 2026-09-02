@@ -246,7 +246,7 @@ export const daypartDateExceptions = pgTable("daypart_date_exceptions", {
 export const scheduleOccurrences = pgTable("schedule_occurrences", {
   id: uuid("id").primaryKey().defaultRandom(),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
-  daypartId: uuid("daypart_id").notNull().references(() => dayparts.id, { onDelete: "restrict" }),
+  daypartId: uuid("daypart_id").references(() => dayparts.id, { onDelete: "restrict" }),
   serviceDate: date("service_date", { mode: "string" }).notNull(),
   name: text("name").notNull(),
   room: text("room").notNull(),

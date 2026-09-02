@@ -54,6 +54,7 @@ beforeAll(async () => {
   const daypartDateExceptions = await readFile(new URL("../drizzle/0024_ambitious_doctor_faustus.sql", import.meta.url), "utf8");
   const explicitResidencyRoster = await readFile(new URL("../drizzle/0025_explicit_residency_roster_visibility.sql", import.meta.url), "utf8");
   const clientOwnershipBoundary = await readFile(new URL("../drizzle/0026_fine_tyrannus.sql", import.meta.url), "utf8");
+  const oneTimeHouseActivities = await readFile(new URL("../drizzle/0028_one_time_house_activities.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -87,6 +88,7 @@ beforeAll(async () => {
   await database.exec(daypartDateExceptions.replaceAll("--> statement-breakpoint", ""));
   await database.exec(explicitResidencyRoster.replaceAll("--> statement-breakpoint", ""));
   await database.exec(clientOwnershipBoundary.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(oneTimeHouseActivities.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -343,6 +345,19 @@ describe("database replacements for Airtable audit formulas", () => {
       VALUES
         ('${ids.residencyA}', NULL, 'Bad Color', '2026-09-11', 'Pool', 'purple', '2026-09-12T01:00:00Z', '2026-09-12T04:00:00Z', 10000);
     `)).rejects.toThrow();
+  });
+
+  it("stores a one-time House Activity without creating a standing Daypart", async () => {
+    await database.exec(`
+      INSERT INTO schedule_occurrences
+        (residency_id, daypart_id, service_date, name, room, color, type, starts_at, ends_at)
+      VALUES
+        ('${ids.residencyA}', NULL, '2026-09-12', 'Movie Night', 'Pool', '#7A65D1', 'house_activity', '2026-09-13T01:00:00Z', '2026-09-13T04:00:00Z');
+    `);
+    const result = await database.query<{ daypart_id: string | null; type: string }>(`
+      SELECT daypart_id, type FROM schedule_occurrences WHERE name = 'Movie Night';
+    `);
+    expect(result.rows[0]).toEqual({ daypart_id: null, type: "house_activity" });
   });
 
   it("prevents a Shift from using another Residency's Daypart", async () => {

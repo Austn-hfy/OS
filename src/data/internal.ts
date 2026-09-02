@@ -311,7 +311,7 @@ export async function getScheduleOccurrenceData(residencyId?: string, range?: { 
     endsAt: scheduleOccurrences.endsAt,
   }).from(scheduleOccurrences)
     .innerJoin(residencies, eq(scheduleOccurrences.residencyId, residencies.id))
-    .innerJoin(dayparts, eq(scheduleOccurrences.daypartId, dayparts.id))
+    .leftJoin(dayparts, eq(scheduleOccurrences.daypartId, dayparts.id))
     .where(occurrenceWhere)
     .orderBy(asc(scheduleOccurrences.startsAt));
   const occurrenceIds = occurrenceRows.map((row) => row.id);

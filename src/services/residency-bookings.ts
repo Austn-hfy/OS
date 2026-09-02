@@ -2,7 +2,7 @@ import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or } from "drizzle-orm"
 import { getDb } from "@/db/client";
 import { assignments, auditLog, clientAssignmentTerms, dayparts, hfyTalentRequests, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
-import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 import type { AuditActor } from "@/lib/auth";
@@ -21,6 +21,8 @@ export type DaypartBookingInput = {
   name?: string;
   room?: string;
   calendarColor?: string;
+  type?: DaypartType;
+  billingMode?: DaypartBillingMode | null;
   startMinute: number;
   endMinute: number;
   clientRateOverrideCents?: number | null;
@@ -126,8 +128,10 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
             name: requested.name?.trim() ?? "",
             room: requested.room?.trim() ?? "",
             color: requested.calendarColor ?? "#2783DC",
-            type: "dj_artist" as const,
-            billingMode: "billed_by_hfy" as const,
+            type: requested.type ?? "dj_artist" as const,
+            billingMode: requested.type === "house_activity"
+              ? null
+              : requested.billingMode ?? (actor.kind === "residency" ? "tracking_only" as const : "billed_by_hfy" as const),
             defaultTalentRateCents: null,
           };
       if (!rule.name || !rule.room || !/^#[0-9A-Fa-f]{6}$/.test(rule.color)) {
@@ -141,7 +145,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       if (requested.requestHfy && (actor.kind !== "residency" || rule.type !== "dj_artist" || requested.assignments.length)) {
         throw new Error("Request HFY must be a client-created DJ slot without a selected artist.");
       }
-      if (actor.kind === "residency" && rule.type === "dj_artist" && rule.billingMode === "billed_by_hfy") {
+      if (requested.daypartId && actor.kind === "residency" && rule.type === "dj_artist" && rule.billingMode === "billed_by_hfy") {
         throw new Error("Standing HFY Booking dates are managed by HFY automatically.");
       }
       if (!requested.daypartId && rule.color.toUpperCase() === HFY_BOOKED_COLOR) {
@@ -188,7 +192,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       if (recordKind === "tracking_occurrence") {
         const [occurrence] = await tx.insert(scheduleOccurrences).values({
           residencyId: residency.id,
-          daypartId: rule.daypartId!,
+          daypartId: rule.daypartId,
           serviceDate: input.serviceDate,
           name: rule.name,
           room: rule.room,
