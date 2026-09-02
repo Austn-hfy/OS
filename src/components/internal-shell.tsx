@@ -68,6 +68,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
   }
 
   const panelResidency = residencies.find((item) => item.id === daypartsResidencyId);
+  const hasDaypartRateAttention = residencies.some((item) => item.needsDaypartRateAttention);
   const contextTitle = mode === "developer" ? "Residencies" : inResidency ? residency?.name : inPipeline ? "Pipeline" : "HFY Programming";
   const contextLabel = mode === "developer" ? "Platform workspace" : inResidency ? "Residency operations" : inPipeline ? "Pipeline workspace" : "Programming workspace";
 
@@ -118,7 +119,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
           {links.map(({ label, href, description, icon }) => <div className="nav-entry" key={href}>
             <WorkspaceNavLink label={label} href={href} description={description} icon={icon} active={isActive(label, href)} attention={inResidency && label === "Day Parts" && Boolean(residency?.needsDaypartRateAttention)} />
             {mode === "hfy" && !inResidency && label === "Calendar" ? <div className={`residency-talent-nav day-parts-nav-owner ${daypartsExpanded ? "expanded" : ""}`}>
-              <button className="residency-nav-item residency-talent-toggle" type="button" aria-expanded={daypartsExpanded} onClick={() => {
+              <button className={`residency-nav-item residency-talent-toggle ${hasDaypartRateAttention ? "needs-attention" : ""}`} type="button" aria-expanded={daypartsExpanded} onClick={() => {
                 if (inResidency && residency) {
                   const willOpen = daypartsResidencyId !== residency.id;
                   setDaypartsExpanded(willOpen);
@@ -126,7 +127,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
                   return;
                 }
                 setDaypartsExpanded((open) => !open);
-              }}><WorkspaceNavIcon name="dayparts" /><span className="residency-nav-copy"><strong>Day Parts</strong><small>Standing schedules</small></span><span className="residency-nav-caret" aria-hidden="true">⌄</span></button>
+              }}><WorkspaceNavIcon name="dayparts" /><span className="residency-nav-copy"><strong>Day Parts</strong><small>Standing schedules</small></span><span className="residency-nav-end" aria-hidden="true">{hasDaypartRateAttention ? <span className="residency-nav-attention">!</span> : null}<span className="residency-nav-caret">⌄</span></span></button>
               {!inResidency && daypartsExpanded ? <div className="residency-talent-links">{residencies.map((item) => <button type="button" className={daypartsResidencyId === item.id ? "active" : ""} onClick={() => setDaypartsResidencyId(item.id)} key={item.id}><span>{item.name}</span><span aria-hidden="true">›</span></button>)}</div> : null}
             </div> : null}
           </div>)}
