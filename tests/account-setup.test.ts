@@ -7,6 +7,7 @@ import {
   issueAccountSetupToken,
 } from "@/domain/account-setup";
 import { completeAccountSetup } from "@/services/account-setup";
+import { buildResidencyAccountSetupEmail } from "@/services/account-setup-email";
 
 describe("account setup credentials", () => {
   it("keeps the credential in the URL fragment so GET requests and scanners never receive it", () => {
@@ -28,6 +29,28 @@ describe("account setup credentials", () => {
   it("does not reach into Supabase's protected auth schema during setup", async () => {
     const source = await readFile(new URL("../src/services/account-setup.ts", import.meta.url), "utf8");
     expect(source).not.toContain("auth.sessions");
+  });
+
+  it("builds a client-safe setup email without exposing an account credential outside the private link", () => {
+    const email = buildResidencyAccountSetupEmail({
+      contactName: "Michael <Manager>",
+      residencyName: "Ace & Co.",
+      setupUrl: "https://hfy.app/setup-account#token=private-token&source=email",
+    });
+
+    expect(email.subject).toBe("Set up your Ace & Co. HFY OS account");
+    expect(email.html).toContain("Michael &lt;Manager&gt;");
+    expect(email.html).toContain("Ace &amp; Co.");
+    expect(email.html).toContain("https://hfy.app/setup-account#token=private-token&amp;source=email");
+    expect(email.html).toContain("one-time link expires in 7 days");
+    expect(email.html).not.toMatch(/payout|invoice|rate|artist/i);
+  });
+
+  it("offers active Residency contacts both a setup email and a copy-link fallback", async () => {
+    const source = await readFile(new URL("../src/app/app/setup/residency-contacts-manager.tsx", import.meta.url), "utf8");
+    expect(source).toContain("sendResidencySetupEmailAction");
+    expect(source).toContain("Send setup email");
+    expect(source).toContain("Copy link");
   });
 
   it("consumes a valid token exactly once during successful password completion", async () => {

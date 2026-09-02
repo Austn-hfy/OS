@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { generateResidencySetupLinkAction, inviteResidencyContactAction, saveResidencyContactAction, type ResidencyActionState } from "@/app/app/actions";
+import { generateResidencySetupLinkAction, inviteResidencyContactAction, saveResidencyContactAction, sendResidencySetupEmailAction, type ResidencyActionState } from "@/app/app/actions";
 
 type ContactRow = {
   id: string;
@@ -51,6 +51,13 @@ export function ResidencyContactsManager({ residencyId, contacts }: { residencyI
     startInvite(async () => setInviteState(await inviteResidencyContactAction({ contactId })));
   }
 
+  function sendSetupEmail(contactId: string) {
+    startInvite(async () => {
+      setPreparedSetupLink("");
+      setInviteState(await sendResidencySetupEmailAction({ contactId }));
+    });
+  }
+
   function copySetupLink(contactId: string) {
     startInvite(async () => {
       const result = await generateResidencySetupLinkAction({ contactId });
@@ -75,7 +82,13 @@ export function ResidencyContactsManager({ residencyId, contacts }: { residencyI
       <div className="residency-contact-list">
         {contacts.map((contact) => <article className={draft.id === contact.id ? "selected" : ""} key={contact.id}>
           <button type="button" onClick={() => edit(contact)}><span><strong>{contact.name}</strong><small>{contact.title || "Title not set"}</small></span><span><small>{roleLabel(contact.accessRole)}</small>{contact.isInternalTest ? <em>Internal test</em> : null}{contact.isPrimary ? <em>Primary</em> : null}</span></button>
-          <div><span className={`contact-invite-status ${contact.invitationStatus}`}>{contact.invitationStatus.replaceAll("_", " ")}</span>{contact.accessRole && contact.hasAccount ? <button className="text-action" type="button" onClick={() => copySetupLink(contact.id)} disabled={inviting}>{inviting ? "Preparing…" : "Copy setup link"}</button> : contact.accessRole && contact.invitationStatus !== "active" ? <button className="text-action" type="button" onClick={() => invite(contact.id)} disabled={inviting}>{inviting ? "Sending…" : contact.invitationStatus === "invited" ? "Resend invite" : "Send invite"}</button> : null}</div>
+          <div>
+            <span className={`contact-invite-status ${contact.invitationStatus}`}>{contact.invitationStatus.replaceAll("_", " ")}</span>
+            {contact.accessRole && contact.hasAccount ? <span className="contact-access-actions">
+              <button className="text-action" type="button" onClick={() => sendSetupEmail(contact.id)} disabled={inviting}>{inviting ? "Sending…" : "Send setup email"}</button>
+              <button className="text-action" type="button" onClick={() => copySetupLink(contact.id)} disabled={inviting}>Copy link</button>
+            </span> : contact.accessRole && contact.invitationStatus !== "active" ? <button className="text-action" type="button" onClick={() => invite(contact.id)} disabled={inviting}>{inviting ? "Sending…" : contact.invitationStatus === "invited" ? "Resend invite" : "Send invite"}</button> : null}
+          </div>
         </article>)}
         {!contacts.length ? <div className="empty"><strong>No contacts yet</strong><p>Add the manager, event contact, or anyone HFY works with regularly.</p></div> : null}
       </div>
