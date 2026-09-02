@@ -25,6 +25,11 @@ function assertEconomicOwner(actor: AuditActor, source: string) {
   }
 }
 
+function normalizedManagedSource(actor: AuditActor, source: string, economicsMode: string) {
+  if (actor.kind !== "internal" || source !== "hotel") return source;
+  return economicsMode === "hfy_request" ? "hfy_request" : "internal";
+}
+
 export async function transitionAssignment(
   actor: AuditActor,
   assignmentId: string,
@@ -44,6 +49,7 @@ export async function transitionAssignment(
       fixedFeeCents: assignments.fixedFeeCents,
       payoutStatus: assignments.payoutStatus,
       source: assignments.source,
+      economicsMode: shifts.economicsMode,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .where(eq(assignments.id, assignmentId))
@@ -66,6 +72,7 @@ export async function transitionAssignment(
       ? "na"
       : nextPayoutStatus(current.payoutStatus, eligible);
 
+    const normalizedSource = normalizedManagedSource(actor, current.source, current.economicsMode);
     await tx.update(assignments).set(targetStatus === "cancelled"
       ? {
           bookingStatus: targetStatus,
@@ -73,6 +80,7 @@ export async function transitionAssignment(
         }
       : {
           bookingStatus: targetStatus,
+          source: normalizedSource,
           totalCompensationCents,
           payoutStatus: payoutState,
           updatedAt: new Date(),
@@ -102,6 +110,7 @@ export async function markAssignmentPaid(
       payoutStatus: assignments.payoutStatus,
       totalCompensationCents: assignments.totalCompensationCents,
       source: assignments.source,
+      economicsMode: shifts.economicsMode,
     }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .where(and(eq(assignments.id, assignmentId), eq(assignments.payoutStatus, "ready_to_pay"))).limit(1);
     if (!current) throw new Error("Only a Ready to Pay Assignment can be marked Paid.");
@@ -160,6 +169,7 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
       bookingStatus: assignments.bookingStatus,
       payoutStatus: assignments.payoutStatus,
       source: assignments.source,
+      economicsMode: shifts.economicsMode,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
     }).from(assignments).innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
@@ -214,6 +224,7 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
     await tx.update(assignments).set({
       talentId: replacement.id,
       setName: replacement.stageName,
+      source: normalizedManagedSource(actor, current.source, current.economicsMode),
       bookingStatus: current.bookingStatus === "open" ? "confirmed" : current.bookingStatus,
       updatedAt: new Date(),
     }).where(eq(assignments.id, current.id));
@@ -256,6 +267,7 @@ export async function rescheduleAssignment(
       fixedFeeCents: assignments.fixedFeeCents,
       payoutStatus: assignments.payoutStatus,
       source: assignments.source,
+      economicsMode: shifts.economicsMode,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
@@ -334,6 +346,7 @@ export async function rescheduleAssignment(
     await tx.update(assignments).set({
       talentId: replacement.id,
       setName: replacement.stageName,
+      source: normalizedManagedSource(actor, current.source, current.economicsMode),
       startsAt,
       endsAt,
       bookingStatus: current.bookingStatus === "open" ? "confirmed" : current.bookingStatus,

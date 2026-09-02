@@ -16,4 +16,12 @@ describe("calendar assignment workflow safeguards", () => {
     expect(source).toContain('calendarAssignmentErrorMessage(error, "Unable to update this DJ. Refresh the page and try again.")');
     expect(source).toContain('calendarAssignmentErrorMessage(error, "Unable to remove this DJ. Refresh the page and try again.")');
   });
+
+  it("normalizes legacy hotel assignments before HFY edits them", async () => {
+    const source = await readFile(new URL("../src/services/assignments.ts", import.meta.url), "utf8");
+
+    expect(source).toContain('source !== "hotel"');
+    expect(source).toContain('economicsMode === "hfy_request" ? "hfy_request" : "internal"');
+    expect(source).toContain('source: normalizedManagedSource(actor, current.source, current.economicsMode)');
+  });
 });
