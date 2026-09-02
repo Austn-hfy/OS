@@ -8,6 +8,10 @@ export type ArtistSearchOption = {
   meta?: string;
 };
 
+export type CreateArtistResult =
+  | { status: "success"; artist: ArtistSearchOption }
+  | { status: "error"; message: string };
+
 export function ArtistSearchPicker({
   artists,
   excludedIds = [],
@@ -17,6 +21,7 @@ export function ArtistSearchPicker({
   collapsedEyebrow,
   collapsedDescription,
   onOpenChange,
+  onCreateArtist,
   onSelect,
 }: {
   artists: ArtistSearchOption[];
@@ -27,11 +32,16 @@ export function ArtistSearchPicker({
   collapsedEyebrow?: string;
   collapsedDescription?: string;
   onOpenChange?: (open: boolean) => void;
+  onCreateArtist?: (name: string) => Promise<CreateArtistResult>;
   onSelect: (artistId: string) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const [query, setQuery] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newArtistName, setNewArtistName] = useState("");
+  const [createPending, setCreatePending] = useState(false);
+  const [createError, setCreateError] = useState("");
   function changeOpen(next: boolean) {
     setOpen(next);
     onOpenChange?.(next);
@@ -55,6 +65,33 @@ export function ArtistSearchPicker({
     }
   }
 
+  function startCreating() {
+    setNewArtistName(query.trim());
+    setCreateError("");
+    setCreating(true);
+  }
+
+  async function createArtist() {
+    const name = newArtistName.trim();
+    if (!onCreateArtist || !name || createPending) return;
+    setCreatePending(true);
+    setCreateError("");
+    try {
+      const result = await onCreateArtist(name);
+      if (result.status === "error") {
+        setCreateError(result.message);
+        return;
+      }
+      await onSelect(result.artist.id);
+      setCreating(false);
+      setNewArtistName("");
+      setQuery("");
+      changeOpen(false);
+    } finally {
+      setCreatePending(false);
+    }
+  }
+
   if (!open) {
     return collapsedDescription ? <button className="artist-choice-option" type="button" onClick={() => changeOpen(true)}><span>{collapsedEyebrow}</span><strong>+ {label}</strong><small>{collapsedDescription}</small></button> : <button className="button secondary quick-add-dj" type="button" onClick={() => changeOpen(true)}>+ {label}</button>;
   }
@@ -69,6 +106,11 @@ export function ArtistSearchPicker({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              if (onCreateArtist && !results.length && query.trim()) startCreating();
+            }}
             placeholder="Search by name, market, or genre"
           />
         </div>
@@ -91,6 +133,11 @@ export function ArtistSearchPicker({
         ))}
         {!results.length ? <p className="artist-results-empty">No matching DJs found.</p> : null}
       </div>
+      {onCreateArtist ? creating ? <div className="artist-inline-create">
+        <div><strong>Add a new DJ</strong><small>Create the roster entry here, then continue scheduling this slot.</small></div>
+        <div className="artist-inline-create-fields"><div className="field"><label>DJ name</label><input autoFocus value={newArtistName} onChange={(event) => setNewArtistName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void createArtist(); } }} placeholder="Artist or stage name" maxLength={200} /></div><button className="button" type="button" disabled={createPending || !newArtistName.trim()} onClick={createArtist}>{createPending ? "Adding…" : "Add DJ"}</button><button className="button secondary" type="button" disabled={createPending} onClick={() => { setCreating(false); setCreateError(""); }}>Cancel</button></div>
+        {createError ? <p className="error" aria-live="polite">{createError}</p> : null}
+      </div> : <button className="artist-create-trigger" type="button" onClick={startCreating}>+ {query.trim() && !results.some((artist) => artist.name.toLowerCase() === query.trim().toLowerCase()) ? `Add “${query.trim()}” as a new DJ` : "Add a new DJ"}</button> : null}
     </div>
   );
 }

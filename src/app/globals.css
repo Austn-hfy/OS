@@ -832,6 +832,15 @@ tr:last-child td { border-bottom: 0; }
 .artist-result small { color: var(--muted); font-size: 9px; }
 .artist-result > span:last-child { color: var(--forest); font-size: 10px; font-weight: 800; }
 .artist-results-empty { color: var(--muted); margin: 4px; font-size: 11px; }
+.artist-create-trigger { appearance: none; width: 100%; padding: 9px 10px; border: 1px dashed rgba(2,116,222,.35); border-radius: 11px; color: var(--forest); background: rgba(255,255,255,.7); font-size: 10px; font-weight: 800; text-align: left; cursor: pointer; }
+.artist-create-trigger:hover { border-style: solid; background: #edf4fd; }
+.artist-inline-create { display: grid; gap: 9px; padding: 11px; border: 1px solid rgba(2,116,222,.28); border-radius: 12px; background: white; }
+.artist-inline-create > div:first-child { display: grid; gap: 2px; }
+.artist-inline-create > div:first-child strong { font-size: 11px; }
+.artist-inline-create > div:first-child small { color: var(--muted); font-size: 9px; }
+.artist-inline-create-fields { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 8px; }
+.artist-inline-create-fields .button { min-height: 40px; padding: 9px 13px; font-size: 10px; }
+.artist-inline-create .error { margin: 0; }
 .quick-more { border-top: 1px solid var(--line); padding-top: 12px; }
 .quick-more summary { color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 700; }
 .quick-more-fields { display: grid; gap: 12px; margin-top: 13px; }
@@ -1310,6 +1319,8 @@ tr:last-child td { border-bottom: 0; }
   .quick-modal { max-height: calc(100vh - 20px); border-radius: 19px; }
   .quick-modal-header, .quick-modal-body { padding-inline: 16px; }
   .quick-slot-picker, .quick-time-fields, .quick-add-choice, .quick-one-time-fields { grid-template-columns: 1fr; }
+  .artist-inline-create-fields { grid-template-columns: 1fr 1fr; }
+  .artist-inline-create-fields .field { grid-column: 1 / -1; }
   .quick-color-popover { right: auto; left: 0; width: min(390px, calc(100vw - 52px)); }
   .quick-slot-details, .quick-reschedule-row { grid-template-columns: 1fr; }
   .quick-modal-footer { margin-inline: -16px; padding-inline: 16px; }

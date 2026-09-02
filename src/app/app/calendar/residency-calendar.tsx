@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { addCalendarAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, type ResidencyActionState } from "@/app/app/actions";
 import { HfyRequestFulfillment } from "@/app/app/hfy-request-fulfillment";
-import { ArtistSearchPicker } from "@/components/artist-search-picker";
+import { createClientOwnedArtistAction } from "@/app/residency/actions";
+import { ArtistSearchPicker, type CreateArtistResult } from "@/components/artist-search-picker";
 import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { DaypartColorPicker } from "@/components/daypart-color-picker";
@@ -19,6 +20,7 @@ import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
 import { MISSING_RESIDENCY_TALENT_RATE_MESSAGE } from "@/domain/residency-rates";
 import { replacementDraftFromAssignment } from "@/domain/assignment-editing";
+import { TALENT_GENRES } from "@/domain/talent-genres";
 
 export type CalendarAssignment = {
   id: string;
@@ -134,6 +136,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   const [dateActionState, setDateActionState] = useState<ResidencyActionState>(initialActionState);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [daypartFilter, setDaypartFilter] = useState("all");
+  const [addedTalent, setAddedTalent] = useState<typeof talent>([]);
   const oneTimeColorPickerRef = useRef<HTMLDetailsElement>(null);
   const submitBooking = async (previous: ResidencyActionState, formData: FormData) => {
     const result = await bookResidencyDateAction(previous, formData);
@@ -165,11 +168,42 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     return () => window.clearTimeout(restoreFilters);
   }, [dayparts]);
 
-  const artistOptions = useMemo(() => talent.map((artist) => ({
+  const availableTalent = useMemo(() => {
+    const artistsById = new Map(talent.map((artist) => [artist.id, artist]));
+    addedTalent.forEach((artist) => artistsById.set(artist.id, artist));
+    return [...artistsById.values()];
+  }, [addedTalent, talent]);
+
+  const artistOptions = useMemo(() => availableTalent.map((artist) => ({
     id: artist.id,
     name: artist.stageName,
     meta: [artist.homeMarket, artist.genres.join(" ")].filter(Boolean).join(" · "),
-  })), [talent]);
+  })), [availableTalent]);
+  const canCreateCalendarArtist = previewMode && !fullProgramming && canManage;
+
+  async function createCalendarArtist(name: string): Promise<CreateArtistResult> {
+    const formData = new FormData();
+    formData.set("name", name);
+    formData.set("contact", "");
+    formData.set("homeMarket", "");
+    formData.set("instagramHandle", "");
+    formData.set("genre", TALENT_GENRES[1]);
+    formData.set("customGenre", "");
+    const result = await createClientOwnedArtistAction({ status: "idle", message: "" }, formData);
+    if (result.status !== "success" || !result.artist) {
+      return { status: "error", message: result.message || "Unable to add this DJ." };
+    }
+    const artist = { ...result.artist, priority: null, ownership: "residency" as const };
+    setAddedTalent((current) => current.some((item) => item.id === artist.id) ? current : [...current, artist]);
+    return {
+      status: "success",
+      artist: {
+        id: artist.id,
+        name: artist.stageName,
+        meta: [artist.homeMarket, artist.genres.join(" ")].filter(Boolean).join(" · "),
+      },
+    };
+  }
 
   const activeSuggestion = activeDaypartId
     ? suggestions.find((item) => item.daypartId === activeDaypartId)
@@ -397,14 +431,14 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
       }
       const unfinished = activeSuggestion.slots.find((slot) => !slot.confirmed);
       if (unfinished) {
-        const artist = talent.find((item) => item.id === unfinished.talentId);
+        const artist = availableTalent.find((item) => item.id === unfinished.talentId);
         return `Finish adding ${artist?.stageName ?? "this artist"}: confirm their hours before saving the ${activeSuggestion.name} slot.`;
       }
       return "";
     } catch {
       return "Choose valid talent start and end times.";
     }
-  }, [activeSuggestion, previewMode, residencyTalentRateConfigured, talent]);
+  }, [activeSuggestion, availableTalent, previewMode, residencyTalentRateConfigured]);
 
   const draftTimeInvalid = useMemo(() => {
     if (!activeSuggestion) return true;
@@ -798,9 +832,9 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
 
                   {activeSuggestion.type === "dj_artist" ? clientStandingHfy ? <div className="standing-hfy-calendar-notice" style={{ "--hfy-booked-color": HFY_BOOKED_COLOR } as CSSProperties}><span>HFY-managed Talent Activity</span><strong>HFY handles this occurrence automatically.</strong><small>No client artist assignment or per-date request is needed. HFY manages talent staffing and talent billing.</small></div> : <><div className="quick-assignment-heading"><div><strong>{activeSuggestion.requestHfy ? "HFY requested" : activeSuggestion.slots.length ? "Your artists" : "Choose who handles this date"}</strong><small>{previewMode ? "Add one of your own artists, or ask HFY to staff this entire date." : "Only HFY-owned artists approved for this Residency appear here."}</small></div></div>
                   {activeSuggestion.requestHfy ? <div className="request-hfy-selection"><div><span>HFY system option</span><strong>Request HFY</strong><small>Creates a pending request without assigning an artist. HFY controls both rates after fulfillment.</small></div><button type="button" onClick={() => updateSuggestion({ requestHfy: false })}>Choose your own artist instead</button></div> : null}
-                  {!activeSuggestion.slots.length && !activeSuggestion.requestHfy ? <div className={`client-assignment-choices ${previewMode && !clientArtistFlow ? "equal-options" : ""}`}><ArtistSearchPicker key={`${activeSuggestion.daypartId}-${artistPickerKey}`} artists={artistOptions} excludedIds={[]} label="Add your artist" initiallyOpen={false} collapsedEyebrow={previewMode ? "Client managed" : undefined} collapsedDescription={previewMode ? "Choose one of your Residency’s artists and manage the rate yourself." : undefined} onOpenChange={(open) => { if (previewMode) setClientArtistFlow(open); }} onSelect={addArtist} />{previewMode && !clientArtistFlow ? <button className="request-hfy-option" type="button" onClick={requestHfyForSuggestion}><span>HFY system option</span><strong>Request HFY</strong><small>Send this entire date to HFY without choosing an artist or seeing HFY rates.</small></button> : null}{previewMode && clientArtistFlow ? <button className="button secondary" type="button" onClick={() => { setClientArtistFlow(false); setArtistPickerKey((value) => value + 1); }}>Back to handling options</button> : null}</div> : null}
+                  {!activeSuggestion.slots.length && !activeSuggestion.requestHfy ? <div className={`client-assignment-choices ${previewMode && !clientArtistFlow ? "equal-options" : ""}`}><ArtistSearchPicker key={`${activeSuggestion.daypartId}-${artistPickerKey}`} artists={artistOptions} excludedIds={[]} label="Add your artist" initiallyOpen={false} collapsedEyebrow={previewMode ? "Client managed" : undefined} collapsedDescription={previewMode ? "Choose one of your Residency’s artists and manage the rate yourself." : undefined} onOpenChange={(open) => { if (previewMode) setClientArtistFlow(open); }} onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={addArtist} />{previewMode && !clientArtistFlow ? <button className="request-hfy-option" type="button" onClick={requestHfyForSuggestion}><span>HFY system option</span><strong>Request HFY</strong><small>Send this entire date to HFY without choosing an artist or seeing HFY rates.</small></button> : null}{previewMode && clientArtistFlow ? <button className="button secondary" type="button" onClick={() => { setClientArtistFlow(false); setArtistPickerKey((value) => value + 1); }}>Back to handling options</button> : null}</div> : null}
                   <div className="quick-assignment-list">{activeSuggestion.slots.map((slot, slotIndex) => {
-                    const artist = talent.find((item) => item.id === slot.talentId);
+                    const artist = availableTalent.find((item) => item.id === slot.talentId);
                     return <div className={`quick-assignment-card ${slot.confirmed ? "confirmed" : "draft"}`} key={slot.id}>
                       <div className="quick-assignment-card-heading"><div><span>Talent {slotIndex + 1}</span><strong>{artist?.stageName ?? "Artist"}</strong><small>{slot.confirmed ? "✓ Added" : "Finish this artist"}</small></div><div className="quick-card-actions">{slot.confirmed ? <button type="button" onClick={() => updateSlot(slotIndex, { confirmed: false })}>Edit</button> : null}<button type="button" onClick={() => removeArtist(slot.id)}>Remove</button></div></div>
                       {!slot.confirmed ? <div className="quick-assignment-time-intro"><div><strong>Choose appearance time</strong><small>Recommended: {formatLocalMinute(clockToMinute(activeSuggestion.start))}–{formatLocalMinute(resolveEndMinute(clockToMinute(activeSuggestion.start), activeSuggestion.end))}</small></div><button type="button" onClick={() => updateSlot(slotIndex, { start: activeSuggestion.start, end: activeSuggestion.end })}>Use recommended</button></div> : null}
@@ -808,7 +842,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                       {!slot.confirmed ? <button className="button quick-confirm-dj" type="button" disabled={draftTimeInvalid} onClick={() => confirmArtist(slot.id)}>Add talent</button> : null}
                     </div>;
                   })}</div>
-                  {activeSuggestion.slots.length && !activeSuggestion.requestHfy && !activeSuggestion.slots.some((slot) => !slot.confirmed) ? <ArtistSearchPicker artists={artistOptions} excludedIds={activeSuggestion.slots.map((slot) => slot.talentId)} label="Add another registered artist" onSelect={addArtist} /> : null}
+                  {activeSuggestion.slots.length && !activeSuggestion.requestHfy && !activeSuggestion.slots.some((slot) => !slot.confirmed) ? <ArtistSearchPicker artists={artistOptions} excludedIds={activeSuggestion.slots.map((slot) => slot.talentId)} label="Add another registered artist" onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={addArtist} /> : null}
                   {assignmentWarning ? <p className={assignmentWarning.startsWith("Finish adding") ? "draft-notice" : "error"} aria-live="polite">{assignmentWarning}</p> : null}
 
                   {!previewMode && activeSuggestion.billingMode === "billed_by_hfy" ? <details className="quick-more"><summary>Pay and billing options</summary><div className="quick-more-fields"><div className="field"><label>Client rate override</label><SensitiveInput type="number" min="0" step="0.01" value={activeSuggestion.clientRateOverride} onChange={(event) => updateSuggestion({ clientRateOverride: event.target.value })} placeholder={`Default $${((residency.clientHourlyRateCents ?? 0) / 100).toFixed(0)}/hr`} /></div>{activeSuggestion.slots.map((slot, slotIndex) => <div className="quick-slot-details" key={slot.id}><strong>Talent {slotIndex + 1}</strong><div className="field"><label>Compensation</label><select value={slot.compensationType} onChange={(event) => updateSlot(slotIndex, { compensationType: event.target.value as SlotDraft["compensationType"] })}><option value="hourly">Hourly</option><option value="fixed">Fixed fee</option><option value="na">N/A</option></select></div><div className="field"><label>{slot.compensationType === "fixed" ? "Fixed fee" : "Talent rate override"}</label><SensitiveInput type="number" min="0" step="0.01" value={slot.compensationType === "fixed" ? slot.fixedFee : slot.rateOverride} onChange={(event) => updateSlot(slotIndex, slot.compensationType === "fixed" ? { fixedFee: event.target.value } : { rateOverride: event.target.value })} placeholder={slot.compensationType === "hourly" ? `${activeSuggestion.defaultTalentRateCents === null ? "Residency" : "Daypart"} default $${((activeSuggestion.defaultTalentRateCents ?? residency.defaultTalentRateCents ?? 0) / 100).toFixed(0)}/hr` : undefined} /></div></div>)}</div></details> : null}
@@ -833,7 +867,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
               {editingEventCanManageAssignments && !previewMode && !residencyTalentRateConfigured ? <p className="error" aria-live="polite">{MISSING_RESIDENCY_TALENT_RATE_MESSAGE}</p> : null}
               {newAssignmentDraft ? <section className="replacement-editor new-assignment-editor">
                 <div className="replacement-step"><span>1</span><div><strong>Choose the DJ</strong><small>Only artists approved for this Residency appear here.</small></div></div>
-                {newAssignmentDraft.talentId ? <div className="replacement-selected"><div><span>Selected DJ</span><strong>{talent.find((item) => item.id === newAssignmentDraft.talentId)?.stageName}</strong></div><button type="button" onClick={() => setNewAssignmentDraft({ ...newAssignmentDraft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose DJ" artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} onSelect={(talentId) => setNewAssignmentDraft({ ...newAssignmentDraft, talentId })} />}
+                {newAssignmentDraft.talentId ? <div className="replacement-selected"><div><span>Selected DJ</span><strong>{availableTalent.find((item) => item.id === newAssignmentDraft.talentId)?.stageName}</strong></div><button type="button" onClick={() => setNewAssignmentDraft({ ...newAssignmentDraft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose DJ" artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={(talentId) => setNewAssignmentDraft({ ...newAssignmentDraft, talentId })} />}
                 <div className="replacement-step"><span>2</span><div><strong>Set their hours</strong><small>The service window may use one DJ or several, but their times cannot overlap.</small></div></div>
                 <div className="quick-dj-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel="New DJ start time" value={newAssignmentDraft.start} onChange={(value) => setNewAssignmentDraft({ ...newAssignmentDraft, start: value })} stepMinutes={15} /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel="New DJ end time" value={newAssignmentDraft.end} onChange={(value) => setNewAssignmentDraft({ ...newAssignmentDraft, end: value })} stepMinutes={15} /></div></div>
                 {previewMode ? null : <details className="quick-more"><summary>Pay options</summary><div className="quick-more-fields"><div className="field"><label>Compensation</label><select value={newAssignmentDraft.compensationType} onChange={(event) => setNewAssignmentDraft({ ...newAssignmentDraft, compensationType: event.target.value as SlotDraft["compensationType"] })}><option value="hourly">Hourly</option><option value="fixed">Fixed fee</option><option value="na">N/A</option></select></div><div className="field"><label>{newAssignmentDraft.compensationType === "fixed" ? "Fixed fee" : "Talent rate override"}</label><SensitiveInput type="number" min="0" step="0.01" value={newAssignmentDraft.compensationType === "fixed" ? newAssignmentDraft.fixedFee : newAssignmentDraft.rateOverride} onChange={(event) => setNewAssignmentDraft({ ...newAssignmentDraft, ...(newAssignmentDraft.compensationType === "fixed" ? { fixedFee: event.target.value } : { rateOverride: event.target.value }) })} placeholder={newAssignmentDraft.compensationType === "hourly" ? "Uses Daypart or Residency default" : undefined} /></div></div></details>}
@@ -842,13 +876,13 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
               </section> : null}
               <div className="quick-reschedule-list">{editingEvent.assignments.map((assignment, index) => {
                 const changing = replacementDraft?.assignmentId === assignment.id;
-                const replacement = changing ? talent.find((item) => item.id === replacementDraft.talentId) : undefined;
+                const replacement = changing ? availableTalent.find((item) => item.id === replacementDraft.talentId) : undefined;
                 return <div className={`quick-reschedule-row ${changing ? "changing" : ""}`} key={assignment.id}>
                   <div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName || assignment.guestName || "Open slot"}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div>
                   {editingEventCanManageAssignments ? <div className="quick-existing-actions"><button className="button secondary" type="button" disabled={editPending} onClick={() => { setNewAssignmentDraft(null); setEditState(initialActionState); setReplacementDraft(replacementDraftFromAssignment(assignment)); }}>Change DJ</button><button className="remove-dj-button" type="button" disabled={editPending} onClick={() => removeExistingAssignment(assignment.id)}>Remove DJ</button></div> : null}
                   {changing && replacementDraft ? <div className="replacement-editor">
                     <div className="replacement-step"><span>1</span><div><strong>Choose the replacement DJ</strong><small>The current DJ remains unchanged until you save.</small></div></div>
-                    {replacement ? <div className="replacement-selected"><div><span>Replacement</span><strong>{replacement.stageName}</strong></div><button type="button" onClick={() => setReplacementDraft({ ...replacementDraft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose replacement" artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} onSelect={(talentId) => setReplacementDraft({ ...replacementDraft, talentId })} />}
+                    {replacement ? <div className="replacement-selected"><div><span>Replacement</span><strong>{replacement.stageName}</strong></div><button type="button" onClick={() => setReplacementDraft({ ...replacementDraft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose replacement" artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={(talentId) => setReplacementDraft({ ...replacementDraft, talentId })} />}
                     <div className="replacement-step"><span>2</span><div><strong>Confirm their hours</strong><small>{previewMode ? "Set the exact time this DJ will play." : "These hours determine this DJ's payout."}</small></div></div>
                     <div className="quick-dj-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel="Replacement DJ start time" value={replacementDraft.start} onChange={(value) => setReplacementDraft({ ...replacementDraft, start: value })} stepMinutes={15} /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel="Replacement DJ end time" value={replacementDraft.end} onChange={(value) => setReplacementDraft({ ...replacementDraft, end: value })} stepMinutes={15} /></div></div>
                     {replacementWarning ? <p className="error" aria-live="polite">{replacementWarning}</p> : null}

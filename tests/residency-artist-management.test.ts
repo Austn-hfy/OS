@@ -61,4 +61,28 @@ describe("Residency-owned artist management", () => {
     expect(card).toContain("Added by HFY on behalf of");
     expect(card).toContain("Added by the");
   });
+
+  it("lets a client create and immediately select a roster DJ while scheduling", async () => {
+    const [actions, calendar, picker] = await Promise.all([
+      readFile(new URL("../src/app/residency/actions.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/artist-search-picker.tsx", import.meta.url), "utf8"),
+    ]);
+    const create = actions.slice(actions.indexOf("export async function createClientOwnedArtistAction"), actions.indexOf("export async function updateClientOwnedArtistAction"));
+    expect(create).toContain("returning({ id: talent.id, stageName: talent.stageName");
+    expect(create).toContain("artist: createdArtist");
+    expect(calendar).toContain("createClientOwnedArtistAction");
+    expect(calendar).toContain("onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined}");
+    expect(calendar).toContain('ownership: "residency" as const');
+    expect(picker).toContain("Add a new DJ");
+    expect(picker).toContain("await onSelect(result.artist.id)");
+    expect(picker).not.toContain("<form");
+  });
+
+  it("keeps the drawer artist form compact without duplicating its heading", async () => {
+    const styles = await readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8");
+    expect(styles).toContain(".artist-create-drawer .client-add-artist-heading { display: none; }");
+    expect(styles).toContain(".artist-create-drawer .client-add-artist form");
+    expect(styles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
+  });
 });

@@ -8,7 +8,11 @@ import { assignments, auditLog, clientAssignmentTerms, residencies, residencyTal
 import { requireResidencyActor, type ResidencyActor } from "@/lib/auth";
 import { resolveClientArtistGenre } from "@/domain/talent-genres";
 
-export type ClientSettingsActionState = { status: "idle" | "success" | "error"; message: string };
+export type ClientSettingsActionState = {
+  status: "idle" | "success" | "error";
+  message: string;
+  artist?: { id: string; stageName: string; homeMarket: string; genres: string[] };
+};
 
 function requireSelfServeTalentAccess(actor: ResidencyActor) {
   if (actor.residencyTier === "complete") {
@@ -34,7 +38,7 @@ export async function createClientOwnedArtistAction(
     }).parse(Object.fromEntries(formData));
     const genre = resolveClientArtistGenre(parsed.genre, parsed.customGenre);
     const database = getDb();
-    await database.transaction(async (tx) => {
+    const createdArtist = await database.transaction(async (tx) => {
       const duplicate = await tx.select({ id: talent.id }).from(talent).where(and(
         eq(talent.owningResidencyId, actor.residencyId),
         sql`lower(${talent.stageName}) = lower(${parsed.name})`,
@@ -51,7 +55,7 @@ export async function createClientOwnedArtistAction(
         exclusiveResidencyId: actor.residencyId,
         rosterStatus: "ready",
         talentStatus: "active",
-      }).returning({ id: talent.id });
+      }).returning({ id: talent.id, stageName: talent.stageName, homeMarket: talent.homeMarket, genres: talent.genres });
       await tx.insert(residencyTalent).values({
         residencyId: actor.residencyId,
         talentId: artist.id,
@@ -72,10 +76,11 @@ export async function createClientOwnedArtistAction(
           createdForResidencyId: actor.residencyId,
         },
       });
+      return artist;
     });
     revalidatePath("/residency/talent");
     revalidatePath("/residency/calendar");
-    return { status: "success", message: `${parsed.name} added to your roster.` };
+    return { status: "success", message: `${parsed.name} added to your roster.`, artist: createdArtist };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to add this artist." };
   }
