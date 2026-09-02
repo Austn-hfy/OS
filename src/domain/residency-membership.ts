@@ -6,6 +6,7 @@ export type ResidencyMembershipOption = {
   accessRole: "manager" | "calendar_viewer";
   contactId: string | null;
   invitationStatus: "not_invited" | "invited" | "active" | "revoked" | null;
+  needsDaypartRateAttention?: boolean;
 };
 
 export function selectResidencyMembership(

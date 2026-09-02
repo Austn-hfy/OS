@@ -595,6 +595,33 @@
   line-height: 1;
 }
 
+.hfy-style-system .residency-nav-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hfy-style-system .residency-nav-attention {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--hfy-coral) 72%, #7b352d);
+  border-radius: 50%;
+  color: #6e2f28;
+  background: color-mix(in srgb, var(--hfy-coral) 32%, white);
+  box-shadow: 0 0 0 4px var(--hfy-coral-soft);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  animation: hfy-rate-attention-pulse 2.35s ease-in-out infinite;
+}
+
+.hfy-style-system .residency-nav-item.needs-attention .residency-nav-icon {
+  border-color: color-mix(in srgb, var(--hfy-coral) 52%, white);
+  color: #8b4035;
+}
+
 .hfy-style-system .client-sidebar .residency-talent-nav {
   min-width: 0;
   display: grid;
@@ -974,6 +1001,45 @@
 .hfy-style-system .daypart-week-add span { border-color: var(--hfy-line); color: var(--hfy-muted); background: rgba(250, 252, 253, 0.82); }
 .hfy-style-system .daypart-week-add:is(:hover, :focus-visible) span { color: var(--hfy-action-ink); border-color: rgba(52, 127, 187, 0.3); background: var(--hfy-action-soft); }
 .hfy-style-system .daypart-week-block { box-shadow: 0 5px 14px rgba(48, 65, 78, 0.1); }
+.hfy-style-system .daypart-week-block.needs-rate {
+  border-color: color-mix(in srgb, var(--hfy-coral) 82%, #71352e);
+  box-shadow: 0 0 0 2px var(--hfy-coral-soft), 0 8px 20px rgba(153, 69, 58, 0.2);
+  animation: hfy-rate-block-glow 2.6s ease-in-out infinite;
+}
+.hfy-style-system .daypart-rate-attention-banner {
+  border-color: color-mix(in srgb, var(--hfy-coral) 42%, var(--hfy-line));
+  color: #64312c;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--hfy-coral) 17%, white), rgba(250, 252, 253, 0.84));
+  box-shadow: var(--hfy-shadow-section), inset 3px 0 var(--hfy-coral);
+}
+.hfy-style-system .daypart-rate-attention-banner > span,
+.hfy-style-system .field label .daypart-rate-needed-label {
+  color: #6e2f28;
+  background: color-mix(in srgb, var(--hfy-coral) 31%, white);
+}
+.hfy-style-system .daypart-rate-field.needs-attention {
+  border-color: color-mix(in srgb, var(--hfy-coral) 56%, var(--hfy-line));
+  background: color-mix(in srgb, var(--hfy-coral) 10%, rgba(251, 252, 253, 0.9));
+  box-shadow: 0 0 0 3px var(--hfy-coral-soft);
+}
+.hfy-style-system .calendar-only-daypart-card.needs-rate {
+  border-color: color-mix(in srgb, var(--hfy-coral) 68%, var(--hfy-line));
+  box-shadow: 0 0 0 2px var(--hfy-coral-soft), var(--hfy-shadow-section);
+}
+
+@keyframes hfy-rate-attention-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(232, 141, 122, 0.13); transform: scale(1); }
+  50% { box-shadow: 0 0 0 7px rgba(232, 141, 122, 0.2); transform: scale(1.04); }
+}
+
+@keyframes hfy-rate-block-glow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(232, 141, 122, 0.13), 0 8px 20px rgba(153, 69, 58, 0.13); }
+  50% { box-shadow: 0 0 0 4px rgba(232, 141, 122, 0.22), 0 9px 24px rgba(153, 69, 58, 0.22); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hfy-style-system :is(.residency-nav-attention, .daypart-week-block.needs-rate) { animation: none; }
+}
 .hfy-style-system .daypart-color-control { border-color: var(--hfy-line-strong); border-radius: var(--hfy-radius-control); background: rgba(251, 252, 253, 0.88); }
 .hfy-style-system .daypart-type-options .standing-hfy { border-color: color-mix(in srgb, #ec4899 28%, var(--hfy-line)); }
 .hfy-style-system .daypart-type-options .standing-hfy.active { border-color: #ec4899; background: color-mix(in srgb, #ec4899 9%, white); box-shadow: inset 3px 0 0 #ec4899; }

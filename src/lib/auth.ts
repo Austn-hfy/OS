@@ -1,9 +1,9 @@
 import { cache } from "react";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/db/client";
-import { residencies, residencyContacts, residencyMemberships, users } from "@/db/schema";
+import { dayparts, residencies, residencyContacts, residencyMemberships, users } from "@/db/schema";
 import { selectResidencyMembership, type ResidencyMembershipOption } from "@/domain/residency-membership";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { viewAsResidencyId } from "@/lib/view-as";
@@ -30,6 +30,7 @@ export type ResidencyActor = {
   isViewAs: boolean;
   isInternalTest: boolean;
   availableResidencies: Array<Pick<ResidencyMembershipOption, "residencyId" | "residencyName" | "accessRole">>;
+  needsDaypartRateAttention?: boolean;
 };
 
 export type AuditActor = InternalActor | ResidencyActor;
@@ -61,6 +62,17 @@ const currentProfile = cache(async () => {
   return { authUser: data.user, profile };
 });
 
+function clientManagedDaypartRateAttention() {
+  return sql<boolean>`exists (
+    select 1 from ${dayparts}
+    where ${dayparts.residencyId} = ${residencies.id}
+      and ${dayparts.active} = true
+      and ${dayparts.type} = 'dj_artist'
+      and ${dayparts.billingMode} = 'tracking_only'
+      and coalesce(${dayparts.clientDefaultRateCents}, 0) <= 0
+  )`;
+}
+
 const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => {
   const current = await currentProfile();
   if (!current) return null;
@@ -72,6 +84,7 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
       residencyName: residencies.name,
       residencyTimezone: residencies.timezone,
       clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
+      needsDaypartRateAttention: clientManagedDaypartRateAttention(),
     }).from(residencies).where(and(
       eq(residencies.id, selectedResidencyId),
       eq(residencies.operatingMode, "operations"),
@@ -98,6 +111,7 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
     accessRole: residencyMemberships.accessRole,
     contactId: residencyContacts.id,
     invitationStatus: residencyContacts.invitationStatus,
+    needsDaypartRateAttention: clientManagedDaypartRateAttention(),
   }).from(residencyMemberships)
     .innerJoin(residencies, eq(residencyMemberships.residencyId, residencies.id))
     .leftJoin(residencyContacts, and(
@@ -136,6 +150,7 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
     accessRole: membership.accessRole,
     isViewAs: false,
     isInternalTest: current.profile.isInternalTest,
+    needsDaypartRateAttention: membership.needsDaypartRateAttention,
     availableResidencies: current.profile.isInternalTest
       ? memberships.map(({ residencyId, residencyName, accessRole }) => ({ residencyId, residencyName, accessRole }))
       : [],
