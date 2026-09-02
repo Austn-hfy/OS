@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { cache } from "react";
 import { getDb } from "@/db/client";
 import {
@@ -36,6 +36,17 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function hfyManagedDaypartRateAttention() {
+  return sql<boolean>`exists (
+    select 1 from ${dayparts}
+    where ${dayparts.residencyId} = ${residencies.id}
+      and ${dayparts.active} = true
+      and ${dayparts.type} = 'dj_artist'
+      and ${dayparts.billingMode} = 'billed_by_hfy'
+      and coalesce(${dayparts.defaultTalentRateCents}, 0) <= 0
+  )`;
+}
+
 export const getResidencyList = cache(async function getResidencyList() {
   return getDb().select({
     id: residencies.id,
@@ -46,6 +57,7 @@ export const getResidencyList = cache(async function getResidencyList() {
     timezone: residencies.timezone,
     defaultTalentRateCents: residencies.defaultTalentRateCents,
     clientHourlyRateCents: residencies.clientHourlyRateCents,
+    needsDaypartRateAttention: hfyManagedDaypartRateAttention(),
   }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name));
 });
 

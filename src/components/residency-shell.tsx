@@ -26,7 +26,7 @@ export function ResidencyShell({ actor, children }: { actor: ResidencyActor; chi
         <p className="nav-label">Workspace</p>
         <WorkspaceNavLink href="/residency/calendar" label="Calendar" description="Schedule and bookings" icon="calendar" active={pathname === "/residency/calendar"} />
         {canManage ? <>
-          <WorkspaceNavLink href="/residency/dayparts" label="Day Parts" description="Standing schedule" icon="dayparts" active={pathname === "/residency/dayparts"} />
+          <WorkspaceNavLink href="/residency/dayparts" label="Day Parts" description="Standing schedule" icon="dayparts" active={pathname === "/residency/dayparts"} attention={Boolean(actor.needsDaypartRateAttention)} />
           <WorkspaceNavLink href="/residency/talent" label="Talent" description="Artist lookup" icon="talent" active={pathname === "/residency/talent"} />
           {actor.clientPaymentStatusVisible ? <WorkspaceNavLink href="/residency/payouts" label="Payouts" description="What this Residency owes" icon="payouts" active={pathname === "/residency/payouts"} /> : null}
           <WorkspaceNavLink href="/residency/invoices" label="Invoices" description="Approved and sent" icon="invoices" active={pathname === "/residency/invoices"} />

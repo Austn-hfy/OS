@@ -11,7 +11,7 @@ export default async function ResidencyDaypartsPage({ searchParams }: { searchPa
 
   return <DaypartRouteManager
     residencyId={actor.residencyId}
-    dayparts={dayparts}
+    dayparts={dayparts.map((daypart) => ({ ...daypart, defaultTalentRateCents: null }))}
     hideFinancials
     initialCreate={actor.accessRole === "manager" && params.create === "1"}
   />;

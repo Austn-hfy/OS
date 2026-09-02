@@ -39,16 +39,18 @@ export function WorkspaceNavLink({
   description,
   icon,
   active,
+  attention = false,
 }: {
   href: string;
   label: string;
   description: string;
   icon: WorkspaceNavIconName;
   active: boolean;
+  attention?: boolean;
 }) {
-  return <Link className={`residency-nav-item ${active ? "active" : ""}`} href={href}>
+  return <Link className={`residency-nav-item ${active ? "active" : ""} ${attention ? "needs-attention" : ""}`} href={href}>
     <WorkspaceNavIcon name={icon} />
     <span className="residency-nav-copy"><strong>{label}</strong><small>{description}</small></span>
-    <span className="residency-nav-arrow" aria-hidden="true">›</span>
+    <span className="residency-nav-end" aria-hidden="true">{attention ? <span className="residency-nav-attention">!</span> : null}<span className="residency-nav-arrow">›</span></span>
   </Link>;
 }

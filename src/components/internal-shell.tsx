@@ -11,7 +11,7 @@ import { enterViewAsAction } from "@/app/app/view-as-actions";
 import { formatServiceTier } from "@/domain/service-tier";
 import { WorkspaceNavIcon, WorkspaceNavLink, type WorkspaceNavIconName } from "@/components/workspace-nav";
 
-type ResidencyOption = { id: string; name: string; cityState: string | null; tier: string; active: boolean };
+type ResidencyOption = { id: string; name: string; cityState: string | null; tier: string; active: boolean; needsDaypartRateAttention?: boolean };
 type OwnerMode = "developer" | "hfy";
 type InternalNavItem = { label: string; href: string; description: string; icon: WorkspaceNavIconName };
 
@@ -116,7 +116,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
         <nav className="nav residency-workspace-nav owner-workspace-nav">
           <p className="nav-label">{inResidency ? "Residency" : mode === "developer" ? "Developer" : "HFY"}</p>
           {links.map(({ label, href, description, icon }) => <div className="nav-entry" key={href}>
-            <WorkspaceNavLink label={label} href={href} description={description} icon={icon} active={isActive(label, href)} />
+            <WorkspaceNavLink label={label} href={href} description={description} icon={icon} active={isActive(label, href)} attention={inResidency && label === "Day Parts" && Boolean(residency?.needsDaypartRateAttention)} />
             {mode === "hfy" && !inResidency && label === "Calendar" ? <div className={`residency-talent-nav day-parts-nav-owner ${daypartsExpanded ? "expanded" : ""}`}>
               <button className="residency-nav-item residency-talent-toggle" type="button" aria-expanded={daypartsExpanded} onClick={() => {
                 if (inResidency && residency) {
