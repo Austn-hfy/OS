@@ -4,32 +4,52 @@ export const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursd
 export const HFY_BOOKED_COLOR = "#EC4899";
 export const HFY_PENDING_COLOR = "#F9A8D4";
 export const DEFAULT_DAYPART_COLOR = "#2783DC";
-export const DAYPART_COLOR_PRESETS = [
-  { label: "Ocean blue", value: DEFAULT_DAYPART_COLOR },
-  { label: "Sky blue", value: "#5AA6E8" },
-  { label: "Deep blue", value: "#1B5FA7" },
-  { label: "Tangerine", value: "#E98332" },
-  { label: "Apricot", value: "#F1A35D" },
-  { label: "Burnt orange", value: "#B95A1E" },
-  { label: "Violet", value: "#7A65D1" },
-  { label: "Lavender", value: "#9B8AE0" },
-  { label: "Deep purple", value: "#5542A1" },
-  { label: "Emerald", value: "#2E9E79" },
-  { label: "Mint green", value: "#5DBA91" },
-  { label: "Forest", value: "#24745B" },
-  { label: "Gold", value: "#D6A11D" },
-  { label: "Sunshine", value: "#E5BC3A" },
-  { label: "Ochre", value: "#A97912" },
-  { label: "Navy", value: "#244C76" },
-  { label: "Slate blue", value: "#4B6F91" },
-  { label: "Deep navy", value: "#173650" },
-  { label: "Red", value: "#D45757" },
-  { label: "Coral", value: "#E97868" },
-  { label: "Burgundy", value: "#9C3F4D" },
-  { label: "Teal", value: "#248F94" },
-  { label: "Aqua", value: "#4DAEB1" },
-  { label: "Deep teal", value: "#19686C" },
+export type DaypartColorPreset = { label: string; value: string };
+export type DaypartColorPresetRow = { label: string; colors: readonly DaypartColorPreset[] };
+
+export const DAYPART_COLOR_PRESET_ROWS: readonly DaypartColorPresetRow[] = [
+  {
+    label: "Dark",
+    colors: [
+      { label: "Burgundy", value: "#9C3F4D" },
+      { label: "Burnt orange", value: "#B95A1E" },
+      { label: "Ochre", value: "#A97912" },
+      { label: "Forest", value: "#24745B" },
+      { label: "Deep teal", value: "#19686C" },
+      { label: "Deep blue", value: "#1B5FA7" },
+      { label: "Deep navy", value: "#173650" },
+      { label: "Deep purple", value: "#5542A1" },
+    ],
+  },
+  {
+    label: "Medium",
+    colors: [
+      { label: "Red", value: "#D45757" },
+      { label: "Tangerine", value: "#E98332" },
+      { label: "Gold", value: "#D6A11D" },
+      { label: "Emerald", value: "#2E9E79" },
+      { label: "Teal", value: "#248F94" },
+      { label: "Ocean blue", value: DEFAULT_DAYPART_COLOR },
+      { label: "Navy", value: "#244C76" },
+      { label: "Violet", value: "#7A65D1" },
+    ],
+  },
+  {
+    label: "Light",
+    colors: [
+      { label: "Coral", value: "#E97868" },
+      { label: "Apricot", value: "#F1A35D" },
+      { label: "Sunshine", value: "#E5BC3A" },
+      { label: "Mint green", value: "#5DBA91" },
+      { label: "Aqua", value: "#4DAEB1" },
+      { label: "Sky blue", value: "#5AA6E8" },
+      { label: "Slate blue", value: "#4B6F91" },
+      { label: "Lavender", value: "#9B8AE0" },
+    ],
+  },
 ] as const;
+
+export const DAYPART_COLOR_PRESETS = DAYPART_COLOR_PRESET_ROWS.flatMap((row) => row.colors);
 
 export type DaypartRuleInput = {
   weekday: number;

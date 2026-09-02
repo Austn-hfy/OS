@@ -9,6 +9,8 @@ describe("one-time calendar slot type", () => {
     expect(calendar).toContain('chooseOneTimeType("house_activity")');
     expect(calendar).toContain("Choose Talent Activity or House Activity to continue.");
     expect(calendar).toContain("One-time slot color presets");
+    expect(calendar).toContain('className="quick-color-picker"');
+    expect(calendar).toContain("oneTimeColorPickerRef.current?.removeAttribute");
     expect(calendar).not.toContain('aria-label="One-time slot color" type="color"');
   });
 

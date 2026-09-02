@@ -588,8 +588,11 @@ tr:last-child td { border-bottom: 0; }
 .daypart-color-control input { width: 38px; height: 30px; min-height: 30px; padding: 0; border: 0; border-radius: 8px; overflow: hidden; }
 .daypart-color-control strong { font-size: 11px; }
 .daypart-color-control.hfy-reserved-color span { width: 38px; height: 30px; flex: 0 0 38px; border: 2px solid white; border-radius: 8px; box-shadow: 0 0 0 1px var(--line); }
-.daypart-color-presets { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 2px; }
-.daypart-color-presets button { width: 30px; height: 30px; min-height: 30px; flex: 0 0 30px; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
+.daypart-color-spectrum { display: grid; gap: 7px; }
+.daypart-color-row { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 8px; }
+.daypart-color-row > span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.daypart-color-presets { display: grid; grid-template-columns: repeat(8, minmax(24px, 30px)); align-items: center; gap: 7px; padding: 2px; }
+.daypart-color-presets button { width: 100%; max-width: 30px; min-height: 0; aspect-ratio: 1; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
 .daypart-color-presets button.active { box-shadow: 0 0 0 3px var(--ink); }
 .booking-suggestion .row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .checkbox-row { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-size: 13px; font-weight: 700; }
@@ -702,6 +705,14 @@ tr:last-child td { border-bottom: 0; }
 .quick-add-choice-card > strong { font-size: 15px; }
 .quick-add-choice-card > small { color: var(--muted); font-size: 11px; line-height: 1.45; }
 .quick-one-time-fields { display: grid; grid-template-columns: 1fr 1fr .8fr; gap: 10px; }
+.quick-one-time-color-field { position: relative; align-content: start; }
+.quick-color-picker { position: relative; width: max-content; }
+.quick-color-picker > summary { appearance: none; width: 46px; height: 46px; display: grid; place-items: center; cursor: pointer; list-style: none; border: 1px solid var(--line); border-radius: 13px; background: white; box-shadow: 0 4px 14px rgba(7,26,49,.06); }
+.quick-color-picker > summary::-webkit-details-marker { display: none; }
+.quick-color-picker > summary span { width: 28px; height: 28px; border: 3px solid white; border-radius: 8px; box-shadow: 0 0 0 1px var(--line); }
+.quick-color-picker[open] > summary { border-color: rgba(39,131,220,.4); box-shadow: 0 0 0 3px rgba(39,131,220,.11); }
+.quick-color-popover { position: absolute; z-index: 8; top: calc(100% + 8px); right: 0; width: min(390px, calc(100vw - 80px)); display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.98); box-shadow: 0 18px 48px rgba(7,26,49,.18); }
+.quick-color-popover > small { color: var(--muted); font-size: 9px; }
 .quick-slot-option { appearance: none; min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 11px 13px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 15px; text-align: left; }
 .quick-slot-option { border-left: 5px solid var(--daypart-color, var(--forest)); }
 .quick-slot-option.active { border-color: var(--daypart-color, var(--forest)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--daypart-color, var(--forest)) 16%, transparent); background: color-mix(in srgb, var(--daypart-color, var(--forest)) 8%, white); }
@@ -1254,6 +1265,7 @@ tr:last-child td { border-bottom: 0; }
   .quick-modal { max-height: calc(100vh - 20px); border-radius: 19px; }
   .quick-modal-header, .quick-modal-body { padding-inline: 16px; }
   .quick-slot-picker, .quick-time-fields, .quick-add-choice, .quick-one-time-fields { grid-template-columns: 1fr; }
+  .quick-color-popover { right: auto; left: 0; width: min(390px, calc(100vw - 52px)); }
   .quick-slot-details, .quick-reschedule-row { grid-template-columns: 1fr; }
   .quick-modal-footer { margin-inline: -16px; padding-inline: 16px; }
   body.staging-environment .sidebar { top: auto; height: auto; }
