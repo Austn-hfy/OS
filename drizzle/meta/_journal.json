@@ -232,6 +232,13 @@
       "when": 1788375806844,
       "tag": "0032_fast_surge",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788378918526,
+      "tag": "0033_grant_client_visibility_policy",
+      "breakpoints": true
     }
   ]
 }

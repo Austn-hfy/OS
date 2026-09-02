@@ -43,4 +43,10 @@ describe("Ace Residency RLS migration", () => {
     expect(sql).toContain("t.\"ownership\" = 'residency'");
     expect(sql).not.toContain("UPDATE \"residency_talent\" SET \"active\" = false");
   });
+
+  it("grants clients the visibility flag referenced by the roster policies", async () => {
+    const sql = await readFile(new URL("../../drizzle/0033_grant_client_visibility_policy.sql", import.meta.url), "utf8");
+
+    expect(sql).toContain('GRANT SELECT ("client_visible") ON "residency_talent" TO authenticated');
+  });
 });
