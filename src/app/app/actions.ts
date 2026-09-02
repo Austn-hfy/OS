@@ -938,6 +938,7 @@ export async function inviteResidencyContactAction(input: { contactId: string })
       email: residencyContacts.email,
       accessRole: residencyContacts.accessRole,
       userId: residencyContacts.userId,
+      invitationStatus: residencyContacts.invitationStatus,
       residencyName: residencies.name,
     }).from(residencyContacts).innerJoin(residencies, eq(residencyContacts.residencyId, residencies.id)).where(and(
       eq(residencyContacts.id, contactId),
@@ -948,24 +949,25 @@ export async function inviteResidencyContactAction(input: { contactId: string })
     if (!contact.email || !contact.accessRole) throw new Error("Add an email and access level before sending an invitation.");
 
     const admin = createSupabaseAdminClient();
-    const existingLocal = (await database.select({ id: users.id }).from(users).where(eq(users.email, contact.email)).limit(1))[0];
+    const existingLocal = (await database.select({ id: users.id, role: users.role }).from(users).where(eq(users.email, contact.email)).limit(1))[0];
+    if (existingLocal?.role === "internal_admin") throw new Error("An internal HFY account cannot be assigned as a Residency login.");
     let authUserId = existingLocal?.id ?? contact.userId ?? null;
-    let invitationStatus: "active" | "invited" = existingLocal ? "active" : "invited";
+    const hasEstablishedAccount = Boolean(existingLocal) && contact.invitationStatus !== "invited";
+    const invitationStatus: "active" | "invited" = hasEstablishedAccount ? "active" : "invited";
     if (!authUserId) {
       const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1_000 });
       if (listError) throw listError;
       const existingAuth = listed.users.find((user) => user.email?.toLocaleLowerCase() === contact.email);
       if (existingAuth) {
         authUserId = existingAuth.id;
-        invitationStatus = "active";
       } else {
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hfy.app";
-        const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(contact.email, {
-          data: { display_name: contact.name },
-          redirectTo: `${siteUrl}/auth/invite`,
+        const { data: created, error: createError } = await admin.auth.admin.createUser({
+          email: contact.email,
+          email_confirm: true,
+          user_metadata: { display_name: contact.name },
         });
-        if (inviteError) throw inviteError;
-        authUserId = invited.user.id;
+        if (createError) throw createError;
+        authUserId = created.user?.id ?? null;
       }
     }
     if (!authUserId) throw new Error("The invitation did not create an account.");
@@ -1004,8 +1006,34 @@ export async function inviteResidencyContactAction(input: { contactId: string })
         details: { accessRole: contact.accessRole },
       });
     });
+
+    if (invitationStatus === "invited") {
+      const credential = await issueResidencySetupCredential(actor, { contactId: contact.id });
+      const delivery = await sendResidencyAccountSetupEmail({
+        to: credential.contact.email,
+        contactName: credential.contact.name,
+        residencyName: credential.contact.residencyName,
+        setupUrl: credential.setupLink,
+        idempotencyKey: `residency-setup/${credential.contact.id}/${credential.setupTokenId}`,
+      });
+      await database.insert(auditLog).values({
+        residencyId: credential.contact.residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_setup_email_sent",
+        entityType: "residency_contact",
+        entityId: credential.contact.id,
+        details: {
+          userId: credential.contact.userId,
+          setupTokenId: credential.setupTokenId,
+          expiresAt: credential.expiresAt.toISOString(),
+          providerMessageId: delivery.providerMessageId,
+        },
+      });
+    }
+
     revalidatePath("/app/setup");
-    return { status: "success", message: invitationStatus === "invited" ? `Invitation sent to ${contact.email}.` : `${contact.email} already has an account and now has access.` };
+    return { status: "success", message: invitationStatus === "invited" ? `Setup email sent to ${contact.email}.` : `${contact.email} already has an account and now has access.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to invite this contact." };
   }

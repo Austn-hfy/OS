@@ -53,6 +53,19 @@ describe("account setup credentials", () => {
     expect(source).toContain("Copy link");
   });
 
+  it("uses the scanner-safe setup credential for the initial Residency invitation", async () => {
+    const source = await readFile(new URL("../src/app/app/actions.ts", import.meta.url), "utf8");
+    const inviteAction = source.slice(
+      source.indexOf("export async function inviteResidencyContactAction"),
+      source.indexOf("async function issueResidencySetupCredential"),
+    );
+
+    expect(inviteAction).toContain("admin.auth.admin.createUser");
+    expect(inviteAction).toContain("issueResidencySetupCredential");
+    expect(inviteAction).toContain("sendResidencyAccountSetupEmail");
+    expect(inviteAction).not.toContain("inviteUserByEmail");
+  });
+
   it("consumes a valid token exactly once during successful password completion", async () => {
     const issued = issueAccountSetupToken();
     let available = true;
