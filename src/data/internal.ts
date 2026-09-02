@@ -249,6 +249,7 @@ export async function getCalendarData(residencyId?: string, range?: { from: stri
     invoiceId: shifts.invoiceId,
     invoiceLinkIssue: shifts.invoiceLinkIssue,
     invoiceLinkNote: shifts.invoiceLinkNote,
+    notes: shifts.notes,
     programDetails: shifts.programDetails,
     manualHostName: shifts.manualHostName,
     economicsMode: shifts.economicsMode,

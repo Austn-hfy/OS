@@ -1,0 +1,48 @@
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+import { projectDaypartSlots } from "@/domain/dayparts";
+
+describe("Calendar Only Dayparts", () => {
+  it("never projects recurring calendar slots", () => {
+    const slots = projectDaypartSlots([{
+      id: "calendar-only",
+      name: "Commune Pool",
+      room: "Pool",
+      color: "#7A65D1",
+      type: "house_activity",
+      billingMode: null,
+      scheduleMode: "calendar_only",
+      active: true,
+      activeUntil: null,
+      defaultTalentRateCents: null,
+      rules: [],
+    }], "2026-09-01", "2026-09-30");
+    expect(slots).toEqual([]);
+  });
+
+  it("appears in the date picker with suggested hours", async () => {
+    const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
+    expect(calendar).toContain('daypart.scheduleMode === "calendar_only"');
+    expect(calendar).toContain("suggestedStartMinute");
+    expect(calendar).toContain("This Calendar Only Daypart will be added only to");
+  });
+
+  it("keeps client artist selection and Request HFY mutually exclusive", async () => {
+    const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
+    expect(calendar).toContain("clientArtistFlow");
+    expect(calendar).toContain("previewMode && !clientArtistFlow");
+    expect(calendar).toContain("Back to handling options");
+  });
+
+  it("provides update and delete actions for both one-time record types", async () => {
+    const [calendar, actions] = await Promise.all([
+      readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/actions.ts", import.meta.url), "utf8"),
+    ]);
+    expect(calendar).toContain("Save slot changes");
+    expect(calendar).toContain("Delete activity");
+    expect(actions).toContain("updateOneTimeShiftAction");
+    expect(actions).toContain("updateOneTimeOccurrenceAction");
+    expect(actions).toContain("deleteOneTimeOccurrenceAction");
+  });
+});

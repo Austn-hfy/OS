@@ -16,6 +16,7 @@ export function ArtistSearchPicker({
   initiallyOpen = false,
   collapsedEyebrow,
   collapsedDescription,
+  onOpenChange,
   onSelect,
 }: {
   artists: ArtistSearchOption[];
@@ -25,11 +26,16 @@ export function ArtistSearchPicker({
   initiallyOpen?: boolean;
   collapsedEyebrow?: string;
   collapsedDescription?: string;
+  onOpenChange?: (open: boolean) => void;
   onSelect: (artistId: string) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const [query, setQuery] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  function changeOpen(next: boolean) {
+    setOpen(next);
+    onOpenChange?.(next);
+  }
   const results = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return artists.filter((artist) => {
@@ -42,7 +48,7 @@ export function ArtistSearchPicker({
     setPendingId(artistId);
     try {
       await onSelect(artistId);
-      setOpen(false);
+      changeOpen(false);
       setQuery("");
     } finally {
       setPendingId(null);
@@ -50,7 +56,7 @@ export function ArtistSearchPicker({
   }
 
   if (!open) {
-    return collapsedDescription ? <button className="artist-choice-option" type="button" onClick={() => setOpen(true)}><span>{collapsedEyebrow}</span><strong>+ {label}</strong><small>{collapsedDescription}</small></button> : <button className="button secondary quick-add-dj" type="button" onClick={() => setOpen(true)}>+ {label}</button>;
+    return collapsedDescription ? <button className="artist-choice-option" type="button" onClick={() => changeOpen(true)}><span>{collapsedEyebrow}</span><strong>+ {label}</strong><small>{collapsedDescription}</small></button> : <button className="button secondary quick-add-dj" type="button" onClick={() => changeOpen(true)}>+ {label}</button>;
   }
 
   return (
@@ -66,7 +72,7 @@ export function ArtistSearchPicker({
             placeholder="Search by name, market, or genre"
           />
         </div>
-        <button className="artist-picker-cancel" type="button" onClick={() => { setOpen(false); setQuery(""); }}>Cancel</button>
+        <button className="artist-picker-cancel" type="button" onClick={() => { changeOpen(false); setQuery(""); }}>Cancel</button>
       </div>
       <div className="artist-results" role="listbox" aria-label="Matching DJs">
         {results.map((artist) => (

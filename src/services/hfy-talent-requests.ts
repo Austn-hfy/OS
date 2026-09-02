@@ -19,7 +19,7 @@ export type FulfillHfyTalentRequestInput = {
 export type CancelHfyTalentRequestInput = {
   residencyId: string;
   shiftId: string;
-  daypartId: string;
+  daypartId: string | null;
   serviceDate: string;
 };
 
@@ -40,7 +40,7 @@ export async function cancelHfyTalentRequest(actor: AuditActor, input: CancelHfy
       .where(and(
         eq(hfyTalentRequests.shiftId, input.shiftId),
         eq(shifts.residencyId, input.residencyId),
-        eq(shifts.daypartId, input.daypartId),
+        input.daypartId ? eq(shifts.daypartId, input.daypartId) : isNull(shifts.daypartId),
         eq(shifts.serviceDate, input.serviceDate),
       ))
       .limit(1)
@@ -62,7 +62,7 @@ export async function cancelHfyTalentRequest(actor: AuditActor, input: CancelHfy
     await tx.delete(shifts).where(and(
       eq(shifts.id, input.shiftId),
       eq(shifts.residencyId, input.residencyId),
-      eq(shifts.daypartId, input.daypartId),
+      input.daypartId ? eq(shifts.daypartId, input.daypartId) : isNull(shifts.daypartId),
       eq(shifts.serviceDate, input.serviceDate),
       eq(shifts.economicsMode, "hfy_request"),
     ));

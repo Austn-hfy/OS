@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { addCalendarAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, deleteCalendarShiftAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, type ResidencyActionState } from "@/app/app/actions";
+import { addCalendarAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, type ResidencyActionState } from "@/app/app/actions";
 import { HfyRequestFulfillment } from "@/app/app/hfy-request-fulfillment";
 import { ArtistSearchPicker } from "@/components/artist-search-picker";
 import { CalendarShareButton } from "@/components/calendar-share-button";
@@ -13,7 +13,7 @@ import { Status } from "@/components/format";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
-import { HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, weekdayForDate, weekdayNames, type DaypartDateException } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, weekdayForDate, weekdayNames, type DaypartDateException, type DaypartScheduleMode } from "@/domain/dayparts";
 import { calendarDaypartsHref, monthLabel, shiftMonthKey } from "@/lib/calendar";
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
@@ -43,6 +43,9 @@ export type ResidencyEvent = MonthCalendarEvent & {
   defaultDjCount?: number | null;
   programDetails: string;
   manualHostName: string;
+  room?: string;
+  notes?: string;
+  editableColor?: string;
   assignments: CalendarAssignment[];
   economicsMode?: "hfy" | "client_owned" | "hfy_request";
   hfyRequestId?: string | null;
@@ -59,6 +62,9 @@ type ResidencyCalendarProps = {
     color: string;
     type: DaypartType;
     billingMode: DaypartBillingMode | null;
+    scheduleMode: DaypartScheduleMode;
+    suggestedStartMinute: number | null;
+    suggestedEndMinute: number | null;
     defaultTalentRateCents: number | null;
     activeUntil: string | null;
     active: boolean;
@@ -79,6 +85,7 @@ type ResidencyCalendarProps = {
 type SlotDraft = { id: string; talentId: string; start: string; end: string; confirmed: boolean; compensationType: "hourly" | "fixed" | "na"; rateOverride: string; fixedFee: string };
 type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; oneTime: boolean; recurringToday: boolean; exceptionKind: "skip" | "override" | null; name: string; room: string; color: string; type: DaypartType | null; billingMode: DaypartBillingMode | null; defaultTalentRateCents: number | null; defaultDjCount: number | null; existing: boolean; start: string; end: string; clientRateOverride: string; notes: string; programDetails: string; manualHostName: string; requestHfy: boolean; slots: SlotDraft[] };
 type ReplacementDraft = { assignmentId: string; talentId: string; start: string; end: string };
+type OneTimeEditDraft = { name: string; room: string; color: string; start: string; end: string; notes: string; programDetails: string; manualHostName: string };
 type ModalState = { type: "add"; date: string } | { type: "edit"; eventId: string } | null;
 type StatusFilter = "needs" | "all" | "filled";
 type AddMode = "choose" | "daypart" | "one-time";
@@ -94,6 +101,19 @@ function emptySlot(talentId: string, start: string, end: string): SlotDraft {
   return { id: crypto.randomUUID(), talentId, start, end, confirmed: false, compensationType: "hourly", rateOverride: "", fixedFee: "" };
 }
 
+function oneTimeDraftFromEvent(event: ResidencyEvent): OneTimeEditDraft {
+  return {
+    name: event.title,
+    room: event.room ?? "",
+    color: event.editableColor ?? event.color ?? "#7A65D1",
+    start: minuteToClock(event.shiftStartMinute),
+    end: minuteToClock(event.shiftEndMinute),
+    notes: event.notes ?? "",
+    programDetails: event.programDetails,
+    manualHostName: event.manualHostName,
+  };
+}
+
 export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, previewMode = false, calendarBasePath = "/app/calendar", daypartsHref, canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
   const initialEditingEvent = initialEventId ? events.find((event) => event.id === initialEventId && !event.projected) : undefined;
@@ -102,8 +122,11 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   const [activeDaypartId, setActiveDaypartId] = useState("");
   const [addMode, setAddMode] = useState<AddMode>("choose");
   const [directDaypartSelection, setDirectDaypartSelection] = useState(false);
+  const [clientArtistFlow, setClientArtistFlow] = useState(false);
+  const [artistPickerKey, setArtistPickerKey] = useState(0);
   const [replacementDraft, setReplacementDraft] = useState<ReplacementDraft | null>(null);
   const [newAssignmentDraft, setNewAssignmentDraft] = useState<SlotDraft | null>(null);
+  const [oneTimeEditDraft, setOneTimeEditDraft] = useState<OneTimeEditDraft | null>(() => initialEditingEvent && !initialEditingEvent.daypartId ? oneTimeDraftFromEvent(initialEditingEvent) : null);
   const [editState, setEditState] = useState<ResidencyActionState>(initialActionState);
   const [editPending, setEditPending] = useState(false);
   const [dateActionState, setDateActionState] = useState<ResidencyActionState>(initialActionState);
@@ -177,8 +200,10 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     const existingDayparts = new Set(events.filter((event) => !event.projected && event.date === date && event.daypartId).map((event) => event.daypartId));
     const nextSuggestions: SuggestionDraft[] = dayparts.flatMap((daypart) => {
       if (!daypart.active || (daypart.activeUntil && date > daypart.activeUntil)) return [];
-      const recurringRule = daypart.rules.find((item) => item.weekday === weekday);
-      const rule = recurringRule ?? daypart.rules[0];
+      const recurringRule = daypart.scheduleMode === "standing_weekly" ? daypart.rules.find((item) => item.weekday === weekday) : undefined;
+      const rule = recurringRule ?? (daypart.scheduleMode === "calendar_only" && daypart.suggestedStartMinute !== null && daypart.suggestedEndMinute !== null
+        ? { weekday, startMinute: daypart.suggestedStartMinute, endMinute: daypart.suggestedEndMinute, defaultDjCount: null }
+        : daypart.rules[0]);
       if (!rule) return [];
       const dateException = dateExceptions.find((item) => item.daypartId === daypart.id && item.serviceDate === date);
       const startMinute = dateException?.kind === "override" && dateException.startMinute !== null ? dateException.startMinute : rule.startMinute;
@@ -189,7 +214,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
         daypartId: daypart.id,
         sourceDaypartId: daypart.id,
         oneTime: false,
-        recurringToday: Boolean(recurringRule),
+        recurringToday: daypart.scheduleMode === "standing_weekly" && Boolean(recurringRule),
         exceptionKind: dateException?.kind ?? null,
         name: daypart.name,
         room: daypart.room,
@@ -237,6 +262,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     setActiveDaypartId(preferred?.daypartId ?? "");
     setAddMode("daypart");
     setDirectDaypartSelection(Boolean(preferred));
+    setClientArtistFlow(false);
     setReplacementDraft(null);
     setNewAssignmentDraft(null);
     setEditState(initialActionState);
@@ -254,6 +280,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     setNewAssignmentDraft(null);
     setEditState(initialActionState);
     setDateActionState(initialActionState);
+    setOneTimeEditDraft(residencyEvent && !residencyEvent.daypartId ? oneTimeDraftFromEvent(residencyEvent) : null);
     setModal({ type: "edit", eventId: event.id });
   }
 
@@ -263,6 +290,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
       setReplacementDraft(null);
       setNewAssignmentDraft(null);
       setEditState(initialActionState);
+      setOneTimeEditDraft(!event.daypartId ? oneTimeDraftFromEvent(event) : null);
       setModal({ type: "edit", eventId: event.id });
     }
   }
@@ -272,6 +300,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   }
 
   function chooseOneTimeType(type: DaypartType) {
+    setClientArtistFlow(false);
     updateSuggestion({
       type,
       billingMode: type === "house_activity" ? null : previewMode ? "tracking_only" : "billed_by_hfy",
@@ -281,6 +310,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   }
 
   function chooseSuggestion(suggestion: SuggestionDraft) {
+    setClientArtistFlow(false);
     setActiveDaypartId(suggestion.daypartId);
     setAddMode(suggestion.oneTime ? "one-time" : "daypart");
     setDirectDaypartSelection(false);
@@ -306,6 +336,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   }
 
   function addArtist(talentId: string) {
+    setClientArtistFlow(true);
     setSuggestions((current) => current.map((item) => item.daypartId === activeDaypartId ? {
       ...item,
       requestHfy: false,
@@ -335,6 +366,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   }
 
   function requestHfyForSuggestion() {
+    setClientArtistFlow(false);
     setSuggestions((current) => current.map((item) => item.daypartId === activeDaypartId ? {
       ...item,
       requestHfy: true,
@@ -537,6 +569,57 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     if (result.status === "success") setModal(null);
   }
 
+  function oneTimeRecordFormData(event: ResidencyEvent, draft: OneTimeEditDraft) {
+    const startMinute = clockToMinute(draft.start);
+    const endMinute = resolveEndMinute(startMinute, draft.end);
+    const formData = new FormData();
+    formData.set("id", event.id);
+    formData.set("name", draft.name);
+    formData.set("room", draft.room);
+    formData.set("calendarColor", draft.color);
+    formData.set("startMinute", String(startMinute));
+    formData.set("endMinute", String(endMinute));
+    formData.set("notes", draft.notes);
+    formData.set("programDetails", draft.programDetails);
+    formData.set("manualHostName", draft.manualHostName);
+    return formData;
+  }
+
+  async function saveOneTimeRecord() {
+    if (!editingEvent || editingEvent.daypartId || !oneTimeEditDraft) return;
+    setEditPending(true);
+    try {
+      const formData = oneTimeRecordFormData(editingEvent, oneTimeEditDraft);
+      const result = editingEvent.recordType === "financial_shift"
+        ? await updateOneTimeShiftAction(formData)
+        : await updateOneTimeOccurrenceAction(formData);
+      setEditState(result);
+      if (result.status === "success") {
+        setModal(null);
+        router.refresh();
+      }
+    } catch {
+      setEditState({ status: "error", message: "Choose valid one-time slot details and hours." });
+    } finally {
+      setEditPending(false);
+    }
+  }
+
+  async function deleteExistingOccurrence() {
+    if (!editingEvent || editingEvent.recordType !== "nonfinancial_occurrence" || editingEvent.daypartId) return;
+    if (!window.confirm(`Delete ${editingEvent.title} on ${editingEvent.date}?`)) return;
+    const formData = new FormData();
+    formData.set("occurrenceId", editingEvent.id);
+    setEditPending(true);
+    const result = await deleteOneTimeOccurrenceAction(formData);
+    setEditPending(false);
+    setEditState(result);
+    if (result.status === "success") {
+      setModal(null);
+      router.refresh();
+    }
+  }
+
   async function saveDateOverride() {
     if (modal?.type !== "add" || !activeSuggestion?.sourceDaypartId) return;
     let startMinute: number;
@@ -587,12 +670,12 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   }
 
   async function cancelSelectedHfyRequest() {
-    if (!editingEvent?.daypartId || editingEvent.economicsMode !== "hfy_request") return;
+    if (!editingEvent || editingEvent.economicsMode !== "hfy_request") return;
     if (!window.confirm(`Cancel the HFY request for ${editingEvent.title} on ${editingEvent.date}? Only this date will return to Client Managed.`)) return;
     const formData = new FormData();
     formData.set("residencyId", residency.id);
     formData.set("shiftId", editingEvent.id);
-    formData.set("daypartId", editingEvent.daypartId);
+    formData.set("daypartId", editingEvent.daypartId ?? "");
     formData.set("serviceDate", editingEvent.date);
     setEditPending(true);
     const result = await cancelHfyTalentRequestAction(formData);
@@ -629,15 +712,29 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
   const previousHref = monthHref(shiftMonthKey(monthKey, -1));
   const nextHref = monthHref(shiftMonthKey(monthKey, 1));
   const createDaypartHref = calendarDaypartsHref(residency.id, previewMode, daypartsHref);
+  const activeSourceDaypart = activeSuggestion?.sourceDaypartId ? dayparts.find((daypart) => daypart.id === activeSuggestion.sourceDaypartId) : undefined;
+  const activeCalendarOnly = activeSourceDaypart?.scheduleMode === "calendar_only";
   const activeStandingRule = modal?.type === "add" && activeSuggestion?.sourceDaypartId
     ? (() => {
       const source = dayparts.find((daypart) => daypart.id === activeSuggestion.sourceDaypartId);
+      if (source?.scheduleMode === "calendar_only") return source.suggestedStartMinute !== null && source.suggestedEndMinute !== null
+        ? { weekday: weekdayForDate(modal.date), startMinute: source.suggestedStartMinute, endMinute: source.suggestedEndMinute, defaultDjCount: null }
+        : undefined;
       return source?.rules.find((rule) => rule.weekday === weekdayForDate(modal.date)) ?? source?.rules[0];
     })()
     : undefined;
   const activeStandingWindow = activeStandingRule
     ? `${formatLocalMinute(activeStandingRule.startMinute)}–${formatLocalMinute(activeStandingRule.endMinute)}`
     : null;
+  const canEditOneTimeRecord = Boolean(editingEvent && !editingEvent.daypartId && oneTimeEditDraft
+    && (editingEvent.recordType === "nonfinancial_occurrence" || editingEventCanManageAssignments));
+  const oneTimeRecordEditor = canEditOneTimeRecord && editingEvent && oneTimeEditDraft ? <section className="one-time-record-editor">
+    <div className="quick-program-fields"><div className="field"><label>Slot name</label><input value={oneTimeEditDraft.name} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, name: event.target.value })} required /></div><div className="field"><label>Room / space</label><input value={oneTimeEditDraft.room} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, room: event.target.value })} required /></div></div>
+    <div className="quick-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel="One-time slot start time" value={oneTimeEditDraft.start} onChange={(start) => setOneTimeEditDraft({ ...oneTimeEditDraft, start })} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel="One-time slot end time" value={oneTimeEditDraft.end} onChange={(end) => setOneTimeEditDraft({ ...oneTimeEditDraft, end })} stepMinutes={15} required /></div><div className="field quick-one-time-color-field"><label>Calendar color</label><details className="quick-color-picker"><summary aria-label="Choose one-time slot color"><span style={{ background: oneTimeEditDraft.color }} aria-hidden="true" /></summary><div className="quick-color-popover"><DaypartColorPicker ariaLabel="One-time slot color presets" value={oneTimeEditDraft.color} onChange={(color) => setOneTimeEditDraft({ ...oneTimeEditDraft, color })} /></div></details></div></div>
+    {editingEvent.daypartType === "house_activity" ? <div className="quick-program-fields"><div className="field"><label>Program / activity details <span>optional</span></label><input value={oneTimeEditDraft.programDetails} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, programDetails: event.target.value })} /></div><div className="field"><label>Host / guest name <span>optional</span></label><input value={oneTimeEditDraft.manualHostName} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, manualHostName: event.target.value })} /></div></div> : null}
+    <div className="field quick-booking-notes"><label>Notes <span>optional</span></label><textarea value={oneTimeEditDraft.notes} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, notes: event.target.value })} /></div>
+    <div className="replacement-actions"><span className="privacy-note">{editingEvent.daypartType === "house_activity" ? "House Activity" : "Talent Activity"} · one-time ownership is locked.</span><button className="button" type="button" disabled={editPending || !oneTimeEditDraft.name.trim() || !oneTimeEditDraft.room.trim()} onClick={saveOneTimeRecord}>{editPending ? "Saving…" : "Save slot changes"}</button></div>
+  </section> : null;
 
   return (
     <>
@@ -679,7 +776,7 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
               </div> : <form action={formAction} className="quick-book-form">
                 <input name="payload" type="hidden" value={payload} />
                 {addMode === "daypart" && !directDaypartSelection ? <>
-                  <div className="quick-slot-picker" role="group" aria-label="Choose Daypart">{suggestions.filter((suggestion) => !suggestion.oneTime).map((suggestion) => <button className={`quick-slot-option ${activeSuggestion?.daypartId === suggestion.daypartId ? "active" : ""}`} style={{ "--daypart-color": suggestion.color } as CSSProperties} type="button" onClick={() => chooseSuggestion(suggestion)} key={suggestion.daypartId}><span><strong>{suggestion.name}</strong><small>{suggestion.exceptionKind === "skip" ? `${suggestion.room} · skipped on this date` : suggestion.recurringToday ? `${suggestion.room} · ${formatLocalMinute(clockToMinute(suggestion.start))}–${formatLocalMinute(resolveEndMinute(clockToMinute(suggestion.start), suggestion.end))}${suggestion.exceptionKind === "override" ? " · custom hours" : ""}` : `${suggestion.room} · not normally scheduled this day`}</small></span>{suggestion.existing ? <Status value="scheduled" /> : null}</button>)}</div>
+                  <div className="quick-slot-picker" role="group" aria-label="Choose Daypart">{suggestions.filter((suggestion) => !suggestion.oneTime).map((suggestion) => { const source = dayparts.find((daypart) => daypart.id === suggestion.sourceDaypartId); return <button className={`quick-slot-option ${activeSuggestion?.daypartId === suggestion.daypartId ? "active" : ""}`} style={{ "--daypart-color": suggestion.color } as CSSProperties} type="button" onClick={() => chooseSuggestion(suggestion)} key={suggestion.daypartId}><span><strong>{suggestion.name}</strong><small>{suggestion.exceptionKind === "skip" ? `${suggestion.room} · skipped on this date` : source?.scheduleMode === "calendar_only" ? `${suggestion.room} · Calendar Only · suggested ${formatLocalMinute(clockToMinute(suggestion.start))}–${formatLocalMinute(resolveEndMinute(clockToMinute(suggestion.start), suggestion.end))}` : suggestion.recurringToday ? `${suggestion.room} · ${formatLocalMinute(clockToMinute(suggestion.start))}–${formatLocalMinute(resolveEndMinute(clockToMinute(suggestion.start), suggestion.end))}${suggestion.exceptionKind === "override" ? " · custom hours" : ""}` : `${suggestion.room} · not normally scheduled this day`}</small></span>{suggestion.existing ? <Status value="scheduled" /> : null}</button>; })}</div>
                   {!activeSuggestion ? <div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => { const next = suggestions.find((suggestion) => suggestion.oneTime); if (next) chooseSuggestion(next); }}>+ Create one-time slot</button><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button></div> : null}
                 </> : null}
 
@@ -687,13 +784,13 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
                   {activeSuggestion.oneTime ? <div className="field quick-one-time-type"><label>Type</label><div className="daypart-type-options"><button className={activeSuggestion.type === "dj_artist" ? "active" : ""} type="button" onClick={() => chooseOneTimeType("dj_artist")}><strong>Talent Activity</strong><small>Schedule talent with assignments and the appropriate financial tracking.</small></button><button className={activeSuggestion.type === "house_activity" ? "active" : ""} type="button" onClick={() => chooseOneTimeType("house_activity")}><strong>House Activity</strong><small>Schedule an activity or host without Assignment, Payout, or Invoice records.</small></button></div></div> : null}
                   {activeSuggestion.oneTime && !activeSuggestion.type ? <div className="card empty daypart-type-gate">Choose Talent Activity or House Activity to continue.</div> : null}
                   {activeSuggestion.oneTime && activeSuggestion.type ? <div className="quick-one-time-fields"><div className="field"><label>Slot name</label><input value={activeSuggestion.name} onChange={(event) => updateSuggestion({ name: event.target.value })} placeholder={activeSuggestion.type === "house_activity" ? "Movie Night" : "Guest DJ Set"} required /></div><div className="field"><label>Room / space</label><input value={activeSuggestion.room} onChange={(event) => updateSuggestion({ room: event.target.value })} placeholder="Pool" required /></div><div className="field quick-one-time-color-field"><label>Calendar color</label><details className="quick-color-picker" ref={oneTimeColorPickerRef}><summary aria-label="Choose one-time slot color" title="Choose calendar color"><span style={{ background: activeSuggestion.color }} aria-hidden="true" /></summary><div className="quick-color-popover"><DaypartColorPicker ariaLabel="One-time slot color presets" value={activeSuggestion.color} onChange={(color) => { updateSuggestion({ color }); oneTimeColorPickerRef.current?.removeAttribute("open"); }} /><small>Hue runs left to right; intensity runs dark to light.</small></div></details></div></div> : null}
-                  {!activeSuggestion.oneTime ? <section className="quick-selected-daypart quick-selected-daypart-editable" style={{ "--daypart-color": activeSuggestion.color } as CSSProperties}><div className="quick-selected-daypart-summary"><span>Selected Daypart</span><strong>{activeSuggestion.name}</strong><small>{activeSuggestion.room}</small></div><div className="quick-selected-window"><div className="quick-selected-window-heading"><span>Hours for this date</span>{activeSuggestion.exceptionKind === "override" ? <em>Custom</em> : null}</div>{activeStandingWindow ? <small>Recommended window: {activeStandingWindow}</small> : null}<div className="quick-inline-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel={`${activeSuggestion.name} date-specific start time`} value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel={`${activeSuggestion.name} date-specific end time`} value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div></div><div className="date-exception-actions"><small>Any change applies only to {modal.date}.</small><button className="button secondary" type="button" disabled={editPending} onClick={saveDateOverride}>{editPending ? "Saving…" : "Save custom hours"}</button>{activeSuggestion.exceptionKind === "override" ? <button className="button secondary" type="button" disabled={editPending} onClick={restoreStandingDate}>Use standing hours</button> : null}<button className="remove-dj-button" type="button" disabled={editPending} onClick={skipSelectedDate}>Skip this date</button></div></section> : activeSuggestion.type ? <div className="quick-time-fields"><div className="field"><label>Slot starts</label><TimeSelect ariaLabel="One-time slot start time" value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Slot ends</label><TimeSelect ariaLabel="One-time slot end time" value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div> : null}
+                  {!activeSuggestion.oneTime ? <section className="quick-selected-daypart quick-selected-daypart-editable" style={{ "--daypart-color": activeSuggestion.color } as CSSProperties}><div className="quick-selected-daypart-summary"><span>Selected Daypart</span><strong>{activeSuggestion.name}</strong><small>{activeSuggestion.room}</small></div><div className="quick-selected-window"><div className="quick-selected-window-heading"><span>Hours for this date</span>{activeSuggestion.exceptionKind === "override" ? <em>Custom</em> : null}</div>{activeStandingWindow ? <small>{activeCalendarOnly ? "Suggested" : "Recommended"} window: {activeStandingWindow}</small> : null}<div className="quick-inline-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel={`${activeSuggestion.name} date-specific start time`} value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel={`${activeSuggestion.name} date-specific end time`} value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div></div>{activeCalendarOnly ? <div className="date-exception-actions"><small>This Calendar Only Daypart will be added only to {modal.date}.</small></div> : <div className="date-exception-actions"><small>Any change applies only to {modal.date}.</small><button className="button secondary" type="button" disabled={editPending} onClick={saveDateOverride}>{editPending ? "Saving…" : "Save custom hours"}</button>{activeSuggestion.exceptionKind === "override" ? <button className="button secondary" type="button" disabled={editPending} onClick={restoreStandingDate}>Use standing hours</button> : null}<button className="remove-dj-button" type="button" disabled={editPending} onClick={skipSelectedDate}>Skip this date</button></div>}</section> : activeSuggestion.type ? <div className="quick-time-fields"><div className="field"><label>Slot starts</label><TimeSelect ariaLabel="One-time slot start time" value={activeSuggestion.start} onChange={(value) => updateShiftTime("start", value)} stepMinutes={15} required /></div><div className="field"><label>Slot ends</label><TimeSelect ariaLabel="One-time slot end time" value={activeSuggestion.end} onChange={(value) => updateShiftTime("end", value)} stepMinutes={15} required /></div></div> : null}
 
                   {activeSuggestion.type === "house_activity" ? <div className="quick-program-fields"><div className="field"><label>Program / activity details <span>optional</span></label><input value={activeSuggestion.programDetails} onChange={(event) => updateSuggestion({ programDetails: event.target.value })} placeholder="Movie title, theme, or event detail" /></div><div className="field"><label>Host / guest name <span>optional</span></label><input value={activeSuggestion.manualHostName} onChange={(event) => updateSuggestion({ manualHostName: event.target.value })} placeholder="Employee or outside host" /><small>Typed names remain informational and never become Artist, Assignment, Payout, or Invoice records.</small></div></div> : null}
 
                   {activeSuggestion.type === "dj_artist" ? clientStandingHfy ? <div className="standing-hfy-calendar-notice" style={{ "--hfy-booked-color": HFY_BOOKED_COLOR } as CSSProperties}><span>Standing HFY Booking</span><strong>HFY handles this occurrence automatically.</strong><small>No per-date request or client artist assignment is needed. HFY manages the talent and billing for this standing Daypart.</small></div> : <><div className="quick-assignment-heading"><div><strong>{activeSuggestion.requestHfy ? "HFY requested" : activeSuggestion.slots.length ? "Your artists" : "Choose who handles this date"}</strong><small>{previewMode ? "Add one of your own artists, or ask HFY to staff this entire date." : "Only HFY-owned artists approved for this Residency appear here."}</small></div></div>
                   {activeSuggestion.requestHfy ? <div className="request-hfy-selection"><div><span>HFY system option</span><strong>Request HFY</strong><small>Creates a pending request without assigning an artist. HFY controls both rates after fulfillment.</small></div><button type="button" onClick={() => updateSuggestion({ requestHfy: false })}>Choose your own artist instead</button></div> : null}
-                  {!activeSuggestion.slots.length && !activeSuggestion.requestHfy ? <div className={`client-assignment-choices ${previewMode ? "equal-options" : ""}`}><ArtistSearchPicker artists={artistOptions} excludedIds={[]} label="Add your artist" initiallyOpen={false} collapsedEyebrow={previewMode ? "Client managed" : undefined} collapsedDescription={previewMode ? "Choose one of your Residency’s artists and manage the rate yourself." : undefined} onSelect={addArtist} />{previewMode ? <button className="request-hfy-option" type="button" onClick={requestHfyForSuggestion}><span>HFY system option</span><strong>Request HFY</strong><small>Send this entire date to HFY without choosing an artist or seeing HFY rates.</small></button> : null}</div> : null}
+                  {!activeSuggestion.slots.length && !activeSuggestion.requestHfy ? <div className={`client-assignment-choices ${previewMode && !clientArtistFlow ? "equal-options" : ""}`}><ArtistSearchPicker key={`${activeSuggestion.daypartId}-${artistPickerKey}`} artists={artistOptions} excludedIds={[]} label="Add your artist" initiallyOpen={false} collapsedEyebrow={previewMode ? "Client managed" : undefined} collapsedDescription={previewMode ? "Choose one of your Residency’s artists and manage the rate yourself." : undefined} onOpenChange={(open) => { if (previewMode) setClientArtistFlow(open); }} onSelect={addArtist} />{previewMode && !clientArtistFlow ? <button className="request-hfy-option" type="button" onClick={requestHfyForSuggestion}><span>HFY system option</span><strong>Request HFY</strong><small>Send this entire date to HFY without choosing an artist or seeing HFY rates.</small></button> : null}{previewMode && clientArtistFlow ? <button className="button secondary" type="button" onClick={() => { setClientArtistFlow(false); setArtistPickerKey((value) => value + 1); }}>Back to handling options</button> : null}</div> : null}
                   <div className="quick-assignment-list">{activeSuggestion.slots.map((slot, slotIndex) => {
                     const artist = talent.find((item) => item.id === slot.talentId);
                     return <div className={`quick-assignment-card ${slot.confirmed ? "confirmed" : "draft"}`} key={slot.id}>
@@ -716,12 +813,13 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
               </form>
             ) : editingEvent ? editingEvent.recordType === "nonfinancial_occurrence" ? <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
-              <div className="quick-house-activity"><strong>Tracking-only Daypart scheduled</strong><p>No payout or invoice records were created.</p>{editingEvent.programDetails ? <p><strong>Program:</strong> {editingEvent.programDetails}</p> : null}{editingEvent.manualHostName ? <p><strong>Host:</strong> {editingEvent.manualHostName}</p> : null}</div>
+              {editingEvent.daypartId ? <div className="quick-house-activity"><strong>Tracking-only Daypart scheduled</strong><p>No payout or invoice records were created.</p>{editingEvent.programDetails ? <p><strong>Program:</strong> {editingEvent.programDetails}</p> : null}{editingEvent.manualHostName ? <p><strong>Host:</strong> {editingEvent.manualHostName}</p> : null}</div> : oneTimeRecordEditor}
               {editingEvent.assignments.length ? <div className="quick-reschedule-list">{editingEvent.assignments.map((assignment, index) => <div className="quick-reschedule-row" key={assignment.id}><div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div></div>)}</div> : null}
               {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
-              <footer className="quick-modal-footer">{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>Skip this date</button> : null}<span>{editingEvent.daypartId ? "The standing Daypart remains active." : "One-time activity"}</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
+              <footer className="quick-modal-footer">{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>Skip this date</button> : <button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingOccurrence}>Delete activity</button>}<span>{editingEvent.daypartId ? "The standing Daypart remains active." : "One-time activity"}</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
             </> : <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
+              {!editingEvent.daypartId && editingEvent.economicsMode !== "hfy_request" ? oneTimeRecordEditor : null}
               {editingEvent.programDetails || editingEvent.manualHostName ? <div className="quick-program-fields">{editingEvent.programDetails ? <div><span>Program / activity</span><strong>{editingEvent.programDetails}</strong></div> : null}{editingEvent.manualHostName ? <div><span>Host / guest</span><strong>{editingEvent.manualHostName}</strong></div> : null}</div> : null}
               {pendingHfyRequest && editingEvent.hfyRequestId ? <section className="replacement-editor new-assignment-editor hfy-request-calendar-editor"><div className="replacement-step"><span>1</span><div><strong>Schedule the requested shift</strong><small>Choose one artist or split the full service window. Residency rates apply automatically.</small></div></div><HfyRequestFulfillment requestId={editingEvent.hfyRequestId} shiftName={editingEvent.title} shiftStartMinute={editingEvent.shiftStartMinute} shiftEndMinute={editingEvent.shiftEndMinute} artists={requestTalent.map((artist) => ({ id: artist.id, stageName: artist.stageName, homeMarket: artist.homeMarket }))} ratesConfigured={residencyTalentRateConfigured && residency.clientHourlyRateCents > 0} onSuccess={() => { setModal(null); router.refresh(); }} /></section> : editingEventCanManageAssignments ? <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours{previewMode ? "." : " because those hours determine pay."}</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft) || (!previewMode && !residencyTalentRateConfigured)} onClick={startAddingAssignment}>+ Add another DJ</button></div> : <div className="request-hfy-selection"><div><span>{editingEvent.economicsMode === "hfy_request" ? "Pending request" : editingEvent.economicsMode === "client_owned" ? "Client-managed slot" : "HFY-managed slot"}</span><strong>{editingEvent.economicsMode === "hfy_request" ? "Request HFY is awaiting fulfillment" : "This slot is read-only here"}</strong><small>{editingEvent.economicsMode === "client_owned" ? "The client controls its artist assignments and private rates." : previewMode ? "HFY controls staffing and both HFY rates. Your Invoice will show the resulting billed total." : "This slot is not editable here."}</small></div></div>}
               {editingEventCanManageAssignments && !previewMode && !residencyTalentRateConfigured ? <p className="error" aria-live="polite">{MISSING_RESIDENCY_TALENT_RATE_MESSAGE}</p> : null}

@@ -60,6 +60,7 @@ export type DaypartRuleInput = {
 
 export type DaypartType = "dj_artist" | "house_activity";
 export type DaypartBillingMode = "billed_by_hfy" | "tracking_only";
+export type DaypartScheduleMode = "standing_weekly" | "calendar_only";
 export type DaypartBookingRecordKind = "financial_shift" | "tracking_occurrence";
 
 export function calendarColorForShift(daypartColor: string | null, shiftCalendarColor: string | null): string | undefined {
@@ -94,6 +95,7 @@ export type ProjectableDaypart = {
   color: string;
   type: DaypartType;
   billingMode: DaypartBillingMode | null;
+  scheduleMode?: DaypartScheduleMode;
   active: boolean;
   activeUntil: string | null;
   defaultTalentRateCents: number | null;

@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
+import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, scheduleOccurrences, shifts, talent, talentPaymentProfiles, users } from "@/db/schema";
 import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
@@ -14,7 +14,7 @@ import { requireActorForResidency, requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
 import { clearDaypartDateException, removeDaypart, saveDaypart, saveDaypartDateOverride, skipDaypartDate } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
-import { addAssignmentToShift, createResidencyDateBooking } from "@/services/residency-bookings";
+import { addAssignmentToShift, createResidencyDateBooking, deleteOneTimeOccurrence, updateOneTimeOccurrence, updateOneTimeShift } from "@/services/residency-bookings";
 import { createShift, deleteShift } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -53,6 +53,15 @@ async function requireManagerForShift(shiftId: string) {
     .where(eq(shifts.id, shiftId))
     .limit(1);
   if (!row) throw new Error("Shift not found.");
+  return requireActorForResidency(row.residencyId, { manager: true });
+}
+
+async function requireManagerForOccurrence(occurrenceId: string) {
+  const [row] = await getDb().select({ residencyId: scheduleOccurrences.residencyId })
+    .from(scheduleOccurrences)
+    .where(eq(scheduleOccurrences.id, occurrenceId))
+    .limit(1);
+  if (!row) throw new Error("Calendar activity not found.");
   return requireActorForResidency(row.residencyId, { manager: true });
 }
 
@@ -1170,6 +1179,9 @@ const daypartPayloadSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   type: z.enum(["dj_artist", "house_activity"]),
   billingMode: z.enum(["billed_by_hfy", "tracking_only"]).nullable(),
+  scheduleMode: z.enum(["standing_weekly", "calendar_only"]),
+  suggestedStartMinute: z.number().int().min(0).max(1439).nullable().optional(),
+  suggestedEndMinute: z.number().int().min(1).max(2879).nullable().optional(),
   defaultTalentRateCents: z.number().int().min(0).nullable().optional(),
   activeUntil: z.iso.date().nullable().optional(),
   active: z.boolean(),
@@ -1179,7 +1191,7 @@ const daypartPayloadSchema = z.object({
     startMinute: z.number().int().min(0).max(1439),
     endMinute: z.number().int().min(1).max(2879),
     defaultDjCount: z.number().int().min(1).max(20).nullable(),
-  })).min(1),
+  })),
 }).superRefine((daypart, context) => {
   if (daypart.type === "house_activity" && daypart.billingMode !== null) {
     context.addIssue({ code: "custom", message: "House Activities do not have a billing mode." });
@@ -1189,6 +1201,12 @@ const daypartPayloadSchema = z.object({
   }
   if (daypart.billingMode === "tracking_only" && daypart.defaultTalentRateCents != null) {
     context.addIssue({ code: "custom", message: "Client Managed Dayparts cannot include an HFY talent rate." });
+  }
+  if (daypart.scheduleMode === "standing_weekly" && !daypart.rules.length) {
+    context.addIssue({ code: "custom", message: "Select at least one operating day." });
+  }
+  if (daypart.scheduleMode === "calendar_only" && (daypart.rules.length || daypart.suggestedStartMinute == null || daypart.suggestedEndMinute == null || daypart.suggestedEndMinute <= daypart.suggestedStartMinute)) {
+    context.addIssue({ code: "custom", message: "Calendar Only Dayparts need valid suggested hours and no weekly rules." });
   }
 });
 
@@ -1458,7 +1476,7 @@ export async function cancelHfyTalentRequestAction(formData: FormData): Promise<
     const parsed = z.object({
       residencyId: z.uuid(),
       shiftId: z.uuid(),
-      daypartId: z.uuid(),
+      daypartId: z.preprocess((value) => value === "" ? null : value, z.uuid().nullable()),
       serviceDate: z.iso.date(),
     }).parse(Object.fromEntries(formData));
     const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
@@ -1602,6 +1620,63 @@ export async function deleteCalendarShiftAction(formData: FormData): Promise<Res
     return { status: "success", message: "Shift deleted." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to delete this Shift." };
+  }
+}
+
+const oneTimeRecordSchema = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(160),
+  room: z.string().trim().min(1).max(160),
+  calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  startMinute: z.coerce.number().int().min(0).max(1439),
+  endMinute: z.coerce.number().int().min(1).max(2879),
+  notes: z.string().trim().max(2_000),
+  programDetails: z.string().trim().max(500),
+  manualHostName: z.string().trim().max(160),
+});
+
+function revalidateOneTimeRecordViews() {
+  revalidatePath("/app/calendar");
+  revalidatePath("/app/payouts");
+  revalidatePath("/app/invoices");
+  revalidatePath("/residency/calendar");
+  revalidatePath("/residency/payouts");
+  revalidatePath("/residency/invoices");
+}
+
+export async function updateOneTimeShiftAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = oneTimeRecordSchema.parse(Object.fromEntries(formData));
+    const actor = await requireManagerForShift(parsed.id);
+    await updateOneTimeShift(actor, parsed);
+    revalidateOneTimeRecordViews();
+    return { status: "success", message: "One-time slot updated." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this one-time slot." };
+  }
+}
+
+export async function updateOneTimeOccurrenceAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = oneTimeRecordSchema.parse(Object.fromEntries(formData));
+    const actor = await requireManagerForOccurrence(parsed.id);
+    await updateOneTimeOccurrence(actor, parsed);
+    revalidateOneTimeRecordViews();
+    return { status: "success", message: "One-time activity updated." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this one-time activity." };
+  }
+}
+
+export async function deleteOneTimeOccurrenceAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const occurrenceId = z.uuid().parse(formData.get("occurrenceId"));
+    const actor = await requireManagerForOccurrence(occurrenceId);
+    await deleteOneTimeOccurrence(actor, occurrenceId);
+    revalidateOneTimeRecordViews();
+    return { status: "success", message: "One-time activity deleted." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to delete this one-time activity." };
   }
 }
 

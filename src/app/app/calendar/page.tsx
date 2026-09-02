@@ -145,6 +145,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     recordType: "financial_shift" as const,
     daypartType: "dj_artist" as const,
     billingMode: matchedDaypart?.billingMode ?? "billed_by_hfy" as const,
+    room: shift.room,
+    notes: shift.notes,
+    editableColor: shift.shiftCalendarColor ?? matchedDaypart?.color ?? shift.daypartColor ?? undefined,
     programDetails: shift.programDetails,
     manualHostName: shift.manualHostName,
     economicsMode: shift.economicsMode,
@@ -193,7 +196,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         residency={{ id: selectedResidency.id, name: selectedResidency.name, timezone: selectedResidency.timezone, defaultTalentRateCents: selectedResidency.defaultTalentRateCents, clientHourlyRateCents: selectedResidency.clientHourlyRateCents, calendarLinkSettings }}
         monthKey={monthKey}
         events={events}
-        dayparts={hfyDayparts.map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })) }))}
+        dayparts={hfyDayparts.map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode, scheduleMode: daypart.scheduleMode, suggestedStartMinute: daypart.suggestedStartMinute, suggestedEndMinute: daypart.suggestedEndMinute, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })) }))}
         talent={talent}
         requestTalent={requestTalent}
         dateExceptions={dateExceptions}

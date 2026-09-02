@@ -1,6 +1,6 @@
-import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAssignmentTerms, dayparts, hfyTalentRequests, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, clientAssignmentTerms, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
 import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
@@ -45,6 +45,31 @@ export type AddShiftAssignmentInput = BookingAssignmentInput & {
   startsAtMinute: number;
   endsAtMinute: number;
 };
+
+export type UpdateOneTimeRecordInput = {
+  id: string;
+  name: string;
+  room: string;
+  calendarColor: string;
+  startMinute: number;
+  endMinute: number;
+  notes?: string;
+  programDetails?: string;
+  manualHostName?: string;
+};
+
+function validateOneTimeRecordInput(input: UpdateOneTimeRecordInput) {
+  const name = input.name.trim();
+  const room = input.room.trim();
+  const calendarColor = input.calendarColor.trim().toUpperCase();
+  if (!name || !room) throw new Error("Slot name and room are required.");
+  if (!/^#[0-9A-F]{6}$/.test(calendarColor) || calendarColor === HFY_BOOKED_COLOR) throw new Error("Choose a valid non-HFY calendar color.");
+  if (!Number.isInteger(input.startMinute) || input.startMinute < 0 || input.startMinute >= 1440
+    || !Number.isInteger(input.endMinute) || input.endMinute <= input.startMinute || input.endMinute > input.startMinute + 1440) {
+    throw new Error("Choose valid slot hours.");
+  }
+  return { name, room, calendarColor };
+}
 
 export async function createResidencyDateBooking(actor: AuditActor, input: CreateResidencyDateBookingInput) {
   if (!input.dayparts.length) throw new Error("Choose at least one Daypart to book.");
@@ -352,6 +377,137 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       });
     }
     return { shiftIds: createdShiftIds, occurrenceIds: createdOccurrenceIds };
+  });
+}
+
+export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTimeRecordInput) {
+  const clean = validateOneTimeRecordInput(input);
+  return getDb().transaction(async (tx) => {
+    const [shift] = await tx.select({
+      id: shifts.id,
+      residencyId: shifts.residencyId,
+      daypartId: shifts.daypartId,
+      serviceDate: shifts.serviceDate,
+      economicsMode: shifts.economicsMode,
+      invoiceId: shifts.invoiceId,
+      invoiceStatus: invoices.status,
+      timezone: residencies.timezone,
+    }).from(shifts)
+      .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
+      .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
+      .where(and(eq(shifts.id, input.id), eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
+      .limit(1);
+    if (!shift || shift.daypartId !== null) throw new Error("Only one-time slots can be edited here.");
+    if (shift.economicsMode === "hfy_request") throw new Error("Cancel the pending HFY request before changing this one-time slot.");
+    if (actor.kind === "residency" && shift.economicsMode !== "client_owned") throw new Error("HFY-managed slots cannot be edited by the client.");
+    if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned slots are managed only by the client.");
+    if (shift.invoiceStatus && shift.invoiceStatus !== "draft") throw new Error("This one-time slot is locked because its Invoice is finalized.");
+
+    const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.startMinute), shift.timezone);
+    const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.endMinute), shift.timezone);
+    const outsideAssignments = await tx.select({ id: assignments.id }).from(assignments).where(and(
+      eq(assignments.shiftId, shift.id),
+      ne(assignments.bookingStatus, "cancelled"),
+      or(lt(assignments.startsAt, startsAt), gt(assignments.endsAt, endsAt)),
+    )).limit(1);
+    if (outsideAssignments.length) throw new Error("Adjust or remove artist hours that fall outside the new slot window first.");
+
+    await tx.update(shifts).set({
+      name: clean.name,
+      room: clean.room,
+      calendarColor: clean.calendarColor,
+      startsAt,
+      endsAt,
+      notes: input.notes?.trim() ?? "",
+      programDetails: input.programDetails?.trim() ?? "",
+      manualHostName: input.manualHostName?.trim() ?? "",
+      updatedAt: new Date(),
+    }).where(eq(shifts.id, shift.id));
+    if (shift.invoiceId) {
+      await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
+      const [remaining] = await tx.select({ total: sql<number>`coalesce(sum(${invoiceLineItems.totalCents}), 0)` }).from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, shift.invoiceId));
+      await tx.update(invoices).set({ totalCents: Number(remaining?.total ?? 0), updatedAt: new Date() }).where(eq(invoices.id, shift.invoiceId));
+    }
+    await tx.insert(auditLog).values({
+      residencyId: shift.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "one_time_shift_updated",
+      entityType: "shift",
+      entityId: shift.id,
+      details: { serviceDate: shift.serviceDate, name: clean.name, room: clean.room, calendarColor: clean.calendarColor, startMinute: input.startMinute, endMinute: input.endMinute },
+    });
+    return { id: shift.id };
+  });
+}
+
+export async function updateOneTimeOccurrence(actor: AuditActor, input: UpdateOneTimeRecordInput) {
+  const clean = validateOneTimeRecordInput(input);
+  return getDb().transaction(async (tx) => {
+    const [occurrence] = await tx.select({
+      id: scheduleOccurrences.id,
+      residencyId: scheduleOccurrences.residencyId,
+      daypartId: scheduleOccurrences.daypartId,
+      serviceDate: scheduleOccurrences.serviceDate,
+      timezone: residencies.timezone,
+    }).from(scheduleOccurrences)
+      .innerJoin(residencies, eq(scheduleOccurrences.residencyId, residencies.id))
+      .where(and(eq(scheduleOccurrences.id, input.id), eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
+      .limit(1)
+      .for("update");
+    if (!occurrence || occurrence.daypartId !== null) throw new Error("Only one-time activities can be edited here.");
+    const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.startMinute), occurrence.timezone);
+    const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.endMinute), occurrence.timezone);
+    const outsideTalent = await tx.select({ id: scheduleOccurrenceTalent.id }).from(scheduleOccurrenceTalent).where(and(
+      eq(scheduleOccurrenceTalent.occurrenceId, occurrence.id),
+      or(lt(scheduleOccurrenceTalent.startsAt, startsAt), gt(scheduleOccurrenceTalent.endsAt, endsAt)),
+    )).limit(1);
+    if (outsideTalent.length) throw new Error("Artist hours must stay inside the new activity window.");
+    await tx.update(scheduleOccurrences).set({
+      name: clean.name,
+      room: clean.room,
+      color: clean.calendarColor,
+      startsAt,
+      endsAt,
+      notes: input.notes?.trim() ?? "",
+      programDetails: input.programDetails?.trim() ?? "",
+      manualHostName: input.manualHostName?.trim() ?? "",
+      updatedAt: new Date(),
+    }).where(eq(scheduleOccurrences.id, occurrence.id));
+    await tx.insert(auditLog).values({
+      residencyId: occurrence.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "one_time_occurrence_updated",
+      entityType: "schedule_occurrence",
+      entityId: occurrence.id,
+      details: { serviceDate: occurrence.serviceDate, name: clean.name, room: clean.room, calendarColor: clean.calendarColor, startMinute: input.startMinute, endMinute: input.endMinute },
+    });
+    return { id: occurrence.id };
+  });
+}
+
+export async function deleteOneTimeOccurrence(actor: AuditActor, occurrenceId: string) {
+  return getDb().transaction(async (tx) => {
+    const [occurrence] = await tx.select({
+      id: scheduleOccurrences.id,
+      residencyId: scheduleOccurrences.residencyId,
+      daypartId: scheduleOccurrences.daypartId,
+      serviceDate: scheduleOccurrences.serviceDate,
+      name: scheduleOccurrences.name,
+    }).from(scheduleOccurrences).where(eq(scheduleOccurrences.id, occurrenceId)).limit(1).for("update");
+    if (!occurrence || occurrence.daypartId !== null) throw new Error("Only one-time activities can be deleted here.");
+    await tx.delete(scheduleOccurrences).where(eq(scheduleOccurrences.id, occurrence.id));
+    await tx.insert(auditLog).values({
+      residencyId: occurrence.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "one_time_occurrence_deleted",
+      entityType: "schedule_occurrence",
+      entityId: occurrence.id,
+      details: { serviceDate: occurrence.serviceDate, name: occurrence.name },
+    });
+    return occurrence;
   });
 }
 
