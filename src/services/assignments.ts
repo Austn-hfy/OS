@@ -26,8 +26,10 @@ function assertEconomicOwner(actor: AuditActor, source: string) {
 }
 
 function normalizedManagedSource(actor: AuditActor, source: string, economicsMode: string) {
-  if (actor.kind !== "internal" || source !== "hotel") return source;
-  return economicsMode === "hfy_request" ? "hfy_request" : "internal";
+  if (actor.kind !== "internal") return source;
+  if (economicsMode === "hfy_request") return "hfy_request";
+  if (economicsMode === "hfy") return "internal";
+  return source;
 }
 
 export async function transitionAssignment(
