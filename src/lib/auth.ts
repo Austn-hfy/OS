@@ -73,6 +73,15 @@ function clientManagedDaypartRateAttention() {
   )`;
 }
 
+function clientManagedDaypartRateAttentionCondition() {
+  return and(
+    eq(dayparts.active, true),
+    eq(dayparts.type, "dj_artist"),
+    eq(dayparts.billingMode, "tracking_only"),
+    sql`coalesce(${dayparts.clientDefaultRateCents}, 0) <= 0`,
+  );
+}
+
 const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => {
   const current = await currentProfile();
   if (!current) return null;
@@ -84,11 +93,15 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
       residencyName: residencies.name,
       residencyTimezone: residencies.timezone,
       clientPaymentStatusVisible: residencies.clientPaymentStatusVisible,
-      needsDaypartRateAttention: clientManagedDaypartRateAttention(),
-    }).from(residencies).where(and(
-      eq(residencies.id, selectedResidencyId),
-      eq(residencies.operatingMode, "operations"),
-    )).limit(1);
+      needsDaypartRateAttention: sql<boolean>`count(${dayparts.id}) > 0`,
+    }).from(residencies)
+      .leftJoin(dayparts, and(eq(dayparts.residencyId, residencies.id), clientManagedDaypartRateAttentionCondition()))
+      .where(and(
+        eq(residencies.id, selectedResidencyId),
+        eq(residencies.operatingMode, "operations"),
+      ))
+      .groupBy(residencies.id)
+      .limit(1);
     if (!residency) return null;
     return {
       kind: "residency",

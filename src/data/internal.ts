@@ -36,15 +36,13 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function hfyManagedDaypartRateAttention() {
-  return sql<boolean>`exists (
-    select 1 from ${dayparts}
-    where ${dayparts.residencyId} = ${residencies.id}
-      and ${dayparts.active} = true
-      and ${dayparts.type} = 'dj_artist'
-      and ${dayparts.billingMode} = 'billed_by_hfy'
-      and coalesce(${dayparts.defaultTalentRateCents}, 0) <= 0
-  )`;
+function hfyManagedDaypartRateAttentionCondition() {
+  return and(
+    eq(dayparts.active, true),
+    eq(dayparts.type, "dj_artist"),
+    eq(dayparts.billingMode, "billed_by_hfy"),
+    sql`coalesce(${dayparts.defaultTalentRateCents}, 0) <= 0`,
+  );
 }
 
 export const getResidencyList = cache(async function getResidencyList() {
@@ -57,8 +55,12 @@ export const getResidencyList = cache(async function getResidencyList() {
     timezone: residencies.timezone,
     defaultTalentRateCents: residencies.defaultTalentRateCents,
     clientHourlyRateCents: residencies.clientHourlyRateCents,
-    needsDaypartRateAttention: hfyManagedDaypartRateAttention(),
-  }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name));
+    needsDaypartRateAttention: sql<boolean>`count(${dayparts.id}) > 0`,
+  }).from(residencies)
+    .leftJoin(dayparts, and(eq(dayparts.residencyId, residencies.id), hfyManagedDaypartRateAttentionCondition()))
+    .where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
+    .groupBy(residencies.id)
+    .orderBy(asc(residencies.name));
 });
 
 export const getDeveloperResidencyList = cache(async function getDeveloperResidencyList() {
