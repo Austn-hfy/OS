@@ -52,4 +52,29 @@ describe("site-wide workspace surface consistency", () => {
     expect(styles).toContain(".workspace-surface-invoices > .table-wrap");
     expect(styles).toContain(".workspace-surface-dashboard > .owner-mode-summary");
   });
+
+  it("uses the icon-led navigation in owner modes and removes duplicate or non-actionable headings", async () => {
+    const [ownerShell, workspaceNav, dashboard, dayparts, artistLookup, clientArtistLookup, styles] = await Promise.all([
+      readSource("../src/components/internal-shell.tsx"),
+      readSource("../src/components/workspace-nav.tsx"),
+      readSource("../src/app/app/page.tsx"),
+      readSource("../src/app/app/dayparts/page.tsx"),
+      readSource("../src/app/app/talent/artist-lookup.tsx"),
+      readSource("../src/app/residency/talent/client-artist-lookup.tsx"),
+      readSource("../src/app/hfy-style-pilot.css"),
+    ]);
+
+    expect(ownerShell).toContain("WorkspaceNavLink");
+    expect(ownerShell).toContain('className="sidebar owner-sidebar"');
+    expect(ownerShell).toContain("WorkspaceNavIcon");
+    expect(workspaceNav).toContain("residency-nav-icon");
+    expect(dashboard).not.toContain("Live Dayparts");
+    expect(dashboard).not.toContain('<h1>Operations</h1>');
+    expect(dashboard).toContain("<h2>Active Residencies</h2>");
+    expect(dayparts).not.toContain('<header className="page-header');
+    expect(artistLookup).not.toContain("Find an artist");
+    expect(clientArtistLookup).not.toContain("Find an artist");
+    expect(styles).toContain(".workspace-surface-talent .artist-roster-toolbar-heading");
+    expect(styles).toContain(".owner-sidebar .owner-workspace-nav .residency-nav-item");
+  });
 });

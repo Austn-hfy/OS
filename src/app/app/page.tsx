@@ -48,8 +48,6 @@ async function DeveloperDashboard() {
 async function HfyWorkQueue() {
   const [queue, hfyRequests] = await Promise.all([getBilledByHfyWorkQueue(), getPendingHfyTalentRequests()]);
   const today = new Date().toISOString().slice(0, 10);
-  const liveQueue = queue.filter((daypart) => daypart.active && (!daypart.activeUntil || daypart.activeUntil >= today));
-  const residencyCount = new Set(queue.map((daypart) => daypart.residencyId)).size;
   const grouped = new Map<string, typeof queue>();
   for (const daypart of queue) {
     const existing = grouped.get(daypart.residencyId) ?? [];
@@ -59,12 +57,6 @@ async function HfyWorkQueue() {
 
   return <WorkspaceSurface className="workspace-surface-dashboard workspace-surface-work-queue">
     <header className="page-header owner-mode-header hfy-mode-header"><div><p className="eyebrow">HFY · Programming</p><h1>Work Queue</h1><p className="subhead">Schedule pending client requests quickly, then scan every Standing HFY Booking across all Residencies.</p></div><Link className="button secondary" href="/app?mode=hfy&view=operations">Open Operations</Link></header>
-    <section className="owner-mode-summary hfy-summary" aria-label="HFY Programming summary">
-      <article><strong>{liveQueue.length}</strong><span>Live Dayparts</span></article>
-      <article><strong>{queue.length}</strong><span>Standing HFY Bookings</span></article>
-      <article><strong>{residencyCount}</strong><span>Residencies represented</span></article>
-      <article><strong>{queue.length - liveQueue.length}</strong><span>Inactive or ended</span></article>
-    </section>
     <HfyRequestQueue requests={hfyRequests.requests} artists={hfyRequests.artists} />
     <section className="hfy-work-queue-section">
       <div className="section-heading"><div><p className="eyebrow">Revenue source of truth</p><h2>Standing HFY Bookings</h2><p className="subhead">Residency Platform status never removes a matching Daypart from this view. Inactive records stay visible and clearly labeled.</p></div></div>
@@ -129,13 +121,6 @@ async function OperationsDashboard({ residencyId }: { residencyId?: string }) {
 
   return (
     <WorkspaceSurface className="workspace-surface-dashboard workspace-surface-operations">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">HFY · Operations</p>
-          <h1>Operations</h1>
-          <p className="subhead">See every residency at once, then open one to work inside that program.</p>
-        </div>
-      </header>
       <section className="active-residencies-section">
         <div className="section-heading active-residencies-heading"><div><p className="eyebrow">Operations</p><h2>Active Residencies</h2><p className="subhead">Open a program or create the next Residency from this company workspace.</p></div><CreateResidencyModal /></div>
       {data.length ? (

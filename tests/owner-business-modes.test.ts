@@ -7,11 +7,12 @@ describe("Owner Developer and HFY business modes", () => {
     expect(shell).toContain('href="/app?mode=developer"><span>Developer</span><small>Platform</small>');
     expect(shell).toContain('href="/app?mode=hfy"><span>HFY</span><small>Programming</small>');
     expect(shell).toContain('mode === "developer" ? [');
-    expect(shell).toContain('["Residencies", "/app?mode=developer"]');
-    expect(shell).toContain('["Admin Settings", "/app/setup?mode=developer"]');
-    expect(shell).toContain('["Work Queue", "/app?mode=hfy"]');
-    expect(shell).toContain('["Operations", "/app?mode=hfy&view=operations"]');
-    expect(shell).toContain('["Pipeline", "/app/leads?mode=hfy"]');
+    expect(shell).toContain('{ label: "Residencies", href: "/app?mode=developer"');
+    expect(shell).toContain('{ label: "Admin Settings", href: "/app/setup?mode=developer"');
+    expect(shell).toContain('{ label: "Work Queue", href: "/app?mode=hfy"');
+    expect(shell).toContain('{ label: "Operations", href: "/app?mode=hfy&view=operations"');
+    expect(shell).toContain('{ label: "Pipeline", href: "/app/leads?mode=hfy"');
+    expect(shell).toContain("<WorkspaceNavLink");
   });
 
   it("loads every Residency for Developer without widening normal HFY operational lists", async () => {

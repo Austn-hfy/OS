@@ -2457,6 +2457,27 @@
   align-items: stretch;
 }
 
+.hfy-style-system .workspace-surface-talent {
+  position: relative;
+}
+
+.hfy-style-system .workspace-surface-talent > .page-header {
+  padding-right: 164px !important;
+}
+
+.hfy-style-system .workspace-surface-talent .artist-roster-toolbar-heading {
+  position: absolute;
+  z-index: 2;
+  top: 24px;
+  right: 20px;
+}
+
+.hfy-style-system .workspace-surface-talent .artist-roster-toolbar-heading .button {
+  min-height: 42px;
+  padding: 9px 14px;
+  font-size: 10px;
+}
+
 .hfy-style-system .workspace-surface-talent :is(.artist-roster-panel, .artist-detail-panel) {
   border: 0;
   border-radius: 0;
@@ -2616,6 +2637,15 @@
   .hfy-style-system .workspace-surface-residency-overview > :is(.residency-overview-grid, .workspace-shortcuts) {
     padding: 16px;
   }
+
+  .hfy-style-system .workspace-surface-talent > .page-header {
+    padding-right: 18px !important;
+  }
+
+  .hfy-style-system .workspace-surface-talent .artist-roster-toolbar-heading {
+    position: static;
+    justify-content: flex-end;
+  }
 }
 .hfy-style-system .hfy-request-assignment-heading,
 .hfy-style-system .hfy-request-assignment-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -2696,4 +2726,181 @@
   .hfy-style-system .hfy-request-assignment-row { grid-template-columns: 24px 1fr; }
   .hfy-style-system .hfy-request-assignment-row .field { grid-column: 2; }
   .hfy-style-system .hfy-request-remove-artist { grid-column: 2; }
+}
+
+/* Owner navigation shares the same icon-led hierarchy as Residency workspaces. */
+.hfy-style-system .owner-sidebar .owner-workspace-nav {
+  gap: 4px;
+}
+
+.hfy-style-system .owner-sidebar .owner-workspace-nav .nav-label {
+  margin: 0 0 7px 9px;
+}
+
+.hfy-style-system .owner-sidebar .owner-workspace-nav .nav-entry {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.hfy-style-system .owner-sidebar .owner-workspace-nav .residency-nav-item {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  min-height: 54px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  color: var(--hfy-muted);
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--hfy-motion), border-color var(--hfy-motion), background var(--hfy-motion), transform var(--hfy-motion);
+}
+
+.hfy-style-system .owner-sidebar .owner-workspace-nav .residency-nav-item:hover {
+  transform: translateY(-1px);
+  color: var(--hfy-ink);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.hfy-style-system .owner-sidebar .owner-workspace-nav .residency-nav-item:is(.active, .active-section) {
+  border-color: color-mix(in srgb, var(--owner-accent) 24%, transparent);
+  color: color-mix(in srgb, var(--owner-accent) 76%, #16212b);
+  background: color-mix(in srgb, var(--owner-accent) 16%, rgba(255, 255, 255, 0.72));
+  box-shadow: inset 3px 0 var(--owner-accent), inset 0 1px rgba(255, 255, 255, 0.76), 0 8px 20px rgba(54, 82, 103, 0.08);
+}
+
+.hfy-style-system .owner-sidebar .residency-nav-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 10px;
+  color: var(--hfy-ink-soft);
+  background: rgba(250, 252, 253, 0.58);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.78);
+}
+
+.hfy-style-system .owner-sidebar .residency-nav-item:is(.active, .active-section) .residency-nav-icon {
+  color: color-mix(in srgb, var(--owner-accent) 76%, #16212b);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.hfy-style-system .owner-sidebar .residency-nav-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hfy-style-system .owner-sidebar .residency-nav-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.hfy-style-system .owner-sidebar .residency-nav-copy strong {
+  overflow: hidden;
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hfy-style-system .owner-sidebar .residency-nav-copy small {
+  overflow: hidden;
+  color: var(--hfy-muted);
+  font-size: 8px;
+  font-weight: 560;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hfy-style-system .owner-sidebar :is(.residency-nav-arrow, .residency-nav-caret) {
+  color: var(--hfy-muted);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.hfy-style-system .owner-sidebar .residency-talent-nav {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.hfy-style-system .owner-sidebar .residency-nav-caret {
+  transform: translateY(-1px);
+  transition: transform var(--hfy-motion);
+}
+
+.hfy-style-system .owner-sidebar .residency-talent-nav.expanded .residency-nav-caret {
+  transform: translateY(1px) rotate(180deg);
+}
+
+.hfy-style-system .owner-sidebar .residency-talent-links {
+  margin: 0 7px 2px 25px;
+  padding: 2px 0 2px 13px;
+  display: grid;
+  gap: 2px;
+  border-left: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .owner-sidebar .owner-workspace-nav .residency-talent-links :is(a, button) {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  min-height: 31px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--hfy-muted);
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 680;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.hfy-style-system .owner-sidebar .owner-workspace-nav .residency-talent-links :is(a, button):is(:hover, .active) {
+  transform: none;
+  color: color-mix(in srgb, var(--owner-accent) 76%, #16212b);
+  background: color-mix(in srgb, var(--owner-accent) 13%, rgba(255, 255, 255, 0.7));
+}
+
+@media (max-width: 850px) {
+  .hfy-style-system .owner-sidebar .owner-workspace-nav {
+    align-items: flex-start;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+
+  .hfy-style-system .owner-sidebar .owner-workspace-nav .nav-entry {
+    flex: 0 0 154px;
+  }
+
+  .hfy-style-system .owner-sidebar .owner-workspace-nav .residency-nav-item:is(.active, .active-section) {
+    box-shadow: inset 0 -2px var(--owner-accent), inset 0 1px rgba(255, 255, 255, 0.76);
+  }
 }

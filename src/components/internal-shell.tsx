@@ -9,9 +9,11 @@ import { PrivacyModeIndicator, PrivacyModeProvider, PrivacyModeToggle } from "@/
 import { DayPartsPanel } from "@/components/day-parts-panel";
 import { enterViewAsAction } from "@/app/app/view-as-actions";
 import { formatServiceTier } from "@/domain/service-tier";
+import { WorkspaceNavIcon, WorkspaceNavLink, type WorkspaceNavIconName } from "@/components/workspace-nav";
 
 type ResidencyOption = { id: string; name: string; cityState: string | null; tier: string; active: boolean };
 type OwnerMode = "developer" | "hfy";
+type InternalNavItem = { label: string; href: string; description: string; icon: WorkspaceNavIconName };
 
 export function resolveOwnerMode(pathname: string, requestedMode: string | null): OwnerMode {
   const hfyOnlyRoute = ["/app/leads", "/app/calendar", "/app/dayparts", "/app/payouts", "/app/invoices", "/app/talent"]
@@ -39,23 +41,23 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
   const residencySuffix = residency
     ? `?${new URLSearchParams({ mode: "hfy", view: "operations", residency: residency.id }).toString()}`
     : "";
-  const links: Array<[string, string]> = inResidency ? [
-    ["Overview", `/app${residencySuffix}`],
-    ["Calendar", `/app/calendar${residencySuffix}`],
-    ["Day Parts", `/app/dayparts${residencySuffix}`],
-    ["Payouts", `/app/payouts${residencySuffix}`],
-    ["Invoices", `/app/invoices${residencySuffix}`],
-    ["Setup", `/app/setup${residencySuffix}`],
+  const links: InternalNavItem[] = inResidency ? [
+    { label: "Overview", href: `/app${residencySuffix}`, description: "Program snapshot", icon: "overview" },
+    { label: "Calendar", href: `/app/calendar${residencySuffix}`, description: "Schedule and bookings", icon: "calendar" },
+    { label: "Day Parts", href: `/app/dayparts${residencySuffix}`, description: "Standing schedule", icon: "dayparts" },
+    { label: "Payouts", href: `/app/payouts${residencySuffix}`, description: "Artist payments", icon: "payouts" },
+    { label: "Invoices", href: `/app/invoices${residencySuffix}`, description: "Billing and delivery", icon: "invoices" },
+    { label: "Setup", href: `/app/setup${residencySuffix}`, description: "Program configuration", icon: "setup" },
   ] : mode === "developer" ? [
-    ["Residencies", "/app?mode=developer"],
-    ["Admin Settings", "/app/setup?mode=developer"],
+    { label: "Residencies", href: "/app?mode=developer", description: "Platform workspaces", icon: "residencies" },
+    { label: "Admin Settings", href: "/app/setup?mode=developer", description: "Company identity", icon: "settings" },
   ] : [
-    ["Work Queue", "/app?mode=hfy"],
-    ["Operations", "/app?mode=hfy&view=operations"],
-    ["Pipeline", "/app/leads?mode=hfy"],
-    ["Calendar", "/app/calendar?mode=hfy"],
-    ["Payouts", "/app/payouts?mode=hfy"],
-    ["Talent", "/app/talent?mode=hfy"],
+    { label: "Work Queue", href: "/app?mode=hfy", description: "Requests and standing work", icon: "workqueue" },
+    { label: "Operations", href: "/app?mode=hfy&view=operations", description: "Residencies and programs", icon: "operations" },
+    { label: "Pipeline", href: "/app/leads?mode=hfy", description: "Leads and conversions", icon: "pipeline" },
+    { label: "Calendar", href: "/app/calendar?mode=hfy", description: "All Residency schedules", icon: "calendar" },
+    { label: "Payouts", href: "/app/payouts?mode=hfy", description: "Company artist payments", icon: "payouts" },
+    { label: "Talent", href: "/app/talent?mode=hfy", description: "Artists and rosters", icon: "talent" },
   ];
 
   function isActive(label: string, href: string) {
@@ -73,7 +75,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
   return (
     <PrivacyModeProvider initialEnabled={initialPrivacyMode}>
     <div className={`shell owner-shell owner-mode-${mode}`} data-owner-mode={mode}>
-      <aside className="sidebar">
+      <aside className="sidebar owner-sidebar">
         <Link className="brand" href={mainHref} onClick={() => setSwitcherOpen(false)}>
           <span className="brand-mark">HFY</span>
           <span className="brand-copy"><strong>HFY OS</strong><span>{mode === "developer" ? "Platform console" : "Programming desk"}</span></span>
@@ -112,15 +114,15 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
           <span>{mode === "developer" ? "Software business" : inPipeline ? "Pre-signature" : residency ? formatServiceTier(residency.tier) : "HFY Programming"}</span>
           <p>{mode === "developer" ? "Technical support, Platform access, and administration." : inPipeline ? "Leads before they move into Operations." : residency ? residency.cityState || "Location pending" : "Revenue work driven by Standing HFY Bookings."}</p>
         </div>
-        <nav className="nav">
+        <nav className="nav residency-workspace-nav owner-workspace-nav">
           <p className="nav-label">{inResidency ? "Residency" : mode === "developer" ? "Developer" : "HFY"}</p>
-          {links.map(([label, href]) => <div className="nav-entry" key={href}>
-            {label === "Talent" && !inResidency ? <div className={`day-parts-nav talent-nav ${talentExpanded ? "expanded" : ""}`}>
-              <button className={`day-parts-nav-toggle ${pathname.startsWith("/app/talent") ? "active" : ""}`} type="button" aria-expanded={talentExpanded} onClick={() => setTalentExpanded((open) => !open)}><span>Talent</span><span aria-hidden="true">⌄</span></button>
-              {talentExpanded ? <div className="day-parts-nav-list"><Link className={pathname === "/app/talent" ? "active" : ""} href="/app/talent?mode=hfy">Artist Lookup</Link><Link className={pathname === "/app/talent/roster" ? "active" : ""} href="/app/talent/roster?mode=hfy">Roster</Link></div> : null}
-            </div> : <Link className={isActive(label, href) ? "active" : ""} href={href}>{label}</Link>}
-            {mode === "hfy" && !inResidency && label === "Calendar" ? <div className={`day-parts-nav ${daypartsExpanded ? "expanded" : ""}`}>
-              <button className="day-parts-nav-toggle" type="button" aria-expanded={daypartsExpanded} onClick={() => {
+          {links.map(({ label, href, description, icon }) => <div className="nav-entry" key={href}>
+            {label === "Talent" && !inResidency ? <div className={`residency-talent-nav talent-nav ${talentExpanded ? "expanded" : ""}`}>
+              <button className={`residency-nav-item residency-talent-toggle ${pathname.startsWith("/app/talent") ? "active-section" : ""}`} type="button" aria-expanded={talentExpanded} onClick={() => setTalentExpanded((open) => !open)}><WorkspaceNavIcon name="talent" /><span className="residency-nav-copy"><strong>Talent</strong><small>Artists and rosters</small></span><span className="residency-nav-caret" aria-hidden="true">⌄</span></button>
+              {talentExpanded ? <div className="residency-talent-links"><Link className={pathname === "/app/talent" ? "active" : ""} href="/app/talent?mode=hfy"><span>Artist Lookup</span><span aria-hidden="true">›</span></Link><Link className={pathname === "/app/talent/roster" ? "active" : ""} href="/app/talent/roster?mode=hfy"><span>Roster</span><span aria-hidden="true">›</span></Link></div> : null}
+            </div> : <WorkspaceNavLink label={label} href={href} description={description} icon={icon} active={isActive(label, href)} />}
+            {mode === "hfy" && !inResidency && label === "Calendar" ? <div className={`residency-talent-nav day-parts-nav-owner ${daypartsExpanded ? "expanded" : ""}`}>
+              <button className="residency-nav-item residency-talent-toggle" type="button" aria-expanded={daypartsExpanded} onClick={() => {
                 if (inResidency && residency) {
                   const willOpen = daypartsResidencyId !== residency.id;
                   setDaypartsExpanded(willOpen);
@@ -128,8 +130,8 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
                   return;
                 }
                 setDaypartsExpanded((open) => !open);
-              }}><span>Day Parts</span><span aria-hidden="true">⌄</span></button>
-              {!inResidency && daypartsExpanded ? <div className="day-parts-nav-list">{residencies.map((item) => <button type="button" className={daypartsResidencyId === item.id ? "active" : ""} onClick={() => setDaypartsResidencyId(item.id)} key={item.id}>{item.name}</button>)}</div> : null}
+              }}><WorkspaceNavIcon name="dayparts" /><span className="residency-nav-copy"><strong>Day Parts</strong><small>Standing schedules</small></span><span className="residency-nav-caret" aria-hidden="true">⌄</span></button>
+              {!inResidency && daypartsExpanded ? <div className="residency-talent-links">{residencies.map((item) => <button type="button" className={daypartsResidencyId === item.id ? "active" : ""} onClick={() => setDaypartsResidencyId(item.id)} key={item.id}><span>{item.name}</span><span aria-hidden="true">›</span></button>)}</div> : null}
             </div> : null}
           </div>)}
         </nav>
