@@ -7,6 +7,7 @@ import { DaypartColorPicker } from "@/components/daypart-color-picker";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 import { daypartNeedsDefaultArtistRate } from "@/domain/daypart-rate-attention";
+import { useReportDaypartRateAttention } from "@/components/daypart-rate-attention-context";
 
 export type DaypartRow = {
   id: string;
@@ -139,8 +140,9 @@ export function DaypartManager({ residencyId, dayparts, onSaved, onClose, readOn
     return result;
   };
   const [state, formAction, pending] = useActionState(submitDaypart, initialActionState);
-  const rateAttentionAudience = hideFinancials ? "residency" as const : "all" as const;
+  const rateAttentionAudience = hideFinancials ? "residency" as const : "hfy" as const;
   const missingRateDayparts = useMemo(() => dayparts.filter((daypart) => daypartNeedsDefaultArtistRate(daypart, rateAttentionAudience)), [dayparts, rateAttentionAudience]);
+  useReportDaypartRateAttention({ residencyId, audience: rateAttentionAudience, needsAttention: missingRateDayparts.length > 0 });
   const standingDayparts = useMemo(() => dayparts.filter((daypart) => daypart.scheduleMode === "standing_weekly"), [dayparts]);
   const calendarOnlyDayparts = useMemo(() => dayparts.filter((daypart) => daypart.scheduleMode === "calendar_only"), [dayparts]);
   const rooms = useMemo(() => [...new Set(standingDayparts.map((daypart) => daypart.room))].sort(), [standingDayparts]);

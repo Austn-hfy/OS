@@ -36,17 +36,14 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function anyDaypartRateAttention() {
+function hfyManagedDaypartRateAttention() {
   return sql<boolean>`exists (
     select 1 from ${dayparts}
     where ${dayparts.residencyId} = ${residencies.id}
       and ${dayparts.active} = true
       and ${dayparts.type} = 'dj_artist'
-      and (
-        (${dayparts.billingMode} = 'billed_by_hfy' and coalesce(${dayparts.defaultTalentRateCents}, 0) <= 0)
-        or
-        (${dayparts.billingMode} = 'tracking_only' and coalesce(${dayparts.clientDefaultRateCents}, 0) <= 0)
-      )
+      and ${dayparts.billingMode} = 'billed_by_hfy'
+      and coalesce(${dayparts.defaultTalentRateCents}, 0) <= 0
   )`;
 }
 
@@ -60,7 +57,7 @@ export const getResidencyList = cache(async function getResidencyList() {
     timezone: residencies.timezone,
     defaultTalentRateCents: residencies.defaultTalentRateCents,
     clientHourlyRateCents: residencies.clientHourlyRateCents,
-    needsDaypartRateAttention: anyDaypartRateAttention(),
+    needsDaypartRateAttention: hfyManagedDaypartRateAttention(),
   }).from(residencies).where(and(eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).orderBy(asc(residencies.name));
 });
 
