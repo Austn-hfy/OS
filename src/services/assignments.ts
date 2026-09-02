@@ -1,6 +1,6 @@
-import { and, eq, gt, inArray, lt, ne } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, ne, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, residencies, shifts, talent } from "@/db/schema";
+import { assignments, auditLog, residencies, residencyTalent, shifts, talent } from "@/db/schema";
 import { calculateCompensationCents, isPaymentEligible, nextPayoutStatus } from "@/domain/airtable-parity";
 import { localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
@@ -66,12 +66,17 @@ export async function transitionAssignment(
       ? "na"
       : nextPayoutStatus(current.payoutStatus, eligible);
 
-    await tx.update(assignments).set({
-      bookingStatus: targetStatus,
-      totalCompensationCents,
-      payoutStatus: payoutState,
-      updatedAt: new Date(),
-    }).where(eq(assignments.id, current.id));
+    await tx.update(assignments).set(targetStatus === "cancelled"
+      ? {
+          bookingStatus: targetStatus,
+          updatedAt: new Date(),
+        }
+      : {
+          bookingStatus: targetStatus,
+          totalCompensationCents,
+          payoutStatus: payoutState,
+          updatedAt: new Date(),
+        }).where(eq(assignments.id, current.id));
     await tx.insert(auditLog).values({
       residencyId: current.residencyId,
       actorUserId: actor.userId,
@@ -79,7 +84,7 @@ export async function transitionAssignment(
       action: "assignment_status_changed",
       entityType: "assignment",
       entityId: current.id,
-      details: { from: current.bookingStatus, to: targetStatus, payoutStatus: payoutState },
+      details: { from: current.bookingStatus, to: targetStatus, payoutStatus: targetStatus === "cancelled" ? current.payoutStatus : payoutState },
     });
   });
 }
@@ -172,11 +177,31 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
       .where(and(
         eq(talent.id, talentId),
         eq(talent.talentStatus, "active"),
+        isNull(talent.archivedAt),
+        or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, current.residencyId)),
         actor.kind === "residency"
           ? and(eq(talent.ownership, "residency"), eq(talent.owningResidencyId, current.residencyId))
           : eq(talent.ownership, "hfy"),
       )).limit(1);
     if (!replacement) throw new Error("Choose an active Talent record.");
+    if (actor.kind === "residency") {
+      const [approved] = await tx.select({ id: residencyTalent.id }).from(residencyTalent).where(and(
+        eq(residencyTalent.residencyId, current.residencyId),
+        eq(residencyTalent.talentId, replacement.id),
+        eq(residencyTalent.active, true),
+      )).limit(1);
+      if (!approved) throw new Error("This DJ is unavailable to this Residency.");
+    } else {
+      await tx.insert(residencyTalent).values({
+        residencyId: current.residencyId,
+        talentId: replacement.id,
+        active: true,
+        approvedByUserId: actor.userId,
+      }).onConflictDoUpdate({
+        target: [residencyTalent.residencyId, residencyTalent.talentId],
+        set: { active: true, approvedByUserId: actor.userId },
+      });
+    }
     const conflict = await tx.select({ id: assignments.id }).from(assignments).where(and(
       ne(assignments.id, current.id),
       eq(assignments.talentId, replacement.id),
@@ -255,11 +280,31 @@ export async function rescheduleAssignment(
       .where(and(
         eq(talent.id, input.talentId),
         eq(talent.talentStatus, "active"),
+        isNull(talent.archivedAt),
+        or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, current.residencyId)),
         actor.kind === "residency"
           ? and(eq(talent.ownership, "residency"), eq(talent.owningResidencyId, current.residencyId))
           : eq(talent.ownership, "hfy"),
       )).limit(1);
     if (!replacement) throw new Error("Choose an active Talent record.");
+    if (actor.kind === "residency") {
+      const [approved] = await tx.select({ id: residencyTalent.id }).from(residencyTalent).where(and(
+        eq(residencyTalent.residencyId, current.residencyId),
+        eq(residencyTalent.talentId, replacement.id),
+        eq(residencyTalent.active, true),
+      )).limit(1);
+      if (!approved) throw new Error("This DJ is unavailable to this Residency.");
+    } else {
+      await tx.insert(residencyTalent).values({
+        residencyId: current.residencyId,
+        talentId: replacement.id,
+        active: true,
+        approvedByUserId: actor.userId,
+      }).onConflictDoUpdate({
+        target: [residencyTalent.residencyId, residencyTalent.talentId],
+        set: { active: true, approvedByUserId: actor.userId },
+      });
+    }
 
     const shiftOverlap = await tx.select({ id: assignments.id }).from(assignments).where(and(
       ne(assignments.id, current.id),
