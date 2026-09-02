@@ -522,10 +522,8 @@ tr:last-child td { border-bottom: 0; }
 .calendar-event.sky { color: #164f83; background: #dcecff; border-left-color: #78a8e8; }
 .calendar-event.orange { color: #83400f; background: #ffead7; border-left-color: #e98332; }
 .calendar-event.custom-color { color: #1b1b1b; background: color-mix(in srgb, var(--daypart-color) 19%, white); border-left-color: var(--daypart-color); }
-.calendar-event.schedule-empty { color: #102334; background: color-mix(in srgb, var(--daypart-color, #2783dc) 64%, white); border-left-color: var(--daypart-color, #2783dc); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #2783dc) 66%, transparent); }
-.calendar-event.schedule-partial { color: #173044; background: color-mix(in srgb, var(--daypart-color, #2783dc) 36%, white); border-left-color: var(--daypart-color, #2783dc); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #2783dc) 42%, transparent); }
-.calendar-event.schedule-filled { color: #263746; background: color-mix(in srgb, var(--daypart-color, #2783dc) 14%, white); border-left-color: var(--daypart-color, #2783dc); }
-.calendar-event.schedule-filled .calendar-event-line::after { content: "✓"; margin-left: auto; color: var(--daypart-color, #2783dc); font-size: 8px; font-weight: 900; }
+.calendar-event.schedule-empty, .calendar-event.schedule-partial, .calendar-event.schedule-filled { color: #102334; background: color-mix(in srgb, var(--daypart-color, #2783dc) 64%, white); border-left-color: var(--daypart-color, #2783dc); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #2783dc) 66%, transparent); }
+.calendar-event.schedule-filled .calendar-event-line::after { content: "✓"; margin-left: auto; color: #102334; font-size: 8px; font-weight: 900; text-shadow: 0 1px rgba(255,255,255,.45); }
 .calendar-status-legend { position: relative; flex: 0 0 auto; color: var(--muted); font-size: 9px; font-weight: 700; }
 .calendar-status-legend > summary { min-height: 36px; display: inline-flex; align-items: center; padding: 7px 12px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: rgba(255,255,255,.72); cursor: pointer; list-style: none; white-space: nowrap; }
 .calendar-status-legend > summary::-webkit-details-marker { display: none; }
@@ -534,12 +532,11 @@ tr:last-child td { border-bottom: 0; }
 .calendar-status-legend-menu { position: absolute; z-index: 24; top: calc(100% + 7px); right: 0; width: 245px; display: grid; gap: 9px; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: rgba(252,253,253,.98); box-shadow: 0 14px 36px rgba(48,65,78,.18); backdrop-filter: blur(16px); }
 .calendar-status-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .calendar-status-legend i { width: 16px; height: 8px; display: inline-block; border-left: 3px solid #2783dc; border-radius: 3px; background: color-mix(in srgb, #2783dc 64%, white); }
-.calendar-status-legend i.partial { background: color-mix(in srgb, #2783dc 36%, white); }
-.calendar-status-legend i.scheduled { background: color-mix(in srgb, #2783dc 14%, white); }
-.calendar-status-legend i.scheduled::after { content: "✓"; position: relative; left: 6px; top: -4px; color: #2783dc; font-style: normal; font-size: 7px; }
+.calendar-status-legend i.daypart { border-left-color: #2e9e79; background: color-mix(in srgb, #2e9e79 64%, white); }
+.calendar-status-legend i:is(.scheduled, .hfy-confirmed, .daypart-confirmed)::after { content: "✓"; position: relative; left: 6px; top: -4px; color: #102334; font-style: normal; font-size: 7px; }
 .calendar-status-legend i.hfy-pending { border-left-color: #f9a8d4; background: color-mix(in srgb, #f9a8d4 20%, white); }
 .calendar-status-legend i.hfy-confirmed { border-left-color: #ec4899; background: color-mix(in srgb, #ec4899 42%, white); }
-.calendar-status-legend i.daypart-confirmed { border-left-color: #2783dc; background: color-mix(in srgb, #2783dc 14%, white); }
+.calendar-status-legend i.daypart-confirmed { border-left-color: #2783dc; background: color-mix(in srgb, #2783dc 64%, white); }
 .calendar-event strong, .calendar-event span, .calendar-event small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-event-line { min-width: 0; display: flex; align-items: baseline; gap: 4px; }
 .calendar-event-line strong { flex: 0 1 auto; font-size: 9px; }
