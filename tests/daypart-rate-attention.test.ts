@@ -33,7 +33,7 @@ describe("Daypart default-rate attention", () => {
   });
 
   it("keeps attention in the Day Parts surfaces and out of Calendar", async () => {
-    const [manager, calendar, residencyShell, ownerShell, auth, internalData, residencyPage] = await Promise.all([
+    const [manager, calendar, residencyShell, ownerShell, auth, internalData, residencyPage, styles] = await Promise.all([
       readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/components/residency-shell.tsx", import.meta.url), "utf8"),
@@ -41,20 +41,22 @@ describe("Daypart default-rate attention", () => {
       readFile(new URL("../src/lib/auth.ts", import.meta.url), "utf8"),
       readFile(new URL("../src/data/internal.ts", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/dayparts/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
     ]);
     expect(manager).toContain("daypart-rate-attention-banner");
     expect(manager).toContain("daypart-rate-needed-mark");
     expect(manager).toContain("daypart-rate-field");
     expect(manager).toContain("calendar-only-daypart-card ${needsRate ? \"needs-rate\"");
     expect(calendar).not.toContain("daypart-rate-attention");
-    expect(residencyShell).toContain("attention={Boolean(actor.needsDaypartRateAttention)}");
+    expect(residencyShell).toContain("attention={needsDaypartRateAttention}");
     expect(ownerShell).toContain('label === "Day Parts"');
-    expect(ownerShell).toContain("residencies.some((item) => item.needsDaypartRateAttention)");
+    expect(ownerShell).toContain("Object.values(rateAttentionByResidency).some(Boolean)");
     expect(ownerShell).toContain('hasDaypartRateAttention ? "needs-attention"');
     expect(ownerShell).toContain("hasDaypartRateAttention ? <span className=\"residency-nav-attention\">!</span>");
     expect(auth).toContain("coalesce(${dayparts.clientDefaultRateCents}, 0) <= 0");
     expect(internalData).toContain("coalesce(${dayparts.defaultTalentRateCents}, 0) <= 0");
-    expect(internalData).toContain("coalesce(${dayparts.clientDefaultRateCents}, 0) <= 0");
+    expect(internalData).not.toContain("coalesce(${dayparts.clientDefaultRateCents}, 0) <= 0");
     expect(residencyPage).toContain("defaultTalentRateCents: null");
+    expect(styles.lastIndexOf(".residency-nav-item.needs-attention")).toBeGreaterThan(styles.lastIndexOf(".owner-workspace-nav .residency-nav-item:is(.active, .active-section)"));
   });
 });

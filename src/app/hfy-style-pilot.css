@@ -1331,14 +1331,6 @@
   }
 }
 
-/* Keep unresolved-rate attention visible on the primary left navigation in every workspace. */
-.hfy-style-system :is(.client-sidebar, .owner-sidebar) .residency-workspace-nav .residency-nav-item.needs-attention {
-  border-color: rgba(216, 105, 86, 0.72);
-  background: linear-gradient(110deg, rgba(255, 231, 225, 0.86), rgba(250, 244, 242, 0.72));
-  box-shadow: 0 0 0 3px rgba(232, 141, 122, 0.16), inset 3px 0 #dc715f, inset 0 1px rgba(255, 255, 255, 0.78);
-  animation: hfy-rate-nav-glow 2.4s ease-in-out infinite;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .hfy-style-system *,
   .hfy-style-system *::before,
@@ -2988,4 +2980,13 @@
   .hfy-style-system .owner-sidebar .owner-workspace-nav .residency-nav-item:is(.active, .active-section) {
     box-shadow: inset 0 -2px var(--owner-accent), inset 0 1px rgba(255, 255, 255, 0.76);
   }
+}
+
+/* Keep unresolved-rate attention visible even when the primary left navigation item is active. */
+.hfy-style-system :is(.client-sidebar, .owner-sidebar) .residency-workspace-nav .residency-nav-item.needs-attention {
+  border-color: rgba(216, 105, 86, 0.72);
+  color: #71362f;
+  background: linear-gradient(110deg, rgba(255, 224, 216, 0.94), rgba(250, 244, 242, 0.82));
+  box-shadow: 0 0 0 3px rgba(232, 141, 122, 0.2), inset 3px 0 #dc715f, inset 0 1px rgba(255, 255, 255, 0.78);
+  animation: hfy-rate-nav-glow 2.4s ease-in-out infinite;
 }

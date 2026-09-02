@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { InternalActor } from "@/lib/auth";
 import { signOut } from "@/app/actions";
 import { PrivacyModeIndicator, PrivacyModeProvider, PrivacyModeToggle } from "@/components/privacy-mode";
@@ -10,6 +10,7 @@ import { DayPartsPanel } from "@/components/day-parts-panel";
 import { enterViewAsAction } from "@/app/app/view-as-actions";
 import { formatServiceTier } from "@/domain/service-tier";
 import { WorkspaceNavIcon, WorkspaceNavLink, type WorkspaceNavIconName } from "@/components/workspace-nav";
+import { DaypartRateAttentionReportProvider, type DaypartRateAttentionReport } from "@/components/daypart-rate-attention-context";
 
 type ResidencyOption = { id: string; name: string; cityState: string | null; tier: string; active: boolean; needsDaypartRateAttention?: boolean };
 type OwnerMode = "developer" | "hfy";
@@ -31,6 +32,9 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [daypartsExpanded, setDaypartsExpanded] = useState(false);
   const [daypartsResidencyId, setDaypartsResidencyId] = useState<string | null>(null);
+  const [rateAttentionByResidency, setRateAttentionByResidency] = useState<Record<string, boolean>>(() => Object.fromEntries(residencies.map((item) => [item.id, Boolean(item.needsDaypartRateAttention)])));
+  const rateAttentionSnapshot = residencies.map((item) => `${item.id}:${Boolean(item.needsDaypartRateAttention)}`).join("|");
+  const previousRateAttentionSnapshot = useRef(rateAttentionSnapshot);
   const inPipeline = pathname.startsWith("/app/leads");
   const residencyId = searchParams.get("residency");
   const residency = mode === "hfy" ? residencies.find((item) => item.id === residencyId) : undefined;
@@ -68,11 +72,25 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
   }
 
   const panelResidency = residencies.find((item) => item.id === daypartsResidencyId);
-  const hasDaypartRateAttention = residencies.some((item) => item.needsDaypartRateAttention);
+  useEffect(() => {
+    if (previousRateAttentionSnapshot.current === rateAttentionSnapshot) return;
+    previousRateAttentionSnapshot.current = rateAttentionSnapshot;
+    setRateAttentionByResidency(Object.fromEntries(residencies.map((item) => [item.id, Boolean(item.needsDaypartRateAttention)])));
+  }, [rateAttentionSnapshot, residencies]);
+
+  const reportDaypartRateAttention = useCallback((report: DaypartRateAttentionReport) => {
+    if (report.audience !== "hfy") return;
+    setRateAttentionByResidency((current) => current[report.residencyId] === report.needsAttention
+      ? current
+      : { ...current, [report.residencyId]: report.needsAttention });
+  }, []);
+
+  const hasDaypartRateAttention = Object.values(rateAttentionByResidency).some(Boolean);
   const contextTitle = mode === "developer" ? "Residencies" : inResidency ? residency?.name : inPipeline ? "Pipeline" : "HFY Programming";
   const contextLabel = mode === "developer" ? "Platform workspace" : inResidency ? "Residency operations" : inPipeline ? "Pipeline workspace" : "Programming workspace";
 
   return (
+    <DaypartRateAttentionReportProvider onReport={reportDaypartRateAttention}>
     <PrivacyModeProvider initialEnabled={initialPrivacyMode}>
     <div className={`shell owner-shell owner-mode-${mode}`} data-owner-mode={mode}>
       <aside className="sidebar owner-sidebar">
@@ -117,7 +135,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
         <nav className="nav residency-workspace-nav owner-workspace-nav">
           <p className="nav-label">{inResidency ? "Residency" : mode === "developer" ? "Developer" : "HFY"}</p>
           {links.map(({ label, href, description, icon }) => <div className="nav-entry" key={href}>
-            <WorkspaceNavLink label={label} href={href} description={description} icon={icon} active={isActive(label, href)} attention={inResidency && label === "Day Parts" && Boolean(residency?.needsDaypartRateAttention)} />
+            <WorkspaceNavLink label={label} href={href} description={description} icon={icon} active={isActive(label, href)} attention={inResidency && label === "Day Parts" && Boolean(residency && rateAttentionByResidency[residency.id])} />
             {mode === "hfy" && !inResidency && label === "Calendar" ? <div className={`residency-talent-nav day-parts-nav-owner ${daypartsExpanded ? "expanded" : ""}`}>
               <button className={`residency-nav-item residency-talent-toggle ${hasDaypartRateAttention ? "needs-attention" : ""}`} type="button" aria-expanded={daypartsExpanded} onClick={() => {
                 if (inResidency && residency) {
@@ -142,5 +160,6 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
       {panelResidency ? <DayPartsPanel key={panelResidency.id} residencyId={panelResidency.id} residencyName={panelResidency.name} hfyOnly={mode === "hfy"} onClose={() => { setDaypartsResidencyId(null); if (inResidency) setDaypartsExpanded(false); }} /> : null}
     </div>
     </PrivacyModeProvider>
+    </DaypartRateAttentionReportProvider>
   );
 }
