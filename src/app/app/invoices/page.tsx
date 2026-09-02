@@ -1,5 +1,6 @@
 import { formatDate, formatMoney, Status } from "@/components/format";
 import { PrivateValue, PrivacyPdfLink } from "@/components/privacy-mode";
+import { WorkspaceSurface } from "@/components/workspace-surface";
 import { getInvoices, getInvoiceWorkspace, getResidencyList } from "@/data/internal";
 import { retryInvoiceSendAction } from "./actions";
 import { InvoiceApprovalButton } from "./invoice-approval-button";
@@ -45,8 +46,8 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
     />;
   }
 
-  return <>
+  return <WorkspaceSurface className="workspace-surface-invoices">
     <header className="page-header card"><div><p className="eyebrow">Company billing</p><h1>Invoices</h1><p className="subhead">Open a Residency to create an Invoice or configure its billing. This company view is for monitoring every program.</p></div></header>
     <div className="table-wrap"><table><thead><tr><th>Invoice</th><th>Residency</th><th>Type</th><th>Period</th><th>Client total</th><th>Talent cost</th><th>Gross margin</th><th>Status</th><th>Delivery</th><th>Action</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td><strong>{row.invoiceNumber}</strong></td><td>{row.residencyName}</td><td>{row.kind === "custom" ? "Custom" : "Scheduled"}</td><td>{formatDate(row.billingPeriodStart)}–{formatDate(row.billingPeriodEnd)}</td><td><PrivateValue>{formatMoney(row.totalCents)}</PrivateValue></td><td><PrivateValue>{formatMoney(row.talentCostCents)}</PrivateValue></td><td><PrivateValue>{formatMoney(row.grossMarginCents)}</PrivateValue></td><td><Status value={row.status} /></td><td>{row.autoSendInvoices ? (row.deliveryStatus ? <Status value={row.deliveryStatus} /> : "Awaiting approval") : <Status value="manual" />}</td><td>{row.status === "draft" ? <InvoiceApprovalButton invoiceId={row.id} autoSend={row.autoSendInvoices} /> : null}{row.pdfStoragePath && row.status !== "draft" ? <PrivacyPdfLink className="button secondary" href={`/app/invoices/${row.id}/pdf`}>Download PDF</PrivacyPdfLink> : null}{row.status === "approved" && row.deliveryStatus === "failed" ? <form action={retryInvoiceSendAction}><input name="invoiceId" type="hidden" value={row.id} /><button className="button" type="submit">Retry send</button></form> : null}</td></tr>)}</tbody></table>{!rows.length ? <div className="empty">No Invoices yet.</div> : null}</div>
-  </>;
+  </WorkspaceSurface>;
 }

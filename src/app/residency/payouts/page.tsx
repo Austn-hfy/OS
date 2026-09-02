@@ -1,5 +1,6 @@
 import { getResidencyClientPayoutStatus } from "@/data/residency-client";
 import { ResidencyPageHeader } from "@/components/residency-page-header";
+import { WorkspaceSurface } from "@/components/workspace-surface";
 import { canResidencyRoleAccess } from "@/domain/residency-access";
 import { requireResidencyActor } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -16,10 +17,10 @@ export default async function ResidencyPayoutStatusPage() {
   const rows = await getResidencyClientPayoutStatus(actor.residencyId);
   const owedTotalCents = rows.reduce((sum, row) => sum + (row.owedCents ?? 0), 0);
   const outstandingCount = rows.filter((row) => row.owedCents !== null && row.owedCents > 0).length;
-  return <section className="residency-workspace-surface residency-payout-workspace-surface">
+  return <WorkspaceSurface className="residency-workspace-surface residency-payout-workspace-surface workspace-surface-payouts">
     <ResidencyPageHeader eyebrow={`${actor.residencyName} billing`} title="Payouts">
       <div className="residency-payout-heading-total"><strong>{money(owedTotalCents)} owed</strong><span>{outstandingCount} client-managed Assignment{outstandingCount === 1 ? "" : "s"} outstanding</span></div>
     </ResidencyPageHeader>
     <ClientPayoutsWorkspace rows={rows} residencyName={actor.residencyName} timeZone={actor.residencyTimezone} />
-  </section>;
+  </WorkspaceSurface>;
 }

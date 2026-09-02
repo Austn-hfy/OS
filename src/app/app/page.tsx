@@ -7,6 +7,7 @@ import { enterViewAsAction } from "./view-as-actions";
 import { CreateResidencyModal } from "./create-residency-modal";
 import { HfyRequestQueue } from "./hfy-request-queue";
 import { formatServiceTier } from "@/domain/service-tier";
+import { WorkspaceSurface } from "@/components/workspace-surface";
 
 const weekdayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -25,7 +26,7 @@ async function DeveloperDashboard() {
   const residencies = await getDeveloperResidencyList();
   const activeCount = residencies.filter((residency) => residency.active).length;
   const completeCount = residencies.filter((residency) => residency.tier === "complete").length;
-  return <>
+  return <WorkspaceSurface className="workspace-surface-dashboard workspace-surface-developer-dashboard">
     <header className="page-header owner-mode-header developer-mode-header"><div><p className="eyebrow">Developer · Platform</p><h1>Platform Control</h1><p className="subhead">Every Residency, technical support access, and administrative settings—independent of HFY Programming operations.</p></div><Link className="button secondary" href="/app/setup?mode=developer">Admin Settings</Link></header>
     <section className="owner-mode-summary" aria-label="Platform summary">
       <article><strong>{residencies.length}</strong><span>Total Residencies</span></article>
@@ -41,7 +42,7 @@ async function DeveloperDashboard() {
         <div className="developer-residency-actions"><form action={enterViewAsAction}><input name="residencyId" type="hidden" value={residency.id} /><button className="button" type="submit">Open Workspace</button></form><Link className="button secondary" href={`/app/setup?${new URLSearchParams({ mode: "developer", residency: residency.id }).toString()}`}>Admin Settings</Link></div>
       </article>)}</div> : <div className="card empty">No Residency records exist yet.</div>}
     </section>
-  </>;
+  </WorkspaceSurface>;
 }
 
 async function HfyWorkQueue() {
@@ -56,7 +57,7 @@ async function HfyWorkQueue() {
     grouped.set(daypart.residencyId, existing);
   }
 
-  return <>
+  return <WorkspaceSurface className="workspace-surface-dashboard workspace-surface-work-queue">
     <header className="page-header owner-mode-header hfy-mode-header"><div><p className="eyebrow">HFY · Programming</p><h1>Work Queue</h1><p className="subhead">Schedule pending client requests quickly, then scan every Standing HFY Booking across all Residencies.</p></div><Link className="button secondary" href="/app?mode=hfy&view=operations">Open Operations</Link></header>
     <section className="owner-mode-summary hfy-summary" aria-label="HFY Programming summary">
       <article><strong>{liveQueue.length}</strong><span>Live Dayparts</span></article>
@@ -83,7 +84,7 @@ async function HfyWorkQueue() {
         </section>;
       })}</div> : <div className="card empty">No Dayparts are currently set as Standing HFY Bookings.</div>}
     </section>
-  </>;
+  </WorkspaceSurface>;
 }
 
 async function OperationsDashboard({ residencyId }: { residencyId?: string }) {
@@ -92,7 +93,7 @@ async function OperationsDashboard({ residencyId }: { residencyId?: string }) {
 
   if (selected) {
     return (
-      <>
+      <WorkspaceSurface className="workspace-surface-dashboard workspace-surface-residency-overview">
         <header className="page-header">
           <div><p className="eyebrow">Residency dashboard</p><h1>{selected.name}</h1><p className="subhead">Everything below belongs only to this residency program.</p></div>
           <span className={`pill ${selected.tier}`}>{formatServiceTier(selected.tier)}</span>
@@ -122,12 +123,12 @@ async function OperationsDashboard({ residencyId }: { residencyId?: string }) {
           <Link className="card workspace-shortcut" href={hfyResidencyHref("/app/payouts", selected.id)}><span>02</span><strong>Payouts</strong><small>Residency-specific artist payments</small></Link>
           <Link className="card workspace-shortcut" href={hfyResidencyHref("/app/invoices", selected.id)}><span>03</span><strong>Invoices</strong><small>Billing and delivery</small></Link>
         </section>
-      </>
+      </WorkspaceSurface>
     );
   }
 
   return (
-    <>
+    <WorkspaceSurface className="workspace-surface-dashboard workspace-surface-operations">
       <header className="page-header">
         <div>
           <p className="eyebrow">HFY · Operations</p>
@@ -160,6 +161,6 @@ async function OperationsDashboard({ residencyId }: { residencyId?: string }) {
         </div>
       ) : <div className="card empty">No active Residencies yet. Create one here when a new hotel is ready to enter HFY OS.</div>}
       </section>
-    </>
+    </WorkspaceSurface>
   );
 }

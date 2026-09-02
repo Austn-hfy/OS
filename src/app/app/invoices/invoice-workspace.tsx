@@ -6,6 +6,7 @@ import { createResidencyInvoiceAction, updateResidencyInvoiceSettingsAction, typ
 import { retryInvoiceSendAction } from "./actions";
 import { InvoiceApprovalButton } from "./invoice-approval-button";
 import { PrivateValue, PrivacyPdfLink, SensitiveInput } from "@/components/privacy-mode";
+import { WorkspaceSurface } from "@/components/workspace-surface";
 
 const initialState: ResidencyActionState = { status: "idle", message: "" };
 const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -120,7 +121,7 @@ export function InvoiceWorkspace({
 
   const manualPayload = JSON.stringify(manualLines.map(({ serviceDate, description, quantity, unitLabel, unitAmount }) => ({ serviceDate, description, quantity, unitLabel, unitAmount })));
 
-  return <div className="invoice-workspace">
+  return <WorkspaceSurface className="invoice-workspace workspace-surface-invoices workspace-surface-invoice-manager">
     <header className="page-header invoice-page-header card">
       <div><p className="eyebrow">{residency.name}</p><h1>Invoices</h1><p className="subhead">Create scheduled or custom Draft Invoices, approve their client PDFs, and control this Residency&apos;s billing rules in one place.</p></div>
       <div className="invoice-header-actions"><button className="button secondary" type="button" onClick={() => setView("setup")}>Invoice setup</button><button className="button" type="button" onClick={() => setDrawerOpen(true)}>Create invoice</button></div>
@@ -152,5 +153,5 @@ export function InvoiceWorkspace({
         <div className="invoice-form-footer"><button className="button secondary" type="button" onClick={() => setDrawerOpen(false)}>Cancel</button><button className="button" disabled={createPending || (kind === "scheduled_period" ? !selectedShiftIds.length : !manualLines.length)} type="submit">{createPending ? "Saving Draft…" : "Save Draft Invoice"}</button></div>
       </form>
     </aside></div> : null}
-  </div>;
+  </WorkspaceSurface>;
 }

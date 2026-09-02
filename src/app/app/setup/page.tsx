@@ -5,13 +5,14 @@ import { ResidencyContactsManager } from "./residency-contacts-manager";
 import { ResidencyProfileEditor } from "./residency-profile-editor";
 import { ResidencyRateEditor } from "./residency-rate-editor";
 import { ClientVisibilitySettings } from "./client-visibility-settings";
+import { WorkspaceSurface } from "@/components/workspace-surface";
 
 export default async function SetupPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
   const { residency } = await searchParams;
   const data = await getSetupData();
   const selected = data.residencies.find((item) => item.id === residency);
   return (
-    <>
+    <WorkspaceSurface className="workspace-surface-settings">
       <header className="page-header card"><div><p className="eyebrow">{selected?.name ?? "Developer · Platform"}</p><h1>{selected ? "Residency setup" : "Admin Settings"}</h1><p className="subhead">{selected ? "Program details, rate defaults, approved artists, and client contacts for this Residency." : "Manage the Platform-level identity and sender details used on client Invoices."}</p></div></header>
       <section className={selected ? "residency-setup-grid" : "grid residency-grid"}>
         {!selected ? <InvoiceBrandingSettings
@@ -29,6 +30,6 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
         </> : null}
 
       </section>
-    </>
+    </WorkspaceSurface>
   );
 }

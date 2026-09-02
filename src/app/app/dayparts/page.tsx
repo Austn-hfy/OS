@@ -11,8 +11,5 @@ export default async function OwnerDaypartsPage({ searchParams }: { searchParams
   if (!residency) redirect("/app?mode=hfy&view=operations");
   const dayparts = (await getDaypartsForResidency(residency.id)).filter(isStandingHfyDaypart);
 
-  return <>
-    <header className="page-header card"><div><p className="eyebrow">{residency.name}</p><h1>Day Parts</h1><p className="subhead">Create and manage this Residency’s standing weekly schedule.</p></div></header>
-    <DaypartRouteManager residencyId={residency.id} dayparts={dayparts} initialCreate={params.create === "1"} />
-  </>;
+  return <DaypartRouteManager residencyId={residency.id} dayparts={dayparts} initialCreate={params.create === "1"} />;
 }

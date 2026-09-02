@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getArtistLookupData, getResidencyList } from "@/data/internal";
+import { WorkspaceSurface } from "@/components/workspace-surface";
 import { ArtistLookup } from "./artist-lookup";
 
 export default async function TalentPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
@@ -8,9 +9,9 @@ export default async function TalentPage({ searchParams }: { searchParams: Promi
 
   const [rows, residencies] = await Promise.all([getArtistLookupData(), getResidencyList()]);
   return (
-    <>
+    <WorkspaceSurface className="workspace-surface-talent">
       <header className="page-header artist-lookup-page-header"><div><p className="eyebrow">HFY talent</p><h1>Artist Lookup</h1><p className="subhead">Search artists onboarded by Here For You, then open one profile to see outstanding pay, upcoming bookings, contact information, and payment details.</p></div></header>
       <ArtistLookup artists={rows} residencies={residencies} currentResidency={null} />
-    </>
+    </WorkspaceSurface>
   );
 }

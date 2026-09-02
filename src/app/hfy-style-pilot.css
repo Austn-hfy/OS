@@ -2401,6 +2401,222 @@
   border-radius: var(--hfy-radius-control);
   background: rgba(255, 255, 255, 0.58);
 }
+
+/*
+ * Shared workspace hierarchy
+ *
+ * Every non-calendar destination uses one page-level surface. The header,
+ * controls, and primary result area are separated by quiet internal rules;
+ * repeated cards remain only where they represent distinct records or metrics.
+ */
+.hfy-style-system :is(.main, .client-shell .main) > .workspace-surface {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-card);
+  background: var(--hfy-surface-strong);
+  box-shadow: var(--hfy-shadow-section), inset 0 1px var(--hfy-inset-highlight);
+  backdrop-filter: blur(16px) saturate(112%);
+}
+
+.hfy-style-system :is(.main, .client-shell .main) > .workspace-surface > .page-header:not(.calendar-page-header) {
+  min-height: 90px;
+  margin: 0;
+  padding: 14px 20px;
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid var(--hfy-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system :is(.main, .client-shell .main) > .workspace-surface > .page-header:not(.calendar-page-header) h1 {
+  margin: 2px 0 0;
+  font-size: clamp(27px, 2.5vw, 34px);
+  line-height: 1.02;
+}
+
+.hfy-style-system :is(.main, .client-shell .main) > .workspace-surface > .page-header:not(.calendar-page-header) .eyebrow {
+  margin: 0 0 5px;
+}
+
+.hfy-style-system :is(.main, .client-shell .main) > .workspace-surface > .page-header:not(.calendar-page-header) .subhead {
+  max-width: 780px;
+  margin: 5px 0 0;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+/* Talent: the roster and profile panes become divisions of the main surface. */
+.hfy-style-system .workspace-surface-talent .artist-lookup-shell {
+  min-height: 680px;
+  gap: 0;
+  align-items: stretch;
+}
+
+.hfy-style-system .workspace-surface-talent :is(.artist-roster-panel, .artist-detail-panel) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system .workspace-surface-talent .artist-roster-panel {
+  position: static;
+  top: auto;
+  max-height: none;
+  border-right: 1px solid var(--hfy-line);
+}
+
+/* Roster: filters and rows live directly inside the shared frame. */
+.hfy-style-system .workspace-surface-roster > .company-roster-card {
+  padding: 18px 20px 20px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+/* Payouts: tabs, filters, and results read as one continuous workspace. */
+.hfy-style-system .workspace-surface-payouts > .payout-tabs,
+.hfy-style-system .workspace-surface-payouts > .payout-filter-bar {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--hfy-line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.hfy-style-system .workspace-surface-payouts > .payout-tabs {
+  padding: 7px 16px;
+  background: transparent;
+}
+
+.hfy-style-system .workspace-surface-payouts > .payout-filter-bar {
+  padding: 16px 20px;
+  background: rgba(229, 235, 239, 0.38);
+}
+
+.hfy-style-system .workspace-surface-payouts > .payout-workspace-shell .payout-list-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system .workspace-surface-payouts .payout-list-heading {
+  background: rgba(216, 225, 231, 0.62);
+}
+
+/* Pipeline and Invoices use the same internal command-bar/list rhythm. */
+.hfy-style-system .workspace-surface-pipeline > .pipeline-status-tabs,
+.hfy-style-system .workspace-surface-invoices > .invoice-tabs {
+  width: auto;
+  margin: 0;
+  padding: 7px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--hfy-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hfy-style-system .workspace-surface-pipeline { gap: 0; }
+
+.hfy-style-system .workspace-surface-pipeline > .lead-list-shell,
+.hfy-style-system .workspace-surface-invoices > .table-wrap,
+.hfy-style-system .workspace-surface-invoices > .invoice-settings-form {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system .workspace-surface-invoice-manager {
+  display: grid;
+  gap: 0;
+}
+
+/* Settings keeps its meaningful form sections but loses the extra outer card. */
+.hfy-style-system .workspace-surface-settings > :is(.residency-client-settings-form, .residency-setup-grid, .residency-grid) {
+  margin: 0;
+  padding: 20px;
+}
+
+.hfy-style-system .workspace-surface-settings > .residency-client-settings-form {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+/* Dashboards retain record/metric cards, but share a single page frame. */
+.hfy-style-system .workspace-surface-dashboard > .owner-mode-summary {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--hfy-line);
+  border-radius: 0;
+  background: rgba(229, 235, 239, 0.3);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system .workspace-surface-dashboard > :is(.developer-residencies-section, .hfy-work-queue-section, .active-residencies-section) {
+  margin: 0;
+  padding: 20px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system .workspace-surface-dashboard > .hfy-request-queue-section {
+  margin: 0;
+  padding: 20px;
+  border-bottom: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .workspace-surface-residency-overview > :is(.residency-overview-grid, .workspace-shortcuts) {
+  margin: 0;
+  padding: 20px;
+}
+
+.hfy-style-system .workspace-surface-residency-overview > .residency-overview-grid {
+  border-bottom: 1px solid var(--hfy-line);
+}
+
+@media (max-width: 1500px) {
+  .hfy-style-system .workspace-surface-talent .artist-roster-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--hfy-line);
+  }
+}
+
+@media (max-width: 650px) {
+  .hfy-style-system :is(.main, .client-shell .main) > .workspace-surface > .page-header:not(.calendar-page-header) {
+    min-height: 0;
+    padding: 16px 18px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hfy-style-system .workspace-surface-settings > :is(.residency-client-settings-form, .residency-setup-grid, .residency-grid),
+  .hfy-style-system .workspace-surface-dashboard > :is(.developer-residencies-section, .hfy-work-queue-section, .active-residencies-section),
+  .hfy-style-system .workspace-surface-dashboard > .hfy-request-queue-section,
+  .hfy-style-system .workspace-surface-residency-overview > :is(.residency-overview-grid, .workspace-shortcuts) {
+    padding: 16px;
+  }
+}
 .hfy-style-system .hfy-request-assignment-heading,
 .hfy-style-system .hfy-request-assignment-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .hfy-style-system .hfy-request-assignment-heading > div { display: grid; gap: 2px; }
