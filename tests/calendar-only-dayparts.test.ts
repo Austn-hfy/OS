@@ -47,7 +47,7 @@ describe("Calendar Only Dayparts", () => {
       readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/app/actions.ts", import.meta.url), "utf8"),
     ]);
-    expect(calendar).toContain("Save slot changes");
+    expect(calendar).toContain("Save session changes");
     expect(calendar).toContain("Delete activity");
     expect(actions).toContain("updateOneTimeShiftAction");
     expect(actions).toContain("updateOneTimeOccurrenceAction");

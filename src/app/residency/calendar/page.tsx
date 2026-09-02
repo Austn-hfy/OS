@@ -42,6 +42,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
       room: shift.room, notes: shift.notes, editableColor: shift.shiftCalendarColor ?? matchedDaypart?.color ?? shift.daypartColor ?? undefined,
       programDetails: shift.programDetails, manualHostName: shift.manualHostName, schedulingStatus: status,
       economicsMode: shift.economicsMode,
+      clientTalentDefaultRateCents: shift.clientTalentDefaultRateCents,
       assignments: activeAssignments.map((assignment) => ({
         id: assignment.id, talentId: assignment.talentId, talentName: assignment.talentName, guestName: assignment.guestName,
         startsAt: assignment.startsAt.toISOString(), endsAt: assignment.endsAt.toISOString(),

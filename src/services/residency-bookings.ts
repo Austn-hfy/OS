@@ -26,6 +26,7 @@ export type DaypartBookingInput = {
   billingMode?: DaypartBillingMode | null;
   startMinute: number;
   endMinute: number;
+  clientTalentDefaultRateCents?: number | null;
   clientRateOverrideCents?: number | null;
   notes?: string;
   programDetails?: string;
@@ -54,6 +55,7 @@ export type UpdateOneTimeRecordInput = {
   calendarColor: string;
   startMinute: number;
   endMinute: number;
+  clientTalentDefaultRateCents?: number | null;
   notes?: string;
   programDetails?: string;
   manualHostName?: string;
@@ -162,7 +164,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
               ? null
               : requested.billingMode ?? (actor.kind === "residency" ? "tracking_only" as const : "billed_by_hfy" as const),
             defaultTalentRateCents: null,
-            clientDefaultRateCents: null,
+            clientDefaultRateCents: requested.clientTalentDefaultRateCents ?? null,
           };
       if (!rule.name || !rule.room || !/^#[0-9A-Fa-f]{6}$/.test(rule.color)) {
         throw new Error("A one-time slot needs a name, room, and valid calendar color.");
@@ -186,6 +188,10 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       }
       if (actor.kind === "residency" && recordKind === "financial_shift" && !requestHfy && !effectiveAssignments.length) {
         throw new Error("Choose one of your artists or use Request HFY.");
+      }
+      if (actor.kind === "residency" && !requested.daypartId && rule.type === "dj_artist" && !requestHfy
+        && (!Number.isInteger(rule.clientDefaultRateCents) || (rule.clientDefaultRateCents ?? 0) <= 0)) {
+        throw new Error("Enter a positive session artist rate before scheduling this one-time Talent Activity.");
       }
       const notes = requested.notes?.trim() ?? "";
       const programDetails = requested.programDetails?.trim() ?? "";
@@ -294,6 +300,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         programDetails,
         manualHostName,
         economicsMode,
+        clientTalentDefaultRateCents: economicsMode === "client_owned" ? rule.clientDefaultRateCents : null,
         clientRateOverrideCents: economicsMode === "hfy" ? requested.clientRateOverrideCents ?? null : null,
         clientRateCents,
         billingStatus: economicsMode === "hfy" ? finalizedInvoice ? "pending_adjustment" : "pending" : "not_billable",
@@ -426,6 +433,7 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       startsAt: shifts.startsAt,
       endsAt: shifts.endsAt,
       clientRateCents: shifts.clientRateCents,
+      clientTalentDefaultRateCents: shifts.clientTalentDefaultRateCents,
       shiftName: shifts.name,
     }).from(shifts)
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
@@ -438,6 +446,10 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
     if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned slots are managed only by the client.");
     const finalizedFullProgrammingShift = shift.residencyTier === "complete" && Boolean(shift.invoiceId && shift.invoiceStatus && shift.invoiceStatus !== "draft");
     if (shift.invoiceStatus && shift.invoiceStatus !== "draft" && !finalizedFullProgrammingShift) throw new Error("This one-time slot is locked because its Invoice is finalized.");
+    if (shift.economicsMode === "client_owned"
+      && (!Number.isInteger(input.clientTalentDefaultRateCents) || (input.clientTalentDefaultRateCents ?? 0) <= 0)) {
+      throw new Error("Enter a positive session artist rate.");
+    }
 
     const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.startMinute), shift.timezone);
     const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.endMinute), shift.timezone);
@@ -473,6 +485,7 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       notes: input.notes?.trim() ?? "",
       programDetails: input.programDetails?.trim() ?? "",
       manualHostName: input.manualHostName?.trim() ?? "",
+      clientTalentDefaultRateCents: shift.economicsMode === "client_owned" ? input.clientTalentDefaultRateCents ?? null : null,
       ...(finalizedFullProgrammingShift && adjustmentCents !== 0 ? {
         invoiceId: null,
         billingStatus: "pending_adjustment" as const,
@@ -481,6 +494,16 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       } : {}),
       updatedAt: new Date(),
     }).where(eq(shifts.id, shift.id));
+    if (shift.economicsMode === "client_owned") {
+      const assignmentIds = await tx.select({ id: assignments.id }).from(assignments).where(eq(assignments.shiftId, shift.id));
+      if (assignmentIds.length) {
+        await tx.update(clientAssignmentTerms).set({
+          defaultRateCents: input.clientTalentDefaultRateCents ?? null,
+          updatedByUserId: actor.userId,
+          updatedAt: new Date(),
+        }).where(inArray(clientAssignmentTerms.assignmentId, assignmentIds.map((assignment) => assignment.id)));
+      }
+    }
     if (shift.invoiceId && !finalizedFullProgrammingShift) {
       await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
       const [remaining] = await tx.select({ total: sql<number>`coalesce(sum(${invoiceLineItems.totalCents}), 0)` }).from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, shift.invoiceId));
@@ -493,7 +516,7 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       action: "one_time_shift_updated",
       entityType: "shift",
       entityId: shift.id,
-      details: { serviceDate: shift.serviceDate, name: clean.name, room: clean.room, calendarColor: clean.calendarColor, startMinute: input.startMinute, endMinute: input.endMinute, pendingTalentInvoiceAdjustmentCents: adjustmentCents },
+      details: { serviceDate: shift.serviceDate, name: clean.name, room: clean.room, calendarColor: clean.calendarColor, startMinute: input.startMinute, endMinute: input.endMinute, clientTalentDefaultRateCents: shift.economicsMode === "client_owned" ? input.clientTalentDefaultRateCents ?? null : null, pendingTalentInvoiceAdjustmentCents: adjustmentCents },
     });
     return { id: shift.id };
   });
@@ -583,6 +606,7 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
       defaultTalentRateCents: residencies.defaultTalentRateCents,
       daypartDefaultTalentRateCents: dayparts.defaultTalentRateCents,
       clientDaypartDefaultRateCents: dayparts.clientDefaultRateCents,
+      clientTalentDefaultRateCents: shifts.clientTalentDefaultRateCents,
       economicsMode: shifts.economicsMode,
     }).from(shifts)
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
@@ -675,7 +699,7 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
       await tx.insert(clientAssignmentTerms).values({
         assignmentId: assignment.id,
         residencyId: shift.residencyId,
-        defaultRateCents: shift.clientDaypartDefaultRateCents,
+        defaultRateCents: shift.clientTalentDefaultRateCents ?? shift.clientDaypartDefaultRateCents,
         updatedByUserId: actor.userId,
       });
     }

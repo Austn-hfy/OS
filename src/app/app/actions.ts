@@ -1660,6 +1660,7 @@ const residencyBookingPayloadSchema = z.object({
     manualHostName: z.string().trim().max(160).optional().default(""),
     startMinute: z.number().int().min(0).max(1439),
     endMinute: z.number().int().min(1).max(2879),
+    clientTalentDefaultRateCents: z.number().int().min(0).nullable().optional(),
     clientRateOverrideCents: z.number().int().min(0).nullable().optional(),
     requestHfy: z.boolean().optional(),
     assignments: z.array(z.object({
@@ -1855,6 +1856,7 @@ const oneTimeRecordSchema = z.object({
   calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   startMinute: z.coerce.number().int().min(0).max(1439),
   endMinute: z.coerce.number().int().min(1).max(2879),
+  clientTalentDefaultRateCents: z.preprocess((value) => value === "" || value == null ? null : value, z.coerce.number().int().min(0).nullable()),
   notes: z.string().trim().max(2_000),
   programDetails: z.string().trim().max(500),
   manualHostName: z.string().trim().max(160),

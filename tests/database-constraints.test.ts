@@ -67,6 +67,7 @@ beforeAll(async () => {
   const clientDaypartRates = await readFile(new URL("../drizzle/0030_warm_newton_destine.sql", import.meta.url), "utf8");
   const separatedFinancials = await readFile(new URL("../drizzle/0031_dazzling_jack_power.sql", import.meta.url), "utf8");
   const clientArtistVisibility = await readFile(new URL("../drizzle/0032_fast_surge.sql", import.meta.url), "utf8");
+  const oneTimeSessionRates = await readFile(new URL("../drizzle/0034_one_time_session_artist_rate.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -105,6 +106,7 @@ beforeAll(async () => {
   await database.exec(clientDaypartRates.replaceAll("--> statement-breakpoint", ""));
   await database.exec(separatedFinancials.replaceAll("--> statement-breakpoint", ""));
   await database.exec(clientArtistVisibility.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(oneTimeSessionRates.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),
@@ -404,6 +406,26 @@ describe("database replacements for Airtable audit formulas", () => {
         (residency_id, daypart_id, name, service_date, room, calendar_color, starts_at, ends_at, client_rate_cents)
       VALUES
         ('${ids.residencyA}', NULL, 'Bad Color', '2026-09-11', 'Pool', 'purple', '2026-09-12T01:00:00Z', '2026-09-12T04:00:00Z', 10000);
+    `)).rejects.toThrow();
+  });
+
+  it("stores a nonnegative session artist rate on a one-time Shift", async () => {
+    await database.exec(`
+      UPDATE shifts
+      SET client_talent_default_rate_cents = 8500
+      WHERE name = 'Movie Night';
+    `);
+    const result = await database.query<{ client_talent_default_rate_cents: number }>(`
+      SELECT client_talent_default_rate_cents
+      FROM shifts
+      WHERE name = 'Movie Night';
+    `);
+    expect(result.rows[0].client_talent_default_rate_cents).toBe(8500);
+
+    await expect(database.exec(`
+      UPDATE shifts
+      SET client_talent_default_rate_cents = -1
+      WHERE name = 'Movie Night';
     `)).rejects.toThrow();
   });
 

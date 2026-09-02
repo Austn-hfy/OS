@@ -30,6 +30,6 @@ describe("client Finances boundaries", () => {
     expect(schema).toContain('defaultRateCents: integer("default_rate_cents")');
     expect(manager).toContain("Default artist rate ($/hr)");
     expect(bookings).toContain("defaultRateCents: rule.clientDefaultRateCents");
-    expect(bookings).toContain("defaultRateCents: shift.clientDaypartDefaultRateCents");
+    expect(bookings).toContain("defaultRateCents: shift.clientTalentDefaultRateCents ?? shift.clientDaypartDefaultRateCents");
   });
 });

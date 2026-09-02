@@ -27,4 +27,25 @@ describe("one-time calendar slot type", () => {
     expect(bookings).toContain('requested.type === "house_activity"');
     expect(migration).toContain('ALTER COLUMN "daypart_id" DROP NOT NULL');
   });
+
+  it("uses an unambiguous session name and persists an editable one-time artist rate", async () => {
+    const [calendar, actions, bookings, schema, migration] = await Promise.all([
+      readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/actions.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/db/schema.ts", import.meta.url), "utf8"),
+      readFile(new URL("../drizzle/0034_one_time_session_artist_rate.sql", import.meta.url), "utf8"),
+    ]);
+
+    expect(calendar).toContain("Session name");
+    expect(calendar).toContain("Poolside Session");
+    expect(calendar).not.toContain("Guest DJ Set");
+    expect(calendar).toContain("Session artist rate");
+    expect(calendar).toContain("clientTalentDefaultRateCents");
+    expect(actions).toContain("clientTalentDefaultRateCents");
+    expect(bookings).toContain('clientTalentDefaultRateCents: economicsMode === "client_owned"');
+    expect(bookings).toContain("tx.update(clientAssignmentTerms)");
+    expect(schema).toContain('clientTalentDefaultRateCents: integer("client_talent_default_rate_cents")');
+    expect(migration).toContain('ADD COLUMN "client_talent_default_rate_cents" integer');
+  });
 });

@@ -559,6 +559,7 @@ export const shifts = pgTable("shifts", {
   programDetails: text("program_details").notNull().default(""),
   manualHostName: text("manual_host_name").notNull().default(""),
   economicsMode: shiftEconomicsMode("economics_mode").notNull().default("hfy"),
+  clientTalentDefaultRateCents: integer("client_talent_default_rate_cents"),
   clientRateOverrideCents: integer("client_rate_override_cents"),
   clientRateCents: integer("client_rate_cents").notNull(),
   billingStatus: billingStatus("billing_status").notNull().default("pending"),
@@ -572,6 +573,7 @@ export const shifts = pgTable("shifts", {
   uniqueIndex("shifts_daypart_date_unique").on(table.daypartId, table.serviceDate).where(sql`${table.daypartId} IS NOT NULL`),
   check("shifts_time_valid", sql`${table.endsAt} > ${table.startsAt}`),
   check("shifts_calendar_color_valid", sql`${table.calendarColor} IS NULL OR ${table.calendarColor} ~ '^#[0-9A-Fa-f]{6}$'`),
+  check("shifts_client_talent_default_rate_nonnegative", sql`${table.clientTalentDefaultRateCents} IS NULL OR ${table.clientTalentDefaultRateCents} >= 0`),
   check("shifts_client_rate_nonnegative", sql`${table.clientRateCents} >= 0 AND (${table.clientRateOverrideCents} IS NULL OR ${table.clientRateOverrideCents} >= 0)`),
   check("shifts_economics_boundary", sql`
     ${table.economicsMode} = 'hfy'

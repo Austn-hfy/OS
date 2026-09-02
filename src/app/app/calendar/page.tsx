@@ -151,6 +151,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     programDetails: shift.programDetails,
     manualHostName: shift.manualHostName,
     economicsMode: shift.economicsMode,
+    clientTalentDefaultRateCents: shift.clientTalentDefaultRateCents,
     hfyRequestId: shift.hfyRequestId,
     schedulingStatus,
     assignments: activeAssignments.map((assignment) => ({

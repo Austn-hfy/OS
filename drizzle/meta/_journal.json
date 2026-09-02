@@ -239,6 +239,13 @@
       "when": 1788378918526,
       "tag": "0033_grant_client_visibility_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788388505828,
+      "tag": "0034_one_time_session_artist_rate",
+      "breakpoints": true
     }
   ]
 }

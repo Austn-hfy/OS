@@ -310,6 +310,7 @@ export async function getCalendarData(residencyId?: string, range?: { from: stri
     programDetails: shifts.programDetails,
     manualHostName: shifts.manualHostName,
     economicsMode: shifts.economicsMode,
+    clientTalentDefaultRateCents: shifts.clientTalentDefaultRateCents,
     hfyRequestId: hfyTalentRequests.id,
   }).from(shifts)
     .innerJoin(residencies, eq(shifts.residencyId, residencies.id))

@@ -21,6 +21,7 @@ export async function getResidencyClientCalendar(residencyId: string, range: { f
     room: shifts.room,
     startsAt: shifts.startsAt,
     endsAt: shifts.endsAt,
+    clientTalentDefaultRateCents: shifts.clientTalentDefaultRateCents,
   }).from(shifts)
     .leftJoin(dayparts, eq(shifts.daypartId, dayparts.id))
     .where(and(eq(shifts.residencyId, residencyId), gte(shifts.serviceDate, range.from), lte(shifts.serviceDate, range.to)))
