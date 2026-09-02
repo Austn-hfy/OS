@@ -1,4 +1,5 @@
 import { formatTimeInput } from "@/components/format";
+import { ResidencyPageHeader } from "@/components/residency-page-header";
 import { getCalendarData, getPublicCalendarLinkSettings, getScheduleOccurrenceData } from "@/data/internal";
 import { getResidencyClientSafeRoster } from "@/data/residency-client";
 import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
@@ -89,11 +90,14 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
     rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })),
   }));
 
-  return <div className="calendar-page client-calendar-page"><ResidencyCalendar
-    residency={{ id: actor.residencyId, name: actor.residencyName, timezone: actor.residencyTimezone, defaultTalentRateCents: 0, clientHourlyRateCents: 0, calendarLinkSettings }}
-    monthKey={monthKey} events={events} dayparts={safeDayparts}
-    talent={roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
-    dateExceptions={dateExceptions}
-    previewMode calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}
-  /></div>;
+  return <>
+    <ResidencyPageHeader eyebrow={actor.residencyName} title="Calendar" />
+    <div className="calendar-page client-calendar-page"><ResidencyCalendar
+      residency={{ id: actor.residencyId, name: actor.residencyName, timezone: actor.residencyTimezone, defaultTalentRateCents: 0, clientHourlyRateCents: 0, calendarLinkSettings }}
+      monthKey={monthKey} events={events} dayparts={safeDayparts}
+      talent={roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
+      dateExceptions={dateExceptions}
+      previewMode calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"} showTitle={false}
+    /></div>
+  </>;
 }

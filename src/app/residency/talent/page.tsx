@@ -1,4 +1,5 @@
 import { getResidencyClientTalentWorkspace } from "@/data/residency-client";
+import { ResidencyPageHeader } from "@/components/residency-page-header";
 import { canResidencyRoleAccess } from "@/domain/residency-access";
 import { requireResidencyActor } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -9,7 +10,7 @@ export default async function ResidencyTalentPage({ searchParams }: { searchPara
   if (!canResidencyRoleAccess(actor.accessRole, "talent")) redirect("/residency/calendar");
   const artists = await getResidencyClientTalentWorkspace(actor.residencyId);
   return <>
-    <header className="page-header"><div><p className="eyebrow">{actor.residencyName} talent</p><h1>Artist Lookup</h1><p className="subhead">Search this Residency’s explicit roster, then open an artist to review bookings, amounts owed, and client-safe profile details.</p></div></header>
+    <ResidencyPageHeader eyebrow={`${actor.residencyName} talent`} title="Artist Lookup" />
     <ClientArtistLookup artists={artists} residencyName={actor.residencyName} timeZone={actor.residencyTimezone} canManage={actor.accessRole === "manager"} initialArtistId={params.artist} />
   </>;
 }

@@ -1285,6 +1285,30 @@
 
 .hfy-style-system .client-shell .main > .client-page-header .eyebrow { margin: 0 0 5px; }
 
+.hfy-style-system .client-shell .main > .residency-page-header {
+  flex: 0 0 auto;
+}
+
+.hfy-style-system .residency-page-summary {
+  width: fit-content;
+  max-width: 100%;
+  margin: calc(var(--hfy-space-2) * -1) 0 var(--hfy-space-4);
+  padding: 8px 12px;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  color: var(--hfy-muted);
+  background: rgba(250, 252, 253, 0.64);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.hfy-style-system .residency-page-summary strong { color: var(--hfy-ink); }
+
+.hfy-style-system .calendar-command-bar.calendar-title-hidden .calendar-command-primary {
+  justify-content: flex-end;
+}
+
 .hfy-style-system .client-page-header-stat {
   min-width: 180px;
   padding: 10px 14px;

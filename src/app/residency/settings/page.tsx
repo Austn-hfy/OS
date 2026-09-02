@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { ResidencyPageHeader } from "@/components/residency-page-header";
 import { ResidencySettingsForm } from "./settings-form";
 import { getResidencyClientSettings } from "@/data/residency-client";
 import { canResidencyRoleAccess } from "@/domain/residency-access";
@@ -9,7 +10,7 @@ export default async function ResidencySettingsPage() {
   if (!canResidencyRoleAccess(actor.accessRole, "settings")) redirect("/residency/calendar");
   const settings = await getResidencyClientSettings(actor.residencyId);
   return <>
-    <header className="page-header client-page-header"><div><p className="eyebrow">Residency workspace</p><h1>Settings</h1></div></header>
+    <ResidencyPageHeader eyebrow="Residency workspace" title="Settings" />
     <ResidencySettingsForm settings={settings} />
   </>;
 }

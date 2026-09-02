@@ -75,6 +75,24 @@ describe("Residency workspace boundaries", () => {
     expect(styles).toContain("grid-template-columns: 32px minmax(0, 1fr) auto");
   });
 
+  it("uses the Invoices header treatment on every Residency workspace route", async () => {
+    const [sharedHeader, calendar, dayparts, artistLookup, roster, payouts, invoices, settings] = await Promise.all([
+      readFile(new URL("../src/components/residency-page-header.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/calendar/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/dayparts/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/talent/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/talent/roster/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/payouts/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/invoices/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/settings/page.tsx", import.meta.url), "utf8"),
+    ]);
+    expect(sharedHeader).toContain('className="page-header client-page-header residency-page-header"');
+    for (const source of [calendar, dayparts, artistLookup, roster, payouts, invoices, settings]) {
+      expect(source).toContain("<ResidencyPageHeader");
+    }
+    expect(calendar).toContain("showTitle={false}");
+  });
+
   it("uses the same Talent and Payout workspace frames in HFY and Residency modes", async () => {
     const [hfyTalent, clientTalent, hfyPayouts, clientPayouts] = await Promise.all([
       readFile(new URL("../src/app/app/talent/artist-lookup.tsx", import.meta.url), "utf8"),
