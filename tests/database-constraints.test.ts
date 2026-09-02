@@ -56,6 +56,7 @@ beforeAll(async () => {
   const clientOwnershipBoundary = await readFile(new URL("../drizzle/0026_fine_tyrannus.sql", import.meta.url), "utf8");
   const oneTimeHouseActivities = await readFile(new URL("../drizzle/0028_one_time_house_activities.sql", import.meta.url), "utf8");
   const calendarOnlyDayparts = await readFile(new URL("../drizzle/0029_calendar_only_dayparts.sql", import.meta.url), "utf8");
+  const clientDaypartRates = await readFile(new URL("../drizzle/0030_warm_newton_destine.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -91,6 +92,7 @@ beforeAll(async () => {
   await database.exec(clientOwnershipBoundary.replaceAll("--> statement-breakpoint", ""));
   await database.exec(oneTimeHouseActivities.replaceAll("--> statement-breakpoint", ""));
   await database.exec(calendarOnlyDayparts.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(clientDaypartRates.replaceAll("--> statement-breakpoint", ""));
   await database.exec(`
     INSERT INTO users (id, email, display_name, role) VALUES
       ('${ids.admin}', 'admin@hfy.test', 'Admin', 'internal_admin'),

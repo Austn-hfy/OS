@@ -92,6 +92,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       type: dayparts.type,
       billingMode: dayparts.billingMode,
       defaultTalentRateCents: dayparts.defaultTalentRateCents,
+      clientDefaultRateCents: dayparts.clientDefaultRateCents,
     }).from(dayparts)
       .where(and(
         eq(dayparts.residencyId, residency.id),
@@ -158,6 +159,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
               ? null
               : requested.billingMode ?? (actor.kind === "residency" ? "tracking_only" as const : "billed_by_hfy" as const),
             defaultTalentRateCents: null,
+            clientDefaultRateCents: null,
           };
       if (!rule.name || !rule.room || !/^#[0-9A-Fa-f]{6}$/.test(rule.color)) {
         throw new Error("A one-time slot needs a name, room, and valid calendar color.");
@@ -347,6 +349,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
           await tx.insert(clientAssignmentTerms).values({
             assignmentId: assignment.id,
             residencyId: residency.id,
+            defaultRateCents: rule.clientDefaultRateCents,
             updatedByUserId: actor.userId,
           });
         }
@@ -362,6 +365,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
             talentId: selectedTalent?.id ?? null,
             rateOverrideCents: assignmentInput.talentRateOverrideCents ?? null,
             daypartDefaultRateCents: rule.defaultTalentRateCents,
+            clientDaypartDefaultRateCents: rule.clientDefaultRateCents,
             resolvedTalentRateCents: effectiveRateCents,
           },
         });
@@ -523,6 +527,7 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
       timezone: residencies.timezone,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
       daypartDefaultTalentRateCents: dayparts.defaultTalentRateCents,
+      clientDaypartDefaultRateCents: dayparts.clientDefaultRateCents,
       economicsMode: shifts.economicsMode,
     }).from(shifts)
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
@@ -613,6 +618,7 @@ export async function addAssignmentToShift(actor: AuditActor, input: AddShiftAss
       await tx.insert(clientAssignmentTerms).values({
         assignmentId: assignment.id,
         residencyId: shift.residencyId,
+        defaultRateCents: shift.clientDaypartDefaultRateCents,
         updatedByUserId: actor.userId,
       });
     }

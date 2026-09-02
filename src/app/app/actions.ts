@@ -1183,6 +1183,7 @@ const daypartPayloadSchema = z.object({
   suggestedStartMinute: z.number().int().min(0).max(1439).nullable().optional(),
   suggestedEndMinute: z.number().int().min(1).max(2879).nullable().optional(),
   defaultTalentRateCents: z.number().int().min(0).nullable().optional(),
+  clientDefaultRateCents: z.number().int().min(0).nullable().optional(),
   activeUntil: z.iso.date().nullable().optional(),
   active: z.boolean(),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
@@ -1201,6 +1202,9 @@ const daypartPayloadSchema = z.object({
   }
   if (daypart.billingMode === "tracking_only" && daypart.defaultTalentRateCents != null) {
     context.addIssue({ code: "custom", message: "Client Managed Dayparts cannot include an HFY talent rate." });
+  }
+  if (daypart.billingMode !== "tracking_only" && daypart.clientDefaultRateCents != null) {
+    context.addIssue({ code: "custom", message: "Only Client Managed Dayparts can include a client rate." });
   }
   if (daypart.scheduleMode === "standing_weekly" && !daypart.rules.length) {
     context.addIssue({ code: "custom", message: "Select at least one operating day." });

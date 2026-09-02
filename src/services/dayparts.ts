@@ -17,6 +17,7 @@ export type SaveDaypartInput = {
   suggestedStartMinute?: number | null;
   suggestedEndMinute?: number | null;
   defaultTalentRateCents?: number | null;
+  clientDefaultRateCents?: number | null;
   activeUntil?: string | null;
   active: boolean;
   sortOrder?: number;
@@ -223,6 +224,9 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
   const defaultTalentRateCents = input.type === "dj_artist" && billingMode === "billed_by_hfy"
     ? input.defaultTalentRateCents ?? null
     : null;
+  const clientDefaultRateCents = input.type === "dj_artist" && billingMode === "tracking_only"
+    ? input.clientDefaultRateCents ?? null
+    : null;
   const activeUntil = input.activeUntil || null;
   if (!name || !room) throw new Error("Daypart name and room are required.");
   if (!/^#[0-9A-F]{6}$/.test(requestedColor)) throw new Error("Choose a valid Daypart color.");
@@ -234,6 +238,9 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
   }
   if (defaultTalentRateCents !== null && (!Number.isInteger(defaultTalentRateCents) || defaultTalentRateCents < 0)) {
     throw new Error("Daypart talent rate must be blank or a nonnegative amount.");
+  }
+  if (clientDefaultRateCents !== null && (!Number.isInteger(clientDefaultRateCents) || clientDefaultRateCents < 0)) {
+    throw new Error("Client Daypart rate must be blank or a nonnegative amount.");
   }
   if (activeUntil) weekdayForDate(activeUntil);
   const rules = input.scheduleMode === "standing_weekly" ? validateDaypartRules(input.rules) : [];
@@ -273,6 +280,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
         suggestedStartMinute,
         suggestedEndMinute,
         defaultTalentRateCents,
+        clientDefaultRateCents,
         activeUntil,
         active: input.active,
         sortOrder: input.sortOrder ?? 0,
@@ -291,6 +299,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
         suggestedStartMinute,
         suggestedEndMinute,
         defaultTalentRateCents,
+        clientDefaultRateCents,
         activeUntil,
         active: input.active,
         sortOrder: input.sortOrder ?? 0,
@@ -306,7 +315,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
       action: input.id ? "daypart_updated" : "daypart_created",
       entityType: "daypart",
       entityId: daypartId,
-      details: { name, room, color, type: input.type, billingMode, scheduleMode: input.scheduleMode, suggestedStartMinute, suggestedEndMinute, defaultTalentRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
+      details: { name, room, color, type: input.type, billingMode, scheduleMode: input.scheduleMode, suggestedStartMinute, suggestedEndMinute, defaultTalentRateCents, clientDefaultRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
     });
     return { id: daypartId };
   });

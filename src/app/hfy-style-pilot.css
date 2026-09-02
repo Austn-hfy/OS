@@ -1378,9 +1378,15 @@
 .hfy-style-system .client-owed-total { display: grid; gap: 4px; text-align: right; }
 .hfy-style-system .client-owed-total span { color: var(--hfy-ink-soft); font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .hfy-style-system .client-owed-total strong { font-size: clamp(24px, 3vw, 38px); }
-.hfy-style-system .client-rate-form { display: grid; grid-template-columns: auto minmax(88px, 120px) auto; gap: 6px; align-items: center; }
-.hfy-style-system .client-rate-form input { min-width: 0; }
-.hfy-style-system .client-rate-form small { grid-column: 1 / -1; }
+.hfy-style-system .client-rate-form { min-width: 250px; display: grid; gap: 6px; }
+.hfy-style-system .client-rate-form > label { color: var(--hfy-ink-soft); font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.hfy-style-system .client-rate-source { width: max-content; max-width: 100%; padding: 5px 8px; border-radius: 999px; color: var(--hfy-ink-soft); background: var(--hfy-surface-nested); font-size: 10px; font-weight: 800; }
+.hfy-style-system .client-rate-source.override { color: #215e52; background: #d9f0ea; }
+.hfy-style-system .client-rate-control { display: grid; grid-template-columns: auto minmax(96px, 130px) auto; gap: 6px; align-items: center; }
+.hfy-style-system .client-rate-control > span { font-weight: 800; }
+.hfy-style-system .client-rate-control input { min-width: 0; }
+.hfy-style-system .client-rate-control .button { min-height: 38px; padding: 8px 11px; white-space: nowrap; }
+.hfy-style-system .client-rate-form small { max-width: 280px; }
 .hfy-style-system .status.client-owned { margin-bottom: 6px; color: #215e52; background: #d9f0ea; }
 .hfy-style-system .client-visibility-settings .toggle-control { margin: var(--hfy-space-4) 0; }
 

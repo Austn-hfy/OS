@@ -18,6 +18,7 @@ export type DaypartRow = {
   suggestedStartMinute: number | null;
   suggestedEndMinute: number | null;
   defaultTalentRateCents: number | null;
+  clientDefaultRateCents: number | null;
   activeUntil: string | null;
   active: boolean;
   sortOrder: number;
@@ -36,6 +37,7 @@ type EditorDraft = {
   suggestedStart: string;
   suggestedEnd: string;
   defaultTalentRate: string;
+  clientDefaultRate: string;
   activeUntil: string;
   active: boolean;
   sortOrder: number;
@@ -73,6 +75,7 @@ function blankDraft(options: { room?: string; weekday?: number; startMinute?: nu
     suggestedStart: "18:00",
     suggestedEnd: "21:00",
     defaultTalentRate: "",
+    clientDefaultRate: "",
     activeUntil: "",
     active: true,
     sortOrder: 0,
@@ -94,6 +97,7 @@ function draftFromDaypart(daypart: DaypartRow): EditorDraft {
     suggestedStart: minuteToClock(daypart.suggestedStartMinute ?? daypart.rules[0]?.startMinute ?? 1080),
     suggestedEnd: minuteToClock(daypart.suggestedEndMinute ?? daypart.rules[0]?.endMinute ?? 1260),
     defaultTalentRate: daypart.defaultTalentRateCents === null ? "" : (daypart.defaultTalentRateCents / 100).toFixed(2),
+    clientDefaultRate: daypart.clientDefaultRateCents === null ? "" : (daypart.clientDefaultRateCents / 100).toFixed(2),
     activeUntil: daypart.activeUntil ?? "",
     active: daypart.active,
     sortOrder: daypart.sortOrder,
@@ -193,6 +197,7 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
       suggestedStartMinute,
       suggestedEndMinute,
       defaultTalentRateCents: draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? centsFromOptionalDollars(draft.defaultTalentRate) : null,
+      clientDefaultRateCents: draft.type === "dj_artist" && draft.billingMode === "tracking_only" ? centsFromOptionalDollars(draft.clientDefaultRate) : null,
       activeUntil: draft.activeUntil || null,
       active: draft.active,
       sortOrder: draft.sortOrder,
@@ -330,14 +335,15 @@ export function DaypartManager({ residencyId, dayparts, onSaved, readOnly = fals
               <input name="payload" type="hidden" value={payload} />
               <div className="daypart-editor-heading"><div><p className="eyebrow">{draft.id ? "Edit Daypart" : "New Daypart"}</p><h2 id="daypart-editor-title">{draft.id ? draft.name : "Add standing hours"}</h2></div><button className="quick-modal-close" type="button" aria-label="Close Daypart editor" onClick={() => setDraft(null)}>×</button></div>
               <div className="daypart-editor-scroll">
-                <div className="field"><label>Type</label><div className="daypart-type-options"><button className={draft.type === "dj_artist" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "dj_artist", billingMode: draft.type === "dj_artist" ? draft.billingMode : null })}><strong>Talent Activity</strong><small>Schedule programming with talent. Assignments and financial tracking follow the billing choice you select next.</small></button><button className={draft.type === "house_activity" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "house_activity", billingMode: null, color: draft.color === HFY_BOOKED_COLOR ? DEFAULT_DAYPART_COLOR : draft.color, defaultTalentRate: "", rules: draft.rules.map((rule) => ({ ...rule, defaultDjCount: "0" })) })}><strong>House Activity</strong><small>Schedule an activity, optional host, or registered talent without financial records.</small></button></div></div>
-                {draft.type === "dj_artist" ? <div className="field daypart-billing-step"><label>Billing</label><div className="daypart-type-options"><button className={draft.billingMode === "billed_by_hfy" ? "active standing-hfy" : "standing-hfy"} type="button" onClick={() => setDraft({ ...draft, billingMode: "billed_by_hfy", color: HFY_BOOKED_COLOR })}><strong>Standing HFY Booking</strong><small>HFY handles talent and billing for every occurrence of this Daypart automatically — no per-date request needed.</small></button><button className={draft.billingMode === "tracking_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "tracking_only", color: draft.color === HFY_BOOKED_COLOR ? DEFAULT_DAYPART_COLOR : draft.color, defaultTalentRate: "" })}><strong>Client Managed</strong><small>You handle talent and billing yourself. You can still request HFY for individual dates from the Calendar.</small></button></div></div> : null}
+                <div className="field"><label>Type</label><div className="daypart-type-options"><button className={draft.type === "dj_artist" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "dj_artist", billingMode: draft.type === "dj_artist" ? draft.billingMode : null })}><strong>Talent Activity</strong><small>Schedule programming with talent. Assignments and financial tracking follow the billing choice you select next.</small></button><button className={draft.type === "house_activity" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "house_activity", billingMode: null, color: draft.color === HFY_BOOKED_COLOR ? DEFAULT_DAYPART_COLOR : draft.color, defaultTalentRate: "", clientDefaultRate: "", rules: draft.rules.map((rule) => ({ ...rule, defaultDjCount: "0" })) })}><strong>House Activity</strong><small>Schedule an activity, optional host, or registered talent without financial records.</small></button></div></div>
+                {draft.type === "dj_artist" ? <div className="field daypart-billing-step"><label>Billing</label><div className="daypart-type-options"><button className={draft.billingMode === "billed_by_hfy" ? "active standing-hfy" : "standing-hfy"} type="button" onClick={() => setDraft({ ...draft, billingMode: "billed_by_hfy", color: HFY_BOOKED_COLOR, clientDefaultRate: "" })}><strong>Standing HFY Booking</strong><small>HFY handles talent and billing for every occurrence of this Daypart automatically — no per-date request needed.</small></button><button className={draft.billingMode === "tracking_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "tracking_only", color: draft.color === HFY_BOOKED_COLOR ? DEFAULT_DAYPART_COLOR : draft.color, defaultTalentRate: "" })}><strong>Client Managed</strong><small>You handle talent and billing yourself. You can still request HFY for individual dates from the Calendar.</small></button></div></div> : null}
                 {draft.type && (draft.type === "house_activity" || draft.billingMode) ? <div className="field daypart-schedule-step"><label>When does this run?</label><div className="daypart-type-options"><button className={draft.scheduleMode === "standing_weekly" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, scheduleMode: "standing_weekly" })}><strong>Standing weekly</strong><small>Choose one or more weekdays. These dates project onto the Calendar automatically.</small></button><button className={draft.scheduleMode === "calendar_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, scheduleMode: "calendar_only" })}><strong>Calendar Only</strong><small>Save this Daypart for occasional use. It appears in the date picker and never repeats automatically.</small></button></div></div> : null}
                 {draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <>
                 <div className="row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /></div><div className="field"><label>Room / space</label><input value={draft.room} onChange={(event) => setDraft({ ...draft, room: event.target.value })} placeholder="Amigo Room" required /></div></div>
                 <div className="daypart-definition-row">
                   {draft.billingMode === "billed_by_hfy" ? <div className="field daypart-color-field"><label>Calendar color</label><div className="daypart-color-control hfy-reserved-color"><span style={{ background: HFY_BOOKED_COLOR }} aria-hidden="true" /><strong>HFY booked</strong></div><small>Reserved pink is applied automatically and cannot be used by Client Managed Dayparts.</small></div> : <div className="field daypart-color-field"><label>Calendar color</label><DaypartColorPicker ariaLabel="Calendar color presets" value={draft.color} onChange={(color) => setDraft({ ...draft, color })} /><small>Colors run left to right by hue, with dark, medium, and light rows. HFY pink remains reserved.</small></div>}
                   {!hideFinancials && draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? <div className="field"><label>Default talent rate ($/hr) <span>optional</span></label><SensitiveInput type="number" min="0" step="0.01" value={draft.defaultTalentRate} onChange={(event) => setDraft({ ...draft, defaultTalentRate: event.target.value })} placeholder="Uses Residency default" /></div> : null}
+                  {draft.type === "dj_artist" && draft.billingMode === "tracking_only" ? <div className="field"><label>Default artist rate ($/hr) <span>optional</span></label><input name="clientDefaultRate" type="number" min="0" step="0.01" value={draft.clientDefaultRate} onChange={(event) => setDraft({ ...draft, clientDefaultRate: event.target.value })} placeholder="Set a standard rate" /><small>Applied to each client-managed booking for this Daypart. You can override a specific date in Payment Status.</small></div> : null}
                   <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this Daypart continues indefinitely.</small></div>
                 </div>
                 <label className="checkbox-row"><input checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} type="checkbox" /> Active Daypart</label>

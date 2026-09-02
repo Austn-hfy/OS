@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, clientAssignmentTerms, dayparts, invoices, residencies, residencyContacts, residencyTalent, scheduleOccurrenceTalent, shifts, talent, users } from "@/db/schema";
+import { calculateClientOwedCents, resolveClientHourlyRateCents } from "@/domain/client-rates";
 import { projectClientSafeRoster, projectClientSafeTalent, type ClientSafeManagedTalent } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
 
@@ -167,30 +168,32 @@ export async function getResidencyClientPayoutStatus(residencyId: string) {
     serviceDate: shifts.serviceDate,
     startsAt: assignments.startsAt,
     endsAt: assignments.endsAt,
-    payoutStatus: assignments.payoutStatus,
-    paidAt: assignments.paidAt,
-    source: assignments.source,
-    clientRateCents: clientAssignmentTerms.rateCents,
+    defaultRateCents: clientAssignmentTerms.defaultRateCents,
+    overrideRateCents: clientAssignmentTerms.rateCents,
   }).from(assignments)
     .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+    .innerJoin(clientAssignmentTerms, eq(clientAssignmentTerms.assignmentId, assignments.id))
     .leftJoin(talent, eq(assignments.talentId, talent.id))
-    .leftJoin(clientAssignmentTerms, eq(clientAssignmentTerms.assignmentId, assignments.id))
-    .where(and(eq(shifts.residencyId, residencyId), inArray(assignments.bookingStatus, ["confirmed", "completed"])))
+    .where(and(
+      eq(shifts.residencyId, residencyId),
+      eq(assignments.source, "client_owned"),
+      inArray(assignments.bookingStatus, ["confirmed", "completed"]),
+    ))
     .orderBy(asc(shifts.serviceDate), asc(assignments.startsAt));
-  return rows.map((row) => ({
-    id: row.id,
-    artist: row.artist ?? "Unassigned",
-    serviceDate: row.serviceDate,
-    startsAt: row.startsAt.toISOString(),
-    endsAt: row.endsAt.toISOString(),
-    status: row.source === "client_owned" ? "Client managed" as const : row.payoutStatus === "paid" ? "Paid" as const : "Pending" as const,
-    paidAt: row.paidAt?.toISOString() ?? null,
-    ownership: row.source === "client_owned" ? "client" as const : "hfy" as const,
-    clientRateCents: row.source === "client_owned" ? row.clientRateCents : null,
-    owedCents: row.source === "client_owned" && row.clientRateCents !== null
-      ? Math.round(((row.endsAt.getTime() - row.startsAt.getTime()) / 3_600_000) * row.clientRateCents)
-      : null,
-  }));
+  return rows.map((row) => {
+    const effectiveRateCents = resolveClientHourlyRateCents(row.defaultRateCents, row.overrideRateCents);
+    return {
+      id: row.id,
+      artist: row.artist ?? "Unassigned",
+      serviceDate: row.serviceDate,
+      startsAt: row.startsAt.toISOString(),
+      endsAt: row.endsAt.toISOString(),
+      defaultRateCents: row.defaultRateCents,
+      overrideRateCents: row.overrideRateCents,
+      effectiveRateCents,
+      owedCents: calculateClientOwedCents(row.startsAt, row.endsAt, effectiveRateCents),
+    };
+  });
 }
 
 export async function getResidencyClientInvoices(residencyId: string) {

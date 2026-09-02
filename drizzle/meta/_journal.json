@@ -211,6 +211,13 @@
       "when": 1788312000000,
       "tag": "0029_calendar_only_dayparts",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788317870499,
+      "tag": "0030_warm_newton_destine",
+      "breakpoints": true
     }
   ]
 }

@@ -184,6 +184,7 @@ export const dayparts = pgTable("dayparts", {
   suggestedStartMinute: integer("suggested_start_minute"),
   suggestedEndMinute: integer("suggested_end_minute"),
   defaultTalentRateCents: integer("default_talent_rate_cents"),
+  clientDefaultRateCents: integer("client_default_rate_cents"),
   activeUntil: date("active_until", { mode: "string" }),
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
@@ -192,18 +193,18 @@ export const dayparts = pgTable("dayparts", {
   uniqueIndex("dayparts_residency_name_unique").on(table.residencyId, sql`lower(${table.name})`),
   index("dayparts_residency_active_idx").on(table.residencyId, table.active, table.sortOrder),
   check("dayparts_color_valid", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),
-  check("dayparts_rate_nonnegative", sql`${table.defaultTalentRateCents} IS NULL OR ${table.defaultTalentRateCents} >= 0`),
+  check("dayparts_rate_nonnegative", sql`(${table.defaultTalentRateCents} IS NULL OR ${table.defaultTalentRateCents} >= 0) AND (${table.clientDefaultRateCents} IS NULL OR ${table.clientDefaultRateCents} >= 0)`),
   check("dayparts_schedule_fields_valid", sql`
     (${table.scheduleMode} = 'standing_weekly' AND ${table.suggestedStartMinute} IS NULL AND ${table.suggestedEndMinute} IS NULL)
     OR
     (${table.scheduleMode} = 'calendar_only' AND ${table.suggestedStartMinute} IS NOT NULL AND ${table.suggestedEndMinute} IS NOT NULL AND ${table.suggestedStartMinute} >= 0 AND ${table.suggestedStartMinute} < 1440 AND ${table.suggestedEndMinute} > ${table.suggestedStartMinute} AND ${table.suggestedEndMinute} <= ${table.suggestedStartMinute} + 1440)
   `),
   check("dayparts_type_fields_valid", sql`
-    (${table.type} = 'house_activity' AND ${table.billingMode} IS NULL AND ${table.defaultTalentRateCents} IS NULL)
+    (${table.type} = 'house_activity' AND ${table.billingMode} IS NULL AND ${table.defaultTalentRateCents} IS NULL AND ${table.clientDefaultRateCents} IS NULL)
     OR
     (${table.type} = 'dj_artist' AND ${table.billingMode} = 'tracking_only' AND ${table.defaultTalentRateCents} IS NULL)
     OR
-    (${table.type} = 'dj_artist' AND ${table.billingMode} = 'billed_by_hfy')
+    (${table.type} = 'dj_artist' AND ${table.billingMode} = 'billed_by_hfy' AND ${table.clientDefaultRateCents} IS NULL)
   `),
 ]);
 
@@ -548,12 +549,13 @@ export const assignments = pgTable("assignments", {
 export const clientAssignmentTerms = pgTable("client_assignment_terms", {
   assignmentId: uuid("assignment_id").primaryKey().references(() => assignments.id, { onDelete: "cascade" }),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  defaultRateCents: integer("default_rate_cents"),
   rateCents: integer("rate_cents"),
   updatedByUserId: uuid("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
   ...timestamps,
 }, (table) => [
   index("client_assignment_terms_residency_idx").on(table.residencyId, table.updatedAt),
-  check("client_assignment_terms_rate_nonnegative", sql`${table.rateCents} IS NULL OR ${table.rateCents} >= 0`),
+  check("client_assignment_terms_rate_nonnegative", sql`(${table.defaultRateCents} IS NULL OR ${table.defaultRateCents} >= 0) AND (${table.rateCents} IS NULL OR ${table.rateCents} >= 0)`),
 ]);
 
 export const hfyTalentRequests = pgTable("hfy_talent_requests", {
