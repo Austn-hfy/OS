@@ -1317,6 +1317,145 @@
 
 .hfy-style-system .client-page-header-stat strong { font-size: 24px; }
 
+/* Residency Talent and Payouts use one calm workspace surface with internal divisions. */
+.hfy-style-system .client-shell .main > .residency-workspace-surface {
+  overflow: hidden;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-card);
+  background: var(--hfy-surface-strong);
+  box-shadow: var(--hfy-shadow-section), inset 0 1px var(--hfy-inset-highlight);
+  backdrop-filter: blur(16px) saturate(112%);
+}
+
+.hfy-style-system .client-shell .main > .residency-workspace-surface > .client-page-header {
+  min-height: 90px;
+  margin: 0;
+  padding: 14px 20px;
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid var(--hfy-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system .client-shell .main > .residency-workspace-surface > .client-page-header h1 {
+  margin: 2px 0 0;
+  font-size: clamp(27px, 2.5vw, 34px);
+  line-height: 1.02;
+}
+
+.hfy-style-system .residency-payout-heading-total {
+  display: grid;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--hfy-muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+.hfy-style-system .residency-payout-heading-total strong {
+  color: var(--hfy-ink);
+  font-family: var(--hfy-font-sans);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.hfy-style-system .residency-talent-workspace-surface .artist-lookup-shell {
+  min-height: 680px;
+  gap: 0;
+  align-items: stretch;
+}
+
+.hfy-style-system .residency-talent-workspace-surface :is(.artist-roster-panel, .artist-detail-panel) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system .residency-talent-workspace-surface .artist-roster-panel {
+  position: static;
+  top: auto;
+  max-height: none;
+  border-right: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .residency-payout-workspace-surface .payout-tabs {
+  margin: 0;
+  padding: 7px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--hfy-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hfy-style-system .residency-payout-workspace-surface .payout-filter-bar {
+  grid-template-columns: minmax(240px, 1.3fr) minmax(300px, 0.9fr);
+  gap: 11px 16px;
+  margin: 0;
+  padding: 16px 20px;
+  border: 0;
+  border-bottom: 1px solid var(--hfy-line);
+  border-radius: 0;
+  background: rgba(229, 235, 239, 0.38);
+  box-shadow: none;
+}
+
+.hfy-style-system .residency-payout-workspace-surface .payout-sort-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.hfy-style-system .residency-payout-workspace-surface .payout-date-range {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, 520px);
+}
+
+.hfy-style-system .residency-payout-workspace-surface .payout-date-range .field { width: auto; }
+
+.hfy-style-system .residency-payout-workspace-surface .payout-list-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hfy-style-system .residency-payout-workspace-surface .payout-list-heading { background: rgba(216, 225, 231, 0.62); }
+
+@media (max-width: 1500px) {
+  .hfy-style-system .residency-talent-workspace-surface .artist-roster-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--hfy-line);
+  }
+}
+
+@media (max-width: 850px) {
+  .hfy-style-system .residency-payout-workspace-surface .payout-filter-bar { grid-template-columns: 1fr; }
+  .hfy-style-system .residency-payout-workspace-surface .payout-date-range { grid-column: auto; width: 100%; }
+}
+
+@media (max-width: 650px) {
+  .hfy-style-system .client-shell .main > .residency-workspace-surface > .client-page-header {
+    min-height: 0;
+    padding: 16px 18px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .hfy-style-system .residency-payout-heading-total { margin-left: 0; text-align: left; }
+  .hfy-style-system .residency-payout-workspace-surface .payout-sort-controls { grid-template-columns: 1fr; }
+  .hfy-style-system .residency-payout-workspace-surface .payout-date-range { grid-template-columns: 1fr 1fr; }
+}
+
 @media (max-width: 700px) {
   .hfy-style-system .daypart-week-corner,
   .hfy-style-system .daypart-room-label { padding-inline: 8px; }

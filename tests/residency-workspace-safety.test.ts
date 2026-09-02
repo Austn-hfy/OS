@@ -94,6 +94,27 @@ describe("Residency workspace boundaries", () => {
     expect(dayparts).not.toContain("<ResidencyPageHeader");
   });
 
+  it("consolidates Residency Talent and Payouts into single workspace surfaces", async () => {
+    const [artistLookup, payouts, payoutWorkspace, styles] = await Promise.all([
+      readFile(new URL("../src/app/residency/talent/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/payouts/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/payouts/client-payouts-workspace.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
+    ]);
+    expect(artistLookup).toContain("residency-talent-workspace-surface");
+    expect(payouts).toContain("residency-payout-workspace-surface");
+    expect(styles).toContain(".residency-workspace-surface");
+    expect(styles).toContain(".residency-talent-workspace-surface :is(.artist-roster-panel, .artist-detail-panel)");
+    expect(styles).toContain(".residency-payout-workspace-surface .payout-list-panel");
+
+    const artist = payoutWorkspace.indexOf('htmlFor="client-payout-artist-search">Artists');
+    const sort = payoutWorkspace.indexOf('className="payout-sort-controls"');
+    const dates = payoutWorkspace.indexOf('className="payout-date-range"');
+    expect(artist).toBeGreaterThan(-1);
+    expect(sort).toBeGreaterThan(artist);
+    expect(dates).toBeGreaterThan(sort);
+  });
+
   it("uses the same Talent and Payout workspace frames in HFY and Residency modes", async () => {
     const [hfyTalent, clientTalent, hfyPayouts, clientPayouts] = await Promise.all([
       readFile(new URL("../src/app/app/talent/artist-lookup.tsx", import.meta.url), "utf8"),

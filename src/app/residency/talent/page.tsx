@@ -9,8 +9,8 @@ export default async function ResidencyTalentPage({ searchParams }: { searchPara
   const [actor, params] = await Promise.all([requireResidencyActor(), searchParams]);
   if (!canResidencyRoleAccess(actor.accessRole, "talent")) redirect("/residency/calendar");
   const artists = await getResidencyClientTalentWorkspace(actor.residencyId);
-  return <>
+  return <section className="residency-workspace-surface residency-talent-workspace-surface">
     <ResidencyPageHeader eyebrow={`${actor.residencyName} talent`} title="Artist Lookup" />
     <ClientArtistLookup artists={artists} residencyName={actor.residencyName} timeZone={actor.residencyTimezone} canManage={actor.accessRole === "manager"} initialArtistId={params.artist} />
-  </>;
+  </section>;
 }

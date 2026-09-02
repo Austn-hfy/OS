@@ -16,9 +16,10 @@ export default async function ResidencyPayoutStatusPage() {
   const rows = await getResidencyClientPayoutStatus(actor.residencyId);
   const owedTotalCents = rows.reduce((sum, row) => sum + (row.owedCents ?? 0), 0);
   const outstandingCount = rows.filter((row) => row.owedCents !== null && row.owedCents > 0).length;
-  return <>
-    <ResidencyPageHeader eyebrow={`${actor.residencyName} billing`} title="Payouts" />
-    <p className="residency-page-summary"><strong>{money(owedTotalCents)}</strong> currently owed across {outstandingCount} client-managed Assignment{outstandingCount === 1 ? "" : "s"}. Rates can be overridden for an individual date.</p>
+  return <section className="residency-workspace-surface residency-payout-workspace-surface">
+    <ResidencyPageHeader eyebrow={`${actor.residencyName} billing`} title="Payouts">
+      <div className="residency-payout-heading-total"><strong>{money(owedTotalCents)} owed</strong><span>{outstandingCount} client-managed Assignment{outstandingCount === 1 ? "" : "s"} outstanding</span></div>
+    </ResidencyPageHeader>
     <ClientPayoutsWorkspace rows={rows} residencyName={actor.residencyName} timeZone={actor.residencyTimezone} />
-  </>;
+  </section>;
 }
