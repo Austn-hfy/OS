@@ -309,7 +309,7 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .calendar-toolbar-select:focus-within { border-color: rgba(39,131,220,.48); box-shadow: 0 0 0 3px rgba(39,131,220,.1); }
 .calendar-toolbar-select > span { flex: 0 0 auto; font-size: inherit; line-height: 1; }
 .calendar-toolbar-select select { width: auto; min-width: 104px; height: 100%; min-height: 0; margin: 0; padding: 0 30px 0 0; border: 0; border-radius: inherit; outline: 0; color: var(--ink); background-color: transparent; box-shadow: none; font: inherit; cursor: pointer; }
-.calendar-toolbar-filters .calendar-toolbar-select:last-child select { min-width: 118px; }
+.calendar-toolbar-filters .calendar-toolbar-select:nth-of-type(2) select { width: 118px; min-width: 118px; }
 .calendar-toolbar .calendar-view-toggle { height: var(--calendar-toolbar-height); min-height: var(--calendar-toolbar-height); padding: 3px; border-width: 1px; border-color: var(--line); border-radius: 10px; }
 .calendar-toolbar .calendar-view-toggle a { min-width: 56px; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; border-radius: 7px; font-size: 10px; }
 .calendar-toolbar .calendar-share-button, .calendar-toolbar-button { height: var(--calendar-toolbar-height); min-height: var(--calendar-toolbar-height); padding: 7px 12px; border-width: 1px; border-color: var(--line); border-radius: 10px; font-size: 10px; }
