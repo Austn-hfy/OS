@@ -437,8 +437,9 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     setAddMode("daypart");
   }
 
-  function chooseRoom(roomId: string) {
-    setSelectedRoomId(roomId);
+  function chooseRoom(room: RoomComboboxOption) {
+    setNewRoomName(room.name);
+    setSelectedRoomId(room.id);
     setActiveDaypartId("");
     setAddMode("activity");
     setNewRoomPromptOpen(false);
@@ -500,10 +501,10 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     const result = await createResidencyRoomAction(formData);
     setRoomCreating(false);
     setRoomCreateState(result);
-    if (!result.room) return;
-    setCreatedRooms((current) => current.some((room) => room.id === result.room!.id) ? current : [...current, result.room!]);
-    setNewRoomName("");
-    chooseRoom(result.room.id);
+    const room = result.room;
+    if (!room) return;
+    setCreatedRooms((current) => current.some((item) => item.id === room.id) ? current : [...current, room]);
+    chooseRoom(room);
   }
 
   function returnToRoomPicker() {
@@ -1011,7 +1012,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
         : <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />}
 
       {modal ? <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }}>
-        <section className={`quick-modal ${modal.type === "edit" ? "quick-modal-edit" : ""}`} role="dialog" aria-modal="true" aria-labelledby="quick-modal-title">
+        <section className={`quick-modal ${modal.type === "edit" ? "quick-modal-edit" : ""} ${modal.type === "add" && addMode === "room" ? "quick-modal-room-picker" : ""}`} role="dialog" aria-modal="true" aria-labelledby="quick-modal-title">
           <header className="quick-modal-header">
             <div><p className="eyebrow">{modal.type === "add" ? `${weekdayNames[weekdayForDate(modal.date)]}, ${modal.date}` : editingEvent?.date}</p><h2 id="quick-modal-title">{modal.type === "add" ? addMode === "room" ? "Where is this happening?" : addMode === "activity" ? "What's happening here?" : addMode === "new-type" ? "Create new" : addMode === "new-repeat" ? "Does this repeat?" : addMode === "one-time" ? activeSuggestion?.createMode === "standing_weekly" ? "Create a recurring Daypart" : activeSuggestion?.createMode === "calendar_only" ? "Create a reusable template" : "Create a one-time activity" : "Schedule Daypart" : `Manage · ${editingEvent?.title ?? "Slot"}`}</h2></div>
             <button className="quick-modal-close" type="button" aria-label="Close popup" onClick={() => setModal(null)}>×</button>
@@ -1021,7 +1022,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
             {modal.type === "add" ? (
               addMode === "room" ? <div className="quick-room-picker-shell">
                 <div className="quick-picker-intro"><strong>Choose a room or space</strong><small>Start typing to find an existing room. A new room is created only when you explicitly choose that option.</small></div>
-                <div className="field quick-room-combobox-field"><label>Room / space</label><RoomCombobox rooms={availableRooms} value={newRoomName} selectedRoomId={null} creationConfirmed={newRoomPromptOpen} placeholder="Start typing, for example Amigo" ariaLabel="Choose or create a room" autoFocus onChange={(roomName) => { setNewRoomName(roomName); setNewRoomPromptOpen(false); setRoomCreateState(initialActionState); }} onSelect={(room) => chooseRoom(room.id)} onCreate={openNewRoomPrompt} /></div>
+                <div className="field quick-room-combobox-field"><label>Room / space</label><RoomCombobox rooms={availableRooms} value={newRoomName} selectedRoomId={null} creationConfirmed={newRoomPromptOpen} placeholder="Start typing, for example Amigo" ariaLabel="Choose or create a room" autoFocus onChange={(roomName) => { setNewRoomName(roomName); setNewRoomPromptOpen(false); setRoomCreateState(initialActionState); }} onSelect={chooseRoom} onCreate={openNewRoomPrompt} /></div>
                 {newRoomPromptOpen ? <div className="quick-new-room-prompt"><div className="quick-new-room-name-summary"><span>New room or space</span><strong>{newRoomName}</strong></div><div className="field"><label>Room color</label><RoomHuePicker value={newRoomHue} onChange={setNewRoomHue} ariaLabel="Choose the new room color" /><small>The next automatic color is preselected. Pick another if you prefer.</small></div><div className="quick-new-room-actions"><button className="button secondary" type="button" onClick={() => { setNewRoomPromptOpen(false); setRoomCreateState(initialActionState); }}>Back</button><button className="button" type="button" disabled={roomCreating || !newRoomName.trim()} onClick={() => void createNewRoom()}>{roomCreating ? "Adding…" : "Create space"}</button></div>{roomCreateState.status === "error" ? <p className="error" aria-live="polite">{roomCreateState.message}</p> : null}</div> : null}
                 <div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button></div>
               </div>

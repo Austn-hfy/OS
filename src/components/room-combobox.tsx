@@ -73,7 +73,7 @@ export function RoomCombobox({
   const similarRoom = rankedRooms.find(({ score }) => score > 0 && score <= 3)?.room;
   const selectionReady = Boolean(selectedRoomId || creationConfirmed);
 
-  return <div className="room-combobox" onBlur={(event) => {
+  return <div className={`room-combobox ${open ? "open" : ""}`} onBlur={(event) => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
   }}>
     <input
@@ -95,7 +95,13 @@ export function RoomCombobox({
       }}
       required
     />
-    {open ? <div className="room-combobox-options" id="room-combobox-options" role="listbox" aria-label="Rooms and spaces">
+    {open ? <div
+      className="room-combobox-options"
+      id="room-combobox-options"
+      role="listbox"
+      aria-label="Rooms and spaces"
+      onMouseDown={(event) => event.preventDefault()}
+    >
       {rankedRooms.map(({ room, score }) => <button
         className={room.id === selectedRoomId ? "selected" : ""}
         type="button"
