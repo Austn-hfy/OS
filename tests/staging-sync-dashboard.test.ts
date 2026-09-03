@@ -22,6 +22,7 @@ describe("staging sync dashboard", () => {
     const page = await source("../src/app/app/setup/page.tsx");
     const card = await source("../src/app/app/setup/staging-sync-card.tsx");
     expect(page).toContain("isStableStagingSyncEnvironment");
+    expect(page).toContain('process.env.STAGING_SYNC_PRODUCTION_EXPORT_MODE === "oidc"');
     expect(page).toContain("process.env.PRODUCTION_SYNC_DATABASE_URL");
     expect(page).toContain("process.env.STAGING_SYNC_CONFIRMATION_SECRET");
     expect(page).toContain("!selected && stagingSyncEnabled");

@@ -48,7 +48,11 @@ An operator may copy a selected production Residency's **structure** into stagin
 
 The normal owner workflow is available only at `staging.hfy.app` under **Developer Platform → Admin Settings → Sync Production Structure**. The owner first selects **Preview Sync**, reviews the exact counts, confirms the preview, and then selects **Sync Ace Now**. The preview expires after ten minutes and becomes invalid immediately if the source or destination plan changes. The card shows the last successful dashboard sync.
 
-The dashboard action has no scheduled trigger and adds no work to ordinary application requests. It is hidden outside the stable `staging` branch, its server endpoint rejects every hostname except `staging.hfy.app`, and every request rechecks the signed-in `internal_admin` role. The production connection authenticates as `hfy_staging_structure_reader`, a dedicated role that has no table permissions and can execute only `private.hfy_staging_structure_snapshot(text)`. That function returns an allowlisted structural document and never selects raw contact, banking, tax-file, note, authentication, booking, payout, Invoice, or share-link data.
+The dashboard action has no scheduled trigger and adds no work to ordinary application requests. It is hidden outside the stable `staging` branch, its server endpoint rejects every hostname except `staging.hfy.app`, and every request rechecks the signed-in `internal_admin` role.
+
+For each invocation, staging obtains a fresh Vercel OIDC token with a custom audience and unique request ID. The production export endpoint verifies the token signature and exact HFY Vercel owner, project, preview environment, issuer, subject, audience, and request ID before running `private.hfy_staging_structure_snapshot(text)`. It accepts only Ace, runs only on `hfy.app` from `main`, and has no production database credential in staging. The SQL function returns an allowlisted structural document and never selects raw contact, banking, tax-file, note, authentication, booking, payout, Invoice, or share-link data.
+
+Every dashboard attempt is recorded in the dedicated `cross_environment_access_log` table with its actor, source deployment, commit, branch, Residency, action, outcome, HTTP status, and safe record counts. Valid production export invocations receive a second source-side record under the same request ID. A separately tagged Sentry security event (`security_stream=cross_environment_access`) is emitted for every terminal outcome, including denials and failures. Tokens, credentials, request authorization headers, and exported records are never included in either channel.
 
 The original operator command remains available as a recovery and audit path. Production can be read through an approved database transaction, through the source-only Supabase API adapter, or from a reviewed project-bound snapshot. Only the separate staging database may receive writes.
 
@@ -58,14 +62,22 @@ Provide these secrets through the operator environment; do not put them in comma
 - `STAGING_SYNC_DATABASE_URL`: approved staging Postgres connection.
 - `STAGING_SYNC_PAYMENT_ENCRYPTION_KEY`: staging's payment-field encryption key, required only when applying synthetic payment profiles.
 
-The staging web deployment instead uses these server-only variables:
+The staging web deployment uses these server-only variables:
 
-- `PRODUCTION_SYNC_DATABASE_URL`: the dedicated `hfy_staging_structure_reader` production connection, configured only on the stable staging branch.
+- `STAGING_SYNC_PRODUCTION_EXPORT_MODE=oidc`: enables the short-lived Vercel identity flow after the production endpoint has been promoted.
 - `DATABASE_URL`: the existing staging database connection.
 - `TALENT_PAYMENT_ENCRYPTION_KEY`: the staging encryption key for synthetic payment profiles.
 - `STAGING_SYNC_CONFIRMATION_SECRET`: a staging-only secret used to sign short-lived reviewed previews.
 
-None of these variables is exposed to browser JavaScript. The cross-environment reader connection and preview-confirmation secret must never be configured on the production deployment.
+None of these variables is exposed to browser JavaScript. `PRODUCTION_SYNC_DATABASE_URL` is retained only during the reviewed cutover as a rollback path; delete it from the staging environment after the live OIDC path succeeds. The preview-confirmation secret must never be configured on the production deployment.
+
+### OIDC cutover sequence
+
+1. Apply the access-log migration to staging and deploy this change to the `staging` branch. Leave the current read-only fallback active for review.
+2. Apply the same migration to production and promote the production export endpoint through the normal staging-to-main review.
+3. Set `STAGING_SYNC_PRODUCTION_EXPORT_MODE=oidc` on the stable staging branch and redeploy staging.
+4. Run Preview Sync, confirm both access-log records and Sentry security events, then run an Apply only if a structural refresh is intended.
+5. Delete `PRODUCTION_SYNC_DATABASE_URL` from the staging branch environment and run Preview Sync once more. Do not remove the restricted database role until the operator command's recovery requirements have been reviewed separately.
 
 Preview an Ace refresh without writing anything:
 

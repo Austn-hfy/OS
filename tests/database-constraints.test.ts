@@ -71,6 +71,7 @@ beforeAll(async () => {
   const roomColorSystem = await readFile(new URL("../drizzle/0036_room_color_system.sql", import.meta.url), "utf8");
   const aceRoomColorSwap = await readFile(new URL("../drizzle/0037_ace_room_color_swap.sql", import.meta.url), "utf8");
   const widerRoomShades = await readFile(new URL("../drizzle/0038_wider_room_shades.sql", import.meta.url), "utf8");
+  const crossEnvironmentAccessLog = await readFile(new URL("../drizzle/0039_cross_environment_access_log.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -150,6 +151,7 @@ beforeAll(async () => {
   await database.exec(roomColorSystem.replaceAll("--> statement-breakpoint", ""));
   await database.exec(aceRoomColorSwap.replaceAll("--> statement-breakpoint", ""));
   await database.exec(widerRoomShades.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(crossEnvironmentAccessLog.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -183,6 +185,28 @@ describe("database replacements for Airtable audit formulas", () => {
         AND NOT relrowsecurity;
     `);
     expect(result.rows).toEqual([]);
+  });
+
+  it("keeps cross-environment access records append-once per request and location", async () => {
+    const requestId = "00000000-0000-4000-8000-000000000090";
+    const values = `
+      '${requestId}', 'staging_caller', '${ids.admin}', 'Admin', 'preview', 'ace-hotel',
+      'prj_test', 'preview', 'owner:test:project:test:environment:preview', 'https://oidc.vercel.com/test'
+    `;
+    await database.exec(`
+      INSERT INTO cross_environment_access_log
+        (request_id, recorded_by, actor_user_id, actor_label, action, residency_slug, source_project_id, source_environment, source_subject, source_issuer)
+      VALUES (${values});
+    `);
+    await expect(database.exec(`
+      INSERT INTO cross_environment_access_log
+        (request_id, recorded_by, actor_user_id, actor_label, action, residency_slug, source_project_id, source_environment, source_subject, source_issuer)
+      VALUES (${values});
+    `)).rejects.toThrow(/unique|duplicate/i);
+    const privilege = await database.query<{ allowed: boolean }>(`
+      SELECT has_table_privilege('authenticated', 'cross_environment_access_log', 'SELECT') AS allowed;
+    `);
+    expect(privilege.rows[0]?.allowed).toBe(false);
   });
 
   it("keeps Platform subscription invoices in a Residency-scoped ledger", async () => {

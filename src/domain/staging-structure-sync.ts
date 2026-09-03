@@ -109,6 +109,37 @@ export type ProductionStructureSnapshot = {
   rosterAssignments: SourceRosterAssignment[];
 };
 
+export function parseProductionStructureSnapshot(
+  parsed: Record<string, unknown>,
+  requestedSlugs: string[],
+): ProductionStructureSnapshot {
+  if (parsed.sourceProjectRef !== PRODUCTION_SUPABASE_PROJECT_REF) {
+    throw new Error("Production snapshot is not bound to the approved HFY production project.");
+  }
+  const requiredArrays = ["clientAccounts", "residencies", "dayparts", "dayRules", "dateExceptions", "talent", "rosterAssignments"];
+  for (const key of requiredArrays) {
+    if (!Array.isArray(parsed[key])) throw new Error(`Reviewed production snapshot is missing ${key}.`);
+  }
+  const snapshot = parsed as unknown as ProductionStructureSnapshot;
+  const snapshotSlugs = snapshot.residencies.map((residency) => residency.slug).sort();
+  const expectedSlugs = [...requestedSlugs].sort();
+  if (snapshotSlugs.length !== expectedSlugs.length || snapshotSlugs.some((slug, index) => slug !== expectedSlugs[index])) {
+    throw new Error("Reviewed production snapshot scope does not exactly match the requested Residency scope.");
+  }
+  return {
+    ...snapshot,
+    residencies: snapshot.residencies.map((residency) => ({
+      ...residency,
+      pipelineStatusChangedAt: new Date(residency.pipelineStatusChangedAt),
+      convertedAt: residency.convertedAt ? new Date(residency.convertedAt) : null,
+    })),
+    talent: snapshot.talent.map((artist) => ({
+      ...artist,
+      archivedAt: artist.archivedAt ? new Date(artist.archivedAt) : null,
+    })),
+  };
+}
+
 export type ExistingStagingState = {
   residencyId: string | null;
   clientAccountId: string | null;

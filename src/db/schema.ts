@@ -775,6 +775,35 @@ export const auditLog = pgTable("audit_log", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("audit_log_residency_created_idx").on(table.residencyId, table.createdAt)]);
 
+export const crossEnvironmentAccessLog = pgTable("cross_environment_access_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  requestId: uuid("request_id").notNull(),
+  recordedBy: text("recorded_by").notNull(),
+  actorUserId: uuid("actor_user_id"),
+  actorLabel: text("actor_label").notNull(),
+  action: text("action").notNull(),
+  residencySlug: text("residency_slug").notNull(),
+  sourceProjectId: text("source_project_id").notNull(),
+  sourceEnvironment: text("source_environment").notNull(),
+  sourceSubject: text("source_subject").notNull(),
+  sourceIssuer: text("source_issuer").notNull(),
+  sourceDeployment: text("source_deployment"),
+  sourceCommitSha: text("source_commit_sha"),
+  sourceGitRef: text("source_git_ref"),
+  outcome: text("outcome").notNull().default("started"),
+  httpStatus: integer("http_status"),
+  reasonCode: text("reason_code"),
+  recordCounts: jsonb("record_counts").$type<Record<string, number>>().notNull().default({}),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  uniqueIndex("cross_environment_access_request_location_unique").on(table.requestId, table.recordedBy),
+  index("cross_environment_access_outcome_started_idx").on(table.outcome, table.startedAt),
+  check("cross_environment_access_recorded_by_valid", sql`${table.recordedBy} IN ('staging_caller', 'production_export')`),
+  check("cross_environment_access_action_valid", sql`${table.action} IN ('preview', 'apply')`),
+  check("cross_environment_access_outcome_valid", sql`${table.outcome} IN ('started', 'succeeded', 'failed', 'denied')`),
+]);
+
 export type User = typeof users.$inferSelect;
 export type AccountSetupToken = typeof accountSetupTokens.$inferSelect;
 export type Residency = typeof residencies.$inferSelect;

@@ -9,6 +9,7 @@ import {
   assertSafeStagingDestination,
   buildStagingResidencyPlan,
   formatDryRunReport,
+  parseProductionStructureSnapshot,
   stagingSyncUuid,
   type ExistingStagingState,
   type ProductionStructureSnapshot,
@@ -89,37 +90,9 @@ function selection() {
   return { all, slugs: [...new Set(slugs)] };
 }
 
-function parseProductionSnapshot(parsed: Record<string, unknown>, requestedSlugs: string[]): ProductionStructureSnapshot {
-  if (parsed.sourceProjectRef !== "tkfsgifnywbwjdkxjhae") {
-    throw new Error("Production snapshot is not bound to the approved HFY production project.");
-  }
-  const requiredArrays = ["clientAccounts", "residencies", "dayparts", "dayRules", "dateExceptions", "talent", "rosterAssignments"];
-  for (const key of requiredArrays) {
-    if (!Array.isArray(parsed[key])) throw new Error(`Reviewed production snapshot is missing ${key}.`);
-  }
-  const snapshot = parsed as unknown as ProductionStructureSnapshot;
-  const snapshotSlugs = snapshot.residencies.map((residency) => residency.slug).sort();
-  const expectedSlugs = [...requestedSlugs].sort();
-  if (snapshotSlugs.length !== expectedSlugs.length || snapshotSlugs.some((slug, index) => slug !== expectedSlugs[index])) {
-    throw new Error("Reviewed production snapshot scope does not exactly match the requested Residency scope.");
-  }
-  return {
-    ...snapshot,
-    residencies: snapshot.residencies.map((residency) => ({
-      ...residency,
-      pipelineStatusChangedAt: new Date(residency.pipelineStatusChangedAt),
-      convertedAt: residency.convertedAt ? new Date(residency.convertedAt) : null,
-    })),
-    talent: snapshot.talent.map((artist) => ({
-      ...artist,
-      archivedAt: artist.archivedAt ? new Date(artist.archivedAt) : null,
-    })),
-  };
-}
-
 function loadReviewedProductionSnapshot(filePath: string, requestedSlugs: string[]): ProductionStructureSnapshot {
   const parsed = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
-  return parseProductionSnapshot(parsed, requestedSlugs);
+  return parseProductionStructureSnapshot(parsed, requestedSlugs);
 }
 
 export async function verifyRequiredSchema(sql: Queryable, label: string): Promise<void> {
@@ -282,7 +255,7 @@ export async function loadRestrictedProductionSnapshot(
       select private.hfy_staging_structure_snapshot(${slug}) as snapshot
     `;
     if (!rows[0]?.snapshot) throw new Error(`Production structure export returned no result for ${slug}.`);
-    snapshots.push(parseProductionSnapshot(rows[0].snapshot, [slug]));
+    snapshots.push(parseProductionStructureSnapshot(rows[0].snapshot, [slug]));
   }
   return snapshots.reduce<ProductionStructureSnapshot>((combined, snapshot) => ({
     clientAccounts: [...combined.clientAccounts, ...snapshot.clientAccounts],
