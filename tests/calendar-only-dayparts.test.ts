@@ -65,17 +65,26 @@ describe("Calendar Only Dayparts", () => {
     expect(calendar).not.toContain('"Save Daypart"');
   });
 
-  it("opens the shared Daypart creation panel without leaving Calendar", async () => {
-    const [calendar, panel] = await Promise.all([
+  it("removes the redundant toolbar launcher while preserving the two established creation paths", async () => {
+    const [calendar, manager, monthCalendar] = await Promise.all([
       readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
-      readFile(new URL("../src/components/day-parts-panel.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/month-calendar.tsx", import.meta.url), "utf8"),
     ]);
-    expect(calendar).toContain("setDaypartsPanelOpen(true)");
-    expect(calendar).toContain("<DayPartsPanel");
-    expect(calendar).toContain("initialCreate");
-    expect(calendar).not.toContain("calendarDaypartsHref");
-    expect(panel).toContain("fullProgrammingClient={fullProgrammingClient}");
-    expect(panel).toContain("if (onSaved) onSaved()");
+    expect(calendar).not.toContain("+ Create New Daypart");
+    expect(calendar).not.toContain("<DayPartsPanel");
+    expect(calendar).toContain("onDateClick={canManage ? openDate : undefined}");
+    expect(manager).toContain("+ Add Daypart");
+    expect(monthCalendar).toContain('className="calendar-add-icon"');
+  });
+
+  it("organizes the Calendar toolbar into left, center, and right clusters", async () => {
+    const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
+    expect(calendar).toContain('className="calendar-toolbar-cluster calendar-toolbar-filters"');
+    expect(calendar).toContain('className="calendar-toolbar-cluster calendar-toolbar-view"');
+    expect(calendar).toContain('className="calendar-toolbar-cluster calendar-toolbar-actions"');
+    expect(calendar).toContain('<span>Status</span><select id="calendar-status-filter"');
+    expect(calendar).toContain('<span>Daypart</span><select id="calendar-daypart-filter"');
   });
 
   it("provides update and delete actions for both one-time record types", async () => {

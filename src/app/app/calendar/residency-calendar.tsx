@@ -10,7 +10,6 @@ import { ArtistSearchPicker, type CreateArtistResult } from "@/components/artist
 import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { DaypartColorPicker } from "@/components/daypart-color-picker";
-import { DayPartsPanel } from "@/components/day-parts-panel";
 import { RoomHuePicker } from "@/components/room-hue-picker";
 import { Status } from "@/components/format";
 import { SensitiveInput } from "@/components/privacy-mode";
@@ -182,7 +181,6 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
   const [newRoomPromptOpen, setNewRoomPromptOpen] = useState(false);
   const [roomCreateState, setRoomCreateState] = useState<CreateRoomActionState>(initialActionState);
   const [roomCreating, setRoomCreating] = useState(false);
-  const [daypartsPanelOpen, setDaypartsPanelOpen] = useState(false);
   const [clientArtistFlow, setClientArtistFlow] = useState(false);
   const [artistPickerKey, setArtistPickerKey] = useState(0);
   const [replacementDraft, setReplacementDraft] = useState<ReplacementDraft | null>(null);
@@ -977,16 +975,19 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
           </div>
         </div>
         <div className="calendar-command-secondary">
-          <div className="calendar-view-filters">
-            {residencyOptions?.length ? <form className="calendar-filter-form" method="get"><input name="mode" type="hidden" value="hfy" /><input name="month" type="hidden" value={monthKey} />{calendarView === "week" ? <><input name="calendarView" type="hidden" value="week" /><input name="week" type="hidden" value={activeWeekStart} /></> : null}{residencySelectionParam === "residency" ? <input name="view" type="hidden" value="operations" /> : null}<div className="field calendar-filter"><label htmlFor="calendar-residency-switcher">Residency calendar</label><select id="calendar-residency-switcher" name={residencySelectionParam} defaultValue={residency.id}>{residencyOptions.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div><button className="button secondary" type="submit">View</button></form> : null}
-            <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="all">All slots</option><option value="needs">Needs scheduling</option><option value="filled">Scheduled</option></select></div>
-            <div className="field"><label htmlFor="calendar-daypart-filter">Daypart</label><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></div>
-            <div className="field calendar-view-filter"><label>View</label><div className="calendar-view-toggle" role="group" aria-label="Calendar view"><Link className={calendarView === "month" ? "active" : ""} aria-current={calendarView === "month" ? "page" : undefined} href={monthViewHref}>Month</Link><Link className={calendarView === "week" ? "active" : ""} aria-current={calendarView === "week" ? "page" : undefined} href={weekViewHref}>Week</Link></div></div>
-          </div>
-          <div className="calendar-command-actions">
-            {canManage ? <button className="button secondary calendar-daypart-setup-button" type="button" onClick={() => setDaypartsPanelOpen(true)}>+ Create New Daypart</button> : null}
-            {canManage ? <CalendarShareButton residencyId={residency.id} residencyName={residency.name} linkSettings={residency.calendarLinkSettings} dayparts={dayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} /> : null}
-            <CalendarStatusLegend internal={!previewMode} />
+          {residencyOptions?.length ? <form className="calendar-filter-form calendar-toolbar-context" method="get"><input name="mode" type="hidden" value="hfy" /><input name="month" type="hidden" value={monthKey} />{calendarView === "week" ? <><input name="calendarView" type="hidden" value="week" /><input name="week" type="hidden" value={activeWeekStart} /></> : null}{residencySelectionParam === "residency" ? <input name="view" type="hidden" value="operations" /> : null}<label className="calendar-toolbar-select calendar-toolbar-context-select" htmlFor="calendar-residency-switcher"><span>Residency calendar</span><select id="calendar-residency-switcher" name={residencySelectionParam} defaultValue={residency.id}>{residencyOptions.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><button className="button secondary calendar-toolbar-button" type="submit">View</button></form> : null}
+          <div className="calendar-toolbar" aria-label="Calendar controls">
+            <div className="calendar-toolbar-cluster calendar-toolbar-filters">
+              <label className="calendar-toolbar-select" htmlFor="calendar-status-filter"><span>Status</span><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="all">All slots</option><option value="needs">Needs scheduling</option><option value="filled">Scheduled</option></select></label>
+              <label className="calendar-toolbar-select" htmlFor="calendar-daypart-filter"><span>Daypart</span><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></label>
+            </div>
+            <div className="calendar-toolbar-cluster calendar-toolbar-view">
+              <div className="calendar-view-toggle" role="group" aria-label="Calendar view"><Link className={calendarView === "month" ? "active" : ""} aria-current={calendarView === "month" ? "page" : undefined} href={monthViewHref}>Month</Link><Link className={calendarView === "week" ? "active" : ""} aria-current={calendarView === "week" ? "page" : undefined} href={weekViewHref}>Week</Link></div>
+            </div>
+            <div className="calendar-toolbar-cluster calendar-toolbar-actions">
+              {canManage ? <CalendarShareButton residencyId={residency.id} residencyName={residency.name} linkSettings={residency.calendarLinkSettings} dayparts={dayparts.filter((daypart) => daypart.active).map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color }))} /> : null}
+              <CalendarStatusLegend internal={!previewMode} />
+            </div>
           </div>
         </div>
       </header>
@@ -1083,19 +1084,6 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
           </div>
         </section>
       </div> : null}
-      {daypartsPanelOpen ? <DayPartsPanel
-        residencyId={residency.id}
-        residencyName={residency.name}
-        hideFinancials={previewMode}
-        initialCreate
-        hfyOnly={!previewMode}
-        fullProgrammingClient={previewMode && fullProgramming}
-        onSaved={() => {
-          setDaypartsPanelOpen(false);
-          router.refresh();
-        }}
-        onClose={() => setDaypartsPanelOpen(false)}
-      /> : null}
     </>
   );
 }
