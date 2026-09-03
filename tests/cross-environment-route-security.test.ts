@@ -10,6 +10,9 @@ describe("cross-environment route security", () => {
     expect(source).toContain("skipCache: true");
     expect(source).toContain("fetch(HFY_PRODUCTION_EXPORT_URL");
     expect(source).toContain('cache: "no-store"');
+    expect(source).not.toContain("PRODUCTION_SYNC_DATABASE_URL");
+    expect(source).not.toContain("STAGING_SYNC_PRODUCTION_EXPORT_MODE");
+    expect(source).not.toContain("loadRestrictedProductionSnapshot");
     expect(source).not.toMatch(/console\.(?:log|error)[^\n]*token/i);
     expect(source).not.toMatch(/alertCrossEnvironmentAccess\([^)]*token/i);
   });
@@ -31,6 +34,7 @@ describe("cross-environment route security", () => {
 
   it("grants the private sanitizer only to HFY's trusted application role", async () => {
     const migration = await readFile(new URL("../drizzle/0040_grant_production_export_to_app.sql", import.meta.url), "utf8");
+    expect(migration).toContain("CREATE ROLE hfy_app NOLOGIN");
     expect(migration).toContain("GRANT USAGE ON SCHEMA private TO hfy_app");
     expect(migration).toContain("GRANT EXECUTE ON FUNCTION private.hfy_staging_structure_snapshot(text) TO hfy_app");
     expect(migration).not.toMatch(/\b(?:anon|authenticated|PUBLIC)\b/);

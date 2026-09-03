@@ -1,7 +1,7 @@
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hfy_app') THEN
-    RAISE EXCEPTION 'Required HFY application role hfy_app does not exist';
+    CREATE ROLE hfy_app NOLOGIN;
   END IF;
 END
 $$;--> statement-breakpoint
