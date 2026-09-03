@@ -57,8 +57,10 @@ export type AddShiftAssignmentInput = BookingAssignmentInput & {
 export type UpdateOneTimeRecordInput = {
   id: string;
   name: string;
+  roomId?: string | null;
   room: string;
   roomHue?: RoomHue;
+  createRoom?: boolean;
   calendarColor: string;
   startMinute: number;
   endMinute: number;
@@ -100,7 +102,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
           normalizedDayparts.push(requested);
           continue;
         }
-        const room = await findOrCreateResidencyRoom(tx, residency.id, requested.room ?? "", requested.roomId);
+        const room = await findOrCreateResidencyRoom(tx, residency.id, requested.room ?? "", requested.roomId, undefined, false);
         normalizedDayparts.push({
           ...requested,
           roomId: room.id,
@@ -116,7 +118,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       if (residency.tier === "complete" && actor.kind === "residency" && type === "dj_artist") {
         throw new Error("HFY manages Talent Activities for Full Programming accounts.");
       }
-      const room = await findOrCreateResidencyRoom(tx, residency.id, requested.room ?? "", requested.roomId);
+      const room = await findOrCreateResidencyRoom(tx, residency.id, requested.room ?? "", requested.roomId, undefined, false);
       const [duplicate] = await tx.select({ id: dayparts.id }).from(dayparts).where(and(
         eq(dayparts.residencyId, residency.id),
         sql`lower(${dayparts.name}) = lower(${name})`,
@@ -538,7 +540,7 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       && (!Number.isInteger(input.clientTalentDefaultRateCents) || (input.clientTalentDefaultRateCents ?? 0) <= 0)) {
       throw new Error("Enter a positive session artist rate.");
     }
-    const assignedRoom = await findOrCreateResidencyRoom(tx, shift.residencyId, clean.room, null, input.roomHue);
+    const assignedRoom = await findOrCreateResidencyRoom(tx, shift.residencyId, clean.room, input.roomId, input.roomHue, input.createRoom === true);
     const calendarColor = clean.calendarColor;
 
     const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.startMinute), shift.timezone);
@@ -628,7 +630,7 @@ export async function updateOneTimeOccurrence(actor: AuditActor, input: UpdateOn
       .limit(1)
       .for("update");
     if (!occurrence || occurrence.daypartId !== null) throw new Error("Only one-time activities can be edited here.");
-    const assignedRoom = await findOrCreateResidencyRoom(tx, occurrence.residencyId, clean.room, null, input.roomHue);
+    const assignedRoom = await findOrCreateResidencyRoom(tx, occurrence.residencyId, clean.room, input.roomId, input.roomHue, input.createRoom === true);
     const calendarColor = clean.calendarColor;
     const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.startMinute), occurrence.timezone);
     const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.endMinute), occurrence.timezone);

@@ -50,6 +50,7 @@ export async function findOrCreateResidencyRoom(
   requestedName: string,
   requestedId?: string | null,
   requestedHue?: RoomHue,
+  allowCreate = true,
 ) {
   const name = normalizeRoomName(requestedName);
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${residencyId}, 0))`);
@@ -63,7 +64,7 @@ export async function findOrCreateResidencyRoom(
       sortOrder: rooms.sortOrder,
     }).from(rooms).where(and(eq(rooms.id, requestedId), eq(rooms.residencyId, residencyId))).limit(1);
     if (!selected) throw new Error("That room is no longer available in this Residency.");
-    if (selected.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase()) return { ...selected, hue: safeHue(selected.hue) };
+    return { ...selected, hue: safeHue(selected.hue) };
   }
 
   const [existing] = await tx.select({
@@ -77,6 +78,9 @@ export async function findOrCreateResidencyRoom(
     sql`lower(btrim(${rooms.name})) = lower(${name})`,
   )).limit(1);
   if (existing) return { ...existing, hue: safeHue(existing.hue) };
+  if (!allowCreate) {
+    throw new Error("Choose an existing room, or select the create-new-space option before saving.");
+  }
 
   const [{ nextSortOrder }] = await tx.select({
     nextSortOrder: sql<number>`coalesce(max(${rooms.sortOrder}), -1) + 1`,
@@ -112,7 +116,7 @@ export async function createResidencyRoom(actor: AuditActor, input: { residencyI
       eq(residencies.operatingMode, "operations"),
     )).limit(1);
     if (!residency) throw new Error("Residency not found.");
-    const room = await findOrCreateResidencyRoom(tx, residency.id, input.name, null, input.hue);
+    const room = await findOrCreateResidencyRoom(tx, residency.id, input.name, null, input.hue, true);
     const [{ itemCount }] = await tx.select({ itemCount: count(dayparts.id) }).from(dayparts).where(eq(dayparts.roomId, room.id));
     await tx.insert(auditLog).values({
       residencyId: residency.id,

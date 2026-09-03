@@ -13,6 +13,7 @@ export type SaveDaypartInput = {
   residencyId: string;
   roomId?: string | null;
   roomHue?: RoomHue | null;
+  createRoom?: boolean;
   name: string;
   room: string;
   color: string;
@@ -293,7 +294,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
       defaultTalentRateCents = input.defaultTalentRateCents ?? null;
     }
 
-    const assignedRoom = await findOrCreateResidencyRoom(tx, residency.id, room, input.roomId, input.roomHue ?? undefined);
+    const assignedRoom = await findOrCreateResidencyRoom(tx, residency.id, room, input.roomId, input.roomHue ?? undefined, input.createRoom === true);
     const allowedRoomColors = roomShadeColors(assignedRoom.hue);
     const color = input.id
       ? allowedRoomColors.includes(requestedColor) ? requestedColor : allowedRoomColors[0]

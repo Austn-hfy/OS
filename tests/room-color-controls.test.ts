@@ -31,12 +31,14 @@ describe("manual room color controls", () => {
     expect(rooms).toContain('action: "residency_room_updated"');
   });
 
-  it("renders the compact pastel room and Daypart choices", async () => {
+  it("renders searchable room choices and compact pastel Daypart choices", async () => {
     const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
+    const roomCombobox = await readFile(new URL("../src/components/room-combobox.tsx", import.meta.url), "utf8");
     const styles = await readFile(new URL("../src/app/globals.css", import.meta.url), "utf8");
-    expect(calendar).toContain('"--room-fill": roomColor(room.hue, "pale")');
+    expect(calendar).toContain("<RoomCombobox rooms={availableRooms}");
+    expect(roomCombobox).toContain("roomColor(room.hue)");
     expect(calendar).toContain('"--room-color": suggestion.color');
-    expect(styles).toContain("width: 132px; min-height: 64px");
+    expect(styles).toContain(".room-combobox-options");
     expect(styles).toContain("border-left: 4px solid var(--room-color");
   });
 });

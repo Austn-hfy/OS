@@ -1422,6 +1422,7 @@ const daypartPayloadSchema = z.object({
   residencyId: z.uuid(),
   roomId: z.uuid().nullable().optional(),
   roomHue: z.enum(ROOM_HUE_ORDER).nullable().optional(),
+  createRoom: z.boolean().optional().default(false),
   name: z.string().trim().min(1),
   room: z.string().trim().min(1),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
@@ -1924,8 +1925,10 @@ export async function deleteCalendarShiftAction(formData: FormData): Promise<Res
 const oneTimeRecordSchema = z.object({
   id: z.uuid(),
   name: z.string().trim().min(1).max(160),
+  roomId: z.preprocess((value) => value === "" || value == null ? null : value, z.uuid().nullable()),
   room: z.string().trim().min(1).max(160),
   roomHue: z.enum(ROOM_HUE_ORDER).optional(),
+  createRoom: z.preprocess((value) => value === "true", z.boolean()),
   calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   startMinute: z.coerce.number().int().min(0).max(1439),
   endMinute: z.coerce.number().int().min(1).max(2879),
