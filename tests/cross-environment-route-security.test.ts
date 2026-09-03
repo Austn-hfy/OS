@@ -31,7 +31,9 @@ describe("cross-environment route security", () => {
 
   it("records safe metadata and counts, never credentials or exported records", async () => {
     const source = await readFile(new URL("../src/lib/cross-environment-alert.ts", import.meta.url), "utf8");
-    expect(source).toContain('scope.setTag("security_stream", "cross_environment_access")');
+    expect(source).toContain('security_stream: "cross_environment_access"');
+    expect(source).toContain("Sentry.captureMessage");
+    expect(source).not.toContain("Sentry.withScope");
     expect(source).toContain("actorUserId");
     expect(source).toContain("sourceDeployment");
     expect(source).toContain("sourceCommitSha");

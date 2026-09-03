@@ -22,23 +22,30 @@ export type CrossEnvironmentAlert = {
 };
 
 export function alertCrossEnvironmentAccess(event: CrossEnvironmentAlert): void {
-  Sentry.withScope((scope) => {
-    scope.setLevel(event.outcome === "succeeded" ? "warning" : "error");
-    scope.setTag("security_stream", "cross_environment_access");
-    scope.setTag("cross_environment.location", event.recordedBy);
-    scope.setTag("cross_environment.action", event.action);
-    scope.setTag("cross_environment.outcome", event.outcome);
-    scope.setTag("cross_environment.residency", event.residencySlug);
-    scope.setContext("cross_environment_access", {
-      requestId: event.requestId,
-      actorUserId: event.actorUserId,
-      actorLabel: event.actorLabel,
-      sourceDeployment: event.sourceDeployment,
-      sourceCommitSha: event.sourceCommitSha,
-      sourceGitRef: event.sourceGitRef,
-      reasonCode: event.reasonCode,
-      recordCounts: event.recordCounts ?? null,
+  try {
+    Sentry.captureMessage(`Cross-environment ${event.action} ${event.outcome}`, {
+      level: event.outcome === "succeeded" ? "warning" : "error",
+      tags: {
+        security_stream: "cross_environment_access",
+        "cross_environment.location": event.recordedBy,
+        "cross_environment.action": event.action,
+        "cross_environment.outcome": event.outcome,
+        "cross_environment.residency": event.residencySlug,
+      },
+      contexts: {
+        cross_environment_access: {
+          requestId: event.requestId,
+          actorUserId: event.actorUserId,
+          actorLabel: event.actorLabel,
+          sourceDeployment: event.sourceDeployment,
+          sourceCommitSha: event.sourceCommitSha,
+          sourceGitRef: event.sourceGitRef,
+          reasonCode: event.reasonCode,
+          recordCounts: event.recordCounts ?? null,
+        },
+      },
     });
-    Sentry.captureMessage(`Cross-environment ${event.action} ${event.outcome}`);
-  });
+  } catch {
+    console.error("Failed to emit cross-environment security event to Sentry.");
+  }
 }
