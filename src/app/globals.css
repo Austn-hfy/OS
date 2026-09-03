@@ -775,7 +775,12 @@ tr:last-child td { border-bottom: 0; }
 .quick-add-choice-card > span { color: var(--forest); font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
 .quick-add-choice-card > strong { font-size: 15px; }
 .quick-add-choice-card > small { color: var(--muted); font-size: 11px; line-height: 1.45; }
-.quick-one-time-fields { display: grid; grid-template-columns: 1fr 1fr .8fr; gap: 10px; }
+.quick-activity-details-row { display: grid; grid-template-columns: 66px minmax(130px, 1.05fr) minmax(110px, .8fr) minmax(220px, 1.2fr); align-items: end; gap: 10px; }
+.quick-activity-details-row > .field { min-width: 0; }
+.quick-activity-details-row :is(input, select) { min-width: 0; }
+.quick-activity-details-row .quick-color-popover { right: auto; left: 0; }
+.quick-activity-time-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px; }
+.quick-activity-time-controls > span { color: var(--muted); font-size: 9px; font-weight: 750; text-transform: uppercase; }
 .quick-one-time-color-field { position: relative; align-content: start; }
 .one-time-session-rate { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 220px); align-items: end; gap: 16px; padding: 12px 14px; border: 1px solid rgba(2,116,222,.2); border-radius: 14px; background: rgba(234,243,255,.62); }
 .one-time-session-rate > div:first-child { align-self: center; display: grid; gap: 3px; }
@@ -1372,7 +1377,10 @@ tr:last-child td { border-bottom: 0; }
   .quick-modal-backdrop { padding: 10px; }
   .quick-modal { max-height: calc(100vh - 20px); border-radius: 19px; }
   .quick-modal-header, .quick-modal-body { padding-inline: 16px; }
-  .quick-slot-picker, .quick-room-picker, .quick-time-fields, .quick-add-choice, .quick-one-time-fields { grid-template-columns: 1fr; }
+  .quick-slot-picker, .quick-room-picker, .quick-time-fields, .quick-add-choice { grid-template-columns: 1fr; }
+  .quick-activity-details-row { grid-template-columns: 60px minmax(0, 1fr); align-items: end; }
+  .quick-activity-details-row > .field:nth-child(3),
+  .quick-activity-time-field { grid-column: 1 / -1; }
   .one-time-session-rate { grid-template-columns: 1fr; }
   .artist-inline-create-fields { grid-template-columns: 1fr 1fr; }
   .artist-inline-create-fields .field { grid-column: 1 / -1; }

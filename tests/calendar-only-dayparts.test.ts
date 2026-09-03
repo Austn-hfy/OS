@@ -69,4 +69,18 @@ describe("Calendar Only Dayparts", () => {
     expect(actions).toContain("updateOneTimeOccurrenceAction");
     expect(actions).toContain("deleteOneTimeOccurrenceAction");
   });
+
+  it("uses the same compact scheduling-details row for new and existing activities", async () => {
+    const [calendar, styles] = await Promise.all([
+      readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
+    ]);
+    expect(calendar).toContain("function SchedulingActivityDetailsRow");
+    expect(calendar.match(/<SchedulingActivityDetailsRow/g)).toHaveLength(2);
+    expect(calendar).toContain("<label>Color</label>");
+    expect(calendar).toContain("<label>Session name</label>");
+    expect(calendar).toContain("<label>Slot time</label>");
+    expect(styles).toContain(".quick-activity-details-row");
+    expect(styles).toContain("grid-template-columns: 66px");
+  });
 });
