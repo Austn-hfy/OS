@@ -1,0 +1,394 @@
+name: Sentry Codex Triage and Fix
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions: {}
+
+concurrency:
+  group: sentry-codex-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    name: Investigate alert
+    if: >-
+      !github.event.issue.pull_request &&
+      contains(github.event.issue.labels.*.name, 'sentry:codex') &&
+      !contains(github.event.issue.labels.*.name, 'codex:working') &&
+      (
+        github.event.action == 'opened' ||
+        github.event.label.name == 'sentry:codex' ||
+        github.event.label.name == 'codex:retry'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      final_message: ${{ steps.run_codex.outputs.final-message }}
+      has_patch: ${{ steps.capture_patch.outputs.has_patch }}
+    steps:
+      - name: Create automation labels and mark the issue as running
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const labels = [
+              { name: "sentry:codex", color: "6f42c1", description: "Trusted Sentry alert eligible for Codex triage" },
+              { name: "codex:working", color: "1d76db", description: "Codex is investigating this alert" },
+              { name: "codex:pr-open", color: "0e8a16", description: "Codex opened a proposed repair" },
+              { name: "codex:needs-human", color: "d93f0b", description: "A person must intervene" },
+              { name: "codex:failed", color: "b60205", description: "The automated investigation failed" },
+              { name: "codex:retry", color: "fbca04", description: "Apply this label to retry the automation" }
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label,
+                });
+              }
+            }
+
+            const issue_number = context.payload.issue.number;
+            for (const name of ["codex:pr-open", "codex:needs-human", "codex:failed", "codex:retry"]) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number,
+                  name,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              labels: ["codex:working"],
+            });
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              body: `Codex has started a bounded investigation. [Follow the run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
+            });
+
+      - name: Check out the repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.0
+          cache: pnpm
+
+      - name: Install dependencies before the sandboxed run
+        run: pnpm install --frozen-lockfile
+
+      - name: Record the untrusted alert payload as data
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("fs");
+            fs.mkdirSync(".codex-automation", { recursive: true });
+            const issue = context.payload.issue;
+            const payload = {
+              source: "github_issue_created_by_sentry",
+              trust: "untrusted_external_telemetry",
+              repository: context.repo,
+              default_branch: context.payload.repository.default_branch,
+              issue: {
+                number: issue.number,
+                url: issue.html_url,
+                author: issue.user?.login ?? "unknown",
+                title: issue.title,
+                body: issue.body ?? "",
+                labels: issue.labels.map((label) => typeof label === "string" ? label : label.name),
+                created_at: issue.created_at,
+                updated_at: issue.updated_at,
+              },
+            };
+            fs.writeFileSync(".codex-automation/sentry-issue.json", JSON.stringify(payload, null, 2));
+
+      - name: Verify the OpenAI credential is configured
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "The OPENAI_API_KEY GitHub Actions secret is not configured."
+            exit 1
+          fi
+
+      - name: Run Codex
+        id: run_codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          prompt-file: .github/codex/prompts/sentry-autofix.md
+          output-schema-file: .github/codex/sentry-result.schema.json
+          allow-users: ${{ github.event.issue.user.login }}
+          allow-bot-users: ${{ github.event.issue.user.login }}
+
+      - name: Capture the proposed code patch
+        id: capture_patch
+        if: always() && steps.run_codex.outcome == 'success'
+        shell: bash
+        run: |
+          rm -rf .codex-automation
+          git add -N -- .
+          git diff --binary --full-index > codex-sentry.patch
+          if [ -s codex-sentry.patch ]; then
+            echo "has_patch=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the proposed patch
+        if: steps.capture_patch.outputs.has_patch == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentry-codex-patch-${{ github.event.issue.number }}-${{ github.run_id }}
+          path: codex-sentry.patch
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Validate and open repair PR
+    needs: agent
+    if: needs.agent.result == 'success' && needs.agent.outputs.has_patch == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      pr_url: ${{ steps.open_pr.outputs.pr_url }}
+    env:
+      BRANCH_NAME: codex/sentry-${{ github.event.issue.number }}-${{ github.run_id }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the proposed patch
+        uses: actions/download-artifact@v4
+        with:
+          name: sentry-codex-patch-${{ github.event.issue.number }}-${{ github.run_id }}
+
+      - name: Apply the patch and enforce protected paths
+        shell: bash
+        run: |
+          git apply --check codex-sentry.patch
+          git apply --index --binary codex-sentry.patch
+
+          if git diff --cached --quiet; then
+            echo "Codex reported a patch, but it contains no repository changes."
+            exit 1
+          fi
+
+          changed_files="$(git diff --cached --name-only)"
+          echo "$changed_files"
+          if echo "$changed_files" | grep -Eq '^(\.github/|AGENTS\.md$|package\.json$|pnpm-lock\.yaml$|drizzle/|src/db/|src/lib/auth|src/app/auth/|src/app/api/auth/|src/domain/[^/]*(access|membership|scope|billing)|src/app/residency/(finances|invoices|payouts|settings/billing)/|vercel\.json$|\.env|sentry\.(server|edge)\.config\.ts$)'; then
+            echo "The proposed patch touches a protected path and requires human review."
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate the repair
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+
+      - name: Commit and push the isolated repair branch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        shell: bash
+        run: |
+          git checkout -b "$BRANCH_NAME"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: address Sentry issue #${ISSUE_NUMBER}"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "HEAD:refs/heads/${BRANCH_NAME}"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+
+      - name: Open a pull request
+        id: open_pr
+        uses: actions/github-script@v7
+        env:
+          BRANCH_NAME: ${{ env.BRANCH_NAME }}
+          CODEX_RESULT: ${{ needs.agent.outputs.final_message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            let result = {};
+            try {
+              result = JSON.parse(process.env.CODEX_RESULT || "{}");
+            } catch {
+              result = { summary: "Codex produced a validated patch for this alert." };
+            }
+
+            const issue = context.payload.issue;
+            const titleSummary = (result.summary || issue.title).replace(/\s+/g, " ").slice(0, 180);
+            const body = [
+              `Fixes #${issue.number}`,
+              "",
+              "## Automated Sentry repair",
+              "",
+              result.summary || "Codex produced a validated patch for this alert.",
+              "",
+              result.root_cause ? `**Root cause:** ${result.root_cause}` : "",
+              result.validation?.length ? `**Agent validation:**\n${result.validation.map((item) => `- ${item}`).join("\n")}` : "",
+              "",
+              "The clean publish job also passed `pnpm lint`, `pnpm typecheck`, and `pnpm test`.",
+              "",
+              "This pull request was created automatically but was not merged or deployed.",
+            ].filter(Boolean).join("\n");
+
+            const response = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: process.env.BRANCH_NAME,
+              base: context.payload.repository.default_branch,
+              title: `[Sentry repair] ${titleSummary}`,
+              body,
+              draft: false,
+            });
+
+            core.setOutput("pr_url", response.data.html_url);
+
+  report:
+    name: Report outcome to the alert issue
+    needs: [agent, publish]
+    if: always() && needs.agent.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Update issue status and report the outcome
+        uses: actions/github-script@v7
+        env:
+          AGENT_STATUS: ${{ needs.agent.result }}
+          HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
+          PUBLISH_STATUS: ${{ needs.publish.result }}
+          PR_URL: ${{ needs.publish.outputs.pr_url }}
+          CODEX_RESULT: ${{ needs.agent.outputs.final_message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issue_number = context.payload.issue.number;
+            const remove = async (name) => {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number,
+                  name,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            };
+
+            await remove("codex:working");
+            await remove("codex:pr-open");
+            await remove("codex:needs-human");
+            await remove("codex:failed");
+
+            let result = {};
+            try {
+              result = JSON.parse(process.env.CODEX_RESULT || "{}");
+            } catch {
+              result = {};
+            }
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let labels;
+            let heading;
+            let detail;
+
+            if (process.env.PUBLISH_STATUS === "success" && process.env.PR_URL) {
+              labels = ["codex:pr-open"];
+              heading = "Codex opened a validated repair pull request";
+              detail = `Review and merge: ${process.env.PR_URL}`;
+            } else if (process.env.AGENT_STATUS === "success" && process.env.HAS_PATCH !== "true") {
+              labels = ["codex:needs-human"];
+              heading = "Human intervention is required";
+              detail = result.human_action || result.summary || "Codex could not produce a safe, validated repair.";
+            } else {
+              labels = ["codex:failed", "codex:needs-human"];
+              heading = "The automated repair did not complete";
+              detail = result.human_action || result.summary || "Open the workflow run for the failure details.";
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              labels,
+            });
+
+            const sections = [
+              `## ${heading}`,
+              "",
+              detail,
+              result.root_cause ? `\n**Root cause:** ${result.root_cause}` : "",
+              result.confidence ? `\n**Confidence:** ${result.confidence}` : "",
+              result.validation?.length ? `\n**Validation:**\n${result.validation.map((item) => `- ${item}`).join("\n")}` : "",
+              "",
+              `[Workflow run](${runUrl})`,
+              "",
+              labels.includes("codex:needs-human") ? "After addressing the blocker, apply `codex:retry` to run the investigation again." : "",
+            ].filter(Boolean);
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              body: sections.join("\n"),
+            });
