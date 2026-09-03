@@ -5,6 +5,7 @@ import { deleteResidencyRoomAction, removeDaypartAction, saveDaypartAction, upda
 import { DEFAULT_DAYPART_COLOR, clockToMinute, contrastTextColor, formatLocalMinute, minuteToClock, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayNames, type DaypartBillingMode, type DaypartScheduleMode, type DaypartType, type RoomHue } from "@/domain/dayparts";
 import { DaypartColorPicker } from "@/components/daypart-color-picker";
 import { RoomHuePicker } from "@/components/room-hue-picker";
+import { RoomCombobox, type RoomComboboxOption } from "@/components/room-combobox";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 import { daypartNeedsDefaultArtistRate } from "@/domain/daypart-rate-attention";
@@ -36,6 +37,7 @@ type EditorDraft = {
   id?: string;
   roomId: string | null;
   roomHue: RoomHue | null;
+  createRoom: boolean;
   name: string;
   room: string;
   color: string;
@@ -73,6 +75,7 @@ function blankDraft(options: { room?: string; roomId?: string | null; roomHue?: 
     name: "",
     roomId: options.roomId ?? null,
     roomHue: options.roomHue ?? null,
+    createRoom: false,
     room: options.room ?? "",
     color: options.color ?? (options.roomHue ? roomDaypartColor(options.roomHue, options.roomItemCount ?? 0) : DEFAULT_DAYPART_COLOR),
     type: null,
@@ -96,6 +99,7 @@ function draftFromDaypart(daypart: DaypartRow): EditorDraft {
     id: daypart.id,
     roomId: daypart.roomId,
     roomHue: daypart.roomHue,
+    createRoom: false,
     name: daypart.name,
     room: daypart.room,
     color: daypart.color,
@@ -159,6 +163,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   const range = useMemo(() => displayRange(standingDayparts), [standingDayparts]);
   const rangeMinutes = range.end - range.start;
   const hasSelectedDay = draft?.scheduleMode === "calendar_only" || (draft?.rules.some((rule) => rule.enabled && rule.start && rule.end) ?? false);
+  const hasSelectedRoom = Boolean(draft?.roomId || draft?.createRoom);
   const missingDateServerError = state.status === "error" && state.message === "Select at least one operating day.";
   const showDateValidation = Boolean(draft) && !hasSelectedDay && (dateValidationRequested || missingDateServerError);
   const draftNeedsRate = Boolean(draft?.active && draft.type === "dj_artist" && (
@@ -222,6 +227,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
       residencyId,
       roomId: draft.roomId,
       roomHue: draft.roomHue,
+      createRoom: draft.createRoom,
       name: draft.name,
       room: draft.room,
       color: draft.color,
@@ -244,18 +250,38 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   }, [draft, residencyId]);
 
   function updateDraftRoom(roomName: string) {
-    const matched = residencyRooms.find((room) => room.name.toLocaleLowerCase() === roomName.trim().toLocaleLowerCase());
     setDraft((current) => {
       if (!current) return current;
-      const hue = matched?.hue ?? (current.roomId ? defaultNewRoomHue : current.roomHue ?? defaultNewRoomHue);
       return {
         ...current,
         room: roomName,
-        roomId: matched?.id ?? null,
-        roomHue: hue,
-        color: matched ? roomDaypartColor(hue, matched.daypartCount) : roomDaypartColor(hue, 0),
+        roomId: null,
+        createRoom: false,
       };
     });
+  }
+
+  function selectDraftRoom(room: RoomComboboxOption) {
+    const matched = residencyRooms.find((item) => item.id === room.id);
+    setDraft((current) => current ? {
+      ...current,
+      room: room.name,
+      roomId: room.id,
+      roomHue: room.hue,
+      createRoom: false,
+      color: roomDaypartColor(room.hue, matched?.daypartCount ?? 0),
+    } : current);
+  }
+
+  function selectNewDraftRoom(roomName: string) {
+    setDraft((current) => current ? {
+      ...current,
+      room: roomName,
+      roomId: null,
+      roomHue: defaultNewRoomHue,
+      createRoom: true,
+      color: roomDaypartColor(defaultNewRoomHue, 0),
+    } : current);
   }
 
   async function saveRoom() {
@@ -436,9 +462,9 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
                 {draft.type === "dj_artist" && !fullProgrammingClient ? <div className="field daypart-billing-step"><label>Billing</label><div className="daypart-type-options"><button className={draft.billingMode === "billed_by_hfy" ? "active standing-hfy" : "standing-hfy"} type="button" onClick={() => setDraft({ ...draft, billingMode: "billed_by_hfy", clientDefaultRate: "" })}><strong>Standing HFY Booking</strong><small>HFY handles talent and billing for every occurrence of this Daypart automatically — no per-date request needed.</small></button><button className={draft.billingMode === "tracking_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "tracking_only", defaultTalentRate: "" })}><strong>Client Managed</strong><small>You handle talent and billing yourself. You can still request HFY for individual dates from the Calendar.</small></button></div></div> : null}
                 {draft.type ? <div className="field daypart-schedule-step"><label>Choose the schedule type up front</label><div className="daypart-type-options"><button className={draft.scheduleMode === "standing_weekly" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, scheduleMode: "standing_weekly" })}><strong>Recurring Daypart</strong><small>Automatically appears on the weekdays you select.</small></button><button className={draft.scheduleMode === "calendar_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, scheduleMode: "calendar_only" })}><strong>Reusable One-off Template</strong><small>Save this as a reusable one-off template you can schedule onto any date later.</small></button></div></div> : null}
                 {draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <>
-                <div className="row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /></div><div className="field"><label>Room / space</label><input value={draft.room} onChange={(event) => updateDraftRoom(event.target.value)} placeholder="Amigo Room" required /></div></div>
+                <div className="row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /></div><div className="field"><label>Room / space</label><RoomCombobox rooms={residencyRooms} value={draft.room} selectedRoomId={draft.roomId} creationConfirmed={draft.createRoom} placeholder="Start typing, for example Amigo" ariaLabel="Daypart room or space" onChange={updateDraftRoom} onSelect={selectDraftRoom} onCreate={selectNewDraftRoom} /></div></div>
                 <div className="daypart-definition-row">
-                  <div className="field daypart-color-field"><label>{draft.roomId ? "Room color shade" : "New room color"}</label>{draft.roomId && draft.roomHue ? <><DaypartColorPicker ariaLabel={`${draft.room} color shades`} hue={draft.roomHue} value={draft.color} onChange={(color) => setDraft({ ...draft, color })} /><small>Choose from four high-contrast shades. The room’s hue stays fixed.{draft.billingMode === "billed_by_hfy" ? " HFY status appears as a pink corner marker." : ""}</small></> : draft.room.trim() && draft.roomHue ? <><RoomHuePicker value={draft.roomHue} onChange={(roomHue) => setDraft({ ...draft, roomHue, color: roomDaypartColor(roomHue, 0) })} ariaLabel={`Choose the room color for ${draft.room}`} /><small>The next automatic color is preselected. This first Daypart uses its dark shade.</small></> : <><div className="daypart-color-control"><span style={{ background: draft.color }} aria-hidden="true" /><strong>Enter a room name</strong></div><small>Name the room or space to choose its color.</small></>}</div>
+                  <div className="field daypart-color-field"><label>{draft.roomId ? "Room color shade" : draft.createRoom ? "New room color" : "Room color"}</label>{draft.roomId && draft.roomHue ? <><DaypartColorPicker ariaLabel={`${draft.room} color shades`} hue={draft.roomHue} value={draft.color} onChange={(color) => setDraft({ ...draft, color })} /><small>Choose from four high-contrast shades. The room’s hue stays fixed.{draft.billingMode === "billed_by_hfy" ? " HFY status appears as a pink corner marker." : ""}</small></> : draft.createRoom && draft.roomHue ? <><RoomHuePicker value={draft.roomHue} onChange={(roomHue) => setDraft({ ...draft, roomHue, color: roomDaypartColor(roomHue, 0) })} ariaLabel={`Choose the room color for ${draft.room}`} /><small>The next automatic color is preselected. This first Daypart uses its dark shade.</small></> : <><div className="daypart-color-control"><span style={{ background: draft.color }} aria-hidden="true" /><strong>Choose a room</strong></div><small>Select an existing room or explicitly create a new space above.</small></>}</div>
                   {!hideFinancials && draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? <div className={`field daypart-rate-field ${draftNeedsRate ? "needs-attention" : ""}`}><label>Default talent rate ($/hr) {draftNeedsRate ? <span className="daypart-rate-needed-label">Needed</span> : null}</label><SensitiveInput type="number" min="0" step="0.01" value={draft.defaultTalentRate} onChange={(event) => setDraft({ ...draft, defaultTalentRate: event.target.value })} placeholder="Enter the hourly rate" /><small>Required before HFY OS can calculate artist pay for this Daypart. You can save now and finish it later.</small></div> : null}
                   {draft.type === "dj_artist" && draft.billingMode === "tracking_only" ? <div className={`field daypart-rate-field ${draftNeedsRate ? "needs-attention" : ""}`}><label>Default artist rate ($/hr) {draftNeedsRate ? <span className="daypart-rate-needed-label">Needed</span> : null}</label><input name="clientDefaultRate" type="number" min="0" step="0.01" value={draft.clientDefaultRate} onChange={(event) => setDraft({ ...draft, clientDefaultRate: event.target.value })} placeholder="Enter the hourly rate" /><small>Required before HFY OS can calculate what the artist is owed. You can override a specific date in Payouts.</small></div> : null}
                   <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this Daypart continues indefinitely.</small></div>
@@ -464,7 +490,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
                 {state.status === "error" && !missingDateServerError ? <p className="error" aria-live="polite">{state.message}</p> : null}
                 {removeState.status === "error" ? <p className="error" aria-live="polite">{removeState.message}</p> : null}
               </div>
-              <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button>{draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <button className="button" disabled={pending} type="submit">{pending ? "Saving…" : "Save Daypart"}</button> : null}</div>
+              <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button>{draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <button className="button" disabled={pending || !hasSelectedRoom} type="submit">{pending ? "Saving…" : "Save Daypart"}</button> : null}</div>
             </form>
           </aside>
         </div>

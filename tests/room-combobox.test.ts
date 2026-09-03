@@ -1,0 +1,42 @@
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+import { roomMatchScore } from "@/components/room-combobox";
+
+describe("room selection safeguards", () => {
+  it("ranks exact, partial, and small typo matches ahead of unrelated rooms", () => {
+    expect(roomMatchScore("Amigo Room", "Amigo Room")).toBe(0);
+    expect(roomMatchScore("Amigo", "Amigo Room")).toBe(1);
+    expect(roomMatchScore("Amgio Room", "Amigo Room")).toBeLessThan(4);
+    expect(roomMatchScore("Rooftop", "Amigo Room")).toBe(4);
+  });
+
+  it("shows existing spaces and makes new-space creation explicit", async () => {
+    const combobox = await readFile(new URL("../src/components/room-combobox.tsx", import.meta.url), "utf8");
+    expect(combobox).toContain('role="combobox"');
+    expect(combobox).toContain('role="listbox"');
+    expect(combobox).toContain("Similar room found:");
+    expect(combobox).toContain("Create “{trimmedValue}”");
+    expect(combobox).toContain("Choose an existing room from the list, or explicitly create a new space.");
+  });
+
+  it("uses the picker for Calendar additions, one-time edits, and Daypart editing", async () => {
+    const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
+    const dayparts = await readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8");
+    expect(calendar.match(/<RoomCombobox/g)).toHaveLength(2);
+    expect(calendar).toContain("creationConfirmed={newRoomPromptOpen}");
+    expect(calendar).toContain("editingOneTimeRoomReady");
+    expect(dayparts).toContain("creationConfirmed={draft.createRoom}");
+    expect(dayparts).toContain("disabled={pending || !hasSelectedRoom}");
+  });
+
+  it("rejects silent creation in the scheduling services", async () => {
+    const rooms = await readFile(new URL("../src/services/rooms.ts", import.meta.url), "utf8");
+    const dayparts = await readFile(new URL("../src/services/dayparts.ts", import.meta.url), "utf8");
+    const bookings = await readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8");
+    expect(rooms).toContain("if (!allowCreate)");
+    expect(rooms).toContain("select the create-new-space option");
+    expect(dayparts).toContain("input.createRoom === true");
+    expect(bookings).toContain("input.createRoom === true");
+    expect(bookings).toContain("requested.roomId, undefined, false");
+  });
+});

@@ -46,16 +46,16 @@ describe("Calendar Only Dayparts", () => {
     expect(calendar).toContain("Back to handling options");
   });
 
-  it("uses a room-first funnel with permanent create tiles last", async () => {
+  it("uses a room-first funnel with searchable existing rooms and explicit creation", async () => {
     const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
     expect(calendar).toContain('addMode === "room" ? "Where is this happening?"');
     expect(calendar).toContain('addMode === "activity" ? "What\'s happening here?"');
-    expect(calendar).toContain("availableRooms.map");
+    expect(calendar).toContain("<RoomCombobox rooms={availableRooms}");
+    expect(calendar).toContain("onCreate={openNewRoomPrompt}");
+    expect(calendar).toContain("A new room is created only when you explicitly choose that option.");
     expect(calendar).toContain("roomSuggestions.map");
-    expect(calendar).toContain("<strong>Other / new space</strong>");
     expect(calendar).toContain("<strong>Create new</strong>");
     expect(calendar).toContain("createResidencyRoomAction");
-    expect(calendar.indexOf("availableRooms.map")).toBeLessThan(calendar.indexOf("<strong>Other / new space</strong>"));
   });
 
   it("uses Mark scheduled for both one-time activity types", async () => {
