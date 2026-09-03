@@ -9,6 +9,7 @@ import {
 import {
   assertSafeSyncEnvironment,
   buildStagingResidencyPlan,
+  pooledProductionReaderUrl,
   type StagingResidencyPlan,
 } from "@/domain/staging-structure-sync";
 import {
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
     return json({ error: "That Residency is not approved for dashboard synchronization." }, 403);
   }
 
-  const productionDatabaseUrl = requiredSecret("PRODUCTION_SYNC_DATABASE_URL");
+  const productionDatabaseUrl = pooledProductionReaderUrl(requiredSecret("PRODUCTION_SYNC_DATABASE_URL"));
   const stagingDatabaseUrl = requiredSecret("DATABASE_URL");
   const confirmationSecret = requiredSecret("STAGING_SYNC_CONFIRMATION_SECRET");
   assertRestrictedProductionReader(productionDatabaseUrl);

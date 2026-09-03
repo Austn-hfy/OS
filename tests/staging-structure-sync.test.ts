@@ -5,6 +5,7 @@ import {
   assertSafeSyncEnvironment,
   buildStagingResidencyPlan,
   formatDryRunReport,
+  pooledProductionReaderUrl,
   sanitizeTalent,
   stagingSyncKey,
   stagingSyncUuid,
@@ -149,6 +150,18 @@ describe("staging production-structure sync", () => {
     expect(() => assertSafeSyncEnvironment(stagingDirect, productionDirect)).toThrow(/production project/i);
     expect(() => assertSafeSyncEnvironment(productionDirect, productionDirect)).toThrow();
     expect(() => assertSafeSyncEnvironment("not-a-url", stagingDirect)).toThrow(/production project/i);
+  });
+
+  it("routes a direct restricted-reader URL through the production Supabase pooler", () => {
+    const direct = "postgresql://hfy_staging_structure_reader:secret@db.tkfsgifnywbwjdkxjhae.supabase.co:6543/postgres?sslmode=require";
+    const pooled = new URL(pooledProductionReaderUrl(direct));
+
+    expect(pooled.hostname).toBe("aws-0-us-west-1.pooler.supabase.com");
+    expect(pooled.port).toBe("6543");
+    expect(decodeURIComponent(pooled.username)).toBe("hfy_staging_structure_reader.tkfsgifnywbwjdkxjhae");
+    expect(pooled.password).toBe("secret");
+    expect(pooled.searchParams.get("sslmode")).toBe("require");
+    expect(pooledProductionReaderUrl(pooled.toString())).toBe(pooled.toString());
   });
 
   it("accepts only the approved production API source and staging database destination", () => {

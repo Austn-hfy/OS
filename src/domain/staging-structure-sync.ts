@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 export const PRODUCTION_SUPABASE_PROJECT_REF: string = "tkfsgifnywbwjdkxjhae";
 export const STAGING_SUPABASE_PROJECT_REF: string = "ucrtbevvdfkceudknyxe";
+const PRODUCTION_SUPABASE_POOLER_HOST = "aws-0-us-west-1.pooler.supabase.com";
 
 const SYNC_NAMESPACE = "hfy-os-staging-structure-sync-v1";
 
@@ -234,6 +235,18 @@ export function supabaseProjectRefFromDatabaseUrl(databaseUrl: string): string |
   const username = decodeURIComponent(parsed.username);
   const pooledRef = username.match(/^[^.]+\.([a-z0-9]+)$/i)?.[1];
   return pooledRef?.toLowerCase() ?? null;
+}
+
+export function pooledProductionReaderUrl(databaseUrl: string): string {
+  const parsed = new URL(databaseUrl);
+  const directProjectRef = parsed.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i)?.[1]?.toLowerCase();
+  if (!directProjectRef) return databaseUrl;
+
+  const username = decodeURIComponent(parsed.username);
+  parsed.hostname = PRODUCTION_SUPABASE_POOLER_HOST;
+  parsed.port = "6543";
+  parsed.username = `${username}.${directProjectRef}`;
+  return parsed.toString();
 }
 
 export function supabaseProjectRefFromApiUrl(apiUrl: string): string | null {
