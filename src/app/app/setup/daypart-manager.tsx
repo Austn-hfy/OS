@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { removeDaypartAction, saveDaypartAction, updateResidencyRoomAction, type CreateRoomActionState, type ResidencyActionState } from "@/app/app/actions";
+import { deleteResidencyRoomAction, removeDaypartAction, saveDaypartAction, updateResidencyRoomAction, type CreateRoomActionState, type ResidencyActionState } from "@/app/app/actions";
 import { DEFAULT_DAYPART_COLOR, clockToMinute, contrastTextColor, formatLocalMinute, minuteToClock, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayNames, type DaypartBillingMode, type DaypartScheduleMode, type DaypartType, type RoomHue } from "@/domain/dayparts";
 import { DaypartColorPicker } from "@/components/daypart-color-picker";
 import { RoomHuePicker } from "@/components/room-hue-picker";
@@ -133,6 +133,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   const [draft, setDraft] = useState<EditorDraft | null>(null);
   const [roomDraft, setRoomDraft] = useState<{ roomId: string; name: string; hue: RoomHue } | null>(null);
   const [roomPending, setRoomPending] = useState(false);
+  const [roomDeletePending, setRoomDeletePending] = useState(false);
   const [roomState, setRoomState] = useState<CreateRoomActionState>(initialActionState);
   const openedInitialDraft = useRef(false);
   const dateSectionRef = useRef<HTMLDivElement>(null);
@@ -274,6 +275,22 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
     }
   }
 
+  async function deleteRoom() {
+    if (!roomDraft) return;
+    if (!window.confirm(`Delete ${roomDraft.name}? This works only after its Dayparts, templates, and dated Calendar activities have been moved or deleted.`)) return;
+    const formData = new FormData();
+    formData.set("residencyId", residencyId);
+    formData.set("roomId", roomDraft.roomId);
+    setRoomDeletePending(true);
+    const result = await deleteResidencyRoomAction(formData);
+    setRoomDeletePending(false);
+    setRoomState(result);
+    if (result.status === "success") {
+      setRoomDraft(null);
+      onSaved?.();
+    }
+  }
+
   function updateRule(weekday: number, next: Partial<RuleDraft>) {
     setDraft((current) => current ? {
       ...current,
@@ -402,7 +419,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
 
       {calendarOnlyDayparts.length ? <section className="calendar-only-dayparts"><div className="section-heading"><div><p className="eyebrow">Saved for later</p><h3>Reusable one-off templates</h3><p className="subhead">Saved choices you can schedule onto any date. They never create a standing weekly rule.</p></div></div><div className="calendar-only-daypart-list">{calendarOnlyDayparts.map((daypart) => { const needsRate = !fullProgrammingClient && daypartNeedsDefaultArtistRate(daypart, rateAttentionAudience); const disabled = readOnly || (fullProgrammingClient && daypart.type === "dj_artist"); return <button className={`calendar-only-daypart-card ${needsRate ? "needs-rate" : ""}`} type="button" disabled={disabled} onClick={disabled ? undefined : () => setDraft(draftFromDaypart(daypart))} key={daypart.id} style={{ "--daypart-color": daypart.color, "--daypart-text-color": contrastTextColor(daypart.color) } as CSSProperties}><span aria-hidden="true" /><div><strong>{daypart.name}</strong><small>{daypart.room} · {formatLocalMinute(daypart.suggestedStartMinute ?? 1080)}–{formatLocalMinute(daypart.suggestedEndMinute ?? 1260)}</small></div><div className="calendar-only-daypart-meta"><em>{daypart.type === "house_activity" ? "House Activity" : daypart.billingMode === "tracking_only" ? "Client Managed" : "HFY Booking"}</em>{needsRate ? <b>! Rate needed</b> : null}</div>{daypart.billingMode === "billed_by_hfy" ? <i className="hfy-booking-indicator" aria-label="HFY booked" /> : null}</button>; })}</div></section> : null}
 
-      {roomDraft ? <div className="room-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setRoomDraft(null); }}><aside className="room-editor-panel" role="dialog" aria-modal="true" aria-labelledby="room-editor-title"><div className="room-editor-heading"><div><p className="eyebrow">Room &amp; space</p><h2 id="room-editor-title">Edit room</h2></div><button className="quick-modal-close" type="button" aria-label="Close room editor" onClick={() => setRoomDraft(null)}>×</button></div><div className="room-editor-body"><div className="field"><label htmlFor="room-editor-name">Room name</label><input id="room-editor-name" value={roomDraft.name} onChange={(event) => setRoomDraft({ ...roomDraft, name: event.target.value })} maxLength={160} autoFocus required /></div><div className="field"><label>Room color</label><RoomHuePicker value={roomDraft.hue} onChange={(hue) => setRoomDraft({ ...roomDraft, hue })} ariaLabel={`Choose the room color for ${roomDraft.name}`} /><small>Saving updates the room name everywhere and recolors its Dayparts and reusable templates across four high-contrast shades.</small></div>{roomState.status === "error" ? <p className="error" aria-live="polite">{roomState.message}</p> : null}</div><div className="room-editor-actions"><button className="button secondary" type="button" disabled={roomPending} onClick={() => setRoomDraft(null)}>Cancel</button><button className="button" type="button" disabled={roomPending || !roomDraft.name.trim()} onClick={() => void saveRoom()}>{roomPending ? "Saving…" : "Save room"}</button></div></aside></div> : roomState.status === "success" ? <p className="success" aria-live="polite">{roomState.message}</p> : null}
+      {roomDraft ? <div className="room-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setRoomDraft(null); }}><aside className="room-editor-panel" role="dialog" aria-modal="true" aria-labelledby="room-editor-title"><div className="room-editor-heading"><div><p className="eyebrow">Room &amp; space</p><h2 id="room-editor-title">Edit room</h2></div><button className="quick-modal-close" type="button" aria-label="Close room editor" onClick={() => setRoomDraft(null)}>×</button></div><div className="room-editor-body"><div className="field"><label htmlFor="room-editor-name">Room name</label><input id="room-editor-name" value={roomDraft.name} onChange={(event) => setRoomDraft({ ...roomDraft, name: event.target.value })} maxLength={160} autoFocus required /></div><div className="field"><label>Room color</label><RoomHuePicker value={roomDraft.hue} onChange={(hue) => setRoomDraft({ ...roomDraft, hue })} ariaLabel={`Choose the room color for ${roomDraft.name}`} /><small>Saving updates the room name everywhere and recolors its Dayparts and reusable templates across four high-contrast shades.</small></div><div className="daypart-danger-zone"><div><strong>Delete room</strong><small>Only an empty room can be deleted. Existing Dayparts, templates, and dated Calendar activities are always preserved.</small></div><button className="remove-dj-button" type="button" disabled={roomPending || roomDeletePending} onClick={() => void deleteRoom()}>{roomDeletePending ? "Deleting…" : "Delete room"}</button></div>{roomState.status === "error" ? <p className="error" aria-live="polite">{roomState.message}</p> : null}</div><div className="room-editor-actions"><button className="button secondary" type="button" disabled={roomPending || roomDeletePending} onClick={() => setRoomDraft(null)}>Cancel</button><button className="button" type="button" disabled={roomPending || roomDeletePending || !roomDraft.name.trim()} onClick={() => void saveRoom()}>{roomPending ? "Saving…" : "Save room"}</button></div></aside></div> : roomState.status === "success" ? <p className="success" aria-live="polite">{roomState.message}</p> : null}
 
       {draft ? (
         <div className="daypart-drawer-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setDraft(null); }}>
