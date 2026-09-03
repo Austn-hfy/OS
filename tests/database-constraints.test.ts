@@ -68,6 +68,10 @@ beforeAll(async () => {
   const separatedFinancials = await readFile(new URL("../drizzle/0031_dazzling_jack_power.sql", import.meta.url), "utf8");
   const clientArtistVisibility = await readFile(new URL("../drizzle/0032_fast_surge.sql", import.meta.url), "utf8");
   const oneTimeSessionRates = await readFile(new URL("../drizzle/0034_one_time_session_artist_rate.sql", import.meta.url), "utf8");
+  const roomColorSystem = await readFile(new URL("../drizzle/0036_room_color_system.sql", import.meta.url), "utf8");
+  const aceRoomColorSwap = await readFile(new URL("../drizzle/0037_ace_room_color_swap.sql", import.meta.url), "utf8");
+  const widerRoomShades = await readFile(new URL("../drizzle/0038_wider_room_shades.sql", import.meta.url), "utf8");
+  const crossEnvironmentAccessLog = await readFile(new URL("../drizzle/0039_cross_environment_access_log.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -116,7 +120,7 @@ beforeAll(async () => {
     INSERT INTO residencies
       (id, client_account_id, slug, name, invoice_prefix, default_talent_rate_cents, client_hourly_rate_cents)
     VALUES
-      ('${ids.residencyA}', '${ids.clientA}', 'hotel-a', 'Hotel A', 'HTLA', 8000, 10000),
+      ('${ids.residencyA}', '${ids.clientA}', 'ace-hotel', 'Hotel A', 'HTLA', 8000, 10000),
       ('${ids.residencyB}', '${ids.clientB}', 'hotel-b', 'Hotel B', 'HTLB', 9000, 12000);
     INSERT INTO residency_memberships (user_id, residency_id) VALUES ('${ids.hotel}', '${ids.residencyA}');
     INSERT INTO dayparts (id, residency_id, name, room, sort_order)
@@ -144,6 +148,10 @@ beforeAll(async () => {
       ('${ids.shiftA}', '${ids.residencyA}', '${ids.daypartA}', '${ids.invoiceA}', 'Pool', '2026-09-05', 'Pool', '2026-09-05T19:00:00Z', '2026-09-06T02:00:00Z', 10000),
       ('${ids.shiftB}', '${ids.residencyB}', NULL, NULL, 'Lobby', '2026-09-05', 'Lobby', '2026-09-05T20:00:00Z', '2026-09-06T03:00:00Z', 12000);
   `);
+  await database.exec(roomColorSystem.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(aceRoomColorSwap.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(widerRoomShades.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(crossEnvironmentAccessLog.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -151,6 +159,23 @@ afterAll(async () => {
 });
 
 describe("database replacements for Airtable audit formulas", () => {
+  it("backfills persistent rooms, references, and deterministic room shades", async () => {
+    const rooms = await database.query<{ name: string; hue: string; sort_order: number }>(`
+      SELECT name, hue, sort_order FROM rooms WHERE residency_id = '${ids.residencyA}' ORDER BY sort_order;
+    `);
+    expect(rooms.rows).toEqual([
+      { name: "Amigo Room", hue: "orange", sort_order: 0 },
+      { name: "Pool", hue: "blue", sort_order: 1 },
+    ]);
+    const dayparts = await database.query<{ name: string; color: string; room_id: string | null }>(`
+      SELECT name, color, room_id FROM dayparts WHERE residency_id = '${ids.residencyA}' ORDER BY name;
+    `);
+    expect(dayparts.rows.map((daypart) => ({ name: daypart.name, color: daypart.color, linked: Boolean(daypart.room_id) }))).toEqual([
+      { name: "Amigo Room", color: "#7D350B", linked: true },
+      { name: "Pool", color: "#103E70", linked: true },
+    ]);
+  });
+
   it("enables deny-by-default row security on every business table", async () => {
     const result = await database.query<{ relname: string }>(`
       SELECT relname
@@ -160,6 +185,28 @@ describe("database replacements for Airtable audit formulas", () => {
         AND NOT relrowsecurity;
     `);
     expect(result.rows).toEqual([]);
+  });
+
+  it("keeps cross-environment access records append-once per request and location", async () => {
+    const requestId = "00000000-0000-4000-8000-000000000090";
+    const values = `
+      '${requestId}', 'staging_caller', '${ids.admin}', 'Admin', 'preview', 'ace-hotel',
+      'prj_test', 'preview', 'owner:test:project:test:environment:preview', 'https://oidc.vercel.com/test'
+    `;
+    await database.exec(`
+      INSERT INTO cross_environment_access_log
+        (request_id, recorded_by, actor_user_id, actor_label, action, residency_slug, source_project_id, source_environment, source_subject, source_issuer)
+      VALUES (${values});
+    `);
+    await expect(database.exec(`
+      INSERT INTO cross_environment_access_log
+        (request_id, recorded_by, actor_user_id, actor_label, action, residency_slug, source_project_id, source_environment, source_subject, source_issuer)
+      VALUES (${values});
+    `)).rejects.toThrow(/unique|duplicate/i);
+    const privilege = await database.query<{ allowed: boolean }>(`
+      SELECT has_table_privilege('authenticated', 'cross_environment_access_log', 'SELECT') AS allowed;
+    `);
+    expect(privilege.rows[0]?.allowed).toBe(false);
   });
 
   it("keeps Platform subscription invoices in a Residency-scoped ledger", async () => {

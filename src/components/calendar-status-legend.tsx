@@ -1,6 +1,6 @@
 export function CalendarStatusLegend({ internal = false }: { internal?: boolean }) {
   return (
-    <details className="calendar-status-legend">
+    <details className="calendar-status-legend" data-internal={internal || undefined}>
       <summary role="button" aria-label="Color key" title="Color key">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="9" />
@@ -12,8 +12,8 @@ export function CalendarStatusLegend({ internal = false }: { internal?: boolean 
         <span><i className="daypart" />Color: Daypart identity</span>
         <span><i className="needs" />No check: needs or partially scheduled</span>
         <span><i className="scheduled" />Checkmark: scheduled</span>
-        <span><i className="hfy-pending" />Faded pink: HFY request pending</span>
-        <span><i className={internal ? "daypart-confirmed" : "hfy-confirmed"} />{internal ? "Configured color + check: HFY scheduled" : "Full pink + check: HFY booked"}</span>
+        <span><i className="hfy-pending" />Outlined pink dot: HFY request pending</span>
+        <span><i className="hfy-confirmed" />Filled pink dot: HFY booked</span>
       </div>
     </details>
   );

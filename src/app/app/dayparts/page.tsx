@@ -3,13 +3,15 @@ import { DaypartRouteManager } from "@/components/daypart-route-manager";
 import { getResidencyList } from "@/data/internal";
 import { getDaypartsForResidency } from "@/services/dayparts";
 import { isStandingHfyDaypart } from "@/domain/hfy-programming";
+import { getRoomsForResidency } from "@/services/rooms";
 
 export default async function OwnerDaypartsPage({ searchParams }: { searchParams: Promise<{ residency?: string; create?: string }> }) {
   const params = await searchParams;
   const residencies = await getResidencyList();
   const residency = residencies.find((item) => item.id === params.residency);
   if (!residency) redirect("/app?mode=hfy&view=operations");
-  const dayparts = (await getDaypartsForResidency(residency.id)).filter(isStandingHfyDaypart);
+  const [allDayparts, rooms] = await Promise.all([getDaypartsForResidency(residency.id), getRoomsForResidency(residency.id)]);
+  const dayparts = allDayparts.filter(isStandingHfyDaypart);
 
-  return <DaypartRouteManager residencyId={residency.id} dayparts={dayparts} initialCreate={params.create === "1"} />;
+  return <DaypartRouteManager residencyId={residency.id} dayparts={dayparts} rooms={rooms} initialCreate={params.create === "1"} />;
 }

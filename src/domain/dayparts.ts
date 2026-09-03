@@ -11,14 +11,14 @@ export const DAYPART_COLOR_PRESET_ROWS: readonly DaypartColorPresetRow[] = [
   {
     label: "Dark",
     colors: [
-      { label: "Burgundy", value: "#9C3F4D" },
-      { label: "Burnt orange", value: "#B95A1E" },
-      { label: "Ochre", value: "#A97912" },
-      { label: "Forest", value: "#24745B" },
-      { label: "Deep teal", value: "#19686C" },
-      { label: "Deep blue", value: "#1B5FA7" },
-      { label: "Deep navy", value: "#173650" },
-      { label: "Deep purple", value: "#5542A1" },
+      { label: "Burgundy", value: "#76293A" },
+      { label: "Burnt orange", value: "#7D350B" },
+      { label: "Ochre", value: "#694B08" },
+      { label: "Forest", value: "#124D38" },
+      { label: "Deep teal", value: "#0D4B50" },
+      { label: "Deep blue", value: "#103E70" },
+      { label: "Deep navy", value: "#0B243A" },
+      { label: "Deep purple", value: "#392873" },
     ],
   },
   {
@@ -47,9 +47,77 @@ export const DAYPART_COLOR_PRESET_ROWS: readonly DaypartColorPresetRow[] = [
       { label: "Lavender", value: "#9B8AE0" },
     ],
   },
+  {
+    label: "Pale",
+    colors: [
+      { label: "Blush", value: "#FADCDD" },
+      { label: "Cream orange", value: "#FBE1C9" },
+      { label: "Cream yellow", value: "#FAEFC4" },
+      { label: "Pale mint", value: "#D9F1E6" },
+      { label: "Pale aqua", value: "#D7F0F1" },
+      { label: "Pale blue", value: "#DAECFA" },
+      { label: "Pale navy", value: "#DEE7EF" },
+      { label: "Pale lavender", value: "#E8E2FA" },
+    ],
+  },
 ] as const;
 
 export const DAYPART_COLOR_PRESETS = DAYPART_COLOR_PRESET_ROWS.flatMap((row) => row.colors);
+
+export const ROOM_HUE_ORDER = ["blue", "orange", "green", "purple", "yellow", "navy", "red", "teal"] as const;
+export type RoomHue = (typeof ROOM_HUE_ORDER)[number];
+export type RoomShade = "dark" | "medium" | "light" | "pale";
+
+const ROOM_HUE_PRESET_COLUMN: Record<RoomHue, number> = {
+  blue: 5,
+  orange: 1,
+  green: 3,
+  purple: 7,
+  yellow: 2,
+  navy: 6,
+  red: 0,
+  teal: 4,
+};
+
+const ROOM_SHADE_ROW: Record<RoomShade, number> = { dark: 0, medium: 1, light: 2, pale: 3 };
+
+// Separate neighboring Dayparts as much as possible while retaining the four
+// familiar stops in the picker.
+export const ROOM_SHADE_ORDER = ["dark", "pale", "medium", "light"] as const;
+
+export function roomHueForIndex(index: number): RoomHue {
+  return ROOM_HUE_ORDER[Math.max(0, index) % ROOM_HUE_ORDER.length];
+}
+
+export function roomColor(hue: RoomHue, shade: RoomShade = "medium"): string {
+  return DAYPART_COLOR_PRESET_ROWS[ROOM_SHADE_ROW[shade]].colors[ROOM_HUE_PRESET_COLUMN[hue]].value;
+}
+
+export function roomDaypartColor(hue: RoomHue, itemIndex: number): string {
+  return roomColor(hue, ROOM_SHADE_ORDER[Math.max(0, itemIndex) % ROOM_SHADE_ORDER.length]);
+}
+
+export function roomShadeColors(hue: RoomHue): string[] {
+  return ROOM_SHADE_ORDER.map((shade) => roomColor(hue, shade));
+}
+
+export function contrastTextColor(background: string): "#FFFFFF" | "#102334" {
+  const hex = background.replace(/^#/, "");
+  if (!/^[0-9A-Fa-f]{6}$/.test(hex)) return "#102334";
+  const channels = [0, 2, 4].map((offset) => {
+    const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+  const whiteContrast = 1.05 / (luminance + 0.05);
+  const darkLuminance = 0.0159;
+  const darkContrast = (luminance + 0.05) / (darkLuminance + 0.05);
+  return whiteContrast >= darkContrast ? "#FFFFFF" : "#102334";
+}
+
+export function isRoomHue(value: string): value is RoomHue {
+  return (ROOM_HUE_ORDER as readonly string[]).includes(value);
+}
 
 export type DaypartRuleInput = {
   weekday: number;
@@ -64,8 +132,8 @@ export type DaypartScheduleMode = "standing_weekly" | "calendar_only";
 export type DaypartBookingRecordKind = "financial_shift" | "tracking_occurrence";
 
 export function calendarColorForShift(daypartColor: string | null, shiftCalendarColor: string | null): string | undefined {
-  if (shiftCalendarColor?.toUpperCase() === HFY_BOOKED_COLOR) return HFY_BOOKED_COLOR;
-  return daypartColor ?? shiftCalendarColor ?? undefined;
+  const datedColor = shiftCalendarColor?.toUpperCase() === HFY_BOOKED_COLOR ? null : shiftCalendarColor;
+  return daypartColor ?? datedColor ?? DEFAULT_DAYPART_COLOR;
 }
 
 export function calendarColorForEconomics(
@@ -74,12 +142,8 @@ export function calendarColorForEconomics(
   economicsMode: "hfy" | "client_owned" | "hfy_request" | undefined,
   audience: "client" | "internal" = "client",
 ): string | undefined {
-  if (economicsMode === "hfy_request") return HFY_PENDING_COLOR;
-  if (economicsMode === "hfy") {
-    if (audience === "client") return HFY_BOOKED_COLOR;
-    const internalShiftColor = shiftCalendarColor?.toUpperCase() === HFY_BOOKED_COLOR ? null : shiftCalendarColor;
-    return daypartColor ?? internalShiftColor ?? DEFAULT_DAYPART_COLOR;
-  }
+  void economicsMode;
+  void audience;
   return calendarColorForShift(daypartColor, shiftCalendarColor);
 }
 

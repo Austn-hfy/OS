@@ -5,6 +5,7 @@ import { calculateBillableAmountCents, resolveRateCents } from "@/domain/airtabl
 import type { AuditActor, InternalActor } from "@/lib/auth";
 import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
+import { findOrCreateResidencyRoom } from "@/services/rooms";
 
 export type CreateShiftInput = {
   residencyId: string;
@@ -24,6 +25,7 @@ export async function createShift(actor: InternalActor, input: CreateShiftInput)
     const [residency] = await tx.select().from(residencies)
       .where(and(eq(residencies.id, input.residencyId), eq(residencies.active, true), eq(residencies.operatingMode, "operations"))).limit(1);
     if (!residency) throw new Error("Residency not found.");
+    const room = await findOrCreateResidencyRoom(tx, residency.id, input.room);
 
     const coveringInvoices = await tx.select({ id: invoices.id, status: invoices.status }).from(invoices).where(and(
       eq(invoices.residencyId, residency.id),
@@ -37,11 +39,12 @@ export async function createShift(actor: InternalActor, input: CreateShiftInput)
     const clientRateCents = resolveRateCents(input.clientRateOverrideCents, residency.clientHourlyRateCents);
     const [shift] = await tx.insert(shifts).values({
       residencyId: residency.id,
+      roomId: room.id,
       daypartId: input.daypartId ?? null,
       invoiceId: draftInvoice?.id ?? null,
       name: input.name.trim(),
       serviceDate: input.serviceDate,
-      room: input.room.trim(),
+      room: room.name,
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       notes: input.notes?.trim() ?? "",
@@ -80,6 +83,7 @@ export async function createShift(actor: InternalActor, input: CreateShiftInput)
       entityId: shift.id,
       details: {
         daypartId: input.daypartId ?? null,
+        roomId: room.id,
         invoiceId: draftInvoice?.id ?? null,
         invoiceLinkIssue: !finalizedInvoice && !draftInvoice,
         pendingAdjustmentSourceInvoiceId: finalizedInvoice?.id ?? null,

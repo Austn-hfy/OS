@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 export const PRODUCTION_SUPABASE_PROJECT_REF: string = "tkfsgifnywbwjdkxjhae";
 export const STAGING_SUPABASE_PROJECT_REF: string = "ucrtbevvdfkceudknyxe";
+const PRODUCTION_SUPABASE_POOLER_HOST = "aws-0-us-west-2.pooler.supabase.com";
 
 const SYNC_NAMESPACE = "hfy-os-staging-structure-sync-v1";
 
@@ -107,6 +108,37 @@ export type ProductionStructureSnapshot = {
   talent: SourceTalent[];
   rosterAssignments: SourceRosterAssignment[];
 };
+
+export function parseProductionStructureSnapshot(
+  parsed: Record<string, unknown>,
+  requestedSlugs: string[],
+): ProductionStructureSnapshot {
+  if (parsed.sourceProjectRef !== PRODUCTION_SUPABASE_PROJECT_REF) {
+    throw new Error("Production snapshot is not bound to the approved HFY production project.");
+  }
+  const requiredArrays = ["clientAccounts", "residencies", "dayparts", "dayRules", "dateExceptions", "talent", "rosterAssignments"];
+  for (const key of requiredArrays) {
+    if (!Array.isArray(parsed[key])) throw new Error(`Reviewed production snapshot is missing ${key}.`);
+  }
+  const snapshot = parsed as unknown as ProductionStructureSnapshot;
+  const snapshotSlugs = snapshot.residencies.map((residency) => residency.slug).sort();
+  const expectedSlugs = [...requestedSlugs].sort();
+  if (snapshotSlugs.length !== expectedSlugs.length || snapshotSlugs.some((slug, index) => slug !== expectedSlugs[index])) {
+    throw new Error("Reviewed production snapshot scope does not exactly match the requested Residency scope.");
+  }
+  return {
+    ...snapshot,
+    residencies: snapshot.residencies.map((residency) => ({
+      ...residency,
+      pipelineStatusChangedAt: new Date(residency.pipelineStatusChangedAt),
+      convertedAt: residency.convertedAt ? new Date(residency.convertedAt) : null,
+    })),
+    talent: snapshot.talent.map((artist) => ({
+      ...artist,
+      archivedAt: artist.archivedAt ? new Date(artist.archivedAt) : null,
+    })),
+  };
+}
 
 export type ExistingStagingState = {
   residencyId: string | null;
@@ -232,8 +264,20 @@ export function supabaseProjectRefFromDatabaseUrl(databaseUrl: string): string |
   const directHost = parsed.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i)?.[1];
   if (directHost) return directHost.toLowerCase();
   const username = decodeURIComponent(parsed.username);
-  const pooledRef = username.match(/^postgres\.([a-z0-9]+)$/i)?.[1];
+  const pooledRef = username.match(/^[^.]+\.([a-z0-9]+)$/i)?.[1];
   return pooledRef?.toLowerCase() ?? null;
+}
+
+export function pooledProductionReaderUrl(databaseUrl: string): string {
+  const parsed = new URL(databaseUrl);
+  const directProjectRef = parsed.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i)?.[1]?.toLowerCase();
+  if (!directProjectRef) return databaseUrl;
+
+  const username = decodeURIComponent(parsed.username);
+  parsed.hostname = PRODUCTION_SUPABASE_POOLER_HOST;
+  parsed.port = "6543";
+  parsed.username = `${username}.${directProjectRef}`;
+  return parsed.toString();
 }
 
 export function supabaseProjectRefFromApiUrl(apiUrl: string): string | null {

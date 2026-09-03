@@ -246,6 +246,41 @@
       "when": 1788388505828,
       "tag": "0034_one_time_session_artist_rate",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788428417000,
+      "tag": "0035_staging_structure_export",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788428782871,
+      "tag": "0036_room_color_system",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788469200000,
+      "tag": "0037_ace_room_color_swap",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788474600000,
+      "tag": "0038_wider_room_shades",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788523200000,
+      "tag": "0039_cross_environment_access_log",
+      "breakpoints": true
     }
   ]
 }

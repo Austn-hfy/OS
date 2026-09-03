@@ -1548,7 +1548,7 @@
 @media (max-width: 700px) {
   .hfy-style-system .daypart-week-corner,
   .hfy-style-system .daypart-room-label { padding-inline: 8px; }
-  .hfy-style-system .daypart-room-label span { display: none; }
+  .hfy-style-system .daypart-room-label-copy > span { display: none; }
   .hfy-style-system .daypart-week-block { padding-inline: 3px; border-left-width: 3px; }
 }
 
@@ -2151,19 +2151,12 @@
   }
 }
 
-/* Pending requests stay faded; staffed HFY slots use the full reserved pink. */
-.hfy-style-system .calendar-event.hfy-pending {
-  color: #7c2852;
-  border-left-color: var(--daypart-color, #f9a8d4);
-  background: color-mix(in srgb, var(--daypart-color, #f9a8d4) 20%, white);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #f9a8d4) 42%, transparent);
-}
-
-.hfy-style-system .calendar-event.hfy-confirmed {
-  color: #65143e;
-  border-left-color: var(--daypart-color, #ec4899);
-  background: color-mix(in srgb, var(--daypart-color, #ec4899) 42%, white);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, #ec4899) 72%, transparent);
+/* HFY state uses a secondary pink marker; the room color remains the pill fill. */
+.hfy-style-system :is(.calendar-event, .week-calendar-event):is(.hfy-pending, .hfy-confirmed) {
+  color: #102334;
+  border-left-color: var(--daypart-color, var(--hfy-action-strong));
+  background: color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 64%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 66%, transparent);
 }
 
 /* The calendar command bar uses the real content width after the sidebar. */

@@ -221,9 +221,26 @@ export const publicCalendarLinks = pgTable("public_calendar_links", {
   check("public_calendar_links_scope_valid", sql`${table.scope} IN ('all', 'selected')`),
 ]);
 
+export const rooms = pgTable("rooms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  hue: text("hue").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("rooms_residency_name_unique").on(table.residencyId, sql`lower(btrim(${table.name}))`),
+  uniqueIndex("rooms_id_residency_unique").on(table.id, table.residencyId),
+  index("rooms_residency_sort_idx").on(table.residencyId, table.sortOrder, table.name),
+  check("rooms_name_not_blank", sql`length(btrim(${table.name})) > 0`),
+  check("rooms_hue_valid", sql`${table.hue} IN ('blue', 'orange', 'green', 'purple', 'yellow', 'navy', 'red', 'teal')`),
+  check("rooms_sort_order_nonnegative", sql`${table.sortOrder} >= 0`),
+]);
+
 export const dayparts = pgTable("dayparts", {
   id: uuid("id").primaryKey().defaultRandom(),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id").references(() => rooms.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   room: text("room").notNull(),
   color: text("color").notNull().default("#2783DC"),
@@ -241,6 +258,7 @@ export const dayparts = pgTable("dayparts", {
 }, (table) => [
   uniqueIndex("dayparts_residency_name_unique").on(table.residencyId, sql`lower(${table.name})`),
   index("dayparts_residency_active_idx").on(table.residencyId, table.active, table.sortOrder),
+  index("dayparts_room_idx").on(table.roomId, table.createdAt),
   check("dayparts_color_valid", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),
   check("dayparts_rate_nonnegative", sql`(${table.defaultTalentRateCents} IS NULL OR ${table.defaultTalentRateCents} >= 0) AND (${table.clientDefaultRateCents} IS NULL OR ${table.clientDefaultRateCents} >= 0)`),
   check("dayparts_schedule_fields_valid", sql`
@@ -305,6 +323,7 @@ export const daypartDateExceptions = pgTable("daypart_date_exceptions", {
 export const scheduleOccurrences = pgTable("schedule_occurrences", {
   id: uuid("id").primaryKey().defaultRandom(),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id").references(() => rooms.id, { onDelete: "restrict" }),
   daypartId: uuid("daypart_id").references(() => dayparts.id, { onDelete: "restrict" }),
   serviceDate: date("service_date", { mode: "string" }).notNull(),
   name: text("name").notNull(),
@@ -321,6 +340,7 @@ export const scheduleOccurrences = pgTable("schedule_occurrences", {
 }, (table) => [
   uniqueIndex("schedule_occurrences_daypart_date_unique").on(table.daypartId, table.serviceDate),
   index("schedule_occurrences_residency_date_idx").on(table.residencyId, table.serviceDate),
+  index("schedule_occurrences_room_idx").on(table.roomId, table.serviceDate),
   check("schedule_occurrences_time_valid", sql`${table.endsAt} > ${table.startsAt}`),
   check("schedule_occurrences_color_valid", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),
 ]);
@@ -547,6 +567,7 @@ export const talentScheduleLocks = pgTable("talent_schedule_locks", {
 export const shifts = pgTable("shifts", {
   id: uuid("id").primaryKey().defaultRandom(),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "restrict" }),
+  roomId: uuid("room_id").references(() => rooms.id, { onDelete: "restrict" }),
   daypartId: uuid("daypart_id").references(() => dayparts.id, { onDelete: "set null" }),
   invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
   name: text("name").notNull(),
@@ -569,6 +590,7 @@ export const shifts = pgTable("shifts", {
 }, (table) => [
   index("shifts_residency_date_idx").on(table.residencyId, table.serviceDate),
   index("shifts_daypart_idx").on(table.daypartId, table.serviceDate),
+  index("shifts_room_idx").on(table.roomId, table.serviceDate),
   uniqueIndex("shifts_exact_slot_unique").on(table.residencyId, table.room, table.startsAt, table.endsAt),
   uniqueIndex("shifts_daypart_date_unique").on(table.daypartId, table.serviceDate).where(sql`${table.daypartId} IS NOT NULL`),
   check("shifts_time_valid", sql`${table.endsAt} > ${table.startsAt}`),
@@ -752,6 +774,35 @@ export const auditLog = pgTable("audit_log", {
   details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("audit_log_residency_created_idx").on(table.residencyId, table.createdAt)]);
+
+export const crossEnvironmentAccessLog = pgTable("cross_environment_access_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  requestId: uuid("request_id").notNull(),
+  recordedBy: text("recorded_by").notNull(),
+  actorUserId: uuid("actor_user_id"),
+  actorLabel: text("actor_label").notNull(),
+  action: text("action").notNull(),
+  residencySlug: text("residency_slug").notNull(),
+  sourceProjectId: text("source_project_id").notNull(),
+  sourceEnvironment: text("source_environment").notNull(),
+  sourceSubject: text("source_subject").notNull(),
+  sourceIssuer: text("source_issuer").notNull(),
+  sourceDeployment: text("source_deployment"),
+  sourceCommitSha: text("source_commit_sha"),
+  sourceGitRef: text("source_git_ref"),
+  outcome: text("outcome").notNull().default("started"),
+  httpStatus: integer("http_status"),
+  reasonCode: text("reason_code"),
+  recordCounts: jsonb("record_counts").$type<Record<string, number>>().notNull().default({}),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  uniqueIndex("cross_environment_access_request_location_unique").on(table.requestId, table.recordedBy),
+  index("cross_environment_access_outcome_started_idx").on(table.outcome, table.startedAt),
+  check("cross_environment_access_recorded_by_valid", sql`${table.recordedBy} IN ('staging_caller', 'production_export')`),
+  check("cross_environment_access_action_valid", sql`${table.action} IN ('preview', 'apply')`),
+  check("cross_environment_access_outcome_valid", sql`${table.outcome} IN ('started', 'succeeded', 'failed', 'denied')`),
+]);
 
 export type User = typeof users.$inferSelect;
 export type AccountSetupToken = typeof accountSetupTokens.$inferSelect;

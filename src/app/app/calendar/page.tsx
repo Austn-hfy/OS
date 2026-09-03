@@ -8,6 +8,7 @@ import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompact
 import { getActiveTalentLookup, getDaypartDateExceptionsForResidencies, getDaypartsForResidencies, getDaypartsForResidency, getHfyRequestTalentLookup } from "@/services/dayparts";
 import { isHfyManagedEconomicsMode, isStandingHfyDaypart } from "@/domain/hfy-programming";
 import { ResidencyCalendar } from "./residency-calendar";
+import { getRoomsForResidency } from "@/services/rooms";
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ residency?: string; calendarResidency?: string; month?: string; event?: string; calendarView?: string; week?: string }> }) {
   const params = await searchParams;
@@ -102,9 +103,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const weekStart = normalizeWeekStart(params.week, requestedMonthKey);
   const monthKey = calendarView === "week" ? monthKeyForDate(shiftDateKey(weekStart, 3)) : requestedMonthKey;
   const range = calendarView === "week" ? weekRange(weekStart) : monthRange(monthKey);
-  const [calendar, dayparts, talent, requestTalent, calendarLinkSettings, dateExceptions] = await Promise.all([
+  const [calendar, dayparts, rooms, talent, requestTalent, calendarLinkSettings, dateExceptions] = await Promise.all([
     getCalendarData(selectedResidency.id, range),
     getDaypartsForResidency(selectedResidency.id),
+    getRoomsForResidency(selectedResidency.id),
     getActiveTalentLookup(selectedResidency.id),
     getHfyRequestTalentLookup(selectedResidency.id),
     getPublicCalendarLinkSettings(selectedResidency.id),
@@ -203,7 +205,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         calendarView={calendarView}
         weekStart={weekStart}
         events={events}
-        dayparts={hfyDayparts.map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode, scheduleMode: daypart.scheduleMode, suggestedStartMinute: daypart.suggestedStartMinute, suggestedEndMinute: daypart.suggestedEndMinute, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })) }))}
+        rooms={rooms}
+        dayparts={hfyDayparts.map((daypart) => ({ id: daypart.id, roomId: daypart.roomId, roomHue: daypart.roomHue, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode, scheduleMode: daypart.scheduleMode, suggestedStartMinute: daypart.suggestedStartMinute, suggestedEndMinute: daypart.suggestedEndMinute, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })) }))}
         talent={talent}
         requestTalent={requestTalent}
         dateExceptions={dateExceptions}

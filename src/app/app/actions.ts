@@ -9,6 +9,7 @@ import { getDb } from "@/db/client";
 import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments, talentPaymentProfiles, talentScheduleLocks, users } from "@/db/schema";
 import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
+import { ROOM_HUE_ORDER } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { requireActorForResidency, requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
@@ -23,8 +24,10 @@ import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-
 import { requestOrigin } from "@/lib/request-origin";
 import { isFullCalendarMonth } from "@/domain/talent-invoicing";
 import { sendResidencyAccountSetupEmail } from "@/services/account-setup-email";
+import { createResidencyRoom, updateResidencyRoom, type ResidencyRoom } from "@/services/rooms";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
+export type CreateRoomActionState = ResidencyActionState & { room?: ResidencyRoom };
 export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
 export type CredentialLinkActionState = ResidencyActionState & { setupLink?: string };
 export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_client_roster" | "remove_from_client_roster";
@@ -1417,6 +1420,8 @@ export async function createShiftAction(formData: FormData) {
 const daypartPayloadSchema = z.object({
   id: z.uuid().optional(),
   residencyId: z.uuid(),
+  roomId: z.uuid().nullable().optional(),
+  roomHue: z.enum(ROOM_HUE_ORDER).nullable().optional(),
   name: z.string().trim().min(1),
   room: z.string().trim().min(1),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
@@ -1650,6 +1655,7 @@ const residencyBookingPayloadSchema = z.object({
   serviceDate: z.iso.date(),
   dayparts: z.array(z.object({
     daypartId: z.uuid().nullable(),
+    roomId: z.uuid().nullable().optional(),
     name: z.string().trim().min(1).optional(),
     room: z.string().trim().min(1).optional(),
     calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
@@ -1663,6 +1669,15 @@ const residencyBookingPayloadSchema = z.object({
     clientTalentDefaultRateCents: z.number().int().min(0).nullable().optional(),
     clientRateOverrideCents: z.number().int().min(0).nullable().optional(),
     requestHfy: z.boolean().optional(),
+    createDaypart: z.object({
+      scheduleMode: z.enum(["standing_weekly", "calendar_only"]),
+      rules: z.array(z.object({
+        weekday: z.number().int().min(0).max(6),
+        startMinute: z.number().int().min(0).max(1439),
+        endMinute: z.number().int().min(1).max(2879),
+        defaultDjCount: z.number().int().min(1).max(20).nullable().optional(),
+      })).optional(),
+    }).optional(),
     assignments: z.array(z.object({
       talentId: z.uuid().nullable().optional(),
       startsAtMinute: z.number().int().min(0).max(2879).optional(),
@@ -1672,8 +1687,8 @@ const residencyBookingPayloadSchema = z.object({
       fixedFeeCents: z.number().int().min(0).nullable().optional(),
     })),
   }).superRefine((slot, context) => {
-    if (slot.daypartId === null && (!slot.name || !slot.room || !slot.calendarColor)) {
-      context.addIssue({ code: "custom", message: "A one-time slot needs a name, room, and calendar color." });
+    if (slot.daypartId === null && (!slot.name || !slot.room)) {
+      context.addIssue({ code: "custom", message: "A new slot needs a name and room." });
     }
     if (slot.daypartId === null && !slot.type) {
       context.addIssue({ code: "custom", message: "Choose Talent Activity or House Activity for this one-time slot." });
@@ -1686,6 +1701,45 @@ const residencyBookingPayloadSchema = z.object({
     }
   })).min(1),
 });
+
+export async function createResidencyRoomAction(formData: FormData): Promise<CreateRoomActionState> {
+  try {
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      name: z.string().trim().min(1).max(160),
+      hue: z.enum(ROOM_HUE_ORDER),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    const room = await createResidencyRoom(actor, parsed);
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/dayparts");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/dayparts");
+    return { status: "success", message: `${room.name} added.`, room };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to add this room." };
+  }
+}
+
+export async function updateResidencyRoomAction(formData: FormData): Promise<CreateRoomActionState> {
+  try {
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      roomId: z.uuid(),
+      name: z.string().trim().min(1).max(160),
+      hue: z.enum(ROOM_HUE_ORDER),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    const room = await updateResidencyRoom(actor, parsed);
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/dayparts");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/dayparts");
+    return { status: "success", message: `${room.name} updated.`, room };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this room." };
+  }
+}
 
 export async function bookResidencyDateAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
   try {
@@ -1853,6 +1907,7 @@ const oneTimeRecordSchema = z.object({
   id: z.uuid(),
   name: z.string().trim().min(1).max(160),
   room: z.string().trim().min(1).max(160),
+  roomHue: z.enum(ROOM_HUE_ORDER).optional(),
   calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   startMinute: z.coerce.number().int().min(0).max(1439),
   endMinute: z.coerce.number().int().min(1).max(2879),

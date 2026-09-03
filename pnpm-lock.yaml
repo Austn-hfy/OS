@@ -23,6 +23,9 @@ importers:
       '@vercel/functions':
         specifier: ^3.9.5
         version: 3.9.5
+      '@vercel/oidc':
+        specifier: 3.8.5
+        version: 3.8.5
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.5)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.0)(postgres@3.4.9)

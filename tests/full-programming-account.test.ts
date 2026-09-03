@@ -27,7 +27,7 @@ describe("Full Programming account controls", () => {
     expect(manager).toContain('fullProgrammingClient && daypart.type === "dj_artist"');
   });
 
-  it("auto-routes attempted talent additions to HFY without exposing a client choice", async () => {
+  it("keeps Talent Activity creation unavailable while preserving the House Activity funnel", async () => {
     const [calendarPage, calendar, service] = await Promise.all([
       readSource("../src/app/residency/calendar/page.tsx"),
       readSource("../src/app/app/calendar/residency-calendar.tsx"),
@@ -35,8 +35,9 @@ describe("Full Programming account controls", () => {
     ]);
     expect(calendarPage).toContain('fullProgramming={actor.residencyTier === "complete"}');
     expect(calendarPage).toContain('actor.residencyTier === "complete" ? []');
-    expect(calendar).toContain("!fullProgramming && activeSuggestion.requestHfy");
-    expect(calendar).toContain("HFY creates and staffs all Talent Activities");
+    expect(calendar).toContain('{!fullProgramming ? <button type="button" onClick={() => chooseOneTimeType("dj_artist")}');
+    expect(calendar).toContain("HFY creates and staffs all Talent Activities for Full Programming accounts.");
+    expect(calendar).toContain('setAddMode("new-type")');
     expect(calendar).toContain("fullProgramming && previewMode && editingEvent.daypartId");
     expect(calendar).toContain("Save custom hours");
     expect(service).toContain("fullProgrammingAutoRequest");

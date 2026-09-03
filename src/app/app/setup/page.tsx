@@ -3,10 +3,26 @@ import { InvoiceBrandingSettings } from "./invoice-branding-settings";
 import { ResidencyContactsManager } from "./residency-contacts-manager";
 import { ResidencyProfileEditor } from "./residency-profile-editor";
 import { WorkspaceSurface } from "@/components/workspace-surface";
+import { getLastStagingStructureSync } from "@/data/staging-sync";
+import { isStableStagingSyncEnvironment } from "@/domain/staging-sync-admin";
+import { StagingSyncCard } from "./staging-sync-card";
 
 export default async function SetupPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
   const { residency } = await searchParams;
-  const data = await getSetupData();
+  const stagingSyncEnabled = !residency && isStableStagingSyncEnvironment({
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    VERCEL: process.env.VERCEL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    VERCEL_TARGET_ENV: process.env.VERCEL_TARGET_ENV,
+    VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF,
+  }) && Boolean(process.env.STAGING_SYNC_CONFIRMATION_SECRET) && (
+    process.env.STAGING_SYNC_PRODUCTION_EXPORT_MODE === "oidc"
+    || Boolean(process.env.PRODUCTION_SYNC_DATABASE_URL)
+  );
+  const [data, lastStagingSync] = await Promise.all([
+    getSetupData(),
+    stagingSyncEnabled ? getLastStagingStructureSync() : Promise.resolve(null),
+  ]);
   const selected = data.residencies.find((item) => item.id === residency);
   return (
     <WorkspaceSurface className="workspace-surface-settings">
@@ -18,6 +34,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
           billingAddress={data.invoiceBranding.billingAddress}
           hasLogo={Boolean(data.invoiceBranding.logo)}
         /> : null}
+        {!selected && stagingSyncEnabled ? <StagingSyncCard initialLastSync={lastStagingSync} /> : null}
         {selected ? <>
           <ResidencyProfileEditor residency={selected} />
           <ResidencyContactsManager residencyId={selected.id} contacts={data.contacts.filter((contact) => contact.residencyId === selected.id)} />

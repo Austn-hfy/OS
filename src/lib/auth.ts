@@ -170,16 +170,21 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
   };
 });
 
-export async function requireInternalActor(): Promise<InternalActor> {
+export async function getInternalActor(): Promise<InternalActor | null> {
   const current = await currentProfile();
-  if (!current) redirect("/login");
-  if (current.profile.role !== "internal_admin") redirect("/login");
+  if (!current || current.profile.role !== "internal_admin") return null;
   return {
     kind: "internal",
     userId: current.profile.id,
     email: current.profile.email,
     displayName: current.profile.displayName,
   };
+}
+
+export async function requireInternalActor(): Promise<InternalActor> {
+  const actor = await getInternalActor();
+  if (!actor) redirect("/login");
+  return actor;
 }
 
 export async function requireResidencyActor(): Promise<ResidencyActor> {

@@ -5,6 +5,7 @@ import {
   assertSafeSyncEnvironment,
   buildStagingResidencyPlan,
   formatDryRunReport,
+  pooledProductionReaderUrl,
   sanitizeTalent,
   stagingSyncKey,
   stagingSyncUuid,
@@ -138,13 +139,29 @@ describe("staging production-structure sync", () => {
   it("accepts only the explicitly approved production-to-staging project direction", () => {
     const productionDirect = "postgresql://postgres:secret@db.tkfsgifnywbwjdkxjhae.supabase.co:5432/postgres";
     const productionPooled = "postgresql://postgres.tkfsgifnywbwjdkxjhae:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres";
+    const restrictedProductionPooled = "postgresql://hfy_staging_structure_reader.tkfsgifnywbwjdkxjhae:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres";
+    const restrictedProductionDedicated = "postgresql://hfy_staging_structure_reader:secret@db.tkfsgifnywbwjdkxjhae.supabase.co:6543/postgres";
     const stagingDirect = "postgresql://postgres:secret@db.ucrtbevvdfkceudknyxe.supabase.co:5432/postgres";
     expect(supabaseProjectRefFromDatabaseUrl(productionDirect)).toBe("tkfsgifnywbwjdkxjhae");
     expect(supabaseProjectRefFromDatabaseUrl(productionPooled)).toBe("tkfsgifnywbwjdkxjhae");
+    expect(supabaseProjectRefFromDatabaseUrl(restrictedProductionPooled)).toBe("tkfsgifnywbwjdkxjhae");
+    expect(supabaseProjectRefFromDatabaseUrl(restrictedProductionDedicated)).toBe("tkfsgifnywbwjdkxjhae");
     expect(() => assertSafeSyncEnvironment(productionDirect, stagingDirect)).not.toThrow();
     expect(() => assertSafeSyncEnvironment(stagingDirect, productionDirect)).toThrow(/production project/i);
     expect(() => assertSafeSyncEnvironment(productionDirect, productionDirect)).toThrow();
     expect(() => assertSafeSyncEnvironment("not-a-url", stagingDirect)).toThrow(/production project/i);
+  });
+
+  it("routes a direct restricted-reader URL through the production Supabase pooler", () => {
+    const direct = "postgresql://hfy_staging_structure_reader:secret@db.tkfsgifnywbwjdkxjhae.supabase.co:6543/postgres?sslmode=require";
+    const pooled = new URL(pooledProductionReaderUrl(direct));
+
+    expect(pooled.hostname).toBe("aws-0-us-west-2.pooler.supabase.com");
+    expect(pooled.port).toBe("6543");
+    expect(decodeURIComponent(pooled.username)).toBe("hfy_staging_structure_reader.tkfsgifnywbwjdkxjhae");
+    expect(pooled.password).toBe("secret");
+    expect(pooled.searchParams.get("sslmode")).toBe("require");
+    expect(pooledProductionReaderUrl(pooled.toString())).toBe(pooled.toString());
   });
 
   it("accepts only the approved production API source and staging database destination", () => {
@@ -276,6 +293,21 @@ describe("staging production-structure sync", () => {
     expect(script).toContain("formatDryRunReport(plans, apply)");
     expect(script).toContain("applyResidencyPlan(tx, plan, stagingEncryptionKey)");
     expect(script.indexOf("applyResidencyPlan(tx, plan, stagingEncryptionKey)")).toBeGreaterThan(script.indexOf("await staging.begin(async (tx)"));
+  });
+
+  it("exposes only the allowlisted structure through a dedicated restricted production function", async () => {
+    const migration = await readFile(new URL("../drizzle/0035_staging_structure_export.sql", import.meta.url), "utf8");
+    const exportedFunction = migration.slice(
+      migration.indexOf("CREATE OR REPLACE FUNCTION private.hfy_staging_structure_snapshot"),
+      migration.indexOf("REVOKE ALL ON FUNCTION"),
+    );
+    expect(exportedFunction).not.toMatch(/primary_contact|billing_contact|\bemail\b|\bphone\b|ach_|zelle_|storage_path|legacy_|internal_notes|talent_notes/i);
+    expect(exportedFunction).toContain("hasPaymentProfile");
+    expect(exportedFunction).toContain("hasTaxDocument");
+    expect(migration).toContain("SECURITY DEFINER");
+    expect(migration).toContain("REVOKE ALL ON FUNCTION private.hfy_staging_structure_snapshot(text) FROM PUBLIC");
+    expect(migration).toContain("REVOKE ALL ON ALL TABLES IN SCHEMA public FROM hfy_staging_structure_exporter");
+    expect(migration).toContain("default_transaction_read_only = on");
   });
 
   it("uses a stable, non-production identifier for every synced entity", () => {
