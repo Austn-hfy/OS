@@ -44,4 +44,21 @@ describe("Calendar batch scheduling", () => {
     expect(pilotStyles).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(pilotStyles).toContain("justify-items: stretch");
   });
+
+  it("keeps the batch editor interactive, scrollable, and complete for house activities", async () => {
+    const [editor, styles, pilotStyles] = await Promise.all([
+      readFile(new URL("../src/components/calendar-batch-editor.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
+    ]);
+
+    expect(editor).toContain("right.needs - left.needs");
+    expect(editor).toContain("expandedEventId === event.id");
+    expect(editor).toContain("Program / activity details");
+    expect(editor).toContain("Host / guest name");
+    expect(editor).toContain("updateDaypartOccurrenceAction");
+    expect(styles).toContain(".calendar-batch-editor-list");
+    expect(styles).toContain("overflow-y: auto");
+    expect(pilotStyles).toContain(".hfy-style-system .calendar-batch-menu { border-color: var(--hfy-line); background: #f9fbfc; }");
+  });
 });
