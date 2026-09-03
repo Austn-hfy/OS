@@ -2236,8 +2236,29 @@
 .hfy-style-system .calendar-batch-row { border-color: var(--hfy-line); background: #fbfcfd; }
 
 .hfy-style-system .calendar-batch-takeover { background: var(--hfy-canvas); }
-.hfy-style-system .calendar-main > .calendar-page:has(.calendar-batch-editor-takeover) { backdrop-filter: none; }
 .hfy-style-system .calendar-batch-form { border-color: var(--hfy-line); background: #edf2f5; }
+.hfy-style-system .calendar-batch-editor-row.is-complete:not(.expanded) {
+  border-color: color-mix(in srgb, var(--hfy-success) 30%, var(--hfy-line));
+  background: var(--hfy-success-soft);
+}
+.hfy-style-system .calendar-batch-editor-row.is-complete:not(.expanded) .calendar-batch-row-state-icon {
+  color: var(--hfy-success);
+  background: var(--hfy-surface-strong);
+}
+.hfy-style-system .calendar-batch-editor-row.is-complete:not(.expanded) .calendar-batch-row-state strong,
+.hfy-style-system .calendar-batch-progress-copy strong { color: var(--hfy-success); }
+.hfy-style-system .calendar-batch-editor-row.is-current {
+  border-color: color-mix(in srgb, var(--hfy-action-strong) 62%, var(--hfy-line));
+  background: var(--hfy-surface-strong);
+  box-shadow: 0 14px 36px rgba(48, 65, 78, 0.14);
+}
+.hfy-style-system .calendar-batch-editor-row.is-current .calendar-batch-row-state-icon {
+  color: var(--hfy-action-ink);
+  background: var(--hfy-action-soft);
+}
+.hfy-style-system .calendar-batch-editor-row.is-current .calendar-batch-row-state strong { color: var(--hfy-action-ink); }
+.hfy-style-system .calendar-batch-progress { background: color-mix(in srgb, var(--hfy-muted) 12%, transparent); }
+.hfy-style-system .calendar-batch-progress > span { background: var(--hfy-success); }
 
 .hfy-style-system .calendar-command-actions {
   min-width: 0;

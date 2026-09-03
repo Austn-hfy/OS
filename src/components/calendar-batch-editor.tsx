@@ -98,6 +98,7 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [state, setState] = useState<ResidencyActionState>(initialActionState);
+  const [validationRequested, setValidationRequested] = useState(false);
   const [savedSummaries, setSavedSummaries] = useState<Record<string, string>>({});
 
   const needsCount = events.filter((event) => event.schedulingStatus === "empty" || event.schedulingStatus === "partial").length;
@@ -118,6 +119,10 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
   const selectedEvent = selectedEvents.find((event) => event.id === expandedEventId);
   const selectedEventReadOnly = Boolean(previewMode && selectedEvent && selectedDaypart?.type === "dj_artist"
     && (fullProgramming || (!selectedEvent.projected && selectedEvent.economicsMode !== "client_owned")));
+  const isOccurrenceComplete = (event: ResidencyEvent) => Object.prototype.hasOwnProperty.call(savedSummaries, event.id) || Boolean(occurrenceSummary(event));
+  const completedCount = selectedEvents.filter(isOccurrenceComplete).length;
+  const nextIncompleteEvent = selectedEvents.find((event) => !isOccurrenceComplete(event));
+  const progressPercent = selectedEvents.length ? Math.round((completedCount / selectedEvents.length) * 100) : 0;
 
   function openBatch(daypartId: string) {
     setSelectedDaypartId(daypartId);
@@ -125,6 +130,7 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
     setDraft(null);
     setDone(false);
     setState(initialActionState);
+    setValidationRequested(false);
     launcherRef.current?.removeAttribute("open");
   }
 
@@ -134,6 +140,7 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
     setDraft(null);
     setDone(false);
     setState(initialActionState);
+    setValidationRequested(false);
     const url = new URL(window.location.href);
     if (url.searchParams.has("batchDaypart")) {
       url.searchParams.delete("batchDaypart");
@@ -146,12 +153,14 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
       setExpandedEventId("");
       setDraft(null);
       setState(initialActionState);
+      setValidationRequested(false);
       return;
     }
     setExpandedEventId(event.id);
     setDraft(draftFromEvent(event, previewMode));
     setDone(false);
     setState(initialActionState);
+    setValidationRequested(false);
     window.requestAnimationFrame(() => document.getElementById(`calendar-batch-row-${event.id}`)?.scrollIntoView({ block: "nearest" }));
   }
 
@@ -196,7 +205,13 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
   })();
 
   async function saveAndNext() {
-    if (!selectedEvent || !selectedDaypart || !draft || warning || !canManage) return;
+    if (!selectedEvent || !selectedDaypart || !draft || !canManage) return;
+    if (warning) {
+      setValidationRequested(true);
+      setState(initialActionState);
+      return;
+    }
+    setValidationRequested(false);
     setPending(true);
     setState(initialActionState);
     let result: ResidencyActionState = initialActionState;
@@ -288,6 +303,8 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
       setExpandedEventId(next.id);
       setDraft(draftFromEvent(next, previewMode));
       setState(initialActionState);
+      setValidationRequested(false);
+      window.requestAnimationFrame(() => document.getElementById(`calendar-batch-row-${next.id}`)?.scrollIntoView({ block: "nearest" }));
     } else {
       setExpandedEventId("");
       setDraft(null);
@@ -312,26 +329,37 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
     </details>
 
     {selectedDaypart ? <div className="calendar-batch-takeover calendar-batch-editor-takeover" style={{ "--daypart-color": selectedDaypart.color } as CSSProperties}>
-      <section className="calendar-batch-screen calendar-batch-editor-screen" role="dialog" aria-modal="true" aria-labelledby="calendar-batch-title">
+      <section className="calendar-batch-screen calendar-batch-editor-screen" role="dialog" aria-labelledby="calendar-batch-title">
         <header className="calendar-batch-header">
-          <div><p className="eyebrow">{residency.name} · {selectedDaypart.room}</p><h2 id="calendar-batch-title">{selectedDaypart.name}</h2><p>{rangeLabel} · {selectedEvents.length} occurrence{selectedEvents.length === 1 ? "" : "s"} this {rangeKind}</p></div>
+          <div className="calendar-batch-heading calendar-batch-editor-heading">
+            <p className="eyebrow">{residency.name} · {selectedDaypart.room}</p>
+            <h2 id="calendar-batch-title">{selectedDaypart.name}</h2>
+            <p>{rangeLabel} · {selectedEvents.length} occurrence{selectedEvents.length === 1 ? "" : "s"} this {rangeKind}</p>
+            <div className="calendar-batch-progress-copy"><strong>{completedCount} of {selectedEvents.length} completed</strong><span>{nextIncompleteEvent ? `Next: ${dateLabel(nextIncompleteEvent.date)}` : "All dates complete"}</span></div>
+            <div className="calendar-batch-progress" role="progressbar" aria-label="Batch scheduling progress" aria-valuemin={0} aria-valuemax={selectedEvents.length} aria-valuenow={completedCount}><span style={{ width: `${progressPercent}%` }} /></div>
+          </div>
           <button className="quick-modal-close" type="button" aria-label="Close batch edit" onClick={closeBatch}>×</button>
         </header>
         {done ? <div className="calendar-batch-done"><span aria-hidden="true">✓</span><h3>Done</h3><p>You reached the end of this Daypart’s {rangeKind}.</p><button className="button" type="button" onClick={closeBatch}>Back to Calendar</button></div> : <div className="calendar-batch-list calendar-batch-editor-list">
-          {selectedEvents.map((event) => {
+          {selectedEvents.map((event, index) => {
             const expanded = event.id === expandedEventId;
             const summary = savedSummaries[event.id] ?? occurrenceSummary(event);
-            return <article className={`calendar-batch-row calendar-batch-editor-row ${expanded ? "expanded" : ""}`} id={`calendar-batch-row-${event.id}`} key={event.id}>
+            const complete = Boolean(summary);
+            const stateClass = expanded ? "is-current" : complete ? "is-complete" : "is-upcoming";
+            const stateLabel = expanded ? complete ? "Editing scheduled" : "Now scheduling" : complete ? "Scheduled" : "Needs scheduling";
+            const stateDetail = expanded ? complete ? summary : `Occurrence ${index + 1} of ${selectedEvents.length}` : complete ? summary : event.id === nextIncompleteEvent?.id ? "Up next" : "Not started";
+            return <article className={`calendar-batch-row calendar-batch-editor-row ${expanded ? "expanded" : ""} ${stateClass}`} id={`calendar-batch-row-${event.id}`} key={event.id}>
               <button className="calendar-batch-row-summary" type="button" aria-expanded={expanded} aria-controls={`calendar-batch-form-${event.id}`} onClick={() => expandEvent(event)}>
+                <span className="calendar-batch-row-state-icon" aria-hidden="true">{complete && !expanded ? "✓" : expanded ? "→" : index + 1}</span>
                 <span className="calendar-batch-row-date"><strong>{dateLabel(event.date)}</strong><small>{formatLocalMinute(event.shiftStartMinute)}–{formatLocalMinute(event.shiftEndMinute)}</small></span>
-                {summary ? <span className="calendar-batch-row-assignment">{summary}</span> : <span className="calendar-batch-row-needs">Needs scheduling</span>}
+                <span className="calendar-batch-row-state"><strong>{stateLabel}</strong><small>{stateDetail}</small></span>
                 <span className="calendar-batch-row-chevron" aria-hidden="true">⌄</span>
               </button>
               {expanded && draft ? <div className="calendar-batch-form calendar-batch-editor-form" id={`calendar-batch-form-${event.id}`}>
-                {previewMode && !fullProgramming && event.projected && selectedDaypart.type === "dj_artist" ? <div className="calendar-batch-mode" role="group" aria-label="Scheduling method"><button type="button" className={!draft.requestHfy ? "active" : ""} onClick={() => setDraft({ ...draft, requestHfy: false })}><strong>Client Managed</strong><small>Choose an artist now</small></button><button type="button" className={draft.requestHfy ? "active" : ""} onClick={() => setDraft({ ...draft, requestHfy: true, talentId: "" })}><strong>Request HFY</strong><small>Send staffing to HFY</small></button></div> : null}
+                {previewMode && !fullProgramming && event.projected && selectedDaypart.type === "dj_artist" ? <div className="calendar-batch-mode" role="group" aria-label="Scheduling method"><button type="button" className={!draft.requestHfy ? "active" : ""} onClick={() => { setDraft({ ...draft, requestHfy: false }); setValidationRequested(false); }}><strong>Client Managed</strong><small>Choose an artist now</small></button><button type="button" className={draft.requestHfy ? "active" : ""} onClick={() => { setDraft({ ...draft, requestHfy: true, talentId: "" }); setValidationRequested(false); }}><strong>Request HFY</strong><small>Send staffing to HFY</small></button></div> : null}
                 {event.economicsMode === "hfy_request" ? <div className="request-hfy-selection"><div><span>Request HFY</span><strong>HFY staffing is pending</strong><small>This occurrence remains in the list for review.</small></div></div> : draft.requestHfy ? <div className="request-hfy-selection"><div><span>Request HFY</span><strong>HFY will staff this occurrence</strong><small>Save &amp; Next sends this date to HFY without assigning a client artist.</small></div></div> : selectedEventReadOnly ? <div className="request-hfy-selection"><div><span>HFY managed</span><strong>{occurrenceSummary(event) || "HFY controls staffing"}</strong><small>This occurrence is available for review here; HFY-owned staffing remains unchanged.</small></div></div> : null}
                 {selectedDaypart.type === "dj_artist" && !selectedEventReadOnly && !draft.requestHfy && event.economicsMode !== "hfy_request" ? <>
-                  {draft.talentId ? <div className="replacement-selected"><div><span>Selected artist</span><strong>{artists.find((artist) => artist.id === draft.talentId)?.name ?? event.assignments[0]?.talentName}</strong></div><button type="button" onClick={() => setDraft({ ...draft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose artist" artists={artists} excludedIds={event.assignments.slice(1).map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))} onCreateArtist={canCreateArtist} onOpenChange={(open) => { if (open) keepExpandedEventVisible(event.id); }} onSelect={(talentId) => setDraft({ ...draft, talentId })} />}
+                  {draft.talentId ? <div className="replacement-selected"><div><span>Selected artist</span><strong>{artists.find((artist) => artist.id === draft.talentId)?.name ?? event.assignments[0]?.talentName}</strong></div><button type="button" onClick={() => { setDraft({ ...draft, talentId: "" }); setValidationRequested(false); }}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose artist" artists={artists} excludedIds={event.assignments.slice(1).map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))} onCreateArtist={canCreateArtist} onOpenChange={(open) => { if (open) keepExpandedEventVisible(event.id); }} onSelect={(talentId) => { setDraft({ ...draft, talentId }); setValidationRequested(false); }} />}
                   <div className="calendar-batch-time-fields"><div className="field"><label>Artist starts</label><TimeSelect ariaLabel={`${dateLabel(event.date)} artist start time`} value={draft.start} onChange={(start) => setDraft({ ...draft, start })} stepMinutes={15} /></div><div className="field"><label>Artist ends</label><TimeSelect ariaLabel={`${dateLabel(event.date)} artist end time`} value={draft.end} onChange={(end) => setDraft({ ...draft, end })} stepMinutes={15} /></div></div>
                   {!previewMode ? <details className="quick-more"><summary>Pay and billing options</summary><div className="quick-more-fields"><div className="field"><label>Client rate override</label><SensitiveInput type="number" min="0" step="0.01" value={draft.clientRateOverride} onChange={(event) => setDraft({ ...draft, clientRateOverride: event.target.value })} placeholder={`Default $${(residency.clientHourlyRateCents / 100).toFixed(0)}/hr`} /></div><div className="field"><label>Compensation</label><select value={draft.compensationType} onChange={(event) => setDraft({ ...draft, compensationType: event.target.value as BatchDraft["compensationType"] })}><option value="hourly">Hourly</option><option value="fixed">Fixed fee</option><option value="na">N/A</option></select></div><div className="field"><label>{draft.compensationType === "fixed" ? "Fixed fee" : "Talent rate override"}</label><SensitiveInput type="number" min="0" step="0.01" value={draft.compensationType === "fixed" ? draft.fixedFee : draft.rateOverride} onChange={(event) => setDraft({ ...draft, ...(draft.compensationType === "fixed" ? { fixedFee: event.target.value } : { rateOverride: event.target.value }) })} placeholder={draft.compensationType === "hourly" ? `Default $${((selectedDaypart.defaultTalentRateCents ?? residency.defaultTalentRateCents) / 100).toFixed(0)}/hr` : undefined} /></div></div></details> : null}
                   {event.assignments.length > 1 ? <p className="draft-notice">This form edits the primary artist. {event.assignments.length - 1} additional assignment{event.assignments.length === 2 ? "" : "s"} remain unchanged.</p> : null}
@@ -344,9 +372,9 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
                   <div className="quick-program-fields"><div className="field"><label>Program / activity details <span>optional</span></label><input value={draft.programDetails} onChange={(event) => setDraft({ ...draft, programDetails: event.target.value })} placeholder="Movie title, theme, or event detail" /></div><div className="field"><label>Host / guest name <span>optional</span></label><input value={draft.manualHostName} onChange={(event) => setDraft({ ...draft, manualHostName: event.target.value })} placeholder="Employee or outside host" /><small>Typed names remain informational and never become Artist, Assignment, Payout, or Invoice records.</small></div></div>
                 </> : null}
                 {!selectedEventReadOnly && event.economicsMode !== "hfy_request" ? <div className="field quick-booking-notes"><label>Notes <span>optional</span></label><textarea value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder="Anything the team should know about this booking" /></div> : null}
-                {warning ? <p className="error" aria-live="polite">{warning}</p> : null}
+                {validationRequested && warning ? <p className="error" role="alert">{warning}</p> : null}
                 {state.status !== "idle" ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}
-                <div className="calendar-batch-actions"><button className="button secondary" type="button" onClick={() => { setExpandedEventId(""); setDraft(null); setState(initialActionState); }}>Cancel</button><button className="button" type="button" disabled={pending || Boolean(warning) || !canManage} onClick={saveAndNext}>{pending ? "Saving…" : "Save & Next"}</button></div>
+                <div className="calendar-batch-actions"><button className="button secondary" type="button" disabled={pending} onClick={() => { setExpandedEventId(""); setDraft(null); setState(initialActionState); setValidationRequested(false); }}>Cancel</button><button className="button" type="button" disabled={pending || !canManage} onClick={saveAndNext}>{pending ? "Saving…" : "Save & Next"}</button></div>
               </div> : null}
             </article>;
           })}
