@@ -56,6 +56,7 @@ describe("Calendar batch scheduling", () => {
     expect(editor).toContain("expandedEventId === event.id");
     expect(editor).toContain("Program / activity details");
     expect(editor).toContain("Host / guest name");
+    expect(editor).toContain("HFY will staff this occurrence");
     expect(editor).toContain("updateDaypartOccurrenceAction");
     expect(styles).toContain(".calendar-batch-editor-list");
     expect(styles).toContain("overflow-y: auto");
