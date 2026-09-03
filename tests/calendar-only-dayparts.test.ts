@@ -42,6 +42,22 @@ describe("Calendar Only Dayparts", () => {
     expect(calendar).toContain("Back to handling options");
   });
 
+  it("starts date scheduling with rooms and scopes Dayparts to the selected room", async () => {
+    const [calendar, styles] = await Promise.all([
+      readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
+    ]);
+    expect(calendar).toContain('addMode === "choose" ? "Choose a room"');
+    expect(calendar).toContain("const roomOptions = useMemo");
+    expect(calendar).toContain("selectedRoomSuggestions.map");
+    expect(calendar).toContain("Choose a room to see only the Dayparts set up for that space.");
+    expect(calendar).toContain("chooseOneTime(selectedRoom ?? undefined)");
+    expect(calendar).toContain("Create a one-time activity in {selectedRoom}.");
+    expect(calendar).not.toContain("Use a setup Daypart");
+    expect(styles).toContain(".quick-room-picker");
+    expect(styles).toContain(".quick-room-option.other");
+  });
+
   it("provides update and delete actions for both one-time record types", async () => {
     const [calendar, actions] = await Promise.all([
       readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
