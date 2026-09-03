@@ -41,6 +41,14 @@ export function roomMatchScore(query: string, roomName: string): number {
   return distance <= threshold ? 3 : 4;
 }
 
+export function rankedRoomMatches(query: string, rooms: RoomComboboxOption[]) {
+  const hasQuery = Boolean(normalizedRoomName(query));
+  return rooms
+    .map((room) => ({ room, score: roomMatchScore(query, room.name) }))
+    .filter(({ score }) => !hasQuery || score < 4)
+    .sort((left, right) => left.score - right.score || left.room.name.localeCompare(right.room.name));
+}
+
 export function RoomCombobox({
   rooms,
   value,
@@ -66,9 +74,7 @@ export function RoomCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const trimmedValue = value.trim().replace(/\s+/g, " ");
-  const rankedRooms = useMemo(() => rooms
-    .map((room) => ({ room, score: roomMatchScore(value, room.name) }))
-    .sort((left, right) => left.score - right.score || left.room.name.localeCompare(right.room.name)), [rooms, value]);
+  const rankedRooms = useMemo(() => rankedRoomMatches(value, rooms), [rooms, value]);
   const exactRoom = rankedRooms.find(({ score }) => score === 0)?.room;
   const similarRoom = rankedRooms.find(({ score }) => score > 0 && score <= 3)?.room;
   const selectionReady = Boolean(selectedRoomId || creationConfirmed);

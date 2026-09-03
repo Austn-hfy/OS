@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { roomMatchScore } from "@/components/room-combobox";
+import { rankedRoomMatches, roomMatchScore, type RoomComboboxOption } from "@/components/room-combobox";
 
 describe("room selection safeguards", () => {
   it("ranks exact, partial, and small typo matches ahead of unrelated rooms", () => {
@@ -8,6 +8,18 @@ describe("room selection safeguards", () => {
     expect(roomMatchScore("Amigo", "Amigo Room")).toBe(1);
     expect(roomMatchScore("Amgio Room", "Amigo Room")).toBeLessThan(4);
     expect(roomMatchScore("Rooftop", "Amigo Room")).toBe(4);
+  });
+
+  it("shows all rooms before typing and removes unrelated rooms afterward", () => {
+    const rooms: RoomComboboxOption[] = [
+      { id: "amigo", name: "Amigo Room", hue: "orange" },
+      { id: "lobby", name: "Lobby", hue: "yellow" },
+      { id: "pool", name: "Pool", hue: "blue" },
+    ];
+    expect(rankedRoomMatches("", rooms).map(({ room }) => room.name)).toEqual(["Amigo Room", "Lobby", "Pool"]);
+    expect(rankedRoomMatches("Po", rooms).map(({ room }) => room.name)).toEqual(["Pool"]);
+    expect(rankedRoomMatches("Amgio Room", rooms).map(({ room }) => room.name)).toEqual(["Amigo Room"]);
+    expect(rankedRoomMatches("patio", rooms)).toEqual([]);
   });
 
   it("shows existing spaces and makes new-space creation explicit", async () => {
