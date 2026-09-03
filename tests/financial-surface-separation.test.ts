@@ -21,15 +21,17 @@ describe("financial surface separation", () => {
     expect(platformQuery).not.toContain("clientAssignmentTerms");
   });
 
-  it("keeps Developer on Platform revenue and HFY on talent receivables and payouts", async () => {
+  it("keeps financial data off the Developer Residency directory and HFY on talent receivables and payouts", async () => {
     const [dashboard, shell, invoicePage, internalData] = await Promise.all([
       readSource("../src/app/app/page.tsx"),
       readSource("../src/components/internal-shell.tsx"),
       readSource("../src/app/app/invoices/page.tsx"),
       readSource("../src/data/internal.ts"),
     ]);
-    expect(dashboard).toContain("Committed Plans");
-    expect(dashboard).toContain("Platform revenue only");
+    expect(dashboard).not.toContain("Committed Plans");
+    expect(dashboard).not.toContain("Platform revenue only");
+    expect(dashboard).not.toContain("getPlatformRevenueDashboard");
+    expect(shell).not.toContain('label: "Committed Plans"');
     expect(shell).toContain('label: "Owed to Us"');
     expect(shell).toContain('label: "Payouts"');
     expect(invoicePage).toContain("HFY Talent Invoices");

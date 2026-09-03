@@ -55,7 +55,7 @@ describe("site-wide workspace surface consistency", () => {
     expect(styles).toContain(".workspace-surface-payouts > .payout-filter-bar");
     expect(styles).toContain(".workspace-surface-pipeline > .lead-list-shell");
     expect(styles).toContain(".workspace-surface-invoices > .table-wrap");
-    expect(styles).toContain(".workspace-surface-dashboard > .owner-mode-summary");
+    expect(styles).toContain(".workspace-surface-dashboard > :is(.developer-residencies-section");
   });
 
   it("uses the icon-led navigation in owner modes and removes duplicate or non-actionable headings", async () => {

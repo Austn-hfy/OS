@@ -248,14 +248,6 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .sensitive-input-mask { position: absolute; z-index: 2; inset: 0; display: flex; align-items: center; padding: 0 13px; border-radius: inherit; color: var(--hfy-ink-soft, #344656); background: rgba(247,249,250,.78); pointer-events: auto; cursor: not-allowed; font-weight: 750; letter-spacing: .12em; }
 .privacy-mode-active input[name="defaultTalentRate"], .privacy-mode-active input[name="clientHourlyRate"] { -webkit-text-security: disc; caret-color: transparent; pointer-events: none; user-select: none; }
 .main { min-width: 0; padding: 46px clamp(24px, 4.5vw, 72px) 72px; }
-.view-as-control { position: fixed; z-index: 37; top: 14px; right: 18px; }
-.view-as-control form { display: flex; align-items: center; gap: 7px; padding: 6px; border: 1px solid rgba(255,255,255,.78); border-radius: 14px; background: rgba(249,251,252,.88); box-shadow: 0 12px 30px rgba(7,26,49,.1); backdrop-filter: blur(16px); }
-.view-as-control label { padding-left: 6px; color: var(--dark); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.view-as-control select { min-height: 34px; width: 160px; padding: 6px 28px 6px 10px; border-radius: 9px; font-size: 10px; }
-.view-as-control .button { min-height: 34px; padding: 7px 12px; font-size: 10px; }
-body:has(.quick-modal-backdrop) .view-as-control,
-body:has(.day-parts-panel-backdrop) .view-as-control,
-body:has(.daypart-drawer-backdrop) .view-as-control { opacity: 0; visibility: hidden; pointer-events: none; }
 .view-as-banner { flex: 0 0 auto; position: relative; z-index: 36; min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 14px; margin: -24px calc(-1 * clamp(24px, 4.5vw, 72px)) 12px; padding: 10px 18px; color: #fff; background: linear-gradient(100deg, #0b2847, #1678cf); box-shadow: 0 10px 28px rgba(7,26,49,.18); }
 .view-as-banner strong { font-family: "Plus Jakarta Sans", sans-serif; font-size: 13px; }
 .view-as-banner > span { font-size: 11px; font-weight: 650; opacity: .9; }
