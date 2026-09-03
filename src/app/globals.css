@@ -177,6 +177,14 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .client-safe-talent-card dl > div { display: grid; gap: 2px; }
 .client-safe-talent-card dt { color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
 .client-safe-talent-card dd { margin: 0; color: var(--dark); font-size: 11px; }
+.client-artist-profile-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: stretch; }
+.client-safe-talent-card .client-artist-facts { min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 18px; align-items: start; }
+.client-safe-talent-card .client-artist-facts > div { min-width: 0; }
+.client-safe-talent-card .client-artist-facts dd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.client-artist-owed-summary { min-width: 138px; display: grid; align-content: center; gap: 2px; padding: 10px 13px; border: 1px solid rgba(39,131,220,.17); border-radius: 12px; background: rgba(217,237,250,.48); text-align: right; }
+.client-artist-owed-summary span { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.client-artist-owed-summary strong { font-family: "Plus Jakarta Sans", sans-serif; font-size: 21px; letter-spacing: -.035em; }
+.client-artist-owed-summary small { color: var(--muted); font-size: 8px; }
 .client-artist-creation-source { padding: 9px 11px; border-radius: 10px; color: #155382 !important; background: rgba(217,237,250,.66); font-size: 10px !important; font-weight: 750; }
 .client-owned-artist-form { display: grid; gap: 12px; }
 .client-owned-artist-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1010,11 +1018,24 @@ tr:last-child td { border-bottom: 0; }
 .artist-section-heading h3 { font-size: 16px; }
 .artist-section-heading > strong { font-family: "Plus Jakarta Sans", sans-serif; font-size: 18px; }
 .artist-owed-list { display: grid; gap: 7px; }
-.artist-owed-list article { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 13px; border-radius: 12px; background: rgba(7,26,49,.035); }
-.artist-owed-list article > div { min-width: 0; display: grid; gap: 3px; }
-.artist-owed-list article > div strong { font-size: 12px; }
-.artist-owed-list article span { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.artist-owed-list article > strong { flex: 0 0 auto; font-family: "Plus Jakarta Sans", sans-serif; font-size: 14px; }
+.artist-owed-list :is(article, button) { appearance: none; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 13px; border: 0; border-radius: 12px; color: var(--ink); background: rgba(7,26,49,.035); text-align: left; }
+.artist-owed-list button { cursor: pointer; transition: background .16s ease, box-shadow .16s ease; }
+.artist-owed-list button:hover { background: rgba(39,131,220,.09); box-shadow: inset 0 0 0 1px rgba(39,131,220,.18); }
+.artist-owed-list :is(article, button) > div { min-width: 0; display: grid; gap: 3px; }
+.artist-owed-list :is(article, button) > div strong { font-size: 12px; }
+.artist-owed-list :is(article, button) > div span { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.artist-owed-list :is(article, button) > strong { flex: 0 0 auto; display: grid; justify-items: end; gap: 2px; font-family: "Plus Jakarta Sans", sans-serif; font-size: 14px; }
+.artist-owed-list :is(article, button) > strong small { color: var(--forest); font-family: inherit; font-size: 8px; font-weight: 800; }
+.client-assignment-rate-modal { width: min(610px, 100%); }
+.client-assignment-rate-modal .quick-modal-header p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+.client-assignment-booking-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.62); }
+.client-assignment-booking-summary > div { min-width: 0; display: grid; gap: 3px; }
+.client-assignment-booking-summary dt { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.client-assignment-booking-summary dd { overflow: hidden; margin: 0; font-size: 10px; font-weight: 750; text-overflow: ellipsis; text-transform: capitalize; white-space: nowrap; }
+.client-assignment-rate-editor { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(280px, 1.3fr); gap: 18px; align-items: start; padding: 16px; border: 1px solid rgba(39,131,220,.17); border-radius: 15px; background: rgba(217,237,250,.34); }
+.client-assignment-rate-editor h3 { margin: 3px 0 8px; font-size: 16px; }
+.client-assignment-rate-editor .client-rate-form { min-width: 0; }
+.client-assignment-rate-editor .client-rate-form p { margin: 0; font-size: 10px; }
 .artist-legacy-financial { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-top: 7px; padding: 11px 13px; border: 1px solid rgba(225,139,121,.3); border-radius: 12px; background: rgba(225,139,121,.08); }
 .artist-legacy-financial > div { min-width: 0; display: grid; gap: 3px; }
 .artist-legacy-financial > div strong { font-size: 12px; }
@@ -1291,6 +1312,9 @@ tr:last-child td { border-bottom: 0; }
   .artist-roster-sort > span { padding-bottom: 0; }
   .artist-roster-sort select { width: 100%; }
   .artist-booking-layout, .artist-detail-info-grid { grid-template-columns: 1fr; }
+  .client-artist-profile-row, .client-assignment-rate-editor { grid-template-columns: 1fr; }
+  .client-safe-talent-card .client-artist-facts, .client-assignment-booking-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .client-artist-owed-summary { min-width: 0; text-align: left; }
   .artist-editor-drawer { width: 100%; }
   .artist-editor-heading, .artist-editor-scroll, .artist-editor-actions { padding-inline: 18px; }
   .artist-editor-grid { grid-template-columns: 1fr; }

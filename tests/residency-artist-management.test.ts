@@ -85,4 +85,34 @@ describe("Residency-owned artist management", () => {
     expect(styles).toContain(".artist-create-drawer .client-add-artist form");
     expect(styles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
   });
+
+  it("keeps client-safe artist facts and outstanding owed in one compact summary", async () => {
+    const [lookup, card, styles] = await Promise.all([
+      readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/talent/client-owned-artist-card.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
+    ]);
+    expect(card).toContain('className="client-artist-profile-row"');
+    expect(card).toContain('className="client-artist-facts"');
+    expect(card).toContain('className="client-artist-owed-summary"');
+    expect(lookup).not.toContain('className="artist-owed-total"');
+    expect(lookup).toContain("artist.outstandingAssignments.length > 0");
+    expect(styles).toContain("grid-template-columns: repeat(4, minmax(0, 1fr));");
+  });
+
+  it("opens client-owned Assignment details and edits the rate from Artist Lookup", async () => {
+    const [lookup, data, actions] = await Promise.all([
+      readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/data/residency-client.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/actions.ts", import.meta.url), "utf8"),
+    ]);
+    expect(lookup).toContain("ClientAssignmentRateDialog");
+    expect(lookup).toContain("updateClientOwnedRateAction");
+    expect(lookup).toContain("Save rate");
+    expect(lookup).toContain("Review →");
+    expect(data).toContain("defaultRateCents: row.defaultRateCents");
+    expect(data).toContain("overrideRateCents: row.overrideRateCents");
+    expect(data).toContain("effectiveRateCents: row.effectiveRateCents");
+    expect(actions).toContain('revalidatePath("/residency/talent")');
+  });
 });

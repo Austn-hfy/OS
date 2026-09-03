@@ -1169,7 +1169,7 @@
 .hfy-style-system .artist-owed-total { border-radius: var(--hfy-radius-card); }
 .hfy-style-system .artist-owed-total > strong { font-size: clamp(32px, 4.8vw, 48px); }
 .hfy-style-system .artist-detail-section { border-top-color: var(--hfy-line); }
-.hfy-style-system .artist-owed-list article { background: var(--hfy-surface-nested); }
+.hfy-style-system .artist-owed-list :is(article, button) { background: var(--hfy-surface-nested); }
 .hfy-style-system .artist-booking-list article { background: rgba(139, 199, 241, 0.09); }
 .hfy-style-system .artist-booking-list time { color: var(--hfy-action-strong); }
 .hfy-style-system .artist-mini-calendar { border-color: var(--hfy-line); background: rgba(251, 252, 253, 0.82); }

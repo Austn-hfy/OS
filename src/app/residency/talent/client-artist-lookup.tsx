@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { updateClientOwnedRateAction, type ClientSettingsActionState } from "@/app/residency/actions";
 import { ArtistBookingCalendar } from "@/components/artist-booking-calendar";
 import { TalentWorkspaceShell } from "@/components/talent-workspace-shell";
 import type { getResidencyClientTalentWorkspace } from "@/data/residency-client";
@@ -10,9 +11,16 @@ import { ArchivedClientOwnedArtistCard, ClientOwnedArtistCard } from "./client-o
 type Artist = Awaited<ReturnType<typeof getResidencyClientTalentWorkspace>>[number];
 type TalentView = "active" | "owed" | "archived";
 type TalentSort = "name_asc" | "name_desc" | "owed_desc" | "booking_asc";
+type OutstandingAssignment = Artist["outstandingAssignments"][number];
+
+const initialRateState: ClientSettingsActionState = { status: "idle", message: "" };
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
+}
+
+function hourlyRate(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100);
 }
 
 function serviceDateLabel(serviceDate: string) {
@@ -23,21 +31,35 @@ function timeLabel(value: string, timeZone: string) {
   return new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
+function ClientAssignmentRateDialog({ assignment, artistName, timeZone, canManage, onClose }: { assignment: OutstandingAssignment; artistName: string; timeZone: string; canManage: boolean; onClose: () => void }) {
+  const [state, action, pending] = useActionState(updateClientOwnedRateAction, initialRateState);
+  const effectiveRateCents = assignment.overrideRateCents ?? assignment.defaultRateCents;
+  const rateSource = assignment.overrideRateCents !== null ? "Artist override" : assignment.defaultRateCents !== null ? "Session default" : "Rate needed";
+  const defaultRateLabel = assignment.defaultRateCents === null ? "No session default has been set." : `Session default: ${hourlyRate(assignment.defaultRateCents)} per hour.`;
+
+  return <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section className="quick-modal client-assignment-rate-modal" role="dialog" aria-modal="true" aria-labelledby="client-assignment-rate-title"><header className="quick-modal-header"><div><p className="eyebrow">{serviceDateLabel(assignment.serviceDate)}</p><h2 id="client-assignment-rate-title">{assignment.shiftName}</h2><p>{artistName} · {assignment.room}</p></div><button className="quick-modal-close" type="button" aria-label="Close booking details" onClick={onClose}>×</button></header><div className="quick-modal-body">
+    <dl className="client-assignment-booking-summary"><div><dt>Artist</dt><dd>{artistName}</dd></div><div><dt>Date</dt><dd>{serviceDateLabel(assignment.serviceDate)}</dd></div><div><dt>Hours</dt><dd>{timeLabel(assignment.startsAt, timeZone)}–{timeLabel(assignment.endsAt, timeZone)}</dd></div><div><dt>Status</dt><dd>{assignment.bookingStatus.replaceAll("_", " ")}</dd></div></dl>
+    <section className="client-assignment-rate-editor"><div><p className="eyebrow">Booking rate</p><h3>{assignment.amountCents === null ? "Rate needed" : `${money(assignment.amountCents)} currently owed`}</h3><span className={`client-rate-source ${assignment.overrideRateCents !== null ? "override" : ""}`}>{rateSource}</span></div>{canManage ? <form action={action} className="client-rate-form"><input type="hidden" name="assignmentId" value={assignment.id} /><label htmlFor={`artist-booking-rate-${assignment.id}`}>Artist hourly rate</label><div className="client-rate-control"><span>$</span><input id={`artist-booking-rate-${assignment.id}`} name="rate" type="number" min="0.01" step="0.01" defaultValue={effectiveRateCents === null ? "" : (effectiveRateCents / 100).toFixed(2)} placeholder="Enter rate" required={assignment.defaultRateCents === null} /><button className="button" type="submit" disabled={pending}>{pending ? "Saving…" : "Save rate"}</button></div><small>{assignment.defaultRateCents === null ? "Enter the hourly rate for this artist and booking." : `${defaultRateLabel} Clear this field and save to return to that default.`}</small>{state.status !== "idle" ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}</form> : <p className="artist-section-empty">A Residency manager can update this booking rate.</p>}</section>
+  </div></section></div>;
+}
+
 export function ClientArtistLookup({ artists, residencyName, timeZone, canManage, fullProgramming = false, initialArtistId }: { artists: Artist[]; residencyName: string; timeZone: string; canManage: boolean; fullProgramming?: boolean; initialArtistId?: string }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<TalentView>("active");
   const [sort, setSort] = useState<TalentSort>("name_asc");
   const [selectedId, setSelectedId] = useState(initialArtistId && artists.some((artist) => artist.id === initialArtistId) ? initialArtistId : null);
   const [creating, setCreating] = useState(false);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
   const selected = artists.find((artist) => artist.id === selectedId) ?? null;
+  const selectedAssignment = selected?.outstandingAssignments.find((assignment) => assignment.id === selectedAssignmentId) ?? null;
   const counts = useMemo(() => ({
     active: artists.filter((artist) => !artist.archivedAt).length,
-    owed: artists.filter((artist) => !artist.archivedAt && artist.outstandingOwedCents > 0).length,
+    owed: artists.filter((artist) => !artist.archivedAt && artist.outstandingAssignments.length > 0).length,
     archived: artists.filter((artist) => Boolean(artist.archivedAt)).length,
   }), [artists]);
   const filteredArtists = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    const matchesView = artists.filter((artist) => view === "archived" ? Boolean(artist.archivedAt) : !artist.archivedAt && (view !== "owed" || artist.outstandingOwedCents > 0));
+    const matchesView = artists.filter((artist) => view === "archived" ? Boolean(artist.archivedAt) : !artist.archivedAt && (view !== "owed" || artist.outstandingAssignments.length > 0));
     return matchesView.filter((artist) => !normalized || [artist.stageName, artist.homeMarket, artist.instagramHandle, ...artist.genres].some((value) => value.toLowerCase().includes(normalized))).sort((left, right) => {
       if (sort === "owed_desc") return right.outstandingOwedCents - left.outstandingOwedCents || left.stageName.localeCompare(right.stageName);
       if (sort === "booking_asc") return (left.upcomingBookings[0]?.serviceDate ?? "9999-12-31").localeCompare(right.upcomingBookings[0]?.serviceDate ?? "9999-12-31") || left.stageName.localeCompare(right.stageName);
@@ -47,16 +69,16 @@ export function ClientArtistLookup({ artists, residencyName, timeZone, canManage
   }, [artists, query, sort, view]);
 
   useEffect(() => {
-    if (!creating) return;
+    if (!creating && !selectedAssignmentId) return;
     const priorOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setCreating(false); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") { setCreating(false); setSelectedAssignmentId(null); } };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = priorOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [creating]);
+  }, [creating, selectedAssignmentId]);
 
   const tabs: Array<{ id: TalentView; label: string }> = fullProgramming ? [
     { id: "active", label: "Active" },
@@ -71,25 +93,24 @@ export function ClientArtistLookup({ artists, residencyName, timeZone, canManage
       <div className="artist-roster-toolbar">
         {canManage ? <div className="artist-roster-toolbar-heading"><button className="button secondary" type="button" onClick={() => setCreating(true)}>+ New Artist</button></div> : null}
         <div className="artist-search-field"><label htmlFor="client-artist-lookup-search">Search artists</label><div><span aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg></span><input id="client-artist-lookup-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by artist name" /></div></div>
-        <div className="artist-roster-tabs" role="tablist" aria-label="Artist status"><div>{tabs.map((tab) => <button className={view === tab.id ? "active" : ""} type="button" role="tab" aria-selected={view === tab.id} onClick={() => { setView(tab.id); setSort(tab.id === "owed" ? "owed_desc" : "name_asc"); setSelectedId(null); }} key={tab.id}><span>{tab.label}</span><strong>{counts[tab.id]}</strong></button>)}</div></div>
+        <div className="artist-roster-tabs" role="tablist" aria-label="Artist status"><div>{tabs.map((tab) => <button className={view === tab.id ? "active" : ""} type="button" role="tab" aria-selected={view === tab.id} onClick={() => { setView(tab.id); setSort(tab.id === "owed" ? "owed_desc" : "name_asc"); setSelectedId(null); setSelectedAssignmentId(null); }} key={tab.id}><span>{tab.label}</span><strong>{counts[tab.id]}</strong></button>)}</div></div>
         <div className="artist-roster-sort"><span><strong>{filteredArtists.length}</strong> {filteredArtists.length === 1 ? "artist" : "artists"}</span><label>Sort<select value={sort} onChange={(event) => setSort(event.target.value as TalentSort)}><option value="name_asc">Name A–Z</option><option value="name_desc">Name Z–A</option>{!fullProgramming ? <option value="owed_desc">Amount owed</option> : null}<option value="booking_asc">Next booking</option></select></label></div>
       </div>
       <div className="artist-roster-list client-artist-roster-list">{filteredArtists.map((artist) => <div className={`artist-roster-row-wrap ${selectedId === artist.id ? "selected" : ""}`} key={artist.id}>
-        <button className="artist-roster-row" type="button" onClick={() => setSelectedId(artist.id)}>
+        <button className="artist-roster-row" type="button" onClick={() => { setSelectedId(artist.id); setSelectedAssignmentId(null); }}>
           <span className="artist-roster-row-heading"><strong>{artist.stageName}</strong>{!fullProgramming && artist.outstandingOwedCents > 0 ? <small className="artist-owed-chip">Owed {money(artist.outstandingOwedCents)}</small> : null}</span>
           <span className="artist-roster-meta">{artist.ownership === "residency" ? "Residency artist" : "HFY roster artist"}{artist.homeMarket ? ` · ${artist.homeMarket}` : ""}</span>
         </button>
       </div>)}{!filteredArtists.length ? <div className="empty artist-list-empty"><p>{!artists.length ? "No artists have been added to this Residency yet." : query ? `No artists match “${query}”.` : `No ${view} artists to show.`}</p></div> : null}</div>
     </>}
     detail={!selected ? <div className="artist-detail-empty"><span>HFY</span><h2>{artists.length ? "Select an artist" : fullProgramming ? "HFY-managed roster" : "Build your roster"}</h2><p>{artists.length ? `Choose someone from the roster to see this Residency’s bookings${fullProgramming ? " and client-safe artist details" : ", amount owed, and client-safe artist details"}.` : fullProgramming ? "HFY manages and staffs all Talent Activities for this Residency." : "Use New Artist to add the first person to Artist Lookup."}</p></div> : <>
-      {selected.ownership === "residency" ? selected.archivedAt ? <ArchivedClientOwnedArtistCard artist={selected} canManage={canManage} residencyName={residencyName} /> : <ClientOwnedArtistCard artist={selected} canManage={canManage} residencyName={residencyName} /> : <header className="artist-detail-header"><div><p className="eyebrow">HFY roster artist</p><h2>{selected.stageName}</h2><p>Explicitly assigned to {residencyName}</p></div><span className="status active">Active</span></header>}
+      {selected.ownership === "residency" ? selected.archivedAt ? <ArchivedClientOwnedArtistCard artist={selected} canManage={canManage} residencyName={residencyName} /> : <ClientOwnedArtistCard artist={selected} canManage={canManage} residencyName={residencyName} outstandingOwedCents={selected.outstandingOwedCents} outstandingAssignmentCount={selected.outstandingAssignments.length} /> : <header className="artist-detail-header"><div><p className="eyebrow">HFY roster artist</p><h2>{selected.stageName}</h2><p>Explicitly assigned to {residencyName}</p></div><span className="status active">Active</span></header>}
       {!selected.archivedAt ? <>
-        {!fullProgramming ? <><section className="artist-owed-total"><span>{residencyName} outstanding owed</span><strong>{money(selected.outstandingOwedCents)}</strong><small>{selected.ownership === "residency" ? `${selected.outstandingAssignments.length} client-managed Assignment${selected.outstandingAssignments.length === 1 ? "" : "s"}` : "HFY-managed artist costs stay outside this Residency ledger"}</small></section>
-        <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Owed from</p><h3>Client-managed Assignments</h3></div><strong>{money(selected.outstandingOwedCents)}</strong></div>{selected.outstandingAssignments.length ? <div className="artist-owed-list">{selected.outstandingAssignments.map((assignment) => <article key={assignment.id}><div><strong>{assignment.shiftName}</strong><span>{serviceDateLabel(assignment.serviceDate)}</span></div><strong>{assignment.amountCents === null ? "Rate needed" : money(assignment.amountCents)}</strong></article>)}</div> : <p className="artist-section-empty">Nothing is currently owed to this artist by {residencyName}.</p>}</section></> : null}
+        {!fullProgramming && selected.ownership === "residency" ? <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Owed from</p><h3>Client-managed Assignments</h3></div></div>{selected.outstandingAssignments.length ? <div className="artist-owed-list">{selected.outstandingAssignments.map((assignment) => <button type="button" onClick={() => setSelectedAssignmentId(assignment.id)} key={assignment.id}><div><strong>{assignment.shiftName}</strong><span>{serviceDateLabel(assignment.serviceDate)} · {timeLabel(assignment.startsAt, timeZone)}–{timeLabel(assignment.endsAt, timeZone)}</span></div><strong><span>{assignment.amountCents === null ? "Rate needed" : money(assignment.amountCents)}</span><small>Review →</small></strong></button>)}</div> : <p className="artist-section-empty">Nothing is currently owed to this artist by {residencyName}.</p>}</section> : null}
         <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Upcoming bookings</p><h3>{selected.upcomingBookings.length} scheduled</h3></div></div><div className="artist-booking-layout"><div className="artist-booking-list">{selected.upcomingBookings.map((booking) => <article key={booking.id}><time dateTime={booking.serviceDate}>{serviceDateLabel(booking.serviceDate)}</time><strong>{booking.shiftName}</strong><span>{booking.room}</span><small>{timeLabel(booking.startsAt, timeZone)}–{timeLabel(booking.endsAt, timeZone)}</small></article>)}{!selected.upcomingBookings.length ? <p className="artist-section-empty">No upcoming bookings.</p> : null}</div><ArtistBookingCalendar artistId={selected.id} bookings={selected.upcomingBookings} /></div></section>
         {selected.ownership === "hfy" ? <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Artist details</p><h3>Client-safe profile</h3></div></div><dl className="artist-definition-list"><div><dt>Genres</dt><dd>{selected.genres.join(", ") || "Not provided"}</dd></div><div><dt>Home market</dt><dd>{selected.homeMarket || "Not provided"}</dd></div><div><dt>Instagram</dt><dd>{selected.instagramHandle || "Not provided"}</dd></div></dl></section> : null}
       </> : null}
     </>}
-    overlays={!fullProgramming && creating ? <div className="artist-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setCreating(false); }}><aside className="artist-editor-drawer artist-create-drawer" role="dialog" aria-modal="true" aria-labelledby="client-artist-create-title"><div className="artist-editor-form"><header className="artist-editor-heading"><div><p className="eyebrow">Residency roster</p><h2 id="client-artist-create-title">New Artist</h2><p>This creates a {residencyName}-owned artist and adds them to this roster.</p></div><button className="quick-modal-close" type="button" aria-label="Close new artist form" onClick={() => setCreating(false)}>×</button></header><div className="artist-editor-scroll"><AddClientArtistForm onSuccess={() => setCreating(false)} /></div></div></aside></div> : null}
+    overlays={<>{!fullProgramming && creating ? <div className="artist-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setCreating(false); }}><aside className="artist-editor-drawer artist-create-drawer" role="dialog" aria-modal="true" aria-labelledby="client-artist-create-title"><div className="artist-editor-form"><header className="artist-editor-heading"><div><p className="eyebrow">Residency roster</p><h2 id="client-artist-create-title">New Artist</h2><p>This creates a {residencyName}-owned artist and adds them to this roster.</p></div><button className="quick-modal-close" type="button" aria-label="Close new artist form" onClick={() => setCreating(false)}>×</button></header><div className="artist-editor-scroll"><AddClientArtistForm onSuccess={() => setCreating(false)} /></div></div></aside></div> : null}{selectedAssignment && selected ? <ClientAssignmentRateDialog key={selectedAssignment.id} assignment={selectedAssignment} artistName={selected.stageName} timeZone={timeZone} canManage={canManage} onClose={() => setSelectedAssignmentId(null)} /> : null}</>}
   />;
 }

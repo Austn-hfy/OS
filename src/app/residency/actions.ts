@@ -294,7 +294,7 @@ export async function updateClientOwnedRateAction(
     requireSelfServeTalentAccess(actor);
     const parsed = z.object({
       assignmentId: z.uuid(),
-      rate: z.union([z.literal(""), z.coerce.number().min(0).max(1_000_000)]),
+      rate: z.union([z.literal(""), z.coerce.number().min(0.01).max(1_000_000)]),
     }).parse(Object.fromEntries(formData));
     const [owned] = await getDb().select({ id: assignments.id }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
@@ -321,6 +321,7 @@ export async function updateClientOwnedRateAction(
       details: { ledger: "client_only" },
     });
     revalidatePath("/residency/finances");
+    revalidatePath("/residency/talent");
     return { status: "success", message: "Rate saved." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to save this rate." };
