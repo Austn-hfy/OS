@@ -139,10 +139,12 @@ describe("staging production-structure sync", () => {
     const productionDirect = "postgresql://postgres:secret@db.tkfsgifnywbwjdkxjhae.supabase.co:5432/postgres";
     const productionPooled = "postgresql://postgres.tkfsgifnywbwjdkxjhae:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres";
     const restrictedProductionPooled = "postgresql://hfy_staging_structure_reader.tkfsgifnywbwjdkxjhae:secret@aws-0-us-west-1.pooler.supabase.com:6543/postgres";
+    const restrictedProductionDedicated = "postgresql://hfy_staging_structure_reader:secret@db.tkfsgifnywbwjdkxjhae.supabase.co:6543/postgres";
     const stagingDirect = "postgresql://postgres:secret@db.ucrtbevvdfkceudknyxe.supabase.co:5432/postgres";
     expect(supabaseProjectRefFromDatabaseUrl(productionDirect)).toBe("tkfsgifnywbwjdkxjhae");
     expect(supabaseProjectRefFromDatabaseUrl(productionPooled)).toBe("tkfsgifnywbwjdkxjhae");
     expect(supabaseProjectRefFromDatabaseUrl(restrictedProductionPooled)).toBe("tkfsgifnywbwjdkxjhae");
+    expect(supabaseProjectRefFromDatabaseUrl(restrictedProductionDedicated)).toBe("tkfsgifnywbwjdkxjhae");
     expect(() => assertSafeSyncEnvironment(productionDirect, stagingDirect)).not.toThrow();
     expect(() => assertSafeSyncEnvironment(stagingDirect, productionDirect)).toThrow(/production project/i);
     expect(() => assertSafeSyncEnvironment(productionDirect, productionDirect)).toThrow();

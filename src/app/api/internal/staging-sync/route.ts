@@ -48,7 +48,8 @@ function requiredSecret(name: string): string {
 
 function assertRestrictedProductionReader(databaseUrl: string): void {
   const username = decodeURIComponent(new URL(databaseUrl).username);
-  if (!username.startsWith("hfy_staging_structure_reader.")) {
+  if (username !== "hfy_staging_structure_reader"
+    && !username.startsWith("hfy_staging_structure_reader.")) {
     throw new Error("The dashboard sync requires the dedicated read-only production structure connection.");
   }
 }
