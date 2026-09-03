@@ -10,7 +10,7 @@ import { isHfyManagedEconomicsMode, isStandingHfyDaypart } from "@/domain/hfy-pr
 import { ResidencyCalendar } from "./residency-calendar";
 import { getRoomsForResidency } from "@/services/rooms";
 
-export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ residency?: string; calendarResidency?: string; month?: string; event?: string; calendarView?: string; week?: string }> }) {
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ residency?: string; calendarResidency?: string; month?: string; event?: string; batchDaypart?: string; calendarView?: string; week?: string }> }) {
   const params = await searchParams;
   const residencyList = await getResidencyList();
   const workspaceResidency = residencyList.find((item) => item.id === params.residency);
@@ -49,6 +49,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         color: calendarColorForEconomics(shift.daypartColor, shift.shiftCalendarColor, shift.economicsMode, "internal"),
         bookingState: shift.economicsMode === "hfy_request" ? "hfy_pending" as const : shift.economicsMode === "hfy" ? "hfy_confirmed" as const : undefined,
         tone: calendarToneForSlot(shift.room, tones[Math.max(0, residencyList.findIndex((item) => item.id === shift.residencyId)) % tones.length]),
+        daypartId: shift.daypartId,
         schedulingStatus,
         startMinute: shiftStartMinute,
         href: `/app/calendar?${new URLSearchParams({ mode: "hfy", calendarResidency: shift.residencyId, month: monthKey, event: shift.id }).toString()}`,
@@ -69,11 +70,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       residencyName: residency.name,
       color: slot.color,
       tone: calendarToneForSlot(slot.room, tones[Math.max(0, residencyList.findIndex((item) => item.id === residency.id)) % tones.length]),
+      daypartId: slot.daypartId,
       schedulingStatus: "empty" as const,
       startMinute: slot.startMinute,
       href: `/app/calendar?${new URLSearchParams({ mode: "hfy", calendarResidency: residency.id, month: monthKey }).toString()}`,
     })));
-    const events: MonthCalendarEvent[] = [...savedShiftEvents, ...projectedEvents]
+    const events = [...savedShiftEvents, ...projectedEvents]
       .sort((left, right) => left.date.localeCompare(right.date) || left.startMinute - right.startMinute);
     const needsDjCount = events.filter((event) => event.schedulingStatus === "empty" || event.schedulingStatus === "partial").length;
 
@@ -91,7 +93,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <button className="button secondary" type="submit">View</button>
           </form>
           <CalendarStatusLegend internal />
-          <div className="calendar-month-cluster"><div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div><div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link></div></div>
+          <div className="calendar-month-cluster"><details className="calendar-batch-launcher"><summary className={`calendar-needs-summary calendar-batch-summary ${needsDjCount ? "attention" : "clear"}`} aria-label={`${needsDjCount ? `${needsDjCount} need scheduling` : "All scheduled"}. Open batch edit.`}><span className="calendar-batch-status">{needsDjCount ? <strong>{needsDjCount}</strong> : <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 10 3 3 7-7" /></svg>}<span>{needsDjCount ? "need scheduling" : "all scheduled"}</span></span><span className="calendar-batch-divider" aria-hidden="true" /><span className="calendar-batch-label">batch edit</span></summary><div className="calendar-batch-menu" aria-label="Choose a Daypart to batch edit"><div className="calendar-batch-menu-heading"><strong>Batch edit a Daypart</strong><small>{monthLabel(monthKey)}</small></div>{hfyDayparts.filter((daypart) => daypart.active).map((daypart) => { const occurrences = events.filter((event) => event.daypartId === daypart.id); const needs = occurrences.filter((event) => event.schedulingStatus === "empty" || event.schedulingStatus === "partial").length; const residency = visibleResidencies.find((item) => item.id === daypart.residencyId); const query = new URLSearchParams({ mode: "hfy", calendarResidency: daypart.residencyId, month: monthKey, batchDaypart: daypart.id }); return <Link className="calendar-batch-menu-row" href={`/app/calendar?${query.toString()}`} key={daypart.id}><span><strong>{daypart.name}</strong><small>{residency?.name} · {daypart.room}</small></span><em>{needs} need scheduling</em></Link>; })}</div></details><div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={monthHref(shiftMonthKey(monthKey, -1))}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={monthHref(shiftMonthKey(monthKey, 1))}>→</Link></div></div>
         </div></header>
         <MonthCalendar compact monthKey={monthKey} events={events} ariaLabel="HFY company programming calendar" />
       </div>
@@ -157,6 +159,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     manualHostName: shift.manualHostName,
     economicsMode: shift.economicsMode,
     clientTalentDefaultRateCents: shift.clientTalentDefaultRateCents,
+    clientRateOverrideCents: shift.clientRateOverrideCents,
     hfyRequestId: shift.hfyRequestId,
     schedulingStatus,
     assignments: activeAssignments.map((assignment) => ({
@@ -170,6 +173,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       endClock: formatTimeInput(assignment.endsAt, selectedResidency.timezone),
       bookingStatus: assignment.bookingStatus,
       payoutStatus: assignment.payoutStatus,
+      compensationType: assignment.compensationType,
+      talentRateOverrideCents: assignment.talentRateOverrideCents,
+      fixedFeeCents: assignment.fixedFeeCents,
     })),
   };
   });
@@ -213,6 +219,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         residencyOptions={residencyList.map((item) => ({ id: item.id, name: item.name }))}
         residencySelectionParam={workspaceResidency ? "residency" : "calendarResidency"}
         initialEventId={params.event}
+        initialBatchDaypartId={params.batchDaypart}
       />
     </div>
   );

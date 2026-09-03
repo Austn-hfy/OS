@@ -8,6 +8,7 @@ import { HfyRequestFulfillment } from "@/app/app/hfy-request-fulfillment";
 import { createClientOwnedArtistAction } from "@/app/residency/actions";
 import { ArtistSearchPicker, type CreateArtistResult } from "@/components/artist-search-picker";
 import { CalendarShareButton } from "@/components/calendar-share-button";
+import { CalendarBatchEditor } from "@/components/calendar-batch-editor";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { DaypartColorPicker } from "@/components/daypart-color-picker";
 import { RoomHuePicker } from "@/components/room-hue-picker";
@@ -37,6 +38,9 @@ export type CalendarAssignment = {
   endClock: string;
   bookingStatus: string;
   payoutStatus: string;
+  compensationType?: "hourly" | "fixed" | "na";
+  talentRateOverrideCents?: number | null;
+  fixedFeeCents?: number | null;
 };
 
 export type ResidencyEvent = MonthCalendarEvent & {
@@ -56,6 +60,7 @@ export type ResidencyEvent = MonthCalendarEvent & {
   assignments: CalendarAssignment[];
   economicsMode?: "hfy" | "client_owned" | "hfy_request";
   clientTalentDefaultRateCents?: number | null;
+  clientRateOverrideCents?: number | null;
   hfyRequestId?: string | null;
 };
 
@@ -89,6 +94,7 @@ type ResidencyCalendarProps = {
   residencyOptions?: Array<{ id: string; name: string }>;
   residencySelectionParam?: "residency" | "calendarResidency";
   initialEventId?: string;
+  initialBatchDaypartId?: string;
   previewMode?: boolean;
   fullProgramming?: boolean;
   calendarBasePath?: string;
@@ -208,7 +214,7 @@ function SchedulingActivityDetailsRow({
   </div>;
 }
 
-export function ResidencyCalendar({ residency, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
   const initialEditingEvent = initialEventId ? events.find((event) => event.id === initialEventId && !event.projected) : undefined;
   const [modal, setModal] = useState<ModalState>(() => initialEditingEvent ? { type: "edit", eventId: initialEditingEvent.id } : null);
@@ -346,7 +352,6 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
   ));
   const pendingHfyRequest = !previewMode && editingEvent?.economicsMode === "hfy_request";
   const residencyTalentRateConfigured = residency.defaultTalentRateCents > 0;
-  const needsDjCount = events.filter((event) => event.schedulingStatus === "empty" || event.schedulingStatus === "partial").length;
   const filteredEvents = events.filter((event) => {
     const statusMatches = statusFilter === "all"
       || (statusFilter === "needs" && (event.schedulingStatus === "empty" || event.schedulingStatus === "partial"))
@@ -1197,7 +1202,20 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
         <div className="calendar-command-primary">
           <div className="calendar-title"><p className="eyebrow">{residency.name}</p><h1>Calendar</h1></div>
           <div className="calendar-month-cluster">
-            <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div>
+            <CalendarBatchEditor
+              residency={residency}
+              rangeLabel={calendarView === "week" ? weekLabel(activeWeekStart) : monthLabel(monthKey)}
+              rangeKind={calendarView}
+              events={events}
+              dayparts={dayparts}
+              artists={artistOptions}
+              canCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined}
+              previewMode={previewMode}
+              fullProgramming={fullProgramming}
+              canManage={canManage}
+              initialDaypartId={initialBatchDaypartId}
+              onRefresh={() => router.refresh()}
+            />
             <div className="month-navigation"><Link className="calendar-arrow" aria-label={`Previous ${calendarView}`} href={previousHref}>←</Link><h2>{calendarView === "week" ? weekLabel(activeWeekStart) : monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label={`Next ${calendarView}`} href={nextHref}>→</Link></div>
           </div>
         </div>

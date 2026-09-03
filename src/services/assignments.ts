@@ -1,7 +1,7 @@
 import { and, eq, gt, inArray, isNull, lt, ne, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, residencies, residencyTalent, shifts, talent } from "@/db/schema";
-import { calculateCompensationCents, isPaymentEligible, nextPayoutStatus } from "@/domain/airtable-parity";
+import { assignments, auditLog, dayparts, residencies, residencyTalent, shifts, talent } from "@/db/schema";
+import { calculateCompensationCents, isPaymentEligible, nextPayoutStatus, resolveTalentRateCents } from "@/domain/airtable-parity";
 import { localDateTimeForMinute } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import type { AuditActor } from "@/lib/auth";
@@ -247,7 +247,14 @@ export async function replaceAssignmentTalent(actor: AuditActor, assignmentId: s
 export async function rescheduleAssignment(
   actor: AuditActor,
   assignmentId: string,
-  input: { talentId: string; startsAtMinute: number; endsAtMinute: number },
+  input: {
+    talentId: string;
+    startsAtMinute: number;
+    endsAtMinute: number;
+    compensationType?: "hourly" | "fixed" | "na";
+    talentRateOverrideCents?: number | null;
+    fixedFeeCents?: number | null;
+  },
 ) {
   if (!Number.isInteger(input.startsAtMinute) || !Number.isInteger(input.endsAtMinute) || input.endsAtMinute <= input.startsAtMinute) {
     throw new Error("Choose valid start and end times for the replacement DJ.");
@@ -268,14 +275,17 @@ export async function rescheduleAssignment(
       bookingStatus: assignments.bookingStatus,
       compensationType: assignments.compensationType,
       talentRateCents: assignments.talentRateCents,
+      talentRateOverrideCents: assignments.talentRateOverrideCents,
       fixedFeeCents: assignments.fixedFeeCents,
       payoutStatus: assignments.payoutStatus,
       source: assignments.source,
       economicsMode: shifts.economicsMode,
       defaultTalentRateCents: residencies.defaultTalentRateCents,
+      daypartDefaultTalentRateCents: dayparts.defaultTalentRateCents,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
+      .leftJoin(dayparts, eq(shifts.daypartId, dayparts.id))
       .where(eq(assignments.id, assignmentId))
       .limit(1);
     if (!current) throw new Error("Assignment not found.");
@@ -342,12 +352,22 @@ export async function rescheduleAssignment(
     )).limit(1);
     if (talentConflict.length) throw new Error(`${replacement.stageName} already has an overlapping active booking.`);
 
+    const compensationType = actor.kind === "residency" ? current.compensationType : input.compensationType ?? current.compensationType;
+    const talentRateOverrideCents = actor.kind === "residency"
+      ? current.talentRateOverrideCents
+      : input.talentRateOverrideCents === undefined ? current.talentRateOverrideCents : input.talentRateOverrideCents;
+    const talentRateCents = actor.kind === "residency" || compensationType !== "hourly"
+      ? current.talentRateCents
+      : resolveTalentRateCents(talentRateOverrideCents, current.daypartDefaultTalentRateCents, current.defaultTalentRateCents);
+    const fixedFeeCents = actor.kind === "residency" || compensationType !== "fixed"
+      ? (compensationType === "fixed" ? current.fixedFeeCents : null)
+      : input.fixedFeeCents === undefined ? current.fixedFeeCents : input.fixedFeeCents;
     const totalCompensationCents = calculateCompensationCents({
-      compensationType: current.compensationType,
+      compensationType,
       startsAt,
       endsAt,
-      talentRateCents: current.talentRateCents,
-      fixedFeeCents: current.fixedFeeCents,
+      talentRateCents,
+      fixedFeeCents,
     });
     await tx.update(assignments).set({
       talentId: replacement.id,
@@ -356,7 +376,12 @@ export async function rescheduleAssignment(
       startsAt,
       endsAt,
       bookingStatus: current.bookingStatus === "open" ? "confirmed" : current.bookingStatus,
+      compensationType,
+      talentRateOverrideCents: compensationType === "hourly" ? talentRateOverrideCents : null,
+      talentRateCents,
+      fixedFeeCents,
       totalCompensationCents,
+      payoutStatus: compensationType === "na" ? "na" : current.payoutStatus === "na" ? "not_ready" : current.payoutStatus,
       updatedAt: new Date(),
     }).where(eq(assignments.id, current.id));
     await tx.insert(auditLog).values({
@@ -373,6 +398,9 @@ export async function rescheduleAssignment(
         previousEndsAt: current.endsAt.toISOString(),
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
+        compensationType,
+        talentRateOverrideCents: compensationType === "hourly" ? talentRateOverrideCents : null,
+        fixedFeeCents,
       },
     });
   });

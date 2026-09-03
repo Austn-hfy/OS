@@ -16,7 +16,7 @@ import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, 
 import { clearDaypartDateException, removeDaypart, saveDaypart, saveDaypartDateOverride, skipDaypartDate } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
 import { addAssignmentToShift, createResidencyDateBooking, deleteOneTimeOccurrence, updateDaypartOccurrence, updateOneTimeOccurrence, updateOneTimeShift } from "@/services/residency-bookings";
-import { createShift, deleteShift } from "@/services/shifts";
+import { createShift, deleteShift, updateCalendarShiftDetails } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { issuePublicCalendarToken } from "@/domain/public-calendar";
@@ -1883,9 +1883,20 @@ export async function rescheduleAssignmentAction(formData: FormData): Promise<Re
       talentId: z.uuid(),
       startsAtMinute: z.coerce.number().int().min(0).max(2879),
       endsAtMinute: z.coerce.number().int().min(1).max(2879),
+      compensationType: z.enum(["hourly", "fixed", "na"]).optional(),
+      talentRateOverride: z.string().optional(),
+      fixedFee: z.string().optional(),
     }).parse(Object.fromEntries(formData));
     const actor = await requireManagerForAssignment(parsed.assignmentId);
-    await rescheduleAssignment(actor, parsed.assignmentId, parsed);
+    await rescheduleAssignment(actor, parsed.assignmentId, {
+      ...parsed,
+      talentRateOverrideCents: parsed.talentRateOverride === undefined
+        ? undefined
+        : parsed.talentRateOverride.trim() ? centsFromDollars(parsed.talentRateOverride) : null,
+      fixedFeeCents: parsed.fixedFee === undefined
+        ? undefined
+        : parsed.fixedFee.trim() ? centsFromDollars(parsed.fixedFee) : null,
+    });
     revalidatePath("/app/calendar");
     revalidatePath("/app/payouts");
     return { status: "success", message: "DJ and hours updated." };
@@ -1904,6 +1915,29 @@ export async function removeCalendarAssignmentAction(formData: FormData): Promis
     return { status: "success", message: "DJ removed from this Shift." };
   } catch (error) {
     return { status: "error", message: calendarAssignmentErrorMessage(error, "Unable to remove this DJ. Refresh the page and try again.", "remove") };
+  }
+}
+
+export async function updateCalendarShiftDetailsAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = z.object({
+      shiftId: z.uuid(),
+      notes: z.string().trim().max(2_000),
+      clientRateOverride: z.string(),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireManagerForShift(parsed.shiftId);
+    await updateCalendarShiftDetails(actor, parsed.shiftId, {
+      notes: parsed.notes,
+      clientRateOverrideCents: actor.kind === "internal"
+        ? parsed.clientRateOverride.trim() ? centsFromDollars(parsed.clientRateOverride) : null
+        : undefined,
+    });
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/invoices");
+    revalidatePath("/residency/calendar");
+    return { status: "success", message: "Shift details updated." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this Shift." };
   }
 }
 

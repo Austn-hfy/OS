@@ -2220,6 +2220,27 @@
   background: var(--hfy-success-soft);
 }
 
+.hfy-style-system .calendar-command-primary .calendar-batch-summary {
+  padding: 0;
+}
+
+.hfy-style-system .calendar-command-primary .calendar-batch-summary.clear {
+  color: var(--hfy-muted);
+  border-color: color-mix(in srgb, var(--hfy-muted) 22%, transparent);
+  background: color-mix(in srgb, var(--hfy-muted) 8%, white);
+}
+
+.hfy-style-system .calendar-batch-menu,
+.hfy-style-system .calendar-batch-screen,
+.hfy-style-system .calendar-batch-header,
+.hfy-style-system .calendar-batch-row {
+  border-color: var(--hfy-line);
+  background-color: var(--hfy-surface-raised);
+}
+
+.hfy-style-system .calendar-batch-takeover { background: var(--hfy-canvas); }
+.hfy-style-system .calendar-batch-form { border-color: var(--hfy-line); background: var(--hfy-surface-nested); }
+
 .hfy-style-system .calendar-command-actions {
   min-width: 0;
   display: flex;
