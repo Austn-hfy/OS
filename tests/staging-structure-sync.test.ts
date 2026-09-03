@@ -273,6 +273,7 @@ describe("staging production-structure sync", () => {
     expect(script).not.toMatch(/delete from residencies/i);
     expect(script).not.toMatch(/delete from talent\s/i);
     expect(script).toContain("--all requires --confirm-all-residencies");
+    expect(script).toContain("formatDryRunReport(plans, apply)");
     expect(script).toContain("applyResidencyPlan(tx, plan, stagingEncryptionKey)");
     expect(script.indexOf("applyResidencyPlan(tx, plan, stagingEncryptionKey)")).toBeGreaterThan(script.indexOf("await staging.begin(async (tx)"));
   });

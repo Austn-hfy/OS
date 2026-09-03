@@ -850,7 +850,7 @@ try {
     const target = await loadExistingStagingState(staging, snapshot, sourceResidency);
     plans.push(buildStagingResidencyPlan(snapshot, sourceResidency.id, target));
   }
-  process.stdout.write(`${formatDryRunReport(plans, false)}\n`);
+  process.stdout.write(`${formatDryRunReport(plans, apply)}\n`);
   if (apply) {
     const stagingEncryptionKey = plans.some((plan) => plan.report.syntheticPaymentProfiles > 0)
       ? requiredEnvironment("STAGING_SYNC_PAYMENT_ENCRYPTION_KEY")
