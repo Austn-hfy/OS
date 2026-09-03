@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import { projectDaypartSlots } from "@/domain/dayparts";
 
 describe("Calendar Only Dayparts", () => {
-  it("uses plain schedule labels throughout the shared Daypart manager", async () => {
+  it("distinguishes reusable templates from ad-hoc calendar activities", async () => {
     const manager = await readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8");
     expect(manager).toContain("<strong>Recurring Daypart</strong>");
-    expect(manager).toContain("<strong>One-off / Occasional activity</strong>");
+    expect(manager).toContain("<strong>Reusable One-off Template</strong>");
+    expect(manager).toContain("Save this as a reusable one-off template you can schedule onto any date later.");
+    expect(manager).toContain("Reusable one-off templates");
     expect(manager).toContain('{draft.type ? <div className="field daypart-schedule-step">');
     expect(manager).not.toContain('draft.type && (draft.type === "house_activity" || draft.billingMode) ? <div className="field daypart-schedule-step"');
     expect(manager).not.toContain("<strong>Standing weekly</strong>");
@@ -34,7 +36,7 @@ describe("Calendar Only Dayparts", () => {
     const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
     expect(calendar).toContain('daypart.scheduleMode === "calendar_only"');
     expect(calendar).toContain("suggestedStartMinute");
-    expect(calendar).toContain("This One-off / Occasional Daypart will be added only to");
+    expect(calendar).toContain("This reusable Daypart template will be added only to");
   });
 
   it("keeps client artist selection and Request HFY mutually exclusive", async () => {
@@ -44,20 +46,37 @@ describe("Calendar Only Dayparts", () => {
     expect(calendar).toContain("Back to handling options");
   });
 
-  it("starts date scheduling with rooms and scopes Dayparts to the selected room", async () => {
-    const [calendar, styles] = await Promise.all([
+  it("shows every room's Dayparts in one date picker with Other last", async () => {
+    const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
+    expect(calendar).toContain('addMode === "choose" ? "Choose a Daypart"');
+    expect(calendar).toContain("Choose any Daypart across all rooms, or create a one-time activity.");
+    expect(calendar).toContain("suggestions.filter((suggestion) => !suggestion.oneTime).map");
+    expect(calendar).toContain("{suggestion.room} · {suggestionScheduleLabel");
+    expect(calendar).toContain("<strong>Other</strong><small>Create a one-time activity.</small>");
+    expect(calendar.indexOf("suggestions.filter((suggestion) => !suggestion.oneTime).map")).toBeLessThan(calendar.indexOf("<strong>Other</strong><small>Create a one-time activity.</small>"));
+    expect(calendar).not.toContain("const roomOptions = useMemo");
+    expect(calendar).not.toContain("selectedRoomSuggestions");
+    expect(calendar).not.toContain("chooseRoom");
+  });
+
+  it("uses Mark scheduled for both one-time activity types", async () => {
+    const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
+    expect(calendar).toContain('activeSuggestion.oneTime ? "Mark scheduled"');
+    expect(calendar).not.toContain('activeSuggestion.oneTime ? `Save');
+    expect(calendar).not.toContain('"Save Daypart"');
+  });
+
+  it("opens the shared Daypart creation panel without leaving Calendar", async () => {
+    const [calendar, panel] = await Promise.all([
       readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
-      readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/day-parts-panel.tsx", import.meta.url), "utf8"),
     ]);
-    expect(calendar).toContain('addMode === "choose" ? "Choose a room"');
-    expect(calendar).toContain("const roomOptions = useMemo");
-    expect(calendar).toContain("selectedRoomSuggestions.map");
-    expect(calendar).toContain("Choose a room to see only the Dayparts set up for that space.");
-    expect(calendar).toContain("chooseOneTime(selectedRoom ?? undefined)");
-    expect(calendar).toContain("Create a one-time activity in {selectedRoom}.");
-    expect(calendar).not.toContain("Use a setup Daypart");
-    expect(styles).toContain(".quick-room-picker");
-    expect(styles).toContain(".quick-room-option.other");
+    expect(calendar).toContain("setDaypartsPanelOpen(true)");
+    expect(calendar).toContain("<DayPartsPanel");
+    expect(calendar).toContain("initialCreate");
+    expect(calendar).not.toContain("calendarDaypartsHref");
+    expect(panel).toContain("fullProgrammingClient={fullProgrammingClient}");
+    expect(panel).toContain("if (onSaved) onSaved()");
   });
 
   it("provides update and delete actions for both one-time record types", async () => {

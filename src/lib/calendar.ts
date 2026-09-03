@@ -4,12 +4,6 @@ const DATE_KEY = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 export type CalendarTone = "blue" | "navy" | "sky" | "orange";
 export type CalendarViewMode = "month" | "week";
 
-export function calendarDaypartsHref(residencyId: string, previewMode: boolean, override?: string): string {
-  if (override) return override;
-  if (previewMode) return "/residency/dayparts";
-  return `/app/dayparts?${new URLSearchParams({ mode: "hfy", residency: residencyId }).toString()}`;
-}
-
 export function calendarToneForSlot(name: string, fallback: CalendarTone = "navy"): CalendarTone {
   const normalizedName = name.toLowerCase();
   if (normalizedName.includes("pool")) return "blue";

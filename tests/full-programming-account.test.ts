@@ -22,7 +22,7 @@ describe("Full Programming account controls", () => {
     const manager = await readSource("../src/app/app/setup/daypart-manager.tsx");
     expect(manager).toContain("+ Add House Activity");
     expect(manager).toContain("HFY manages all Talent Activities");
-    expect(manager).toContain("One-off / Occasional");
+    expect(manager).toContain("Reusable One-off Template");
     expect(manager).toContain('scheduleMode === "calendar_only" ? []');
     expect(manager).toContain('fullProgrammingClient && daypart.type === "dj_artist"');
   });
