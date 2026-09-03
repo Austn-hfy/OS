@@ -232,7 +232,7 @@ export function supabaseProjectRefFromDatabaseUrl(databaseUrl: string): string |
   const directHost = parsed.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i)?.[1];
   if (directHost) return directHost.toLowerCase();
   const username = decodeURIComponent(parsed.username);
-  const pooledRef = username.match(/^postgres\.([a-z0-9]+)$/i)?.[1];
+  const pooledRef = username.match(/^[^.]+\.([a-z0-9]+)$/i)?.[1];
   return pooledRef?.toLowerCase() ?? null;
 }
 

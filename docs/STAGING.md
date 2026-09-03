@@ -46,13 +46,26 @@ An operator may copy a selected production Residency's **structure** into stagin
 
 ## On-demand production-structure sync
 
-The sync runs only from an operator machine. It is not available in the web application, has no scheduled trigger, and adds no work to normal application requests. Only the separate staging database may receive writes. Production can be read either through a read-only database transaction or through the source-only Supabase API adapter, whose queries allowlist non-sensitive columns and expose no production mutation method.
+The normal owner workflow is available only at `staging.hfy.app` under **Developer Platform → Admin Settings → Sync Production Structure**. The owner first selects **Preview Sync**, reviews the exact counts, confirms the preview, and then selects **Sync Ace Now**. The preview expires after ten minutes and becomes invalid immediately if the source or destination plan changes. The card shows the last successful dashboard sync.
+
+The dashboard action has no scheduled trigger and adds no work to ordinary application requests. It is hidden outside the stable `staging` branch, its server endpoint rejects every hostname except `staging.hfy.app`, and every request rechecks the signed-in `internal_admin` role. The production connection authenticates as `hfy_staging_structure_reader`, a dedicated role that has no table permissions and can execute only `private.hfy_staging_structure_snapshot(text)`. That function returns an allowlisted structural document and never selects raw contact, banking, tax-file, note, authentication, booking, payout, Invoice, or share-link data.
+
+The original operator command remains available as a recovery and audit path. Production can be read through an approved database transaction, through the source-only Supabase API adapter, or from a reviewed project-bound snapshot. Only the separate staging database may receive writes.
 
 Provide these secrets through the operator environment; do not put them in command arguments, logs, documentation, or committed files:
 
 - `PRODUCTION_SYNC_DATABASE_URL`: approved production Postgres connection (preferred), or `PRODUCTION_SYNC_SUPABASE_URL` plus either `PRODUCTION_SYNC_SERVICE_ROLE_KEY` or `PRODUCTION_SYNC_SERVICE_ROLE_KEY_FILE` for the source-only API adapter.
 - `STAGING_SYNC_DATABASE_URL`: approved staging Postgres connection.
 - `STAGING_SYNC_PAYMENT_ENCRYPTION_KEY`: staging's payment-field encryption key, required only when applying synthetic payment profiles.
+
+The staging web deployment instead uses these server-only variables:
+
+- `PRODUCTION_SYNC_DATABASE_URL`: the dedicated `hfy_staging_structure_reader` production connection, configured only on the stable staging branch.
+- `DATABASE_URL`: the existing staging database connection.
+- `TALENT_PAYMENT_ENCRYPTION_KEY`: the staging encryption key for synthetic payment profiles.
+- `STAGING_SYNC_CONFIRMATION_SECRET`: a staging-only secret used to sign short-lived reviewed previews.
+
+None of these variables is exposed to browser JavaScript. The cross-environment reader connection and preview-confirmation secret must never be configured on the production deployment.
 
 Preview an Ace refresh without writing anything:
 

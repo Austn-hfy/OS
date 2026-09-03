@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import postgres, { type Sql, type TransactionSql } from "postgres";
 import { encryptSensitiveField } from "../src/lib/field-encryption";
@@ -62,7 +63,7 @@ function optionalSecret(name: string, fileName: string): string | undefined {
   const direct = optionalEnvironment(name);
   const filePath = optionalEnvironment(fileName);
   if (direct && filePath) throw new Error(`Set ${name} or ${fileName}, not both.`);
-  return direct ?? (filePath ? readFileSync(filePath, "utf8").trim() : undefined);
+  return direct ?? (filePath ? readFileSync(/* turbopackIgnore: true */ filePath, "utf8").trim() : undefined);
 }
 
 function argumentValues(name: string): string[] {
@@ -88,10 +89,9 @@ function selection() {
   return { all, slugs: [...new Set(slugs)] };
 }
 
-function loadReviewedProductionSnapshot(filePath: string, requestedSlugs: string[]): ProductionStructureSnapshot {
-  const parsed = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+function parseProductionSnapshot(parsed: Record<string, unknown>, requestedSlugs: string[]): ProductionStructureSnapshot {
   if (parsed.sourceProjectRef !== "tkfsgifnywbwjdkxjhae") {
-    throw new Error("Reviewed snapshot is not bound to the approved HFY production project.");
+    throw new Error("Production snapshot is not bound to the approved HFY production project.");
   }
   const requiredArrays = ["clientAccounts", "residencies", "dayparts", "dayRules", "dateExceptions", "talent", "rosterAssignments"];
   for (const key of requiredArrays) {
@@ -117,7 +117,12 @@ function loadReviewedProductionSnapshot(filePath: string, requestedSlugs: string
   };
 }
 
-async function verifyRequiredSchema(sql: Queryable, label: string): Promise<void> {
+function loadReviewedProductionSnapshot(filePath: string, requestedSlugs: string[]): ProductionStructureSnapshot {
+  const parsed = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+  return parseProductionSnapshot(parsed, requestedSlugs);
+}
+
+export async function verifyRequiredSchema(sql: Queryable, label: string): Promise<void> {
   const tableNames = Object.keys(REQUIRED_COLUMNS);
   const rows = await sql<Array<{ tableName: string; columnName: string }>>`
     select table_name as "tableName", column_name as "columnName"
@@ -265,6 +270,29 @@ async function loadProductionSnapshot(sql: Queryable, slugs: string[]): Promise<
   ` : [];
 
   return { clientAccounts, residencies: residencyRows, dayparts, dayRules, dateExceptions, talent, rosterAssignments };
+}
+
+export async function loadRestrictedProductionSnapshot(
+  sql: Queryable,
+  slugs: string[],
+): Promise<ProductionStructureSnapshot> {
+  const snapshots: ProductionStructureSnapshot[] = [];
+  for (const slug of slugs) {
+    const rows = await sql<Array<{ snapshot: Record<string, unknown> }>>`
+      select private.hfy_staging_structure_snapshot(${slug}) as snapshot
+    `;
+    if (!rows[0]?.snapshot) throw new Error(`Production structure export returned no result for ${slug}.`);
+    snapshots.push(parseProductionSnapshot(rows[0].snapshot, [slug]));
+  }
+  return snapshots.reduce<ProductionStructureSnapshot>((combined, snapshot) => ({
+    clientAccounts: [...combined.clientAccounts, ...snapshot.clientAccounts],
+    residencies: [...combined.residencies, ...snapshot.residencies],
+    dayparts: [...combined.dayparts, ...snapshot.dayparts],
+    dayRules: [...combined.dayRules, ...snapshot.dayRules],
+    dateExceptions: [...combined.dateExceptions, ...snapshot.dateExceptions],
+    talent: [...combined.talent, ...snapshot.talent],
+    rosterAssignments: [...combined.rosterAssignments, ...snapshot.rosterAssignments],
+  }), { clientAccounts: [], residencies: [], dayparts: [], dayRules: [], dateExceptions: [], talent: [], rosterAssignments: [] });
 }
 
 type ApiResult = {
@@ -498,7 +526,7 @@ async function loadProductionSnapshotFromApi(
   return { clientAccounts, residencies, dayparts, dayRules, dateExceptions, talent, rosterAssignments };
 }
 
-async function loadExistingStagingState(
+export async function loadExistingStagingState(
   sql: Queryable,
   source: ProductionStructureSnapshot,
   sourceResidency: SourceResidency,
@@ -554,10 +582,11 @@ async function loadExistingStagingState(
   };
 }
 
-async function applyResidencyPlan(
+export async function applyResidencyPlan(
   tx: TransactionSql<Record<string, never>>,
   plan: StagingResidencyPlan,
   stagingEncryptionKey: string,
+  actor: { userId?: string; label?: string } = {},
 ): Promise<void> {
   await tx`
     insert into client_accounts (id, name, active, internal_notes, updated_at)
@@ -768,10 +797,11 @@ async function applyResidencyPlan(
   }
 
   await tx`
-    insert into audit_log (residency_id, actor_label, action, entity_type, entity_id, details)
+    insert into audit_log (residency_id, actor_user_id, actor_label, action, entity_type, entity_id, details)
     values (
       ${plan.residencyId},
-      'operator staging structure sync',
+      ${actor.userId ?? null},
+      ${actor.label ?? 'operator staging structure sync'},
       'staging_structure_synced_from_production',
       'residency',
       ${plan.residencyId},
@@ -784,86 +814,91 @@ async function applyResidencyPlan(
         rosterAssignmentCount: plan.rosterAssignments.length,
         copiedAuthenticationRecords: 0,
         copiedSensitiveRecords: 0,
+        requestedByUserId: actor.userId ?? null,
       })}
     )
   `;
 }
 
-const requested = selection();
-const apply = process.argv.includes("--apply");
-const stagingDatabaseUrl = requiredEnvironment("STAGING_SYNC_DATABASE_URL");
-const productionSnapshotFiles = argumentValues("--production-snapshot-file");
-if (productionSnapshotFiles.length > 1) throw new Error("Pass --production-snapshot-file only once.");
-const productionSnapshotFile = productionSnapshotFiles[0];
-if (productionSnapshotFile && requested.all) {
-  throw new Error("Reviewed snapshot input requires explicit --residency values; it cannot be combined with --all.");
-}
-const productionDatabaseUrl = optionalEnvironment("PRODUCTION_SYNC_DATABASE_URL");
-const productionApiUrl = optionalEnvironment("PRODUCTION_SYNC_SUPABASE_URL");
-const productionServiceRoleKey = optionalSecret(
-  "PRODUCTION_SYNC_SERVICE_ROLE_KEY",
-  "PRODUCTION_SYNC_SERVICE_ROLE_KEY_FILE",
-);
-if (productionSnapshotFile && (productionDatabaseUrl || productionApiUrl || productionServiceRoleKey)) {
-  throw new Error("Configure one production source: reviewed snapshot, database URL, or Supabase URL plus service-role key.");
-}
-if (productionDatabaseUrl && (productionApiUrl || productionServiceRoleKey)) {
-  throw new Error("Configure one production source: database URL or Supabase URL plus service-role key.");
-}
-if (productionSnapshotFile) {
-  assertSafeStagingDestination(stagingDatabaseUrl);
-} else if (productionDatabaseUrl) {
-  assertSafeSyncEnvironment(productionDatabaseUrl, stagingDatabaseUrl);
-} else {
-  if (!productionApiUrl || !productionServiceRoleKey) {
-    throw new Error("Set PRODUCTION_SYNC_DATABASE_URL, or set both PRODUCTION_SYNC_SUPABASE_URL and PRODUCTION_SYNC_SERVICE_ROLE_KEY.");
+export async function main(): Promise<void> {
+  const requested = selection();
+  const apply = process.argv.includes("--apply");
+  const stagingDatabaseUrl = requiredEnvironment("STAGING_SYNC_DATABASE_URL");
+  const productionSnapshotFiles = argumentValues("--production-snapshot-file");
+  if (productionSnapshotFiles.length > 1) throw new Error("Pass --production-snapshot-file only once.");
+  const productionSnapshotFile = productionSnapshotFiles[0];
+  if (productionSnapshotFile && requested.all) {
+    throw new Error("Reviewed snapshot input requires explicit --residency values; it cannot be combined with --all.");
   }
-  assertSafeSyncApiEnvironment(productionApiUrl, stagingDatabaseUrl);
-}
+  const productionDatabaseUrl = optionalEnvironment("PRODUCTION_SYNC_DATABASE_URL");
+  const productionApiUrl = optionalEnvironment("PRODUCTION_SYNC_SUPABASE_URL");
+  const productionServiceRoleKey = optionalSecret(
+    "PRODUCTION_SYNC_SERVICE_ROLE_KEY",
+    "PRODUCTION_SYNC_SERVICE_ROLE_KEY_FILE",
+  );
+  if (productionSnapshotFile && (productionDatabaseUrl || productionApiUrl || productionServiceRoleKey)) {
+    throw new Error("Configure one production source: reviewed snapshot, database URL, or Supabase URL plus service-role key.");
+  }
+  if (productionDatabaseUrl && (productionApiUrl || productionServiceRoleKey)) {
+    throw new Error("Configure one production source: database URL or Supabase URL plus service-role key.");
+  }
+  if (productionSnapshotFile) {
+    assertSafeStagingDestination(stagingDatabaseUrl);
+  } else if (productionDatabaseUrl) {
+    assertSafeSyncEnvironment(productionDatabaseUrl, stagingDatabaseUrl);
+  } else {
+    if (!productionApiUrl || !productionServiceRoleKey) {
+      throw new Error("Set PRODUCTION_SYNC_DATABASE_URL, or set both PRODUCTION_SYNC_SUPABASE_URL and PRODUCTION_SYNC_SERVICE_ROLE_KEY.");
+    }
+    assertSafeSyncApiEnvironment(productionApiUrl, stagingDatabaseUrl);
+  }
 
-const production = productionDatabaseUrl
-  ? postgres(productionDatabaseUrl, { prepare: false, max: 1, connect_timeout: 15, idle_timeout: 10 })
-  : null;
-const productionApi = productionApiUrl && productionServiceRoleKey
-  ? createClient(productionApiUrl, productionServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
-  : null;
-const staging = postgres(stagingDatabaseUrl, { prepare: false, max: 1, connect_timeout: 15, idle_timeout: 10 });
+  const production = productionDatabaseUrl
+    ? postgres(productionDatabaseUrl, { prepare: false, max: 1, connect_timeout: 15, idle_timeout: 10 })
+    : null;
+  const productionApi = productionApiUrl && productionServiceRoleKey
+    ? createClient(productionApiUrl, productionServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    : null;
+  const staging = postgres(stagingDatabaseUrl, { prepare: false, max: 1, connect_timeout: 15, idle_timeout: 10 });
 
-try {
-  await verifyRequiredSchema(staging, "Staging");
-  if (production) await verifyRequiredSchema(production, "Production");
-  const snapshot = productionSnapshotFile
-    ? loadReviewedProductionSnapshot(productionSnapshotFile, requested.slugs)
-    : production
-      ? await production.begin("read only", async (tx) => {
-      const slugs = await selectedResidencySlugs(tx, requested.all, requested.slugs);
-      if (!slugs.length) throw new Error("Production has no Residencies to synchronize.");
-      return loadProductionSnapshot(tx, slugs);
-      })
-      : await (async () => {
-        const slugs = await selectedResidencySlugsFromApi(productionApi!, requested.all, requested.slugs);
+  try {
+    await verifyRequiredSchema(staging, "Staging");
+    if (production) await verifyRequiredSchema(production, "Production");
+    const snapshot = productionSnapshotFile
+      ? loadReviewedProductionSnapshot(productionSnapshotFile, requested.slugs)
+      : production
+        ? await production.begin("read only", async (tx) => {
+        const slugs = await selectedResidencySlugs(tx, requested.all, requested.slugs);
         if (!slugs.length) throw new Error("Production has no Residencies to synchronize.");
-        return loadProductionSnapshotFromApi(productionApi!, slugs);
-      })();
-  const plans: StagingResidencyPlan[] = [];
-  for (const sourceResidency of snapshot.residencies) {
-    const target = await loadExistingStagingState(staging, snapshot, sourceResidency);
-    plans.push(buildStagingResidencyPlan(snapshot, sourceResidency.id, target));
+        return loadProductionSnapshot(tx, slugs);
+        })
+        : await (async () => {
+          const slugs = await selectedResidencySlugsFromApi(productionApi!, requested.all, requested.slugs);
+          if (!slugs.length) throw new Error("Production has no Residencies to synchronize.");
+          return loadProductionSnapshotFromApi(productionApi!, slugs);
+        })();
+    const plans: StagingResidencyPlan[] = [];
+    for (const sourceResidency of snapshot.residencies) {
+      const target = await loadExistingStagingState(staging, snapshot, sourceResidency);
+      plans.push(buildStagingResidencyPlan(snapshot, sourceResidency.id, target));
+    }
+    process.stdout.write(`${formatDryRunReport(plans, apply)}\n`);
+    if (apply) {
+      const stagingEncryptionKey = plans.some((plan) => plan.report.syntheticPaymentProfiles > 0)
+        ? requiredEnvironment("STAGING_SYNC_PAYMENT_ENCRYPTION_KEY")
+        : "";
+      await staging.begin(async (tx) => {
+        await tx`select pg_advisory_xact_lock(2026090201)`;
+        for (const plan of plans) await applyResidencyPlan(tx, plan, stagingEncryptionKey);
+      });
+      process.stdout.write("All selected staging changes committed atomically.\n");
+    }
+  } finally {
+    await Promise.all([
+      ...(production ? [production.end({ timeout: 5 })] : []),
+      staging.end({ timeout: 5 }),
+    ]);
   }
-  process.stdout.write(`${formatDryRunReport(plans, apply)}\n`);
-  if (apply) {
-    const stagingEncryptionKey = plans.some((plan) => plan.report.syntheticPaymentProfiles > 0)
-      ? requiredEnvironment("STAGING_SYNC_PAYMENT_ENCRYPTION_KEY")
-      : "";
-    await staging.begin(async (tx) => {
-      await tx`select pg_advisory_xact_lock(2026090201)`;
-      for (const plan of plans) await applyResidencyPlan(tx, plan, stagingEncryptionKey);
-    });
-    process.stdout.write("All selected staging changes committed atomically.\n");
-  }
-} finally {
-  await Promise.all([
-    ...(production ? [production.end({ timeout: 5 })] : []),
-    staging.end({ timeout: 5 }),
-  ]);
 }
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

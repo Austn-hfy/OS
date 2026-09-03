@@ -246,6 +246,13 @@
       "when": 1788388505828,
       "tag": "0034_one_time_session_artist_rate",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788428417000,
+      "tag": "0035_staging_structure_export",
+      "breakpoints": true
     }
   ]
 }
