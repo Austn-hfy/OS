@@ -142,7 +142,7 @@ export async function skipDaypartDate(
 ) {
   weekdayForDate(input.serviceDate);
   return getDb().transaction(async (tx) => {
-    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name, residencyTier: residencies.tier }).from(dayparts)
+    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name, scheduleMode: dayparts.scheduleMode, residencyTier: residencies.tier }).from(dayparts)
       .innerJoin(residencies, eq(dayparts.residencyId, residencies.id))
       .where(and(eq(dayparts.id, input.daypartId), eq(dayparts.residencyId, input.residencyId)))
       .limit(1);
@@ -198,26 +198,34 @@ export async function skipDaypartDate(
       eq(scheduleOccurrences.daypartId, input.daypartId),
       eq(scheduleOccurrences.serviceDate, input.serviceDate),
     ));
-    await tx.insert(daypartDateExceptions).values({
-      daypartId: input.daypartId,
-      serviceDate: input.serviceDate,
-      kind: "skip",
-      startMinute: null,
-      endMinute: null,
-      createdByUserId: actor.userId,
-    }).onConflictDoUpdate({
-      target: [daypartDateExceptions.daypartId, daypartDateExceptions.serviceDate],
-      set: { kind: "skip", startMinute: null, endMinute: null, createdByUserId: actor.userId, updatedAt: new Date() },
-    });
+    if (daypart.scheduleMode === "calendar_only") {
+      await tx.delete(daypartDateExceptions).where(and(
+        eq(daypartDateExceptions.daypartId, input.daypartId),
+        eq(daypartDateExceptions.serviceDate, input.serviceDate),
+      ));
+    } else {
+      await tx.insert(daypartDateExceptions).values({
+        daypartId: input.daypartId,
+        serviceDate: input.serviceDate,
+        kind: "skip",
+        startMinute: null,
+        endMinute: null,
+        createdByUserId: actor.userId,
+      }).onConflictDoUpdate({
+        target: [daypartDateExceptions.daypartId, daypartDateExceptions.serviceDate],
+        set: { kind: "skip", startMinute: null, endMinute: null, createdByUserId: actor.userId, updatedAt: new Date() },
+      });
+    }
     await tx.insert(auditLog).values({
       residencyId: input.residencyId,
       actorUserId: actor.userId,
       actorLabel: actor.email,
-      action: "daypart_date_skipped",
+      action: daypart.scheduleMode === "calendar_only" ? "daypart_calendar_date_removed" : "daypart_date_skipped",
       entityType: "daypart",
       entityId: input.daypartId,
       details: { serviceDate: input.serviceDate, name: daypart.name, removedShiftId: shift?.id ?? null, pendingTalentInvoiceAdjustment: Boolean(shift?.invoiceId && shift.invoiceStatus && shift.invoiceStatus !== "draft" && daypart.residencyTier === "complete") },
     });
+    return { scheduleMode: daypart.scheduleMode };
   });
 }
 

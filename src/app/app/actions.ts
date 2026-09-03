@@ -15,7 +15,7 @@ import { requireActorForResidency, requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
 import { clearDaypartDateException, removeDaypart, saveDaypart, saveDaypartDateOverride, skipDaypartDate } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
-import { addAssignmentToShift, createResidencyDateBooking, deleteOneTimeOccurrence, updateOneTimeOccurrence, updateOneTimeShift } from "@/services/residency-bookings";
+import { addAssignmentToShift, createResidencyDateBooking, deleteOneTimeOccurrence, updateDaypartOccurrence, updateOneTimeOccurrence, updateOneTimeShift } from "@/services/residency-bookings";
 import { createShift, deleteShift } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -1548,12 +1548,14 @@ export async function skipDaypartDateAction(formData: FormData): Promise<Residen
   try {
     const parsed = daypartDateActionSchema.parse(Object.fromEntries(formData));
     const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
-    await skipDaypartDate(actor, parsed);
+    const result = await skipDaypartDate(actor, parsed);
     revalidateResidencyCalendars();
     revalidatePath("/residency/finances");
     revalidatePath("/app/payouts");
     revalidatePath("/app/invoices");
-    return { status: "success", message: "This date was skipped. The standing Daypart remains unchanged." };
+    return result.scheduleMode === "calendar_only"
+      ? { status: "success", message: "This date was removed from the Calendar. The reusable template stays saved." }
+      : { status: "success", message: "This date was skipped. The standing Daypart remains unchanged." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to skip this date." };
   }
@@ -1967,6 +1969,25 @@ export async function updateOneTimeOccurrenceAction(formData: FormData): Promise
     return { status: "success", message: "One-time activity updated." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to update this one-time activity." };
+  }
+}
+
+export async function updateDaypartOccurrenceAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = z.object({
+      id: z.uuid(),
+      startMinute: z.coerce.number().int().min(0).max(1439),
+      endMinute: z.coerce.number().int().min(1).max(2879),
+      notes: z.string().trim().max(2_000),
+      programDetails: z.string().trim().max(500),
+      manualHostName: z.string().trim().max(160),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireManagerForOccurrence(parsed.id);
+    await updateDaypartOccurrence(actor, parsed);
+    revalidateOneTimeRecordViews();
+    return { status: "success", message: "This scheduled date was updated. The reusable template was not changed." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this scheduled date." };
   }
 }
 
