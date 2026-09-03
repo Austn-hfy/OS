@@ -10,7 +10,7 @@ async function requestDayparts(residencyId: string, hfyOnly: boolean) {
   return (await response.json() as { dayparts: DaypartRow[] }).dayparts;
 }
 
-export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = false, hideFinancials = false, initialCreate = false, hfyOnly = false }: { residencyId: string; residencyName: string; onClose: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean; hfyOnly?: boolean }) {
+export function DayPartsPanel({ residencyId, residencyName, onClose, onSaved, readOnly = false, hideFinancials = false, initialCreate = false, hfyOnly = false, fullProgrammingClient = false }: { residencyId: string; residencyName: string; onClose: () => void; onSaved?: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean; hfyOnly?: boolean; fullProgrammingClient?: boolean }) {
   const [dayparts, setDayparts] = useState<DaypartRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -49,7 +49,7 @@ export function DayPartsPanel({ residencyId, residencyName, onClose, readOnly = 
   return <div className="day-parts-panel-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
     <aside className="day-parts-panel" role="dialog" aria-modal="true" aria-label={`${residencyName} Day Parts`}>
       <div className="day-parts-panel-scroll">
-        {loading ? <div className="card empty">Loading Day Parts…</div> : error ? <div className="card empty error">{error}<button className="button secondary" type="button" onClick={() => void load()}>Try again</button></div> : <DaypartManager residencyId={residencyId} dayparts={dayparts} onSaved={() => void load()} onClose={onClose} readOnly={readOnly} hideFinancials={hideFinancials} initialCreate={initialCreate} />}
+        {loading ? <div className="card empty">Loading Day Parts…</div> : error ? <div className="card empty error">{error}<button className="button secondary" type="button" onClick={() => void load()}>Try again</button></div> : <DaypartManager residencyId={residencyId} dayparts={dayparts} onSaved={() => { if (onSaved) onSaved(); else void load(); }} onClose={onClose} readOnly={readOnly} hideFinancials={hideFinancials} initialCreate={initialCreate} fullProgrammingClient={fullProgrammingClient} />}
       </div>
     </aside>
   </div>;
