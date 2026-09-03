@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import type { SlotSchedulingStatus } from "@/domain/dayparts";
+import { contrastTextColor, type SlotSchedulingStatus } from "@/domain/dayparts";
 import { monthGrid, type CalendarTone } from "@/lib/calendar";
 
 export { calendarToneForSlot } from "@/lib/calendar";
@@ -40,7 +40,7 @@ export function MonthCalendar({ monthKey, events, selectedDate, onDateClick, onE
           return <div className={`calendar-day ${onDateClick ? "interactive" : ""} ${day.inMonth ? "" : "outside"} ${selectedDate === day.iso ? "selected" : ""}`} role="gridcell" key={day.iso}>
             {onDateClick ? <button className="calendar-date-trigger" type="button" aria-label={`Add to ${day.iso}`} onClick={() => onDateClick(day.iso)}><span className="calendar-day-header"><time dateTime={day.iso}>{day.day}</time>{day.inMonth ? <span className="calendar-add-icon" aria-hidden="true">+</span> : null}</span></button> : <div className="calendar-day-header"><time dateTime={day.iso}>{day.day}</time></div>}
             <div className="calendar-events">{visibleEvents.map((event) => {
-              const eventStyle = event.color ? { "--daypart-color": event.color } as CSSProperties : undefined;
+              const eventStyle = event.color ? { "--daypart-color": event.color, "--daypart-text-color": contrastTextColor(event.color) } as CSSProperties : undefined;
               const eventClassName = `calendar-event ${event.schedulingStatus ? `schedule-${event.schedulingStatus}` : event.color ? "custom-color" : event.tone ?? "blue"} ${event.bookingState ? event.bookingState.replace("_", "-") : ""}`;
               const content = <><span className="calendar-event-line"><strong>{event.title}</strong><span>{event.time}</span></span>{compact ? null : <small>{event.residencyName}</small>}{event.bookingState ? <i className="hfy-booking-indicator" aria-label={event.bookingState === "hfy_pending" ? "HFY request pending" : "HFY booked"} /> : null}</>;
               const tooltip = [event.title, event.room, event.time, compact ? event.residencyName : null].filter(Boolean).join(" · ");

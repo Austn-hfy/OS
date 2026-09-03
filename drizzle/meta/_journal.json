@@ -267,6 +267,13 @@
       "when": 1788469200000,
       "tag": "0037_ace_room_color_swap",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788474600000,
+      "tag": "0038_wider_room_shades",
+      "breakpoints": true
     }
   ]
 }

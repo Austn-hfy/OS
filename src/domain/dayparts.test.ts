@@ -7,6 +7,7 @@ import {
   calendarColorForEconomics,
   calendarColorForShift,
   clockToMinute,
+  contrastTextColor,
   daypartDateKey,
   daypartBookingRecordKind,
   formatLocalMinute,
@@ -38,11 +39,17 @@ describe("Daypart weekly rules", () => {
     expect(calendarColorForEconomics("#2783DC", null, "client_owned")).toBe("#2783DC");
   });
 
-  it("assigns distinct room hues deterministically and cycles three shades", () => {
+  it("assigns distinct room hues deterministically and cycles four widely spaced shades", () => {
     expect(ROOM_HUE_ORDER).toEqual(["blue", "orange", "green", "purple", "yellow", "navy", "red", "teal"]);
-    expect(roomColor("blue", "dark")).toBe("#1B5FA7");
+    expect(roomColor("blue", "dark")).toBe("#103E70");
     expect(roomColor("orange", "medium")).toBe("#E98332");
-    expect([0, 1, 2, 3].map((index) => roomDaypartColor("blue", index))).toEqual(["#1B5FA7", "#2783DC", "#5AA6E8", "#1B5FA7"]);
+    expect([0, 1, 2, 3, 4].map((index) => roomDaypartColor("blue", index))).toEqual(["#103E70", "#DAECFA", "#2783DC", "#5AA6E8", "#103E70"]);
+  });
+
+  it("chooses readable text for the new lightest and darkest room shades", () => {
+    expect(contrastTextColor("#103E70")).toBe("#FFFFFF");
+    expect(contrastTextColor("#DAECFA")).toBe("#102334");
+    expect(contrastTextColor("not-a-color")).toBe("#102334");
   });
 
   it("routes billed and tracking-only Dayparts to separate record chains", () => {

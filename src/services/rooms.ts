@@ -1,6 +1,6 @@
-import { and, asc, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { auditLog, dayparts, residencies, rooms, scheduleOccurrences } from "@/db/schema";
+import { auditLog, dayparts, residencies, rooms, scheduleOccurrences, shifts } from "@/db/schema";
 import { isRoomHue, roomDaypartColor, roomHueForIndex, type RoomHue } from "@/domain/dayparts";
 import type { AuditActor } from "@/lib/auth";
 
@@ -127,7 +127,7 @@ export async function createResidencyRoom(actor: AuditActor, input: { residencyI
   });
 }
 
-export async function updateResidencyRoomHue(actor: AuditActor, input: { residencyId: string; roomId: string; hue: RoomHue }): Promise<ResidencyRoom> {
+export async function updateResidencyRoom(actor: AuditActor, input: { residencyId: string; roomId: string; name: string; hue: RoomHue }): Promise<ResidencyRoom> {
   return getDb().transaction(async (tx) => {
     const [residency] = await tx.select({ id: residencies.id }).from(residencies).where(and(
       eq(residencies.id, input.residencyId),
@@ -146,25 +146,37 @@ export async function updateResidencyRoomHue(actor: AuditActor, input: { residen
     }).from(rooms).where(and(eq(rooms.id, input.roomId), eq(rooms.residencyId, residency.id))).limit(1).for("update");
     if (!room) throw new Error("Room not found in this Residency.");
 
+    const name = normalizeRoomName(input.name);
+    const [duplicate] = await tx.select({ id: rooms.id }).from(rooms).where(and(
+      eq(rooms.residencyId, residency.id),
+      ne(rooms.id, room.id),
+      sql`lower(btrim(${rooms.name})) = lower(${name})`,
+    )).limit(1);
+    if (duplicate) throw new Error("A room or space with that name already exists.");
+
     const roomDayparts = await tx.select({ id: dayparts.id, name: dayparts.name }).from(dayparts)
       .where(eq(dayparts.roomId, room.id))
       .orderBy(sql`lower(${dayparts.name})`, asc(dayparts.name), asc(dayparts.id));
     const updatedAt = new Date();
     for (let index = 0; index < roomDayparts.length; index += 1) {
       const color = roomDaypartColor(input.hue, index);
-      await tx.update(dayparts).set({ color, updatedAt }).where(eq(dayparts.id, roomDayparts[index].id));
-      await tx.update(scheduleOccurrences).set({ color, updatedAt }).where(eq(scheduleOccurrences.daypartId, roomDayparts[index].id));
+      await tx.update(dayparts).set({ room: name, color, updatedAt }).where(eq(dayparts.id, roomDayparts[index].id));
+      await tx.update(scheduleOccurrences).set({ room: name, color, updatedAt }).where(eq(scheduleOccurrences.daypartId, roomDayparts[index].id));
     }
-    await tx.update(rooms).set({ hue: input.hue, updatedAt }).where(eq(rooms.id, room.id));
+    // Ad-hoc records have no Daypart to carry the room name, so keep their
+    // denormalized display value synchronized through the persistent room id.
+    await tx.update(scheduleOccurrences).set({ room: name, updatedAt }).where(eq(scheduleOccurrences.roomId, room.id));
+    await tx.update(shifts).set({ room: name, updatedAt }).where(eq(shifts.roomId, room.id));
+    await tx.update(rooms).set({ name, hue: input.hue, updatedAt }).where(eq(rooms.id, room.id));
     await tx.insert(auditLog).values({
       residencyId: residency.id,
       actorUserId: actor.userId,
       actorLabel: actor.email,
-      action: "residency_room_hue_updated",
+      action: "residency_room_updated",
       entityType: "room",
       entityId: room.id,
-      details: { name: room.name, previousHue: safeHue(room.hue), hue: input.hue, daypartCount: roomDayparts.length },
+      details: { previousName: room.name, name, previousHue: safeHue(room.hue), hue: input.hue, daypartCount: roomDayparts.length },
     });
-    return { ...room, hue: input.hue, daypartCount: roomDayparts.length };
+    return { ...room, name, hue: input.hue, daypartCount: roomDayparts.length };
   });
 }

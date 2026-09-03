@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { removeDaypartAction, saveDaypartAction, updateResidencyRoomHueAction, type CreateRoomActionState, type ResidencyActionState } from "@/app/app/actions";
-import { DEFAULT_DAYPART_COLOR, clockToMinute, formatLocalMinute, minuteToClock, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayNames, type DaypartBillingMode, type DaypartScheduleMode, type DaypartType, type RoomHue } from "@/domain/dayparts";
+import { removeDaypartAction, saveDaypartAction, updateResidencyRoomAction, type CreateRoomActionState, type ResidencyActionState } from "@/app/app/actions";
+import { DEFAULT_DAYPART_COLOR, clockToMinute, contrastTextColor, formatLocalMinute, minuteToClock, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayNames, type DaypartBillingMode, type DaypartScheduleMode, type DaypartType, type RoomHue } from "@/domain/dayparts";
 import { DaypartColorPicker } from "@/components/daypart-color-picker";
 import { RoomHuePicker } from "@/components/room-hue-picker";
 import { SensitiveInput } from "@/components/privacy-mode";
@@ -131,9 +131,9 @@ function displayRange(dayparts: DaypartRow[]) {
 
 export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved, onClose, readOnly = false, hideFinancials = false, initialCreate = false, fullProgrammingClient = false }: { residencyId: string; dayparts: DaypartRow[]; residencyRooms: ResidencyRoom[]; onSaved?: () => void; onClose?: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean; fullProgrammingClient?: boolean }) {
   const [draft, setDraft] = useState<EditorDraft | null>(null);
-  const [roomHueDraft, setRoomHueDraft] = useState<{ roomId: string; roomName: string; hue: RoomHue } | null>(null);
-  const [roomHuePending, setRoomHuePending] = useState(false);
-  const [roomHueState, setRoomHueState] = useState<CreateRoomActionState>(initialActionState);
+  const [roomDraft, setRoomDraft] = useState<{ roomId: string; name: string; hue: RoomHue } | null>(null);
+  const [roomPending, setRoomPending] = useState(false);
+  const [roomState, setRoomState] = useState<CreateRoomActionState>(initialActionState);
   const openedInitialDraft = useRef(false);
   const dateSectionRef = useRef<HTMLDivElement>(null);
   const draftOpenRef = useRef(false);
@@ -154,7 +154,6 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   useReportDaypartRateAttention({ residencyId, audience: rateAttentionAudience, needsAttention: missingRateDayparts.length > 0 });
   const standingDayparts = useMemo(() => dayparts.filter((daypart) => daypart.scheduleMode === "standing_weekly"), [dayparts]);
   const calendarOnlyDayparts = useMemo(() => dayparts.filter((daypart) => daypart.scheduleMode === "calendar_only"), [dayparts]);
-  const weeklyRoomNames = useMemo(() => [...new Set(standingDayparts.map((daypart) => daypart.room))].sort(), [standingDayparts]);
   const defaultNewRoomHue = roomHueForIndex(Math.max(-1, ...residencyRooms.map((room) => room.sortOrder)) + 1);
   const range = useMemo(() => displayRange(standingDayparts), [standingDayparts]);
   const rangeMinutes = range.end - range.start;
@@ -184,6 +183,18 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [draft]);
+
+  useEffect(() => {
+    if (!roomDraft) return;
+    const priorOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setRoomDraft(null); };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = priorOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [roomDraft]);
 
   useEffect(() => {
     const draftIsOpen = Boolean(draft);
@@ -246,18 +257,19 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
     });
   }
 
-  async function saveRoomHue() {
-    if (!roomHueDraft) return;
+  async function saveRoom() {
+    if (!roomDraft) return;
     const formData = new FormData();
     formData.set("residencyId", residencyId);
-    formData.set("roomId", roomHueDraft.roomId);
-    formData.set("hue", roomHueDraft.hue);
-    setRoomHuePending(true);
-    const result = await updateResidencyRoomHueAction(formData);
-    setRoomHuePending(false);
-    setRoomHueState(result);
+    formData.set("roomId", roomDraft.roomId);
+    formData.set("name", roomDraft.name);
+    formData.set("hue", roomDraft.hue);
+    setRoomPending(true);
+    const result = await updateResidencyRoomAction(formData);
+    setRoomPending(false);
+    setRoomState(result);
     if (result.status === "success") {
-      setRoomHueDraft(null);
+      setRoomDraft(null);
       onSaved?.();
     }
   }
@@ -296,18 +308,17 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
     });
   }
 
-  function addFromGrid(room: string, weekday: number) {
-    const roomDaypart = dayparts.find((daypart) => daypart.room === room);
+  function addFromGrid(room: ResidencyRoom, weekday: number) {
     const roomRule = dayparts
-      .filter((daypart) => daypart.scheduleMode === "standing_weekly" && daypart.room === room)
+      .filter((daypart) => daypart.scheduleMode === "standing_weekly" && daypart.roomId === room.id)
       .flatMap((daypart) => daypart.rules)
       .find((rule) => rule.weekday === weekday)
-      ?? standingDayparts.find((daypart) => daypart.room === room)?.rules[0];
+      ?? standingDayparts.find((daypart) => daypart.roomId === room.id)?.rules[0];
     const next = blankDraft({
-      room,
-      roomId: roomDaypart?.roomId,
-      roomHue: roomDaypart?.roomHue,
-      roomItemCount: dayparts.filter((daypart) => daypart.room === room).length,
+      room: room.name,
+      roomId: room.id,
+      roomHue: room.hue,
+      roomItemCount: room.daypartCount,
       weekday,
       startMinute: roomRule?.startMinute,
       endMinute: roomRule?.endMinute,
@@ -340,21 +351,22 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
 
       {missingRateDayparts.length ? <div className="daypart-rate-attention-banner" role="status"><span aria-hidden="true">!</span><div><strong>{missingRateDayparts.length} default artist {missingRateDayparts.length === 1 ? "rate needs" : "rates need"} attention</strong><p>Open every highlighted Talent Activity and enter a rate above $0. You can keep building the schedule, but HFY OS cannot calculate what the artist is owed until these rates are saved.</p></div></div> : null}
 
-      {residencyRooms.length ? <section className="room-color-settings"><div className="room-color-settings-heading"><div><p className="eyebrow">Rooms &amp; spaces</p><h3>Room colors</h3><p>Each room keeps one hue. Its Dayparts automatically cycle through dark, medium, and light shades.</p></div></div><div className="room-color-card-list">{residencyRooms.map((room) => <div className="room-color-card" key={room.id} style={{ "--room-color": roomColor(room.hue), "--room-border": roomColor(room.hue, "dark") } as CSSProperties}><span className="room-color-card-swatch" aria-hidden="true" /><div><strong>{room.name}</strong><small>{room.daypartCount} {room.daypartCount === 1 ? "Daypart or template" : "Dayparts and templates"}</small></div>{readOnly ? null : <button className="button secondary" type="button" onClick={() => { setRoomHueState(initialActionState); setRoomHueDraft({ roomId: room.id, roomName: room.name, hue: room.hue }); }}>Change color</button>}</div>)}</div>{roomHueDraft ? <div className="room-color-editor"><div><strong>Choose a color for {roomHueDraft.roomName}</strong><small>Saving recolors every Daypart and reusable template in this room using its dark, medium, and light shades.</small></div><RoomHuePicker value={roomHueDraft.hue} onChange={(hue) => setRoomHueDraft({ ...roomHueDraft, hue })} ariaLabel={`Choose the room color for ${roomHueDraft.roomName}`} /><div className="room-color-editor-actions"><button className="button secondary" type="button" disabled={roomHuePending} onClick={() => setRoomHueDraft(null)}>Cancel</button><button className="button" type="button" disabled={roomHuePending} onClick={() => void saveRoomHue()}>{roomHuePending ? "Saving…" : "Save room color"}</button></div>{roomHueState.status === "error" ? <p className="error" aria-live="polite">{roomHueState.message}</p> : null}</div> : roomHueState.status === "success" ? <p className="success" aria-live="polite">{roomHueState.message}</p> : null}</section> : null}
-
-      {weeklyRoomNames.length ? <div className="daypart-week-board" style={{ "--daypart-grid-start": range.start, "--daypart-grid-end": range.end } as CSSProperties}>
+      {residencyRooms.length ? <div className="daypart-week-board" style={{ "--daypart-grid-start": range.start, "--daypart-grid-end": range.end } as CSSProperties}>
         <div className="daypart-week-corner"><strong>Room</strong><span>{formatLocalMinute(range.start)}–{formatLocalMinute(range.end)}</span></div>
         {weekdayNames.map((weekday) => <div className="daypart-week-heading" key={weekday}>{weekday.slice(0, 3)}</div>)}
-        {weeklyRoomNames.map((room) => <div className="daypart-week-row" key={room}>
-          <div className="daypart-room-label"><strong>{room}</strong><span>Click open space to add</span></div>
+        {residencyRooms.map((room) => <div className="daypart-week-row" key={room.id}>
+          <div className="daypart-room-label">
+            {readOnly ? <span className="daypart-room-color-bar" style={{ "--room-color": roomColor(room.hue), "--room-tint": roomColor(room.hue, "pale") } as CSSProperties} aria-hidden="true" /> : <button className="daypart-room-color-bar" style={{ "--room-color": roomColor(room.hue), "--room-tint": roomColor(room.hue, "pale") } as CSSProperties} type="button" aria-label={`Edit ${room.name}`} title={`Edit ${room.name}`} onClick={() => { setRoomState(initialActionState); setRoomDraft({ roomId: room.id, name: room.name, hue: room.hue }); }}><span aria-hidden="true">✎</span></button>}
+            <div className="daypart-room-label-copy"><strong>{room.name}</strong><span>{room.daypartCount} {room.daypartCount === 1 ? "Daypart or template" : "Dayparts and templates"}<br />Click open space to add</span></div>
+          </div>
           {weekdayNames.map((weekdayName, weekday) => {
             const blocks = standingDayparts.flatMap((daypart) => {
-              if (daypart.room !== room) return [];
+              if (daypart.roomId !== room.id) return [];
               const rule = daypart.rules.find((item) => item.weekday === weekday);
               return rule ? [{ daypart, rule }] : [];
             });
-            return <div className="daypart-week-cell" key={`${room}-${weekdayName}`}>
-              {readOnly ? null : <button className="daypart-week-add" type="button" aria-label={`Add a Daypart in ${room} on ${weekdayName}`} onClick={() => addFromGrid(room, weekday)}><span>+</span></button>}
+            return <div className="daypart-week-cell" key={`${room.id}-${weekdayName}`}>
+              {readOnly ? null : <button className="daypart-week-add" type="button" aria-label={`Add a Daypart in ${room.name} on ${weekdayName}`} onClick={() => addFromGrid(room, weekday)}><span>+</span></button>}
               {blocks.map(({ daypart, rule }) => {
                 const top = Math.max(0, ((rule.startMinute - range.start) / rangeMinutes) * 100);
                 const bottom = Math.min(100, ((rule.endMinute - range.start) / rangeMinutes) * 100);
@@ -369,6 +381,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
                   onClick={readOnly || (fullProgrammingClient && daypart.type === "dj_artist") ? undefined : () => setDraft(draftFromDaypart(daypart))}
                   style={{
                     "--daypart-color": daypart.color,
+                    "--daypart-text-color": contrastTextColor(daypart.color),
                     top: `${top}%`,
                     height: `${Math.max(9, bottom - top)}%`,
                     left: `calc(${lane * laneWidth}% + 4px)`,
@@ -387,7 +400,9 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
         </div>)}
       </div> : readOnly ? <div className="card empty daypart-empty-grid">No weekly Dayparts are configured for this Residency.</div> : <button className="card empty daypart-empty-grid" type="button" onClick={() => setDraft(blankDraft())}>No weekly Dayparts yet. Click to create one, or manage as-needed choices below.</button>}
 
-      {calendarOnlyDayparts.length ? <section className="calendar-only-dayparts"><div className="section-heading"><div><p className="eyebrow">Saved for later</p><h3>Reusable one-off templates</h3><p className="subhead">Saved choices you can schedule onto any date. They never create a standing weekly rule.</p></div></div><div className="calendar-only-daypart-list">{calendarOnlyDayparts.map((daypart) => { const needsRate = !fullProgrammingClient && daypartNeedsDefaultArtistRate(daypart, rateAttentionAudience); const disabled = readOnly || (fullProgrammingClient && daypart.type === "dj_artist"); return <button className={`calendar-only-daypart-card ${needsRate ? "needs-rate" : ""}`} type="button" disabled={disabled} onClick={disabled ? undefined : () => setDraft(draftFromDaypart(daypart))} key={daypart.id} style={{ "--daypart-color": daypart.color } as CSSProperties}><span aria-hidden="true" /><div><strong>{daypart.name}</strong><small>{daypart.room} · {formatLocalMinute(daypart.suggestedStartMinute ?? 1080)}–{formatLocalMinute(daypart.suggestedEndMinute ?? 1260)}</small></div><div className="calendar-only-daypart-meta"><em>{daypart.type === "house_activity" ? "House Activity" : daypart.billingMode === "tracking_only" ? "Client Managed" : "HFY Booking"}</em>{needsRate ? <b>! Rate needed</b> : null}</div>{daypart.billingMode === "billed_by_hfy" ? <i className="hfy-booking-indicator" aria-label="HFY booked" /> : null}</button>; })}</div></section> : null}
+      {calendarOnlyDayparts.length ? <section className="calendar-only-dayparts"><div className="section-heading"><div><p className="eyebrow">Saved for later</p><h3>Reusable one-off templates</h3><p className="subhead">Saved choices you can schedule onto any date. They never create a standing weekly rule.</p></div></div><div className="calendar-only-daypart-list">{calendarOnlyDayparts.map((daypart) => { const needsRate = !fullProgrammingClient && daypartNeedsDefaultArtistRate(daypart, rateAttentionAudience); const disabled = readOnly || (fullProgrammingClient && daypart.type === "dj_artist"); return <button className={`calendar-only-daypart-card ${needsRate ? "needs-rate" : ""}`} type="button" disabled={disabled} onClick={disabled ? undefined : () => setDraft(draftFromDaypart(daypart))} key={daypart.id} style={{ "--daypart-color": daypart.color, "--daypart-text-color": contrastTextColor(daypart.color) } as CSSProperties}><span aria-hidden="true" /><div><strong>{daypart.name}</strong><small>{daypart.room} · {formatLocalMinute(daypart.suggestedStartMinute ?? 1080)}–{formatLocalMinute(daypart.suggestedEndMinute ?? 1260)}</small></div><div className="calendar-only-daypart-meta"><em>{daypart.type === "house_activity" ? "House Activity" : daypart.billingMode === "tracking_only" ? "Client Managed" : "HFY Booking"}</em>{needsRate ? <b>! Rate needed</b> : null}</div>{daypart.billingMode === "billed_by_hfy" ? <i className="hfy-booking-indicator" aria-label="HFY booked" /> : null}</button>; })}</div></section> : null}
+
+      {roomDraft ? <div className="room-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setRoomDraft(null); }}><aside className="room-editor-panel" role="dialog" aria-modal="true" aria-labelledby="room-editor-title"><div className="room-editor-heading"><div><p className="eyebrow">Room &amp; space</p><h2 id="room-editor-title">Edit room</h2></div><button className="quick-modal-close" type="button" aria-label="Close room editor" onClick={() => setRoomDraft(null)}>×</button></div><div className="room-editor-body"><div className="field"><label htmlFor="room-editor-name">Room name</label><input id="room-editor-name" value={roomDraft.name} onChange={(event) => setRoomDraft({ ...roomDraft, name: event.target.value })} maxLength={160} autoFocus required /></div><div className="field"><label>Room color</label><RoomHuePicker value={roomDraft.hue} onChange={(hue) => setRoomDraft({ ...roomDraft, hue })} ariaLabel={`Choose the room color for ${roomDraft.name}`} /><small>Saving updates the room name everywhere and recolors its Dayparts and reusable templates across four high-contrast shades.</small></div>{roomState.status === "error" ? <p className="error" aria-live="polite">{roomState.message}</p> : null}</div><div className="room-editor-actions"><button className="button secondary" type="button" disabled={roomPending} onClick={() => setRoomDraft(null)}>Cancel</button><button className="button" type="button" disabled={roomPending || !roomDraft.name.trim()} onClick={() => void saveRoom()}>{roomPending ? "Saving…" : "Save room"}</button></div></aside></div> : roomState.status === "success" ? <p className="success" aria-live="polite">{roomState.message}</p> : null}
 
       {draft ? (
         <div className="daypart-drawer-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setDraft(null); }}>
@@ -406,7 +421,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
                 {draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <>
                 <div className="row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /></div><div className="field"><label>Room / space</label><input value={draft.room} onChange={(event) => updateDraftRoom(event.target.value)} placeholder="Amigo Room" required /></div></div>
                 <div className="daypart-definition-row">
-                  <div className="field daypart-color-field"><label>{draft.roomId ? "Room color shade" : "New room color"}</label>{draft.roomId && draft.roomHue ? <><DaypartColorPicker ariaLabel={`${draft.room} color shades`} hue={draft.roomHue} value={draft.color} onChange={(color) => setDraft({ ...draft, color })} /><small>Choose dark, medium, or light. The room’s hue stays fixed.{draft.billingMode === "billed_by_hfy" ? " HFY status appears as a pink corner marker." : ""}</small></> : draft.room.trim() && draft.roomHue ? <><RoomHuePicker value={draft.roomHue} onChange={(roomHue) => setDraft({ ...draft, roomHue, color: roomDaypartColor(roomHue, 0) })} ariaLabel={`Choose the room color for ${draft.room}`} /><small>The next automatic color is preselected. This first Daypart uses its dark shade.</small></> : <><div className="daypart-color-control"><span style={{ background: draft.color }} aria-hidden="true" /><strong>Enter a room name</strong></div><small>Name the room or space to choose its color.</small></>}</div>
+                  <div className="field daypart-color-field"><label>{draft.roomId ? "Room color shade" : "New room color"}</label>{draft.roomId && draft.roomHue ? <><DaypartColorPicker ariaLabel={`${draft.room} color shades`} hue={draft.roomHue} value={draft.color} onChange={(color) => setDraft({ ...draft, color })} /><small>Choose from four high-contrast shades. The room’s hue stays fixed.{draft.billingMode === "billed_by_hfy" ? " HFY status appears as a pink corner marker." : ""}</small></> : draft.room.trim() && draft.roomHue ? <><RoomHuePicker value={draft.roomHue} onChange={(roomHue) => setDraft({ ...draft, roomHue, color: roomDaypartColor(roomHue, 0) })} ariaLabel={`Choose the room color for ${draft.room}`} /><small>The next automatic color is preselected. This first Daypart uses its dark shade.</small></> : <><div className="daypart-color-control"><span style={{ background: draft.color }} aria-hidden="true" /><strong>Enter a room name</strong></div><small>Name the room or space to choose its color.</small></>}</div>
                   {!hideFinancials && draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? <div className={`field daypart-rate-field ${draftNeedsRate ? "needs-attention" : ""}`}><label>Default talent rate ($/hr) {draftNeedsRate ? <span className="daypart-rate-needed-label">Needed</span> : null}</label><SensitiveInput type="number" min="0" step="0.01" value={draft.defaultTalentRate} onChange={(event) => setDraft({ ...draft, defaultTalentRate: event.target.value })} placeholder="Enter the hourly rate" /><small>Required before HFY OS can calculate artist pay for this Daypart. You can save now and finish it later.</small></div> : null}
                   {draft.type === "dj_artist" && draft.billingMode === "tracking_only" ? <div className={`field daypart-rate-field ${draftNeedsRate ? "needs-attention" : ""}`}><label>Default artist rate ($/hr) {draftNeedsRate ? <span className="daypart-rate-needed-label">Needed</span> : null}</label><input name="clientDefaultRate" type="number" min="0" step="0.01" value={draft.clientDefaultRate} onChange={(event) => setDraft({ ...draft, clientDefaultRate: event.target.value })} placeholder="Enter the hourly rate" /><small>Required before HFY OS can calculate what the artist is owed. You can override a specific date in Payouts.</small></div> : null}
                   <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this Daypart continues indefinitely.</small></div>

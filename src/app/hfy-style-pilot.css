@@ -1548,7 +1548,7 @@
 @media (max-width: 700px) {
   .hfy-style-system .daypart-week-corner,
   .hfy-style-system .daypart-room-label { padding-inline: 8px; }
-  .hfy-style-system .daypart-room-label span { display: none; }
+  .hfy-style-system .daypart-room-label-copy > span { display: none; }
   .hfy-style-system .daypart-week-block { padding-inline: 3px; border-left-width: 3px; }
 }
 

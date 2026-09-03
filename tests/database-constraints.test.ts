@@ -70,6 +70,7 @@ beforeAll(async () => {
   const oneTimeSessionRates = await readFile(new URL("../drizzle/0034_one_time_session_artist_rate.sql", import.meta.url), "utf8");
   const roomColorSystem = await readFile(new URL("../drizzle/0036_room_color_system.sql", import.meta.url), "utf8");
   const aceRoomColorSwap = await readFile(new URL("../drizzle/0037_ace_room_color_swap.sql", import.meta.url), "utf8");
+  const widerRoomShades = await readFile(new URL("../drizzle/0038_wider_room_shades.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -148,6 +149,7 @@ beforeAll(async () => {
   `);
   await database.exec(roomColorSystem.replaceAll("--> statement-breakpoint", ""));
   await database.exec(aceRoomColorSwap.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(widerRoomShades.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -167,8 +169,8 @@ describe("database replacements for Airtable audit formulas", () => {
       SELECT name, color, room_id FROM dayparts WHERE residency_id = '${ids.residencyA}' ORDER BY name;
     `);
     expect(dayparts.rows.map((daypart) => ({ name: daypart.name, color: daypart.color, linked: Boolean(daypart.room_id) }))).toEqual([
-      { name: "Amigo Room", color: "#B95A1E", linked: true },
-      { name: "Pool", color: "#1B5FA7", linked: true },
+      { name: "Amigo Room", color: "#7D350B", linked: true },
+      { name: "Pool", color: "#103E70", linked: true },
     ]);
   });
 

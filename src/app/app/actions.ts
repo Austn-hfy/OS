@@ -24,7 +24,7 @@ import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-
 import { requestOrigin } from "@/lib/request-origin";
 import { isFullCalendarMonth } from "@/domain/talent-invoicing";
 import { sendResidencyAccountSetupEmail } from "@/services/account-setup-email";
-import { createResidencyRoom, updateResidencyRoomHue, type ResidencyRoom } from "@/services/rooms";
+import { createResidencyRoom, updateResidencyRoom, type ResidencyRoom } from "@/services/rooms";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type CreateRoomActionState = ResidencyActionState & { room?: ResidencyRoom };
@@ -1721,22 +1721,23 @@ export async function createResidencyRoomAction(formData: FormData): Promise<Cre
   }
 }
 
-export async function updateResidencyRoomHueAction(formData: FormData): Promise<CreateRoomActionState> {
+export async function updateResidencyRoomAction(formData: FormData): Promise<CreateRoomActionState> {
   try {
     const parsed = z.object({
       residencyId: z.uuid(),
       roomId: z.uuid(),
+      name: z.string().trim().min(1).max(160),
       hue: z.enum(ROOM_HUE_ORDER),
     }).parse(Object.fromEntries(formData));
     const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
-    const room = await updateResidencyRoomHue(actor, parsed);
+    const room = await updateResidencyRoom(actor, parsed);
     revalidatePath("/app/calendar");
     revalidatePath("/app/dayparts");
     revalidatePath("/residency/calendar");
     revalidatePath("/residency/dayparts");
-    return { status: "success", message: `${room.name} color updated.`, room };
+    return { status: "success", message: `${room.name} updated.`, room };
   } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this room color." };
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this room." };
   }
 }
 
