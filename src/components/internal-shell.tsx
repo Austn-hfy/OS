@@ -11,6 +11,7 @@ import { enterViewAsAction } from "@/app/app/view-as-actions";
 import { formatServiceTier } from "@/domain/service-tier";
 import { WorkspaceNavIcon, WorkspaceNavLink, type WorkspaceNavIconName } from "@/components/workspace-nav";
 import { DaypartRateAttentionReportProvider, type DaypartRateAttentionReport } from "@/components/daypart-rate-attention-context";
+import { isInternalNavigationItemActive } from "@/domain/internal-navigation";
 
 type ResidencyOption = { id: string; name: string; cityState: string | null; tier: string; active: boolean; needsDaypartRateAttention?: boolean };
 type OwnerMode = "developer" | "hfy";
@@ -53,7 +54,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
     { label: "Setup", href: `/app/setup${residencySuffix}`, description: "Program configuration", icon: "setup" },
   ] : mode === "developer" ? [
     { label: "Residencies", href: "/app?mode=developer", description: "Platform workspaces", icon: "residencies" },
-    { label: "Committed Plans", href: "/app?mode=developer#committed-plans", description: "Platform revenue", icon: "invoices" },
+    { label: "Committed Plans", href: "/app?mode=developer&section=committed-plans#committed-plans", description: "Platform revenue", icon: "invoices" },
     { label: "Admin Settings", href: "/app/setup?mode=developer", description: "Company identity", icon: "settings" },
   ] : [
     { label: "Work Queue", href: "/app?mode=hfy", description: "Requests and standing work", icon: "workqueue" },
@@ -66,11 +67,16 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
   ];
 
   function isActive(label: string, href: string) {
-    if (label === "Work Queue") return pathname === "/app" && !residency && searchParams.get("view") !== "operations";
-    if (label === "Operations") return pathname === "/app" && (Boolean(residency) || searchParams.get("view") === "operations");
-    if (label === "Pipeline") return inPipeline;
-    const route = href.split("?")[0];
-    return pathname === route;
+    return isInternalNavigationItemActive(
+      { label, href },
+      {
+        mode,
+        pathname,
+        residencyId: residency?.id ?? null,
+        section: searchParams.get("section"),
+        view: searchParams.get("view"),
+      },
+    );
   }
 
   const panelResidency = residencies.find((item) => item.id === daypartsResidencyId);
