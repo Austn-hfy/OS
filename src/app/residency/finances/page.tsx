@@ -5,6 +5,7 @@ import { WorkspaceSurface } from "@/components/workspace-surface";
 import { getResidencyClientFinances } from "@/data/residency-client";
 import { canResidencyRoleAccess } from "@/domain/residency-access";
 import { requireResidencyActor } from "@/lib/auth";
+import { ClientTalentFinances } from "./client-talent-finances";
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -27,6 +28,14 @@ export default async function ResidencyFinancesPage() {
   return <WorkspaceSurface className="residency-workspace-surface workspace-surface-finances">
     <ResidencyPageHeader eyebrow={`${actor.residencyName} finances`} title="Finances" />
     <div className="finance-accordions">
+      <details className="finance-accordion card" open>
+        <summary><span><small>Directly sourced by your team</small><strong>Owed to Your Talent</strong></span><span><strong>{money(owedToTalentCents)}</strong><small>informational only</small></span></summary>
+        <div className="finance-accordion-body">
+          <p>This is a summary of what your Residency pays its own talent directly. HFY does not collect, send, or manage these payments.</p>
+          <ClientTalentFinances rows={finances.clientTalent} timeZone={actor.residencyTimezone} canManage={actor.accessRole === "manager" && actor.residencyTier !== "complete"} />
+        </div>
+      </details>
+
       {finances.hasHfyManagedTalentActivity ? <details className="finance-accordion card" open>
         <summary><span><small>HFY-managed programming</small><strong>Owed to HFY</strong></span><span><strong>{money(owedToHfyCents)}</strong><small>outstanding</small></span></summary>
         <div className="finance-accordion-body">
@@ -35,13 +44,6 @@ export default async function ResidencyFinancesPage() {
         </div>
       </details> : null}
 
-      <details className="finance-accordion card" open>
-        <summary><span><small>Directly sourced by your team</small><strong>Owed to Your Talent</strong></span><span><strong>{money(owedToTalentCents)}</strong><small>informational only</small></span></summary>
-        <div className="finance-accordion-body">
-          <p>This is a read-only summary of what your Residency pays its own talent directly. HFY does not collect, send, or manage these payments.</p>
-          {finances.clientTalent.length ? <div className="table-wrap"><table><thead><tr><th>Artist</th><th>Activity</th><th>Date</th><th>Status</th><th>Amount owed</th></tr></thead><tbody>{finances.clientTalent.map((row) => <tr key={row.id}><td><strong>{row.artist}</strong></td><td>{row.shiftName}</td><td>{date(row.serviceDate)}</td><td><span className={`status ${row.bookingStatus}`}>{row.bookingStatus.replaceAll("_", " ")}</span></td><td>{row.owedCents === null ? "Rate needed" : money(row.owedCents)}</td></tr>)}</tbody></table></div> : <div className="empty">Nothing is currently owed to talent sourced directly by this Residency.</div>}
-        </div>
-      </details>
     </div>
   </WorkspaceSurface>;
 }

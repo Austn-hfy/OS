@@ -1,27 +1,19 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import { updateClientOwnedRateAction, type ClientSettingsActionState } from "@/app/residency/actions";
+import { useEffect, useMemo, useState } from "react";
 import { ArtistBookingCalendar } from "@/components/artist-booking-calendar";
 import { TalentWorkspaceShell } from "@/components/talent-workspace-shell";
 import { RateNeededWarning } from "@/components/rate-needed-warning";
 import type { getResidencyClientTalentWorkspace } from "@/data/residency-client";
 import { AddClientArtistForm } from "./add-client-artist-form";
+import { ClientAssignmentRateDialog } from "./client-assignment-rate-dialog";
 import { ArchivedClientOwnedArtistCard, ClientOwnedArtistCard } from "./client-owned-artist-card";
 
 type Artist = Awaited<ReturnType<typeof getResidencyClientTalentWorkspace>>[number];
 type TalentView = "active" | "owed" | "archived";
 type TalentSort = "name_asc" | "name_desc" | "owed_desc" | "booking_asc";
-type OutstandingAssignment = Artist["outstandingAssignments"][number];
-
-const initialRateState: ClientSettingsActionState = { status: "idle", message: "" };
-
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
-}
-
-function hourlyRate(cents: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100);
 }
 
 function serviceDateLabel(serviceDate: string) {
@@ -30,18 +22,6 @@ function serviceDateLabel(serviceDate: string) {
 
 function timeLabel(value: string, timeZone: string) {
   return new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(new Date(value));
-}
-
-function ClientAssignmentRateDialog({ assignment, artistName, timeZone, canManage, onClose }: { assignment: OutstandingAssignment; artistName: string; timeZone: string; canManage: boolean; onClose: () => void }) {
-  const [state, action, pending] = useActionState(updateClientOwnedRateAction, initialRateState);
-  const effectiveRateCents = assignment.overrideRateCents ?? assignment.defaultRateCents;
-  const rateSource = assignment.overrideRateCents !== null ? "Artist override" : assignment.defaultRateCents !== null ? "Session default" : "Rate needed";
-  const defaultRateLabel = assignment.defaultRateCents === null ? "No session default has been set." : `Session default: ${hourlyRate(assignment.defaultRateCents)} per hour.`;
-
-  return <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}><section className="quick-modal client-assignment-rate-modal" role="dialog" aria-modal="true" aria-labelledby="client-assignment-rate-title"><header className="quick-modal-header"><div><p className="eyebrow">{serviceDateLabel(assignment.serviceDate)}</p><h2 id="client-assignment-rate-title">{assignment.shiftName}</h2><p>{artistName} · {assignment.room}</p></div><button className="quick-modal-close" type="button" aria-label="Close booking details" onClick={onClose}>×</button></header><div className="quick-modal-body">
-    <dl className="client-assignment-booking-summary"><div><dt>Artist</dt><dd>{artistName}</dd></div><div><dt>Date</dt><dd>{serviceDateLabel(assignment.serviceDate)}</dd></div><div><dt>Hours</dt><dd>{timeLabel(assignment.startsAt, timeZone)}–{timeLabel(assignment.endsAt, timeZone)}</dd></div><div><dt>Status</dt><dd>{assignment.bookingStatus.replaceAll("_", " ")}</dd></div></dl>
-    <section className="client-assignment-rate-editor"><div><p className="eyebrow">Booking rate</p><h3>{assignment.amountCents === null ? "Rate needed" : `${money(assignment.amountCents)} currently owed`}</h3><span className={`client-rate-source ${assignment.overrideRateCents !== null ? "override" : ""}`}>{rateSource}</span></div>{canManage ? <form action={action} className="client-rate-form"><input type="hidden" name="assignmentId" value={assignment.id} /><label htmlFor={`artist-booking-rate-${assignment.id}`}>Artist hourly rate</label><div className="client-rate-control"><span>$</span><input id={`artist-booking-rate-${assignment.id}`} name="rate" type="number" min="0.01" step="0.01" defaultValue={effectiveRateCents === null ? "" : (effectiveRateCents / 100).toFixed(2)} placeholder="Enter rate" required={assignment.defaultRateCents === null} /><button className="button" type="submit" disabled={pending}>{pending ? "Saving…" : "Save rate"}</button></div><small>{assignment.defaultRateCents === null ? "Enter the hourly rate for this artist and booking." : `${defaultRateLabel} Clear this field and save to return to that default.`}</small>{state.status !== "idle" ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}</form> : <p className="artist-section-empty">A Residency manager can update this booking rate.</p>}</section>
-  </div></section></div>;
 }
 
 export function ClientArtistLookup({ artists, residencyName, timeZone, canManage, fullProgramming = false, initialArtistId }: { artists: Artist[]; residencyName: string; timeZone: string; canManage: boolean; fullProgramming?: boolean; initialArtistId?: string }) {

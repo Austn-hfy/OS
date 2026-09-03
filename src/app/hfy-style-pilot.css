@@ -3102,6 +3102,24 @@
 .hfy-style-system .finance-accordion > summary strong { font-size: 18px; }
 .hfy-style-system .finance-accordion-body { padding: 0 22px 22px; border-top: 1px solid var(--hfy-line); }
 .hfy-style-system .finance-accordion-body > p { margin: 16px 0; color: var(--hfy-muted); }
+.hfy-style-system .finance-rate-needed-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--hfy-coral) 58%, var(--hfy-line));
+  border-radius: 11px;
+  color: var(--hfy-ink);
+  background: color-mix(in srgb, var(--hfy-coral) 13%, white);
+  cursor: pointer;
+  font: inherit;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hfy-coral) 13%, transparent);
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.hfy-style-system .finance-rate-needed-button small { color: #7a302d; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.hfy-style-system .finance-rate-needed-button:hover { border-color: color-mix(in srgb, var(--hfy-coral) 78%, #8a3b35); background: color-mix(in srgb, var(--hfy-coral) 21%, white); }
+.hfy-style-system .finance-rate-needed-button:focus-visible { outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--hfy-coral) 30%, transparent); }
 
 .hfy-style-system .platform-billing-summary {
   display: grid;

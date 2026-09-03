@@ -36,18 +36,20 @@ describe("Calendar occasional activity follow-up", () => {
   });
 
   it("makes the client artist rate non-blocking while preserving the existing Artist Lookup rate stop", async () => {
-    const [calendar, bookings, artistLookup] = await Promise.all([
+    const [calendar, bookings, artistLookup, rateDialog] = await Promise.all([
       readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/talent/client-assignment-rate-dialog.tsx", import.meta.url), "utf8"),
     ]);
     expect(calendar).toContain("Optional while scheduling");
     expect(calendar).toContain("Optional now");
     expect(calendar).not.toContain("oneTimeClientRateMissing");
     expect(bookings).not.toContain("positive session artist rate");
     expect(bookings).toContain("defaultRateCents: rule.clientDefaultRateCents");
-    expect(artistLookup).toContain('assignment.defaultRateCents !== null ? "Session default" : "Rate needed"');
-    expect(artistLookup).toContain("Enter the hourly rate for this artist and booking.");
+    expect(artistLookup).toContain("ClientAssignmentRateDialog");
+    expect(rateDialog).toContain('assignment.defaultRateCents !== null ? "Session default" : "Rate needed"');
+    expect(rateDialog).toContain("Enter the hourly rate for this artist and booking.");
   });
 
   it("puts reusable templates before the weekly grid and explains their names", async () => {
