@@ -15,3 +15,8 @@ export async function loadProductionStructureExport(residencySlug: string): Prom
   if (!snapshot) throw new Error("Production structure export returned no result.");
   return parseProductionStructureSnapshot(snapshot, [residencySlug]);
 }
+
+export async function productionDatabasePrincipal(): Promise<string> {
+  const result = await getDb().execute<{ current_user: string }>(sql`select current_user`);
+  return result.rows[0]?.current_user ?? "unknown";
+}

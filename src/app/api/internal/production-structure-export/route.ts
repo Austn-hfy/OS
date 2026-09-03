@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { verifyVercelOidcToken } from "@vercel/oidc";
 import { NextRequest, NextResponse } from "next/server";
-import { loadProductionStructureExport } from "@/data/production-structure-export";
+import {
+  loadProductionStructureExport,
+  productionDatabasePrincipal,
+} from "@/data/production-structure-export";
 import {
   assertVerifiedStagingOidcClaims,
   HFY_PRODUCTION_EXPORT_AUDIENCE,
@@ -182,7 +185,11 @@ export async function POST(request: NextRequest) {
     } catch {
       // The response still fails closed when the terminal audit write is unavailable.
     }
-    console.error("Production structure export failed.", safeExportError(error));
+    const databasePrincipal = await productionDatabasePrincipal().catch(() => "unavailable");
+    console.error("Production structure export failed.", {
+      ...safeExportError(error),
+      databasePrincipal,
+    });
     alertCrossEnvironmentAccess({ ...identity, outcome: "failed", reasonCode: "export_failed" });
     return json({ error: "The production structure export could not be completed." }, 500);
   }
