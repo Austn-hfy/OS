@@ -66,20 +66,17 @@ Provide these secrets through the operator environment; do not put them in comma
 
 The staging web deployment uses these server-only variables:
 
-- `STAGING_SYNC_PRODUCTION_EXPORT_MODE=oidc`: enables the short-lived Vercel identity flow after the production endpoint has been promoted.
 - `DATABASE_URL`: the existing staging database connection.
 - `TALENT_PAYMENT_ENCRYPTION_KEY`: the staging encryption key for synthetic payment profiles.
 - `STAGING_SYNC_CONFIRMATION_SECRET`: a staging-only secret used to sign short-lived reviewed previews.
 
-None of these variables is exposed to browser JavaScript. `PRODUCTION_SYNC_DATABASE_URL` is retained only during the reviewed cutover as a rollback path; delete it from the staging environment after the live OIDC path succeeds. The preview-confirmation secret must never be configured on the production deployment.
+None of these variables is exposed to browser JavaScript. The staging web deployment has no production database URL, service-role key, or legacy authentication fallback. The preview-confirmation secret must never be configured on the production deployment.
 
-### OIDC cutover sequence
+### OIDC cutover verification
 
-1. Apply the access-log migration to staging and deploy this change to the `staging` branch. Leave the current read-only fallback active for review.
-2. Apply the same migration to production and promote the production export endpoint through the normal staging-to-main review.
-3. Set `STAGING_SYNC_PRODUCTION_EXPORT_MODE=oidc` on the stable staging branch and redeploy staging.
-4. Run Preview Sync, confirm both access-log records and Sentry security events, then run an Apply only if a structural refresh is intended.
-5. Delete `PRODUCTION_SYNC_DATABASE_URL` from the staging branch environment and run Preview Sync once more. Do not remove the restricted database role until the operator command's recovery requirements have been reviewed separately.
+The production endpoint and staging caller were verified together on September 3, 2026. A live Preview Sync succeeded through Vercel OIDC, produced matching `production_export` and `staging_caller` audit records under one request ID, and triggered the production security alert. The former `PRODUCTION_SYNC_DATABASE_URL` staging variable and application fallback were then removed. Re-run Preview Sync after any future identity or deployment-boundary change; run an Apply only when a structural refresh is intended.
+
+The restricted database reader remains available only for the separate operator recovery command below. It is not configured in Vercel and is not reachable from the staging web application. Review and explicitly authorize any future use or retirement of that recovery role.
 
 Preview an Ace refresh without writing anything:
 

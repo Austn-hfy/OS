@@ -5,15 +5,12 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   applyResidencyPlan,
   loadExistingStagingState,
-  loadRestrictedProductionSnapshot,
   verifyRequiredSchema,
 } from "../../../../../scripts/sync-staging-structure";
 import {
-  assertSafeSyncEnvironment,
   assertSafeStagingDestination,
   buildStagingResidencyPlan,
   parseProductionStructureSnapshot,
-  pooledProductionReaderUrl,
   type ProductionStructureSnapshot,
   type StagingResidencyPlan,
 } from "@/domain/staging-structure-sync";
@@ -72,14 +69,6 @@ function requiredSecret(name: string): string {
   return value;
 }
 
-function assertRestrictedProductionReader(databaseUrl: string): void {
-  const username = decodeURIComponent(new URL(databaseUrl).username);
-  if (username !== "hfy_staging_structure_reader"
-    && !username.startsWith("hfy_staging_structure_reader.")) {
-    throw new Error("The dashboard sync requires the dedicated read-only production structure connection.");
-  }
-}
-
 function requestOriginHostname(value: string | null): string | null {
   try {
     return value ? new URL(value).hostname.toLowerCase() : null;
@@ -116,10 +105,6 @@ function json(body: Record<string, unknown>, status = 200) {
     status,
     headers: { "Cache-Control": "no-store" },
   });
-}
-
-function oidcProductionExportEnabled(): boolean {
-  return process.env.STAGING_SYNC_PRODUCTION_EXPORT_MODE === "oidc";
 }
 
 async function loadProductionSnapshotOverOidc(exportRequest: ProductionExportRequest): Promise<ProductionStructureSnapshot> {
@@ -197,15 +182,6 @@ export async function POST(request: NextRequest) {
   const confirmationSecret = requiredSecret("STAGING_SYNC_CONFIRMATION_SECRET");
   assertSafeStagingDestination(stagingDatabaseUrl);
 
-  const oidcExport = oidcProductionExportEnabled();
-  const productionDatabaseUrl = oidcExport ? null : pooledProductionReaderUrl(requiredSecret("PRODUCTION_SYNC_DATABASE_URL"));
-  if (productionDatabaseUrl) {
-    assertRestrictedProductionReader(productionDatabaseUrl);
-    assertSafeSyncEnvironment(productionDatabaseUrl, stagingDatabaseUrl);
-  }
-  const production = productionDatabaseUrl
-    ? postgres(productionDatabaseUrl, { prepare: false, max: 1, connect_timeout: 15, idle_timeout: 10 })
-    : null;
   const staging = postgres(stagingDatabaseUrl, { prepare: false, max: 1, connect_timeout: 15, idle_timeout: 10 });
   let callerAudit: CrossEnvironmentAccessIdentity | null = null;
   try {
@@ -233,9 +209,7 @@ export async function POST(request: NextRequest) {
       sourceGitRef: exportRequest.source.gitRef,
     };
     await beginCrossEnvironmentAccess(callerAudit);
-    const snapshot = oidcExport
-      ? await loadProductionSnapshotOverOidc(exportRequest)
-      : await production!.begin("read only", (tx) => loadRestrictedProductionSnapshot(tx, [residencySlug]));
+    const snapshot = await loadProductionSnapshotOverOidc(exportRequest);
     if (snapshot.residencies.length !== 1) throw new Error("Production did not return exactly one approved Residency.");
     const recordCounts = snapshotRecordCounts(snapshot);
     const plans: StagingResidencyPlan[] = [];
@@ -309,9 +283,6 @@ export async function POST(request: NextRequest) {
     ) ? error.message : "HFY OS could not complete the staging sync. No partial changes were saved.";
     return json({ error: message }, 500);
   } finally {
-    await Promise.all([
-      production?.end({ timeout: 5 }),
-      staging.end({ timeout: 5 }),
-    ]);
+    await staging.end({ timeout: 5 });
   }
 }
