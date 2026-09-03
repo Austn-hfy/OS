@@ -29,6 +29,13 @@ describe("cross-environment route security", () => {
     expect(source).toContain('"Cache-Control": "no-store"');
   });
 
+  it("grants the private sanitizer only to HFY's trusted application role", async () => {
+    const migration = await readFile(new URL("../drizzle/0040_grant_production_export_to_app.sql", import.meta.url), "utf8");
+    expect(migration).toContain("GRANT USAGE ON SCHEMA private TO hfy_app");
+    expect(migration).toContain("GRANT EXECUTE ON FUNCTION private.hfy_staging_structure_snapshot(text) TO hfy_app");
+    expect(migration).not.toMatch(/\b(?:anon|authenticated|PUBLIC)\b/);
+  });
+
   it("records safe metadata and counts, never credentials or exported records", async () => {
     const source = await readFile(new URL("../src/lib/cross-environment-alert.ts", import.meta.url), "utf8");
     expect(source).toContain('security_stream: "cross_environment_access"');

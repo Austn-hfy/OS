@@ -281,6 +281,13 @@
       "when": 1788523200000,
       "tag": "0039_cross_environment_access_log",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788526800000,
+      "tag": "0040_grant_production_export_to_app",
+      "breakpoints": true
     }
   ]
 }
