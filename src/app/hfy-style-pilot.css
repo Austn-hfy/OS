@@ -2157,8 +2157,16 @@
 
 .hfy-style-system .calendar-command-secondary {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
   padding-top: 10px;
   border-top: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .calendar-command-secondary .calendar-toolbar {
+  width: 100%;
+  justify-self: stretch;
+  padding-inline: 0;
 }
 
 .hfy-style-system .calendar-toolbar-context {
