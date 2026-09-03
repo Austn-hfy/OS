@@ -1,7 +1,7 @@
 export function CalendarStatusLegend({ internal = false }: { internal?: boolean }) {
   return (
     <details className="calendar-status-legend" data-internal={internal || undefined}>
-      <summary aria-label="Color key" title="Color key">
+      <summary role="button" aria-label="Color key" title="Color key">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="9" />
           <path d="M12 10.75V16" />
