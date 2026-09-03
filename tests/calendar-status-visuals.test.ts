@@ -20,7 +20,7 @@ describe("calendar scheduling status visuals", () => {
     expect(legend).toContain("Checkmark: scheduled");
     expect(legend).toContain("Outlined pink dot: HFY request pending");
     expect(legend).toContain("Filled pink dot: HFY booked");
-    expect(legend).toContain('<summary aria-label="Color key" title="Color key">');
+    expect(legend).toContain('<summary role="button" aria-label="Color key" title="Color key">');
     expect(legend).not.toContain("<summary>Color key</summary>");
   });
 
