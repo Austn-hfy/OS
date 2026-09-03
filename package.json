@@ -20,6 +20,7 @@
     "provision": "tsx scripts/provision-user.ts",
     "provision:residency": "tsx scripts/provision-residency-account.ts",
     "seed:ace-parity": "tsx scripts/seed-ace-parity.ts",
+    "staging:sync-from-production": "tsx scripts/sync-staging-structure.ts",
     "storage:bootstrap": "tsx scripts/bootstrap-storage.ts",
     "storage:export": "tsx scripts/export-storage.ts",
     "storage:verify": "tsx scripts/verify-storage-export.ts",

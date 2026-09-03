@@ -7,7 +7,7 @@ HFY OS has two deliberately separate deployed environments. Staging is the revie
 | Environment | Git branch | Application | Supabase project | Data policy |
 | --- | --- | --- | --- | --- |
 | Production | `main` | `https://hfy.app` | `tkfsgifnywbwjdkxjhae` | Real operational data |
-| Staging | `staging` | `https://hfy-os-git-staging-austyn-7123.vercel.app` | `ucrtbevvdfkceudknyxe` | Empty or synthetic test data only |
+| Staging | `staging` | `https://staging.hfy.app` | `ucrtbevvdfkceudknyxe` | Synthetic test data, including approved sanitized production-structure copies |
 
 The Vercel project is shared, but every database, Auth, Storage, URL, encryption, and delivery-sensitive variable used by `staging` is a branch-scoped override. Staging does not use production's Supabase project. Resend delivery and production Healthchecks are not connected to staging.
 
@@ -38,11 +38,46 @@ Supabase staging and production are independent projects. A migration recorded i
 
 ## Access and data
 
-The staging owner is `austyn@hearforyou.group`. Use the staging login page and its password-recovery flow if a new password is needed. Staging must not contain Ace, Michael, or any other production customer records. Use clearly labeled synthetic fixtures and remove them when their test is complete.
+The staging owner is `austyn@hearforyou.group`. Use the staging login page and its password-recovery flow if a new password is needed.
+
+Staging must never contain raw production customer data. This prohibition includes real customer authentication users, memberships, setup tokens, contact details, delivery endpoints, artist contact details, payment or ACH values, tax documents, private notes, Stripe identifiers, Shifts, Assignments, payouts, invoices, and public-calendar tokens.
+
+An operator may copy a selected production Residency's **structure** into staging with the guarded sync command documented below. This is a deliberate refinement of the original no-production-data rule: schedules and approved public-facing roster structure may be represented for realistic testing only after every sensitive field is excluded at the source query or replaced with a clearly synthetic equivalent. Existing synthetic Residencies such as Test 1 and Test 2 remain outside the selected scope and must not be modified.
+
+## On-demand production-structure sync
+
+The sync runs only from an operator machine. It is not available in the web application, has no scheduled trigger, and adds no work to normal application requests. Only the separate staging database may receive writes. Production can be read either through a read-only database transaction or through the source-only Supabase API adapter, whose queries allowlist non-sensitive columns and expose no production mutation method.
+
+Provide these secrets through the operator environment; do not put them in command arguments, logs, documentation, or committed files:
+
+- `PRODUCTION_SYNC_DATABASE_URL`: approved production Postgres connection (preferred), or `PRODUCTION_SYNC_SUPABASE_URL` plus either `PRODUCTION_SYNC_SERVICE_ROLE_KEY` or `PRODUCTION_SYNC_SERVICE_ROLE_KEY_FILE` for the source-only API adapter.
+- `STAGING_SYNC_DATABASE_URL`: approved staging Postgres connection.
+- `STAGING_SYNC_PAYMENT_ENCRYPTION_KEY`: staging's payment-field encryption key, required only when applying synthetic payment profiles.
+
+Preview an Ace refresh without writing anything:
+
+```bash
+pnpm staging:sync-from-production -- --residency ace-hotel
+```
+
+After reviewing that report, apply the same scoped refresh:
+
+```bash
+pnpm staging:sync-from-production -- --residency ace-hotel --apply
+```
+
+The command is repeatable and deterministic. It refreshes the selected Residency's configuration, Dayparts, weekly Day Rules, single-date exceptions, assigned sanitized artists, and roster-assignment visibility. It deactivates staging-only Dayparts and roster assignments only inside the selected Residency; it does not hard-delete them or touch any other Residency.
+
+An all-Residency run is deliberately difficult to invoke and is never the default:
+
+```bash
+pnpm staging:sync-from-production -- --all --confirm-all-residencies
+```
+
+Add `--apply` only after reviewing the all-Residency dry-run. This is still a scoped refresh of each selected Residency, not a staging database wipe.
 
 ## Rollback
 
 - For a staging-only problem, revert the staging commit or redeploy the last known-good staging deployment. Production is unaffected.
 - For a database problem, prefer a forward corrective migration. Do not reuse production backups in staging.
 - Production rollback remains a separate, deliberate action and is never triggered by changes to `staging`.
-
