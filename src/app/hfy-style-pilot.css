@@ -2230,16 +2230,13 @@
   background: color-mix(in srgb, var(--hfy-muted) 8%, white);
 }
 
-.hfy-style-system .calendar-batch-menu,
-.hfy-style-system .calendar-batch-screen,
+.hfy-style-system .calendar-batch-menu { border-color: var(--hfy-line); background: #f9fbfc; }
+.hfy-style-system .calendar-batch-screen { border-color: var(--hfy-line); background: #eef2f4; }
 .hfy-style-system .calendar-batch-header,
-.hfy-style-system .calendar-batch-row {
-  border-color: var(--hfy-line);
-  background-color: var(--hfy-surface-raised);
-}
+.hfy-style-system .calendar-batch-row { border-color: var(--hfy-line); background: #fbfcfd; }
 
 .hfy-style-system .calendar-batch-takeover { background: var(--hfy-canvas); }
-.hfy-style-system .calendar-batch-form { border-color: var(--hfy-line); background: var(--hfy-surface-nested); }
+.hfy-style-system .calendar-batch-form { border-color: var(--hfy-line); background: #edf2f5; }
 
 .hfy-style-system .calendar-command-actions {
   min-width: 0;
