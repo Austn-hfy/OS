@@ -38,6 +38,7 @@ describe("room selection safeguards", () => {
     const styles = await readFile(new URL("../src/app/globals.css", import.meta.url), "utf8");
     expect(calendar).toContain("quick-modal-room-picker");
     expect(styles).toContain(".quick-modal.quick-modal-room-picker");
+    expect(styles).toContain(".quick-modal.quick-modal-room-picker { height: auto; }");
     expect(styles).toContain(".room-combobox.open .room-combobox-options");
     expect(styles).toContain("position: static");
     expect(styles).toContain("@media (max-height: 700px)");
