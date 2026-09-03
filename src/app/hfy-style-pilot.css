@@ -2187,8 +2187,34 @@
 }
 
 .hfy-style-system .calendar-command-secondary {
+  display: grid;
   padding-top: 10px;
   border-top: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .calendar-toolbar-context {
+  justify-self: start;
+}
+
+.hfy-style-system .calendar-toolbar-select,
+.hfy-style-system .calendar-toolbar :is(.calendar-view-toggle, .calendar-share-button, .calendar-status-legend > summary),
+.hfy-style-system .calendar-toolbar-button {
+  border-color: var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  background: var(--hfy-surface-raised);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+  font-size: 10px;
+}
+
+.hfy-style-system .calendar-toolbar-select select {
+  border: 0;
+  background-color: transparent;
+  box-shadow: none;
+  font-size: inherit;
+}
+
+.hfy-style-system .calendar-toolbar .calendar-view-toggle a {
+  font-size: inherit;
 }
 
 .hfy-style-system .calendar-command-primary .calendar-month-cluster {
@@ -2424,14 +2450,12 @@
 }
 
 @media (max-width: 1050px) {
-  .hfy-style-system .calendar-command-secondary { align-items: stretch; flex-direction: column; }
-  .hfy-style-system .calendar-command-actions { justify-content: flex-start; }
+  .hfy-style-system .calendar-command-secondary { align-items: stretch; }
 }
 
 @media (max-width: 850px) {
   .hfy-style-system .calendar-command-primary { align-items: stretch; flex-direction: column; }
   .hfy-style-system .calendar-command-primary .calendar-month-cluster { justify-content: space-between; }
-  .hfy-style-system .calendar-command-secondary .calendar-view-filters { width: 100%; }
   .hfy-style-system .client-add-artist-heading,
   .hfy-style-system .client-payment-section-heading { align-items: stretch; flex-direction: column; }
   .hfy-style-system .client-add-artist-heading > p { max-width: none; text-align: left; }
@@ -2440,11 +2464,46 @@
 }
 
 @media (max-width: 700px) {
+  .hfy-style-system .calendar-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 16px;
+  }
+  .hfy-style-system .calendar-toolbar-filters {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .hfy-style-system .calendar-toolbar-filters .calendar-toolbar-select {
+    flex: 1 1 0;
+  }
+  .hfy-style-system .calendar-toolbar-filters .calendar-toolbar-select select {
+    width: 100%;
+  }
+  .hfy-style-system .calendar-toolbar-view { justify-self: start; }
+  .hfy-style-system .calendar-toolbar-actions { justify-self: end; }
   .hfy-style-system .daypart-workspace-heading { min-height: 0; padding: 16px 18px; }
   .hfy-style-system .quick-modal-backdrop { padding: 12px; }
   .hfy-style-system .quick-modal { max-height: calc(100dvh - 24px); }
   .hfy-style-system .quick-selected-daypart-editable { grid-template-columns: 1fr; }
   .hfy-style-system .quick-selected-daypart-editable .date-exception-actions { grid-column: auto; }
+}
+
+@media (max-width: 520px) {
+  .hfy-style-system .calendar-toolbar-context {
+    width: 100%;
+  }
+  .hfy-style-system .calendar-toolbar-context-select {
+    flex: 1 1 0;
+  }
+  .hfy-style-system .calendar-toolbar-context-select select {
+    width: 100%;
+    min-width: 0;
+  }
+  .hfy-style-system .calendar-toolbar-filters {
+    flex-wrap: wrap;
+  }
+  .hfy-style-system .calendar-toolbar-filters .calendar-toolbar-select {
+    flex-basis: 100%;
+  }
 }
 
 @media (max-width: 650px) {

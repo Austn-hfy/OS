@@ -18,6 +18,10 @@ describe("calendar scheduling status visuals", () => {
     expect(legend).toContain("Color: Daypart identity");
     expect(legend).toContain("No check: needs or partially scheduled");
     expect(legend).toContain("Checkmark: scheduled");
+    expect(legend).toContain("Outlined pink dot: HFY request pending");
+    expect(legend).toContain("Filled pink dot: HFY booked");
+    expect(legend).toContain('<summary aria-label="Color key" title="Color key">');
+    expect(legend).not.toContain("<summary>Color key</summary>");
   });
 
   it("retains distinct pending and fulfilled HFY colors", async () => {

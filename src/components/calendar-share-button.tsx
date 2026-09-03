@@ -24,7 +24,14 @@ export function CalendarShareButton({ residencyId, residencyName, linkSettings, 
   }, [open]);
 
   return <>
-    <button className="button secondary calendar-share-button" type="button" onClick={() => setOpen(true)}>Share calendar</button>
+    <button className="button secondary calendar-share-button" type="button" onClick={() => setOpen(true)}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
+        <path d="M12 15V4" />
+        <path d="m7.5 8.5 4.5-4.5 4.5 4.5" />
+        <path d="M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" />
+      </svg>
+      <span>Share calendar</span>
+    </button>
     {open ? <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setOpen(false); }}>
       <section className="quick-modal calendar-share-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-share-title">
         <header className="quick-modal-header">
