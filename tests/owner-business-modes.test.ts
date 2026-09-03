@@ -8,11 +8,25 @@ describe("Owner Developer and HFY business modes", () => {
     expect(shell).toContain('href="/app?mode=hfy"><span>HFY</span><small>Programming</small>');
     expect(shell).toContain('mode === "developer" ? [');
     expect(shell).toContain('{ label: "Residencies", href: "/app?mode=developer"');
+    expect(shell).not.toContain('{ label: "Committed Plans"');
     expect(shell).toContain('{ label: "Admin Settings", href: "/app/setup?mode=developer"');
     expect(shell).toContain('{ label: "Work Queue", href: "/app?mode=hfy"');
     expect(shell).toContain('{ label: "Operations", href: "/app?mode=hfy&view=operations"');
     expect(shell).toContain('{ label: "Pipeline", href: "/app/leads?mode=hfy"');
     expect(shell).toContain("<WorkspaceNavLink");
+  });
+
+  it("keeps the Developer landing page focused only on the Residency directory", async () => {
+    const [dashboard, shell] = await Promise.all([
+      readFile(new URL("../src/app/app/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/internal-shell.tsx", import.meta.url), "utf8"),
+    ]);
+    expect(dashboard).toContain("All Residencies");
+    expect(dashboard).toContain("developer-residency-grid");
+    expect(dashboard).not.toContain("Platform Control");
+    expect(dashboard).not.toContain("owner-mode-summary");
+    expect(dashboard).not.toContain("developer-platform-plans");
+    expect(shell).not.toContain("view-as-control");
   });
 
   it("loads every Residency for Developer without widening normal HFY operational lists", async () => {

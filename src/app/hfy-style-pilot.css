@@ -1941,29 +1941,10 @@
 .hfy-style-system .owner-mode-header {
   border-color: color-mix(in srgb, var(--owner-accent) 16%, rgba(255, 255, 255, 0.72)) !important;
 }
-.hfy-style-system .developer-mode-header {
-  background: linear-gradient(120deg, rgba(244, 250, 253, 0.93), rgba(222, 237, 246, 0.82)) !important;
-}
 .hfy-style-system .hfy-mode-header {
   background: linear-gradient(120deg, rgba(251, 247, 244, 0.94), rgba(242, 224, 217, 0.8)) !important;
 }
 .hfy-style-system .owner-mode-header > .button { flex: 0 0 auto; }
-
-.hfy-style-system .owner-mode-summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: var(--hfy-space-6);
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: var(--hfy-radius-card);
-  background: rgba(248, 251, 252, 0.72);
-  box-shadow: var(--hfy-shadow-section), inset 0 1px var(--hfy-inset-highlight);
-  backdrop-filter: blur(16px) saturate(112%);
-}
-.hfy-style-system .owner-mode-summary article { min-height: 92px; display: grid; align-content: center; gap: 5px; padding: 18px 20px; }
-.hfy-style-system .owner-mode-summary article + article { border-left: 1px solid var(--hfy-line); }
-.hfy-style-system .owner-mode-summary strong { color: var(--owner-accent); font-size: 28px; font-weight: 620; letter-spacing: -0.045em; }
-.hfy-style-system .owner-mode-summary span { color: var(--hfy-muted); font-size: 10px; font-weight: 680; }
 
 .hfy-style-system :is(.developer-residencies-section, .hfy-work-queue-section) {
   padding: var(--hfy-space-6);
@@ -2035,9 +2016,6 @@
 
 @media (max-width: 850px) {
   .hfy-style-system .owner-mode-switch { width: min(360px, 100%); margin-bottom: 8px; }
-  .hfy-style-system .owner-mode-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .hfy-style-system .owner-mode-summary article:nth-child(3) { border-left: 0; border-top: 1px solid var(--hfy-line); }
-  .hfy-style-system .owner-mode-summary article:nth-child(4) { border-top: 1px solid var(--hfy-line); }
   .hfy-style-system .developer-residency-grid { grid-template-columns: 1fr; }
   .hfy-style-system .hfy-work-queue-list > article { grid-template-columns: 1fr; gap: 10px; padding-left: 24px; }
   .hfy-style-system .queue-daypart-rate { display: grid; }
@@ -2046,8 +2024,6 @@
 }
 
 @media (max-width: 520px) {
-  .hfy-style-system .owner-mode-summary { grid-template-columns: 1fr; }
-  .hfy-style-system .owner-mode-summary article + article { border-left: 0; border-top: 1px solid var(--hfy-line); }
   .hfy-style-system .developer-residency-actions { grid-template-columns: 1fr; }
 }
 
@@ -2745,17 +2721,6 @@
   backdrop-filter: none;
 }
 
-/* Dashboards retain record/metric cards, but share a single page frame. */
-.hfy-style-system .workspace-surface-dashboard > .owner-mode-summary {
-  margin: 0;
-  border: 0;
-  border-bottom: 1px solid var(--hfy-line);
-  border-radius: 0;
-  background: rgba(229, 235, 239, 0.3);
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
 .hfy-style-system .workspace-surface-dashboard > :is(.developer-residencies-section, .hfy-work-queue-section, .active-residencies-section) {
   margin: 0;
   padding: 20px;
@@ -3102,8 +3067,7 @@
 }
 
 .hfy-style-system .finance-accordions,
-.hfy-style-system .platform-invoice-history,
-.hfy-style-system .developer-platform-plans {
+.hfy-style-system .platform-invoice-history {
   display: grid;
   gap: 16px;
 }
@@ -3154,10 +3118,6 @@
 .hfy-style-system .platform-plan-breakdown dd { margin: 0; font-weight: 750; }
 .hfy-style-system .full-programming-notice { padding: 14px 16px; border: 1px solid color-mix(in srgb, #2783dc 35%, var(--hfy-line)); border-radius: 12px; background: color-mix(in srgb, #2783dc 7%, white); }
 .hfy-style-system .full-programming-notice p { margin: 5px 0 0; color: var(--hfy-muted); }
-.hfy-style-system .developer-platform-plans { scroll-margin-top: 24px; }
-.hfy-style-system .developer-platform-plans td { vertical-align: top; }
-.hfy-style-system .developer-platform-plans td > small { display: block; margin-top: 3px; color: var(--hfy-muted); }
-
 @media (max-width: 850px) {
   .hfy-style-system .platform-billing-summary,
   .hfy-style-system .platform-plan-breakdown { grid-template-columns: 1fr; }
