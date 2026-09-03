@@ -2,7 +2,7 @@ import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or, sql } from "drizzle
 import { getDb } from "@/db/client";
 import { assignments, auditLog, clientAssignmentTerms, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
 import { calculateBillableAmountCents, calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
-import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType, type RoomHue } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 import type { AuditActor } from "@/lib/auth";
@@ -58,6 +58,7 @@ export type UpdateOneTimeRecordInput = {
   id: string;
   name: string;
   room: string;
+  roomHue?: RoomHue;
   calendarColor: string;
   startMinute: number;
   endMinute: number;
@@ -537,7 +538,7 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       && (!Number.isInteger(input.clientTalentDefaultRateCents) || (input.clientTalentDefaultRateCents ?? 0) <= 0)) {
       throw new Error("Enter a positive session artist rate.");
     }
-    const assignedRoom = await findOrCreateResidencyRoom(tx, shift.residencyId, clean.room);
+    const assignedRoom = await findOrCreateResidencyRoom(tx, shift.residencyId, clean.room, null, input.roomHue);
     const calendarColor = clean.calendarColor;
 
     const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.startMinute), shift.timezone);
@@ -627,7 +628,7 @@ export async function updateOneTimeOccurrence(actor: AuditActor, input: UpdateOn
       .limit(1)
       .for("update");
     if (!occurrence || occurrence.daypartId !== null) throw new Error("Only one-time activities can be edited here.");
-    const assignedRoom = await findOrCreateResidencyRoom(tx, occurrence.residencyId, clean.room);
+    const assignedRoom = await findOrCreateResidencyRoom(tx, occurrence.residencyId, clean.room, null, input.roomHue);
     const calendarColor = clean.calendarColor;
     const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.startMinute), occurrence.timezone);
     const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.endMinute), occurrence.timezone);

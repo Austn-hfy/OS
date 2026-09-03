@@ -11,12 +11,13 @@ import { CalendarShareButton } from "@/components/calendar-share-button";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { DaypartColorPicker } from "@/components/daypart-color-picker";
 import { DayPartsPanel } from "@/components/day-parts-panel";
+import { RoomHuePicker } from "@/components/room-hue-picker";
 import { Status } from "@/components/format";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { WeekCalendar } from "@/components/week-calendar";
-import { HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, roomColor, roomDaypartColor, weekdayForDate, weekdayNames, type DaypartDateException, type DaypartScheduleMode, type RoomHue } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayForDate, weekdayNames, type DaypartDateException, type DaypartScheduleMode, type RoomHue } from "@/domain/dayparts";
 import { monthKeyForDate, monthLabel, normalizeWeekStart, shiftDateKey, shiftMonthKey, weekLabel, type CalendarViewMode } from "@/lib/calendar";
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
@@ -98,7 +99,7 @@ type SlotDraft = { id: string; talentId: string; start: string; end: string; con
 type CreateMode = "standing_weekly" | "calendar_only" | "one_time";
 type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; roomId: string | null; oneTime: boolean; createMode: CreateMode | null; repeatWeekdays: number[]; recurringToday: boolean; exceptionKind: "skip" | "override" | null; name: string; room: string; color: string; type: DaypartType | null; billingMode: DaypartBillingMode | null; defaultTalentRateCents: number | null; defaultDjCount: number | null; existing: boolean; start: string; end: string; clientTalentDefaultRate: string; clientRateOverride: string; notes: string; programDetails: string; manualHostName: string; requestHfy: boolean; slots: SlotDraft[] };
 type ReplacementDraft = { assignmentId: string; talentId: string; start: string; end: string };
-type OneTimeEditDraft = { name: string; room: string; color: string; start: string; end: string; clientTalentDefaultRate: string; notes: string; programDetails: string; manualHostName: string };
+type OneTimeEditDraft = { name: string; room: string; roomHue: RoomHue; color: string; start: string; end: string; clientTalentDefaultRate: string; notes: string; programDetails: string; manualHostName: string };
 type ModalState = { type: "add"; date: string } | { type: "edit"; eventId: string } | null;
 type StatusFilter = "needs" | "all" | "filled";
 type AddMode = "room" | "activity" | "new-type" | "new-repeat" | "daypart" | "one-time";
@@ -114,10 +115,12 @@ function emptySlot(talentId: string, start: string, end: string): SlotDraft {
   return { id: crypto.randomUUID(), talentId, start, end, confirmed: false, compensationType: "hourly", rateOverride: "", fixedFee: "" };
 }
 
-function oneTimeDraftFromEvent(event: ResidencyEvent): OneTimeEditDraft {
+function oneTimeDraftFromEvent(event: ResidencyEvent, rooms: ResidencyRoom[]): OneTimeEditDraft {
+  const room = rooms.find((item) => item.name.toLocaleLowerCase() === (event.room ?? "").trim().toLocaleLowerCase());
   return {
     name: event.title,
     room: event.room ?? "",
+    roomHue: room?.hue ?? roomHueForIndex(Math.max(-1, ...rooms.map((item) => item.sortOrder)) + 1),
     color: event.editableColor ?? event.color ?? "#7A65D1",
     start: minuteToClock(event.shiftStartMinute),
     end: minuteToClock(event.shiftEndMinute),
@@ -175,6 +178,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
   const [createdRooms, setCreatedRooms] = useState<ResidencyRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [newRoomName, setNewRoomName] = useState("");
+  const [newRoomHue, setNewRoomHue] = useState<RoomHue>(() => roomHueForIndex(Math.max(-1, ...rooms.map((room) => room.sortOrder)) + 1));
   const [newRoomPromptOpen, setNewRoomPromptOpen] = useState(false);
   const [roomCreateState, setRoomCreateState] = useState<CreateRoomActionState>(initialActionState);
   const [roomCreating, setRoomCreating] = useState(false);
@@ -183,7 +187,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
   const [artistPickerKey, setArtistPickerKey] = useState(0);
   const [replacementDraft, setReplacementDraft] = useState<ReplacementDraft | null>(null);
   const [newAssignmentDraft, setNewAssignmentDraft] = useState<SlotDraft | null>(null);
-  const [oneTimeEditDraft, setOneTimeEditDraft] = useState<OneTimeEditDraft | null>(() => initialEditingEvent && !initialEditingEvent.daypartId ? oneTimeDraftFromEvent(initialEditingEvent) : null);
+  const [oneTimeEditDraft, setOneTimeEditDraft] = useState<OneTimeEditDraft | null>(() => initialEditingEvent && !initialEditingEvent.daypartId ? oneTimeDraftFromEvent(initialEditingEvent, rooms) : null);
   const [editState, setEditState] = useState<ResidencyActionState>(initialActionState);
   const [editPending, setEditPending] = useState(false);
   const [dateActionState, setDateActionState] = useState<ResidencyActionState>(initialActionState);
@@ -199,6 +203,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
 
   const modalOpen = modal !== null;
   const availableRooms = [...new Map([...rooms, ...createdRooms].map((room) => [room.id, room])).values()];
+  const defaultNewRoomHue = roomHueForIndex(Math.max(-1, ...availableRooms.map((room) => room.sortOrder)) + 1);
   useEffect(() => {
     if (!modalOpen) return;
     const priorOverflow = document.body.style.overflow;
@@ -362,6 +367,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     setSelectedRoomId(preferred?.roomId ?? "");
     setAddMode(preferred ? "daypart" : "room");
     setNewRoomName("");
+    setNewRoomHue(defaultNewRoomHue);
     setNewRoomPromptOpen(false);
     setRoomCreateState(initialActionState);
     setClientArtistFlow(false);
@@ -382,7 +388,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     setNewAssignmentDraft(null);
     setEditState(initialActionState);
     setDateActionState(initialActionState);
-    setOneTimeEditDraft(residencyEvent && !residencyEvent.daypartId ? oneTimeDraftFromEvent(residencyEvent) : null);
+    setOneTimeEditDraft(residencyEvent && !residencyEvent.daypartId ? oneTimeDraftFromEvent(residencyEvent, availableRooms) : null);
     setModal({ type: "edit", eventId: event.id });
   }
 
@@ -392,7 +398,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
       setReplacementDraft(null);
       setNewAssignmentDraft(null);
       setEditState(initialActionState);
-      setOneTimeEditDraft(!event.daypartId ? oneTimeDraftFromEvent(event) : null);
+      setOneTimeEditDraft(!event.daypartId ? oneTimeDraftFromEvent(event, availableRooms) : null);
       setModal({ type: "edit", eventId: event.id });
     }
   }
@@ -426,6 +432,13 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     setAddMode("activity");
     setNewRoomPromptOpen(false);
     setRoomCreateState(initialActionState);
+  }
+
+  function openNewRoomPrompt() {
+    setNewRoomName("");
+    setNewRoomHue(defaultNewRoomHue);
+    setRoomCreateState(initialActionState);
+    setNewRoomPromptOpen(true);
   }
 
   function chooseCreateNew() {
@@ -471,6 +484,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     const formData = new FormData();
     formData.set("residencyId", residency.id);
     formData.set("name", newRoomName);
+    formData.set("hue", newRoomHue);
     setRoomCreating(true);
     const result = await createResidencyRoomAction(formData);
     setRoomCreating(false);
@@ -772,6 +786,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     formData.set("id", event.id);
     formData.set("name", draft.name);
     formData.set("room", draft.room);
+    formData.set("roomHue", draft.roomHue);
     formData.set("calendarColor", draft.color);
     formData.set("startMinute", String(startMinute));
     formData.set("endMinute", String(endMinute));
@@ -941,8 +956,10 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     && (editingEvent.recordType === "nonfinancial_occurrence" || editingEventCanManageAssignments));
   const editingOneTimeClientRateMissing = Boolean(editingEvent?.daypartType === "dj_artist" && editingEvent.economicsMode === "client_owned"
     && (!dollarsToCents(oneTimeEditDraft?.clientTalentDefaultRate ?? "") || (dollarsToCents(oneTimeEditDraft?.clientTalentDefaultRate ?? "") ?? 0) <= 0));
+  const editingOneTimeRoom = oneTimeEditDraft ? availableRooms.find((room) => room.name.toLocaleLowerCase() === oneTimeEditDraft.room.trim().toLocaleLowerCase()) : undefined;
   const oneTimeRecordEditor = canEditOneTimeRecord && editingEvent && oneTimeEditDraft ? <section className="one-time-record-editor">
-    <SchedulingActivityDetailsRow name={oneTimeEditDraft.name} room={oneTimeEditDraft.room} color={oneTimeEditDraft.color} start={oneTimeEditDraft.start} end={oneTimeEditDraft.end} ariaPrefix="scheduled activity" onNameChange={(name) => setOneTimeEditDraft({ ...oneTimeEditDraft, name })} onRoomChange={(room) => setOneTimeEditDraft({ ...oneTimeEditDraft, room })} onColorChange={(color) => setOneTimeEditDraft({ ...oneTimeEditDraft, color })} onStartChange={(start) => setOneTimeEditDraft({ ...oneTimeEditDraft, start })} onEndChange={(end) => setOneTimeEditDraft({ ...oneTimeEditDraft, end })} />
+    <SchedulingActivityDetailsRow name={oneTimeEditDraft.name} room={oneTimeEditDraft.room} color={oneTimeEditDraft.color} start={oneTimeEditDraft.start} end={oneTimeEditDraft.end} ariaPrefix="scheduled activity" onNameChange={(name) => setOneTimeEditDraft({ ...oneTimeEditDraft, name })} onRoomChange={(roomName) => { const matched = availableRooms.find((room) => room.name.toLocaleLowerCase() === roomName.trim().toLocaleLowerCase()); setOneTimeEditDraft({ ...oneTimeEditDraft, room: roomName, roomHue: matched?.hue ?? (editingOneTimeRoom ? defaultNewRoomHue : oneTimeEditDraft.roomHue) }); }} onColorChange={(color) => setOneTimeEditDraft({ ...oneTimeEditDraft, color })} onStartChange={(start) => setOneTimeEditDraft({ ...oneTimeEditDraft, start })} onEndChange={(end) => setOneTimeEditDraft({ ...oneTimeEditDraft, end })} />
+    {oneTimeEditDraft.room.trim() && !editingOneTimeRoom ? <div className="field one-time-new-room-color"><label>New room color</label><RoomHuePicker value={oneTimeEditDraft.roomHue} onChange={(roomHue) => setOneTimeEditDraft({ ...oneTimeEditDraft, roomHue })} ariaLabel={`Choose the room color for ${oneTimeEditDraft.room}`} /><small>The next automatic color is preselected. Pick another before saving this new room.</small></div> : null}
     {editingEvent.daypartType === "dj_artist" && editingEvent.economicsMode === "client_owned" ? <div className={`one-time-session-rate ${editingOneTimeClientRateMissing ? "needs-attention" : ""}`}><div><strong>Session artist rate</strong><small>This default applies to every artist in this one-time session. Payment Status overrides still win.</small></div><div className="field"><label>Hourly rate ($/hr) <span>Required</span></label><input type="number" min="0.01" step="0.01" value={oneTimeEditDraft.clientTalentDefaultRate} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, clientTalentDefaultRate: event.target.value })} placeholder="Enter hourly rate" required /></div></div> : null}
     {editingEvent.daypartType === "house_activity" ? <div className="quick-program-fields"><div className="field"><label>Program / activity details <span>optional</span></label><input value={oneTimeEditDraft.programDetails} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, programDetails: event.target.value })} /></div><div className="field"><label>Host / guest name <span>optional</span></label><input value={oneTimeEditDraft.manualHostName} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, manualHostName: event.target.value })} /></div></div> : null}
     <div className="field quick-booking-notes"><label>Notes <span>optional</span></label><textarea value={oneTimeEditDraft.notes} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, notes: event.target.value })} /></div>
@@ -986,7 +1003,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
 
           <div className="quick-modal-body">
             {modal.type === "add" ? (
-              addMode === "room" ? <div className="quick-room-picker-shell"><div className="quick-picker-intro"><strong>Choose a room or space</strong><small>Room colors stay consistent across every Daypart scheduled there.</small></div><div className="quick-funnel-tiles" role="group" aria-label="Choose a room">{availableRooms.map((room) => <button className="quick-funnel-tile room" style={{ "--room-color": roomColor(room.hue), "--room-border": roomColor(room.hue, "dark") } as CSSProperties} type="button" onClick={() => chooseRoom(room.id)} key={room.id}><strong>{room.name}</strong></button>)}</div><div className="quick-funnel-divider" />{newRoomPromptOpen ? <div className="quick-new-room-prompt"><div className="field"><label htmlFor="quick-new-room-name">Name the new space</label><input id="quick-new-room-name" value={newRoomName} onChange={(event) => setNewRoomName(event.target.value)} placeholder="Rooftop" autoFocus maxLength={160} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void createNewRoom(); } }} /></div><div><button className="button secondary" type="button" onClick={() => { setNewRoomPromptOpen(false); setNewRoomName(""); setRoomCreateState(initialActionState); }}>Cancel</button><button className="button" type="button" disabled={roomCreating || !newRoomName.trim()} onClick={() => void createNewRoom()}>{roomCreating ? "Adding…" : "Continue"}</button></div>{roomCreateState.status === "error" ? <p className="error" aria-live="polite">{roomCreateState.message}</p> : null}</div> : <button className="quick-funnel-wide-tile" type="button" onClick={() => setNewRoomPromptOpen(true)}><strong>Other / new space</strong><span aria-hidden="true">+</span></button>}<div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button></div></div>
+              addMode === "room" ? <div className="quick-room-picker-shell"><div className="quick-picker-intro"><strong>Choose a room or space</strong><small>Room colors stay consistent across every Daypart scheduled there.</small></div><div className="quick-funnel-tiles" role="group" aria-label="Choose a room">{availableRooms.map((room) => <button className="quick-funnel-tile room" style={{ "--room-color": roomColor(room.hue), "--room-border": roomColor(room.hue, "dark") } as CSSProperties} type="button" onClick={() => chooseRoom(room.id)} key={room.id}><strong>{room.name}</strong></button>)}</div><div className="quick-funnel-divider" />{newRoomPromptOpen ? <div className="quick-new-room-prompt"><div className="field"><label htmlFor="quick-new-room-name">Name the new space</label><input id="quick-new-room-name" value={newRoomName} onChange={(event) => setNewRoomName(event.target.value)} placeholder="Rooftop" autoFocus maxLength={160} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void createNewRoom(); } }} /></div><div className="field"><label>Room color</label><RoomHuePicker value={newRoomHue} onChange={setNewRoomHue} ariaLabel="Choose the new room color" /><small>The next automatic color is preselected. Pick another if you prefer.</small></div><div className="quick-new-room-actions"><button className="button secondary" type="button" onClick={() => { setNewRoomPromptOpen(false); setNewRoomName(""); setRoomCreateState(initialActionState); }}>Cancel</button><button className="button" type="button" disabled={roomCreating || !newRoomName.trim()} onClick={() => void createNewRoom()}>{roomCreating ? "Adding…" : "Continue"}</button></div>{roomCreateState.status === "error" ? <p className="error" aria-live="polite">{roomCreateState.message}</p> : null}</div> : <button className="quick-funnel-wide-tile" type="button" onClick={openNewRoomPrompt}><strong>Other / new space</strong><span aria-hidden="true">+</span></button>}<div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button></div></div>
               : addMode === "activity" ? <div className="quick-room-picker-shell"><div className="quick-picker-heading"><button className="button secondary" type="button" onClick={returnToRoomPicker}>← Rooms</button><div><span>Selected room</span><strong>{selectedRoom?.name}</strong></div></div>{roomSuggestions.length ? <div className="quick-funnel-tiles" role="group" aria-label={`Choose an activity in ${selectedRoom?.name ?? "this room"}`}>{roomSuggestions.map((suggestion) => <button className="quick-funnel-tile activity" style={{ "--room-color": suggestion.color, "--room-border": roomColor(selectedRoom?.hue ?? "blue", "dark") } as CSSProperties} type="button" onClick={() => chooseSuggestion(suggestion)} key={suggestion.daypartId}><strong>{suggestion.name}</strong>{suggestion.existing ? <Status value="scheduled" /> : null}{suggestion.billingMode === "billed_by_hfy" ? <i className="hfy-booking-indicator" aria-label="HFY booked" /> : null}</button>)}</div> : <p className="quick-funnel-empty">Nothing is saved in {selectedRoom?.name} yet.</p>}<div className="quick-funnel-divider" /><button className="quick-funnel-wide-tile" type="button" onClick={chooseCreateNew}><strong>Create new</strong><span aria-hidden="true">+</span></button><div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button></div></div>
               : addMode === "new-type" ? <div className="quick-room-picker-shell"><div className="quick-picker-heading"><button className="button secondary" type="button" onClick={returnToAddPicker}>← Back</button><div><span>Room</span><strong>{selectedRoom?.name}</strong></div></div><div className="field quick-one-time-type"><label>Type</label><div className="daypart-type-options">{!fullProgramming ? <button type="button" onClick={() => chooseOneTimeType("dj_artist")}><strong>Talent Activity</strong><small>Schedule talent with assignments and the appropriate financial tracking.</small></button> : null}<button type="button" onClick={() => chooseOneTimeType("house_activity")}><strong>House Activity</strong><small>Schedule an activity or host without Assignment, Payout, or Invoice records.</small></button></div>{fullProgramming ? <small>HFY creates and staffs all Talent Activities for Full Programming accounts.</small> : null}</div></div>
               : addMode === "new-repeat" ? <div className="quick-room-picker-shell"><div className="quick-picker-heading"><button className="button secondary" type="button" onClick={() => setAddMode("new-type")}>← Back</button><div><span>{activeSuggestion?.type === "house_activity" ? "House Activity" : "Talent Activity"}</span><strong>{selectedRoom?.name}</strong></div></div><div className="quick-repeat-options" role="group" aria-label="Does this repeat?"><button type="button" onClick={() => chooseCreateMode("standing_weekly")}><strong>Same weekday every week</strong><small>Save a recurring Daypart and schedule this date now.</small></button><button type="button" onClick={() => chooseCreateMode("calendar_only")}><strong>Occasionally, might reuse</strong><small>Save a reusable one-off template and schedule this date now.</small></button><button type="button" onClick={() => chooseCreateMode("one_time")}><strong>No, just this once</strong><small>Schedule only this date without saving a reusable item.</small></button></div></div>

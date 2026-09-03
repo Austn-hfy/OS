@@ -260,6 +260,13 @@
       "when": 1788428782871,
       "tag": "0036_room_color_system",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788469200000,
+      "tag": "0037_ace_room_color_swap",
+      "breakpoints": true
     }
   ]
 }

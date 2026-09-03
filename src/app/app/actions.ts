@@ -9,6 +9,7 @@ import { getDb } from "@/db/client";
 import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments, talentPaymentProfiles, talentScheduleLocks, users } from "@/db/schema";
 import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
+import { ROOM_HUE_ORDER } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { requireActorForResidency, requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
@@ -23,7 +24,7 @@ import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-
 import { requestOrigin } from "@/lib/request-origin";
 import { isFullCalendarMonth } from "@/domain/talent-invoicing";
 import { sendResidencyAccountSetupEmail } from "@/services/account-setup-email";
-import { createResidencyRoom, type ResidencyRoom } from "@/services/rooms";
+import { createResidencyRoom, updateResidencyRoomHue, type ResidencyRoom } from "@/services/rooms";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type CreateRoomActionState = ResidencyActionState & { room?: ResidencyRoom };
@@ -1420,6 +1421,7 @@ const daypartPayloadSchema = z.object({
   id: z.uuid().optional(),
   residencyId: z.uuid(),
   roomId: z.uuid().nullable().optional(),
+  roomHue: z.enum(ROOM_HUE_ORDER).nullable().optional(),
   name: z.string().trim().min(1),
   room: z.string().trim().min(1),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
@@ -1705,6 +1707,7 @@ export async function createResidencyRoomAction(formData: FormData): Promise<Cre
     const parsed = z.object({
       residencyId: z.uuid(),
       name: z.string().trim().min(1).max(160),
+      hue: z.enum(ROOM_HUE_ORDER),
     }).parse(Object.fromEntries(formData));
     const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
     const room = await createResidencyRoom(actor, parsed);
@@ -1715,6 +1718,25 @@ export async function createResidencyRoomAction(formData: FormData): Promise<Cre
     return { status: "success", message: `${room.name} added.`, room };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to add this room." };
+  }
+}
+
+export async function updateResidencyRoomHueAction(formData: FormData): Promise<CreateRoomActionState> {
+  try {
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      roomId: z.uuid(),
+      hue: z.enum(ROOM_HUE_ORDER),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    const room = await updateResidencyRoomHue(actor, parsed);
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/dayparts");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/dayparts");
+    return { status: "success", message: `${room.name} color updated.`, room };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update this room color." };
   }
 }
 
@@ -1884,6 +1906,7 @@ const oneTimeRecordSchema = z.object({
   id: z.uuid(),
   name: z.string().trim().min(1).max(160),
   room: z.string().trim().min(1).max(160),
+  roomHue: z.enum(ROOM_HUE_ORDER).optional(),
   calendarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   startMinute: z.coerce.number().int().min(0).max(1439),
   endMinute: z.coerce.number().int().min(1).max(2879),

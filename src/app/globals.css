@@ -608,6 +608,27 @@ tr:last-child td { border-bottom: 0; }
 .section-heading .subhead { margin-top: 9px; }
 .daypart-manager { min-width: 0; margin-bottom: 28px; }
 .daypart-card-heading, .daypart-editor-heading, .booking-suggestion-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.room-color-settings { display: grid; gap: 12px; margin: 0 0 20px; padding: 16px; border: 1px solid var(--line); border-radius: 20px; background: rgba(255,255,255,.76); box-shadow: var(--shadow); }
+.room-color-settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.room-color-settings-heading h3 { margin: 0; }
+.room-color-settings-heading p:last-child { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.room-color-card-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+.room-color-card { min-width: 0; display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid color-mix(in srgb, var(--room-border) 35%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--room-color) 8%, white); }
+.room-color-card-swatch { width: 12px; height: 38px; border-radius: 999px; background: var(--room-color); }
+.room-color-card > div { min-width: 0; display: grid; gap: 2px; }
+.room-color-card strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.room-color-card small { color: var(--muted); font-size: 9px; }
+.room-color-card .button { min-height: 32px; padding: 7px 9px; font-size: 9px; }
+.room-color-editor { display: grid; gap: 12px; padding: 14px; border: 1px solid rgba(48,68,84,.22); border-radius: 15px; background: rgba(245,248,251,.88); }
+.room-color-editor > div:first-child { display: grid; gap: 3px; }
+.room-color-editor > div:first-child small { color: var(--muted); font-size: 10px; line-height: 1.45; }
+.room-color-editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.room-hue-picker { display: grid; grid-template-columns: repeat(4, minmax(52px, 1fr)); gap: 7px; }
+.room-hue-picker button { appearance: none; min-width: 0; display: grid; justify-items: center; gap: 5px; padding: 8px 4px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: white; }
+.room-hue-picker button:hover { border-color: rgba(27,66,95,.42); background: rgba(245,248,251,.95); }
+.room-hue-picker button.active { border-color: var(--ink); box-shadow: 0 0 0 2px rgba(23,54,80,.15); }
+.room-hue-picker button i { width: 24px; height: 24px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px rgba(20,28,38,.18); }
+.room-hue-picker button span { overflow: hidden; width: 100%; font-size: 8px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .daypart-week-board { width: 100%; min-width: 0; display: grid; grid-template-columns: clamp(68px, 10.5vw, 120px) repeat(7, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: var(--line); box-shadow: var(--shadow); }
 .daypart-manager:has(.daypart-week-board) { overflow: hidden; }
 .daypart-week-corner, .daypart-week-heading { min-height: 54px; display: grid; place-content: center; background: #e6e8eb; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -827,7 +848,7 @@ tr:last-child td { border-bottom: 0; }
 .quick-funnel-wide-tile span { color: var(--forest); font-size: 19px; }
 .quick-funnel-empty { margin: 0; padding: 8px 2px 2px; color: var(--muted); font-size: 11px; }
 .quick-new-room-prompt { display: grid; gap: 10px; padding: 14px; border: 1px dashed rgba(48,68,84,.3); border-radius: 14px; background: rgba(255,255,255,.54); }
-.quick-new-room-prompt > div:nth-child(2) { display: flex; justify-content: flex-end; gap: 8px; }
+.quick-new-room-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .quick-new-room-prompt p { margin: 0; }
 .quick-repeat-options { display: grid; gap: 10px; }
 .quick-repeat-options button { appearance: none; min-height: 78px; display: grid; align-content: center; gap: 5px; padding: 15px 17px; border: 1px solid var(--line); border-radius: 15px; color: var(--ink); background: white; text-align: left; }
@@ -1477,6 +1498,7 @@ tr:last-child td { border-bottom: 0; }
   .daypart-drawer { width: 100%; }
   .daypart-drawer .daypart-editor-heading, .daypart-editor-scroll, .daypart-drawer .daypart-editor-actions { padding-inline: 18px; }
   .daypart-editor .row, .daypart-definition-row, .booking-suggestion .row { grid-template-columns: 1fr; }
+  .room-hue-picker { grid-template-columns: repeat(4, minmax(52px, 1fr)); }
   .week-rule-fields { grid-template-columns: 1fr; }
   .assignment-slot { grid-template-columns: 1fr; }
   .quick-modal-backdrop { padding: 10px; }

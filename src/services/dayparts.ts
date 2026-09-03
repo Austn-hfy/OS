@@ -2,7 +2,7 @@ import { and, asc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-or
 import { getDb } from "@/db/client";
 import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, rooms, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
-import { HFY_BOOKED_COLOR, isRoomHue, roomShadeColors, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, isRoomHue, roomShadeColors, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType, type RoomHue } from "@/domain/dayparts";
 import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import type { AuditActor } from "@/lib/auth";
 import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
@@ -12,6 +12,7 @@ export type SaveDaypartInput = {
   id?: string;
   residencyId: string;
   roomId?: string | null;
+  roomHue?: RoomHue | null;
   name: string;
   room: string;
   color: string;
@@ -292,7 +293,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
       defaultTalentRateCents = input.defaultTalentRateCents ?? null;
     }
 
-    const assignedRoom = await findOrCreateResidencyRoom(tx, residency.id, room, input.roomId);
+    const assignedRoom = await findOrCreateResidencyRoom(tx, residency.id, room, input.roomId, input.roomHue ?? undefined);
     const allowedRoomColors = roomShadeColors(assignedRoom.hue);
     const color = input.id
       ? allowedRoomColors.includes(requestedColor) ? requestedColor : allowedRoomColors[0]

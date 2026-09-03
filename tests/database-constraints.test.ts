@@ -69,6 +69,7 @@ beforeAll(async () => {
   const clientArtistVisibility = await readFile(new URL("../drizzle/0032_fast_surge.sql", import.meta.url), "utf8");
   const oneTimeSessionRates = await readFile(new URL("../drizzle/0034_one_time_session_artist_rate.sql", import.meta.url), "utf8");
   const roomColorSystem = await readFile(new URL("../drizzle/0036_room_color_system.sql", import.meta.url), "utf8");
+  const aceRoomColorSwap = await readFile(new URL("../drizzle/0037_ace_room_color_swap.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -117,7 +118,7 @@ beforeAll(async () => {
     INSERT INTO residencies
       (id, client_account_id, slug, name, invoice_prefix, default_talent_rate_cents, client_hourly_rate_cents)
     VALUES
-      ('${ids.residencyA}', '${ids.clientA}', 'hotel-a', 'Hotel A', 'HTLA', 8000, 10000),
+      ('${ids.residencyA}', '${ids.clientA}', 'ace-hotel', 'Hotel A', 'HTLA', 8000, 10000),
       ('${ids.residencyB}', '${ids.clientB}', 'hotel-b', 'Hotel B', 'HTLB', 9000, 12000);
     INSERT INTO residency_memberships (user_id, residency_id) VALUES ('${ids.hotel}', '${ids.residencyA}');
     INSERT INTO dayparts (id, residency_id, name, room, sort_order)
@@ -146,6 +147,7 @@ beforeAll(async () => {
       ('${ids.shiftB}', '${ids.residencyB}', NULL, NULL, 'Lobby', '2026-09-05', 'Lobby', '2026-09-05T20:00:00Z', '2026-09-06T03:00:00Z', 12000);
   `);
   await database.exec(roomColorSystem.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(aceRoomColorSwap.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -158,15 +160,15 @@ describe("database replacements for Airtable audit formulas", () => {
       SELECT name, hue, sort_order FROM rooms WHERE residency_id = '${ids.residencyA}' ORDER BY sort_order;
     `);
     expect(rooms.rows).toEqual([
-      { name: "Amigo Room", hue: "blue", sort_order: 0 },
-      { name: "Pool", hue: "orange", sort_order: 1 },
+      { name: "Amigo Room", hue: "orange", sort_order: 0 },
+      { name: "Pool", hue: "blue", sort_order: 1 },
     ]);
     const dayparts = await database.query<{ name: string; color: string; room_id: string | null }>(`
       SELECT name, color, room_id FROM dayparts WHERE residency_id = '${ids.residencyA}' ORDER BY name;
     `);
     expect(dayparts.rows.map((daypart) => ({ name: daypart.name, color: daypart.color, linked: Boolean(daypart.room_id) }))).toEqual([
-      { name: "Amigo Room", color: "#1B5FA7", linked: true },
-      { name: "Pool", color: "#B95A1E", linked: true },
+      { name: "Amigo Room", color: "#B95A1E", linked: true },
+      { name: "Pool", color: "#1B5FA7", linked: true },
     ]);
   });
 
