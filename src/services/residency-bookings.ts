@@ -70,6 +70,15 @@ export type UpdateOneTimeRecordInput = {
   manualHostName?: string;
 };
 
+export type UpdateDaypartOccurrenceInput = {
+  id: string;
+  startMinute: number;
+  endMinute: number;
+  notes?: string;
+  programDetails?: string;
+  manualHostName?: string;
+};
+
 function validateOneTimeRecordInput(input: UpdateOneTimeRecordInput) {
   const name = input.name.trim();
   const room = input.room.trim();
@@ -276,10 +285,6 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       }
       if (actor.kind === "residency" && recordKind === "financial_shift" && !requestHfy && !effectiveAssignments.length) {
         throw new Error("Choose one of your artists or use Request HFY.");
-      }
-      if (actor.kind === "residency" && !requested.daypartId && rule.type === "dj_artist" && !requestHfy
-        && (!Number.isInteger(rule.clientDefaultRateCents) || (rule.clientDefaultRateCents ?? 0) <= 0)) {
-        throw new Error("Enter a positive session artist rate before scheduling this one-time Talent Activity.");
       }
       const notes = requested.notes?.trim() ?? "";
       const programDetails = requested.programDetails?.trim() ?? "";
@@ -536,10 +541,6 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
     if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned slots are managed only by the client.");
     const finalizedFullProgrammingShift = shift.residencyTier === "complete" && Boolean(shift.invoiceId && shift.invoiceStatus && shift.invoiceStatus !== "draft");
     if (shift.invoiceStatus && shift.invoiceStatus !== "draft" && !finalizedFullProgrammingShift) throw new Error("This one-time slot is locked because its Invoice is finalized.");
-    if (shift.economicsMode === "client_owned"
-      && (!Number.isInteger(input.clientTalentDefaultRateCents) || (input.clientTalentDefaultRateCents ?? 0) <= 0)) {
-      throw new Error("Enter a positive session artist rate.");
-    }
     const assignedRoom = await findOrCreateResidencyRoom(tx, shift.residencyId, clean.room, input.roomId, input.roomHue, input.createRoom === true);
     const calendarColor = clean.calendarColor;
 
@@ -659,6 +660,55 @@ export async function updateOneTimeOccurrence(actor: AuditActor, input: UpdateOn
       entityType: "schedule_occurrence",
       entityId: occurrence.id,
       details: { serviceDate: occurrence.serviceDate, name: clean.name, room: assignedRoom.name, roomId: assignedRoom.id, calendarColor, startMinute: input.startMinute, endMinute: input.endMinute },
+    });
+    return { id: occurrence.id };
+  });
+}
+
+export async function updateDaypartOccurrence(actor: AuditActor, input: UpdateDaypartOccurrenceInput) {
+  if (!Number.isInteger(input.startMinute) || input.startMinute < 0 || input.startMinute >= 1440
+    || !Number.isInteger(input.endMinute) || input.endMinute <= input.startMinute || input.endMinute > input.startMinute + 1440) {
+    throw new Error("Choose valid activity hours.");
+  }
+  return getDb().transaction(async (tx) => {
+    const [occurrence] = await tx.select({
+      id: scheduleOccurrences.id,
+      residencyId: scheduleOccurrences.residencyId,
+      daypartId: scheduleOccurrences.daypartId,
+      serviceDate: scheduleOccurrences.serviceDate,
+      name: scheduleOccurrences.name,
+      timezone: residencies.timezone,
+    }).from(scheduleOccurrences)
+      .innerJoin(residencies, eq(scheduleOccurrences.residencyId, residencies.id))
+      .where(and(eq(scheduleOccurrences.id, input.id), eq(residencies.active, true), eq(residencies.operatingMode, "operations")))
+      .limit(1)
+      .for("update");
+    if (!occurrence || occurrence.daypartId === null) throw new Error("Only a scheduled Daypart date can be edited here.");
+
+    const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.startMinute), occurrence.timezone);
+    const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.endMinute), occurrence.timezone);
+    const outsideTalent = await tx.select({ id: scheduleOccurrenceTalent.id }).from(scheduleOccurrenceTalent).where(and(
+      eq(scheduleOccurrenceTalent.occurrenceId, occurrence.id),
+      or(lt(scheduleOccurrenceTalent.startsAt, startsAt), gt(scheduleOccurrenceTalent.endsAt, endsAt)),
+    )).limit(1);
+    if (outsideTalent.length) throw new Error("Artist hours must stay inside the new activity window.");
+
+    await tx.update(scheduleOccurrences).set({
+      startsAt,
+      endsAt,
+      notes: input.notes?.trim() ?? "",
+      programDetails: input.programDetails?.trim() ?? "",
+      manualHostName: input.manualHostName?.trim() ?? "",
+      updatedAt: new Date(),
+    }).where(eq(scheduleOccurrences.id, occurrence.id));
+    await tx.insert(auditLog).values({
+      residencyId: occurrence.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "daypart_occurrence_updated",
+      entityType: "schedule_occurrence",
+      entityId: occurrence.id,
+      details: { serviceDate: occurrence.serviceDate, daypartId: occurrence.daypartId, name: occurrence.name, startMinute: input.startMinute, endMinute: input.endMinute },
     });
     return { id: occurrence.id };
   });
