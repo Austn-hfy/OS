@@ -101,15 +101,16 @@ describe("Residency-owned artist management", () => {
   });
 
   it("opens client-owned Assignment details and edits the rate from Artist Lookup", async () => {
-    const [lookup, data, actions] = await Promise.all([
+    const [lookup, dialog, data, actions] = await Promise.all([
       readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/talent/client-assignment-rate-dialog.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/data/residency-client.ts", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/actions.ts", import.meta.url), "utf8"),
     ]);
     expect(lookup).toContain("ClientAssignmentRateDialog");
-    expect(lookup).toContain("updateClientOwnedRateAction");
-    expect(lookup).toContain("Save rate");
     expect(lookup).toContain("Review →");
+    expect(dialog).toContain("updateClientOwnedRateAction");
+    expect(dialog).toContain("Save rate");
     expect(data).toContain("defaultRateCents: row.defaultRateCents");
     expect(data).toContain("overrideRateCents: row.overrideRateCents");
     expect(data).toContain("effectiveRateCents: row.effectiveRateCents");
