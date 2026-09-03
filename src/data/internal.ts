@@ -799,7 +799,7 @@ export async function getInvoiceWorkspace(residencyId: string) {
 
 export async function getSetupData() {
   const database = getDb();
-  const [residencyRows, talentRows, approvals, contacts, calendarLinks, invoiceBranding] = await Promise.all([
+  const [residencyRows, contacts, calendarLinks, invoiceBranding] = await Promise.all([
     database.select({
       id: residencies.id,
       name: residencies.name,
@@ -808,11 +808,7 @@ export async function getSetupData() {
       tier: residencies.tier,
       active: residencies.active,
       internalNotes: residencies.internalNotes,
-      defaultTalentRateCents: residencies.defaultTalentRateCents,
-      clientHourlyRateCents: residencies.clientHourlyRateCents,
     }).from(residencies).where(eq(residencies.operatingMode, "operations")).orderBy(desc(residencies.active), asc(residencies.name)),
-    database.select({ id: talent.id, stageName: talent.stageName, homeMarket: talent.homeMarket, exclusiveResidencyId: talent.exclusiveResidencyId }).from(talent).where(and(eq(talent.ownership, "hfy"), eq(talent.talentStatus, "active"), isNull(talent.archivedAt))).orderBy(asc(talent.stageName)),
-    database.select({ residencyId: residencyTalent.residencyId, talentId: residencyTalent.talentId }).from(residencyTalent).where(eq(residencyTalent.active, true)),
     database.select({
       id: residencyContacts.id,
       residencyId: residencyContacts.residencyId,
@@ -836,8 +832,6 @@ export async function getSetupData() {
   const linkedResidencies = new Set(calendarLinks.map((link) => link.residencyId));
   return {
     residencies: residencyRows.map((residency) => ({ ...residency, hasPublicCalendarLink: linkedResidencies.has(residency.id) })),
-    talent: talentRows,
-    approvals,
     contacts: contacts.map((contact) => ({ ...contact, hasAccount: Boolean(contact.userId), isInternalTest: Boolean(contact.isInternalTest) })),
     invoiceBranding,
   };
