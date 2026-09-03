@@ -884,6 +884,8 @@ button.daypart-room-color-bar:hover { transform: translateY(-1px); box-shadow: i
 .room-combobox-status { color: #9a5a28; font-size: 8px; line-height: 1.35; }
 .room-combobox-status.ready { color: #28715a; }
 .quick-modal-room-picker .room-combobox.open .room-combobox-options { position: static; }
+.quick-modal-room-picker .room-combobox-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.quick-modal-room-picker .room-combobox-options button.create { border-top-color: transparent; border-radius: 9px; }
 @media (max-height: 700px) {
   .quick-modal-backdrop { padding: 10px; }
   .quick-modal.quick-modal-room-picker { height: calc(100dvh - 20px); max-height: calc(100dvh - 20px); }
@@ -898,11 +900,9 @@ button.daypart-room-color-bar:hover { transform: translateY(-1px); box-shadow: i
   .quick-modal-room-picker .room-combobox.open .room-combobox-options { min-height: 0; max-height: none; align-content: start; overscroll-behavior: contain; }
   .quick-modal-room-picker .quick-picker-intro,
   .quick-modal-room-picker .quick-slot-picker-actions { display: none; }
-  .quick-modal-room-picker .room-combobox-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .quick-modal-room-picker .room-combobox-options button { min-height: 40px; padding: 5px 8px; }
-  .quick-modal-room-picker .room-combobox-options button.create { border-top-color: transparent; border-radius: 9px; }
 }
-@media (max-height: 700px) and (max-width: 560px) {
+@media (max-width: 560px) {
   .quick-modal-room-picker .room-combobox-options { grid-template-columns: 1fr; }
 }
 .quick-repeat-options { display: grid; gap: 10px; }
