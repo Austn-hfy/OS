@@ -115,4 +115,20 @@ describe("Residency-owned artist management", () => {
     expect(data).toContain("effectiveRateCents: row.effectiveRateCents");
     expect(actions).toContain('revalidatePath("/residency/talent")');
   });
+
+  it("surfaces missing rates on both the artist row and the full Assignment pill without changing Talent navigation", async () => {
+    const [lookup, warning, styles, shell] = await Promise.all([
+      readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/rate-needed-warning.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/residency-shell.tsx", import.meta.url), "utf8"),
+    ]);
+    expect(lookup).toContain("artist.outstandingAssignments.some");
+    expect(lookup).toContain('className={assignment.amountCents === null ? "artist-rate-needed-row" : undefined}');
+    expect(warning).toContain("Rate needed");
+    expect(warning).toContain('aria-hidden="true">!</span>');
+    expect(styles).toContain(".artist-owed-list .artist-rate-needed-row");
+    expect(shell).toContain('href="/residency/talent" label="Talent"');
+    expect(shell).not.toContain('label="Talent" description="Artist lookup" icon="talent" active={pathname === "/residency/talent"} attention=');
+  });
 });

@@ -7,13 +7,14 @@ export type ArtistRosterEntry = {
   talentStatus: "active" | "inactive";
   archivedAt: Date | string | null;
   totalOutstandingOwedCents: number;
+  hasRateNeeded: boolean;
   upcomingBookings: Array<{ serviceDate: string }>;
 };
 
 export function artistRosterCounts<T extends ArtistRosterEntry>(artists: T[]) {
   return {
     active: artists.filter((artist) => !artist.archivedAt && artist.talentStatus === "active").length,
-    owed: artists.filter((artist) => !artist.archivedAt && artist.totalOutstandingOwedCents > 0).length,
+    owed: artists.filter((artist) => !artist.archivedAt && (artist.totalOutstandingOwedCents > 0 || artist.hasRateNeeded)).length,
     inactive: artists.filter((artist) => !artist.archivedAt && artist.talentStatus === "inactive").length,
     archived: artists.filter((artist) => Boolean(artist.archivedAt)).length,
   };
@@ -30,7 +31,7 @@ export function filterAndSortArtistRoster<T extends ArtistRosterEntry>(
     const matchesView = view === "archived"
       ? Boolean(artist.archivedAt)
       : !artist.archivedAt && (view === "owed"
-        ? artist.totalOutstandingOwedCents > 0
+        ? artist.totalOutstandingOwedCents > 0 || artist.hasRateNeeded
         : artist.talentStatus === view);
     if (!matchesView) return false;
     return !normalized

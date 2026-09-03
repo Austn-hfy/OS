@@ -1026,6 +1026,11 @@ tr:last-child td { border-bottom: 0; }
 .artist-roster-select input:focus-visible + span { outline: 3px solid rgba(2,116,222,.18); outline-offset: 2px; }
 .artist-roster-row-heading { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .artist-roster-row-heading > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: "Plus Jakarta Sans", sans-serif; font-size: 14px; }
+.artist-roster-signals { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; }
+.artist-rate-needed-badge { display: inline-flex; align-items: center; gap: 6px; color: #742f27; font-family: Inter, ui-sans-serif, sans-serif; font-size: 10px; font-weight: 900; white-space: nowrap; }
+.artist-rate-needed-badge.compact { gap: 4px; padding: 4px 7px; border-radius: 999px; background: #ffd9d1; font-size: 8px; }
+.artist-rate-needed-mark { width: 18px; height: 18px; flex: 0 0 18px; display: grid; place-items: center; border: 1px solid rgba(124,48,37,.2); border-radius: 50%; color: #742f27; background: #ffd2c8; font-size: 11px; font-weight: 900; line-height: 1; box-shadow: 0 3px 8px rgba(116,47,39,.14); }
+.artist-rate-needed-badge.compact .artist-rate-needed-mark { width: 14px; height: 14px; flex-basis: 14px; font-size: 9px; box-shadow: none; }
 .artist-roster-row-heading .status { padding: 4px 7px; font-size: 8px; }
 .artist-roster-meta, .artist-roster-genres { overflow: hidden; color: var(--muted); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .artist-roster-genres { color: #444; }
@@ -1078,6 +1083,8 @@ tr:last-child td { border-bottom: 0; }
 .artist-owed-list :is(article, button) { appearance: none; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 13px; border: 0; border-radius: 12px; color: var(--ink); background: rgba(7,26,49,.035); text-align: left; }
 .artist-owed-list button { cursor: pointer; transition: background .16s ease, box-shadow .16s ease; }
 .artist-owed-list button:hover { background: rgba(39,131,220,.09); box-shadow: inset 0 0 0 1px rgba(39,131,220,.18); }
+.artist-owed-list .artist-rate-needed-row { border: 1px solid rgba(216,111,92,.7); background: rgba(255,235,231,.92); box-shadow: 0 0 0 3px rgba(232,141,122,.16), 0 9px 24px rgba(183,75,82,.14); }
+.artist-owed-list button.artist-rate-needed-row:hover { border-color: rgba(196,77,65,.82); background: #ffe5df; box-shadow: 0 0 0 4px rgba(232,141,122,.2), 0 11px 28px rgba(183,75,82,.18); }
 .artist-owed-list :is(article, button) > div { min-width: 0; display: grid; gap: 3px; }
 .artist-owed-list :is(article, button) > div strong { font-size: 12px; }
 .artist-owed-list :is(article, button) > div span { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }

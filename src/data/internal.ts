@@ -34,6 +34,7 @@ import {
 } from "@/domain/airtable-parity";
 import { getInvoiceBrandingSettings } from "@/services/invoice-branding";
 import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents } from "@/domain/platform-billing";
+import { assignmentNeedsRate } from "@/domain/assignment-rates";
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
@@ -463,6 +464,10 @@ export async function getArtistLookupData(residencyId?: string) {
       talentId: assignments.talentId,
       bookingStatus: assignments.bookingStatus,
       payoutStatus: assignments.payoutStatus,
+      compensationType: assignments.compensationType,
+      talentRateCents: assignments.talentRateCents,
+      talentRateOverrideCents: assignments.talentRateOverrideCents,
+      fixedFeeCents: assignments.fixedFeeCents,
       totalCompensationCents: assignments.totalCompensationCents,
       startsAt: assignments.startsAt,
       endsAt: assignments.endsAt,
@@ -478,7 +483,14 @@ export async function getArtistLookupData(residencyId?: string) {
       .where(and(
         inArray(assignments.talentId, artistIds),
         residencyId ? eq(shifts.residencyId, residencyId) : undefined,
-        or(eq(assignments.payoutStatus, "ready_to_pay"), gte(shifts.serviceDate, todayUtc())),
+        or(
+          eq(assignments.payoutStatus, "ready_to_pay"),
+          gte(shifts.serviceDate, todayUtc()),
+          and(
+            eq(assignments.payoutStatus, "not_ready"),
+            inArray(assignments.bookingStatus, ["offered", "pending_hfy_confirmation", "confirmed", "completed"]),
+          ),
+        ),
       ))
       .orderBy(asc(shifts.serviceDate), asc(assignments.startsAt)),
     database.select({
@@ -522,6 +534,18 @@ export async function getArtistLookupData(residencyId?: string) {
         endsAt: assignment.endsAt.toISOString(),
         amountCents: assignment.totalCompensationCents,
       }));
+    const rateNeededAssignments = artistAssignments
+      .filter(assignmentNeedsRate)
+      .map((assignment) => ({
+        id: assignment.id,
+        residencyId: assignment.residencyId,
+        residencyName: assignment.residencyName,
+        residencyTimezone: assignment.residencyTimezone,
+        shiftName: assignment.shiftName,
+        serviceDate: assignment.serviceDate,
+        startsAt: assignment.startsAt.toISOString(),
+        endsAt: assignment.endsAt.toISOString(),
+      }));
     const upcomingBookings = artistAssignments
       .filter((assignment) => assignment.serviceDate >= todayUtc() && upcomingStatuses.has(assignment.bookingStatus))
       .map((assignment) => ({
@@ -562,6 +586,8 @@ export async function getArtistLookupData(residencyId?: string) {
       liveOutstandingOwedCents,
       totalOutstandingOwedCents: residencyId ? liveOutstandingOwedCents : liveOutstandingOwedCents + artist.legacyOutstandingOwedCents,
       outstandingAssignments,
+      rateNeededAssignments,
+      hasRateNeeded: rateNeededAssignments.length > 0,
       upcomingBookings,
       paymentProfile: paymentProfile ? {
         paymentMethod: paymentProfile.paymentMethod,

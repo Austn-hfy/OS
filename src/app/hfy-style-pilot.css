@@ -1159,6 +1159,9 @@
 .hfy-style-system .artist-roster-row:hover { background: rgba(139, 199, 241, 0.09); }
 .hfy-style-system .artist-roster-row-wrap.selected { color: var(--hfy-action-ink); background: var(--hfy-action-soft); box-shadow: inset 3px 0 var(--hfy-action-strong); }
 .hfy-style-system .artist-roster-row-heading > strong { font-family: var(--hfy-font-sans); font-size: 13px; }
+.hfy-style-system .artist-rate-needed-badge { color: #8a3b35; font-family: var(--hfy-font-sans); }
+.hfy-style-system .artist-rate-needed-badge.compact { background: color-mix(in srgb, var(--hfy-coral) 22%, white); }
+.hfy-style-system .artist-rate-needed-mark { border-color: color-mix(in srgb, var(--hfy-coral) 42%, transparent); color: #7a302d; background: color-mix(in srgb, var(--hfy-coral) 30%, white); }
 .hfy-style-system .artist-roster-flags small { color: var(--hfy-label); background: var(--hfy-slate-surface); }
 .hfy-style-system .artist-roster-flags small.approved { color: var(--hfy-success); background: var(--hfy-success-soft); }
 .hfy-style-system .artist-roster-flags small.not-approved { color: var(--hfy-warning); background: var(--hfy-warning-soft); }
@@ -1177,6 +1180,8 @@
 .hfy-style-system .artist-owed-total > strong { font-size: clamp(32px, 4.8vw, 48px); }
 .hfy-style-system .artist-detail-section { border-top-color: var(--hfy-line); }
 .hfy-style-system .artist-owed-list :is(article, button) { background: var(--hfy-surface-nested); }
+.hfy-style-system .artist-owed-list .artist-rate-needed-row { border-color: color-mix(in srgb, var(--hfy-coral) 74%, var(--hfy-line)); background: color-mix(in srgb, var(--hfy-coral) 17%, white); box-shadow: 0 0 0 3px var(--hfy-coral-soft), 0 10px 26px rgba(183, 75, 82, 0.14); }
+.hfy-style-system .artist-owed-list button.artist-rate-needed-row:hover { border-color: var(--hfy-coral); background: color-mix(in srgb, var(--hfy-coral) 23%, white); box-shadow: 0 0 0 4px var(--hfy-coral-soft), 0 12px 30px rgba(183, 75, 82, 0.18); }
 .hfy-style-system .artist-booking-list article { background: rgba(139, 199, 241, 0.09); }
 .hfy-style-system .artist-booking-list time { color: var(--hfy-action-strong); }
 .hfy-style-system .artist-mini-calendar { border-color: var(--hfy-line); background: rgba(251, 252, 253, 0.82); }
