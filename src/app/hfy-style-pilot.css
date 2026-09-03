@@ -2236,6 +2236,7 @@
 .hfy-style-system .calendar-batch-row { border-color: var(--hfy-line); background: #fbfcfd; }
 
 .hfy-style-system .calendar-batch-takeover { background: var(--hfy-canvas); }
+.hfy-style-system .calendar-main > .calendar-page:has(.calendar-batch-editor-takeover) { backdrop-filter: none; }
 .hfy-style-system .calendar-batch-form { border-color: var(--hfy-line); background: #edf2f5; }
 
 .hfy-style-system .calendar-command-actions {

@@ -61,5 +61,6 @@ describe("Calendar batch scheduling", () => {
     expect(styles).toContain(".calendar-batch-editor-list");
     expect(styles).toContain("overflow-y: auto");
     expect(pilotStyles).toContain(".hfy-style-system .calendar-batch-menu { border-color: var(--hfy-line); background: #f9fbfc; }");
+    expect(pilotStyles).toContain(":has(.calendar-batch-editor-takeover) { backdrop-filter: none; }");
   });
 });
