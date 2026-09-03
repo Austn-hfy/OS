@@ -60,6 +60,14 @@ Preview an Ace refresh without writing anything:
 pnpm staging:sync-from-production -- --residency ace-hotel
 ```
 
+If the production database password is intentionally unavailable to the operator, the same command can consume a reviewed, project-bound structural snapshot exported through the Supabase SQL editor:
+
+```bash
+pnpm staging:sync-from-production -- --residency ace-hotel --production-snapshot-file /secure/temporary/ace-structure.json
+```
+
+The snapshot must identify the approved production project and its Residency scope must exactly match every `--residency` argument. Keep it outside the repository and delete it after the reviewed apply.
+
 After reviewing that report, apply the same scoped refresh:
 
 ```bash
