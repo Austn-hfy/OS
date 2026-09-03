@@ -8,7 +8,7 @@ import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from 
 import { ResidencyCalendar, type ResidencyEvent } from "@/app/app/calendar/residency-calendar";
 import { getRoomsForResidency } from "@/services/rooms";
 
-export default async function ResidencyClientCalendarPage({ searchParams }: { searchParams: Promise<{ month?: string; calendarView?: string; week?: string }> }) {
+export default async function ResidencyClientCalendarPage({ searchParams }: { searchParams: Promise<{ month?: string; calendarView?: string; week?: string; batchDaypart?: string }> }) {
   const [actor, params] = await Promise.all([requireResidencyActor(), searchParams]);
   const requestedMonthKey = normalizeMonthKey(params.month);
   const calendarView = normalizeCalendarView(params.calendarView);
@@ -101,5 +101,6 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
     talent={actor.residencyTier === "complete" ? [] : roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
     dateExceptions={dateExceptions}
     previewMode fullProgramming={actor.residencyTier === "complete"} calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}
+    initialBatchDaypartId={params.batchDaypart}
   /></div>;
 }

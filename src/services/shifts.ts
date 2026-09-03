@@ -93,6 +93,65 @@ export async function createShift(actor: InternalActor, input: CreateShiftInput)
   });
 }
 
+export async function updateCalendarShiftDetails(
+  actor: AuditActor,
+  shiftId: string,
+  input: { notes: string; clientRateOverrideCents?: number | null },
+) {
+  return getDb().transaction(async (tx) => {
+    const [shift] = await tx.select({
+      id: shifts.id,
+      residencyId: shifts.residencyId,
+      economicsMode: shifts.economicsMode,
+      invoiceId: shifts.invoiceId,
+      invoiceStatus: invoices.status,
+      clientRateOverrideCents: shifts.clientRateOverrideCents,
+      defaultClientRateCents: residencies.clientHourlyRateCents,
+    }).from(shifts)
+      .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
+      .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
+      .where(eq(shifts.id, shiftId))
+      .limit(1);
+    if (!shift) throw new Error("Shift not found.");
+    if (actor.kind === "residency" && shift.economicsMode !== "client_owned") throw new Error("HFY-managed Shifts cannot be changed by the client.");
+    if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned and pending-request Shifts are controlled through their own workflow.");
+
+    const rateChanged = actor.kind === "internal"
+      && input.clientRateOverrideCents !== undefined
+      && input.clientRateOverrideCents !== shift.clientRateOverrideCents;
+    if (rateChanged && shift.invoiceStatus && shift.invoiceStatus !== "draft") {
+      throw new Error("Billing is locked because this Shift's Invoice is finalized.");
+    }
+    const clientRateOverrideCents = actor.kind === "internal" && input.clientRateOverrideCents !== undefined
+      ? input.clientRateOverrideCents
+      : shift.clientRateOverrideCents;
+    await tx.update(shifts).set({
+      notes: input.notes.trim(),
+      ...(actor.kind === "internal" ? {
+        clientRateOverrideCents,
+        clientRateCents: resolveRateCents(clientRateOverrideCents, shift.defaultClientRateCents),
+      } : {}),
+      updatedAt: new Date(),
+    }).where(eq(shifts.id, shift.id));
+
+    if (rateChanged && shift.invoiceId && shift.invoiceStatus === "draft") {
+      await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
+      const [remaining] = await tx.select({ total: sql<number>`coalesce(sum(${invoiceLineItems.totalCents}), 0)` })
+        .from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, shift.invoiceId));
+      await tx.update(invoices).set({ totalCents: Number(remaining?.total ?? 0), updatedAt: new Date() }).where(eq(invoices.id, shift.invoiceId));
+    }
+    await tx.insert(auditLog).values({
+      residencyId: shift.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "calendar_shift_details_updated",
+      entityType: "shift",
+      entityId: shift.id,
+      details: { rateChanged, clientRateOverrideCents: actor.kind === "internal" ? clientRateOverrideCents : undefined },
+    });
+  });
+}
+
 export async function deleteShift(actor: AuditActor, shiftId: string) {
   return getDb().transaction(async (tx) => {
     const [shift] = await tx.select({
