@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm exec tsx scripts/apply-one-time-session-rate-migration.ts && pnpm build",
+  "buildCommand": "pnpm build",
   "git": {
     "deploymentEnabled": {
       "codex/performance-pdx1-region": false,
