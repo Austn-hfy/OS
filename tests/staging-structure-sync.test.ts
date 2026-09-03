@@ -156,7 +156,7 @@ describe("staging production-structure sync", () => {
     const direct = "postgresql://hfy_staging_structure_reader:secret@db.tkfsgifnywbwjdkxjhae.supabase.co:6543/postgres?sslmode=require";
     const pooled = new URL(pooledProductionReaderUrl(direct));
 
-    expect(pooled.hostname).toBe("aws-0-us-west-1.pooler.supabase.com");
+    expect(pooled.hostname).toBe("aws-0-us-west-2.pooler.supabase.com");
     expect(pooled.port).toBe("6543");
     expect(decodeURIComponent(pooled.username)).toBe("hfy_staging_structure_reader.tkfsgifnywbwjdkxjhae");
     expect(pooled.password).toBe("secret");

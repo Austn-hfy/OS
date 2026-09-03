@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 export const PRODUCTION_SUPABASE_PROJECT_REF: string = "tkfsgifnywbwjdkxjhae";
 export const STAGING_SUPABASE_PROJECT_REF: string = "ucrtbevvdfkceudknyxe";
-const PRODUCTION_SUPABASE_POOLER_HOST = "aws-0-us-west-1.pooler.supabase.com";
+const PRODUCTION_SUPABASE_POOLER_HOST = "aws-0-us-west-2.pooler.supabase.com";
 
 const SYNC_NAMESPACE = "hfy-os-staging-structure-sync-v1";
 
