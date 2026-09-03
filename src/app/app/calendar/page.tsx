@@ -3,13 +3,13 @@ import { formatTimeInput } from "@/components/format";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { getCalendarData, getPublicCalendarLinkSettings, getResidencyList } from "@/data/internal";
-import { calendarToneForSlot, monthLabel, monthRange, normalizeMonthKey, shiftMonthKey } from "@/lib/calendar";
+import { calendarToneForSlot, monthKeyForDate, monthLabel, monthRange, normalizeCalendarView, normalizeMonthKey, normalizeWeekStart, shiftDateKey, shiftMonthKey, weekRange } from "@/lib/calendar";
 import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { getActiveTalentLookup, getDaypartDateExceptionsForResidencies, getDaypartsForResidencies, getDaypartsForResidency, getHfyRequestTalentLookup } from "@/services/dayparts";
 import { isHfyManagedEconomicsMode, isStandingHfyDaypart } from "@/domain/hfy-programming";
 import { ResidencyCalendar } from "./residency-calendar";
 
-export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ residency?: string; calendarResidency?: string; month?: string; event?: string }> }) {
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ residency?: string; calendarResidency?: string; month?: string; event?: string; calendarView?: string; week?: string }> }) {
   const params = await searchParams;
   const residencyList = await getResidencyList();
   const workspaceResidency = residencyList.find((item) => item.id === params.residency);
@@ -97,8 +97,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     );
   }
 
-  const monthKey = normalizeMonthKey(params.month);
-  const range = monthRange(monthKey);
+  const requestedMonthKey = normalizeMonthKey(params.month);
+  const calendarView = normalizeCalendarView(params.calendarView);
+  const weekStart = normalizeWeekStart(params.week, requestedMonthKey);
+  const monthKey = calendarView === "week" ? monthKeyForDate(shiftDateKey(weekStart, 3)) : requestedMonthKey;
+  const range = calendarView === "week" ? weekRange(weekStart) : monthRange(monthKey);
   const [calendar, dayparts, talent, requestTalent, calendarLinkSettings, dateExceptions] = await Promise.all([
     getCalendarData(selectedResidency.id, range),
     getDaypartsForResidency(selectedResidency.id),
@@ -186,6 +189,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     programDetails: "",
     manualHostName: "",
     defaultDjCount: slot.defaultDjCount,
+    room: slot.room,
     schedulingStatus: "empty" as const,
     assignments: [],
   }));
@@ -196,6 +200,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         key={selectedResidency.id}
         residency={{ id: selectedResidency.id, name: selectedResidency.name, timezone: selectedResidency.timezone, defaultTalentRateCents: selectedResidency.defaultTalentRateCents, clientHourlyRateCents: selectedResidency.clientHourlyRateCents, calendarLinkSettings }}
         monthKey={monthKey}
+        calendarView={calendarView}
+        weekStart={weekStart}
         events={events}
         dayparts={hfyDayparts.map((daypart) => ({ id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode, scheduleMode: daypart.scheduleMode, suggestedStartMinute: daypart.suggestedStartMinute, suggestedEndMinute: daypart.suggestedEndMinute, defaultTalentRateCents: daypart.defaultTalentRateCents, activeUntil: daypart.activeUntil, active: daypart.active, rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })) }))}
         talent={talent}

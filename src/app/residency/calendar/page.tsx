@@ -3,14 +3,17 @@ import { getCalendarData, getPublicCalendarLinkSettings, getScheduleOccurrenceDa
 import { getResidencyClientSafeRoster } from "@/data/residency-client";
 import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
 import { requireResidencyActor } from "@/lib/auth";
-import { calendarToneForSlot, monthRange, normalizeMonthKey } from "@/lib/calendar";
+import { calendarToneForSlot, monthKeyForDate, monthRange, normalizeCalendarView, normalizeMonthKey, normalizeWeekStart, shiftDateKey, weekRange } from "@/lib/calendar";
 import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar, type ResidencyEvent } from "@/app/app/calendar/residency-calendar";
 
-export default async function ResidencyClientCalendarPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+export default async function ResidencyClientCalendarPage({ searchParams }: { searchParams: Promise<{ month?: string; calendarView?: string; week?: string }> }) {
   const [actor, params] = await Promise.all([requireResidencyActor(), searchParams]);
-  const monthKey = normalizeMonthKey(params.month);
-  const range = monthRange(monthKey);
+  const requestedMonthKey = normalizeMonthKey(params.month);
+  const calendarView = normalizeCalendarView(params.calendarView);
+  const weekStart = normalizeWeekStart(params.week, requestedMonthKey);
+  const monthKey = calendarView === "week" ? monthKeyForDate(shiftDateKey(weekStart, 3)) : requestedMonthKey;
+  const range = calendarView === "week" ? weekRange(weekStart) : monthRange(monthKey);
   const [calendar, occurrences, dayparts, roster, calendarLinkSettings, dateExceptions] = await Promise.all([
     getCalendarData(actor.residencyId, range),
     getScheduleOccurrenceData(actor.residencyId, range),
@@ -80,7 +83,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
     id: slot.id, date: slot.date, title: slot.name, time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · Needs scheduling`,
     residencyName: "Projected from Day Parts", color: slot.color, daypartId: slot.daypartId, shiftStartMinute: slot.startMinute, shiftEndMinute: slot.endMinute,
     projected: true, recordType: "projected", daypartType: slot.type, billingMode: slot.billingMode, defaultDjCount: slot.defaultDjCount,
-    programDetails: "", manualHostName: "", schedulingStatus: "empty", assignments: [],
+    room: slot.room, programDetails: "", manualHostName: "", schedulingStatus: "empty", assignments: [],
   }));
   const events = [...savedShifts, ...savedOccurrences, ...projected].sort((left, right) => left.date.localeCompare(right.date) || left.shiftStartMinute - right.shiftStartMinute);
   const safeDayparts = dayparts.map((daypart) => ({
@@ -92,7 +95,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
 
   return <div className="calendar-page client-calendar-page"><ResidencyCalendar
     residency={{ id: actor.residencyId, name: actor.residencyName, timezone: actor.residencyTimezone, defaultTalentRateCents: 0, clientHourlyRateCents: 0, calendarLinkSettings }}
-    monthKey={monthKey} events={events} dayparts={safeDayparts}
+    monthKey={monthKey} calendarView={calendarView} weekStart={weekStart} events={events} dayparts={safeDayparts}
     talent={actor.residencyTier === "complete" ? [] : roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
     dateExceptions={dateExceptions}
     previewMode fullProgramming={actor.residencyTier === "complete"} calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}

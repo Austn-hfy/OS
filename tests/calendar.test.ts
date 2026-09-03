@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calendarDaypartsHref, monthGrid, monthRange, normalizeMonthKey, shiftMonthKey } from "../src/lib/calendar";
+import { calendarDaypartsHref, monthGrid, monthKeyForDate, monthRange, normalizeCalendarView, normalizeMonthKey, normalizeWeekStart, shiftDateKey, shiftMonthKey, weekDays, weekLabel, weekRange } from "../src/lib/calendar";
 
 describe("company calendar helpers", () => {
   it("builds a complete Sunday-first month grid", () => {
@@ -21,6 +21,26 @@ describe("company calendar helpers", () => {
 
   it("rejects malformed month query values", () => {
     expect(normalizeMonthKey("not-a-month", "2026-08")).toBe("2026-08");
+  });
+
+  it("normalizes the optional week view and its Sunday start", () => {
+    expect(normalizeCalendarView("week")).toBe("week");
+    expect(normalizeCalendarView("agenda")).toBe("month");
+    expect(normalizeWeekStart("2026-09-02", "2026-09")).toBe("2026-08-30");
+  });
+
+  it("builds and navigates exact seven-day ranges across boundaries", () => {
+    expect(weekRange("2026-08-30")).toEqual({ from: "2026-08-30", to: "2026-09-05" });
+    expect(shiftDateKey("2026-12-27", 7)).toBe("2027-01-03");
+    expect(monthKeyForDate("2027-01-03")).toBe("2027-01");
+    expect(weekDays("2026-08-30").map((day) => day.iso)).toEqual([
+      "2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05",
+    ]);
+  });
+
+  it("labels same-month and cross-month calendar weeks", () => {
+    expect(weekLabel("2026-09-06")).toBe("Sep 6–12, 2026");
+    expect(weekLabel("2026-08-30")).toBe("Aug 30–Sep 5, 2026");
   });
 
   it("routes Create New Daypart to the Day Parts tab without opening its create dialog", () => {

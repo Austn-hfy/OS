@@ -14,8 +14,9 @@ import { Status } from "@/components/format";
 import { SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
+import { WeekCalendar } from "@/components/week-calendar";
 import { HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, weekdayForDate, weekdayNames, type DaypartDateException, type DaypartScheduleMode } from "@/domain/dayparts";
-import { calendarDaypartsHref, monthLabel, shiftMonthKey } from "@/lib/calendar";
+import { calendarDaypartsHref, monthKeyForDate, monthLabel, normalizeWeekStart, shiftDateKey, shiftMonthKey, weekLabel, type CalendarViewMode } from "@/lib/calendar";
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
 import { MISSING_RESIDENCY_TALENT_RATE_MESSAGE } from "@/domain/residency-rates";
@@ -58,6 +59,8 @@ export type ResidencyEvent = MonthCalendarEvent & {
 type ResidencyCalendarProps = {
   residency: { id: string; name: string; timezone: string; defaultTalentRateCents: number; clientHourlyRateCents: number; calendarLinkSettings: PublicCalendarLinkSettings };
   monthKey: string;
+  calendarView?: CalendarViewMode;
+  weekStart?: string;
   events: ResidencyEvent[];
   dayparts: Array<{
     id: string;
@@ -157,7 +160,7 @@ function SchedulingActivityDetailsRow({
   </div>;
 }
 
-export function ResidencyCalendar({ residency, monthKey, events, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", daypartsHref, canManage = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, monthKey, calendarView = "month", weekStart, events, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", daypartsHref, canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
   const initialEditingEvent = initialEventId ? events.find((event) => event.id === initialEventId && !event.projected) : undefined;
   const [modal, setModal] = useState<ModalState>(() => initialEditingEvent ? { type: "edit", eventId: initialEditingEvent.id } : null);
@@ -838,14 +841,27 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
     }
   }
 
-  const monthHref = (target: string) => {
-    if (calendarBasePath !== "/app/calendar") return `${calendarBasePath}?month=${target}`;
-    const query = new URLSearchParams({ mode: "hfy", month: target, [residencySelectionParam]: residency.id });
+  const activeWeekStart = weekStart ?? normalizeWeekStart(undefined, monthKey);
+  const calendarHref = (viewMode: CalendarViewMode, targetMonth: string, targetWeek?: string) => {
+    const query = new URLSearchParams({ month: targetMonth });
+    if (viewMode === "week") {
+      query.set("calendarView", "week");
+      query.set("week", targetWeek ?? activeWeekStart);
+    }
+    if (calendarBasePath !== "/app/calendar") return `${calendarBasePath}?${query.toString()}`;
+    query.set("mode", "hfy");
+    query.set(residencySelectionParam, residency.id);
     if (residencySelectionParam === "residency") query.set("view", "operations");
     return `${calendarBasePath}?${query.toString()}`;
   };
-  const previousHref = monthHref(shiftMonthKey(monthKey, -1));
-  const nextHref = monthHref(shiftMonthKey(monthKey, 1));
+  const weekHref = (amount: number) => {
+    const targetWeek = shiftDateKey(activeWeekStart, amount * 7);
+    return calendarHref("week", monthKeyForDate(shiftDateKey(targetWeek, 3)), targetWeek);
+  };
+  const previousHref = calendarView === "week" ? weekHref(-1) : calendarHref("month", shiftMonthKey(monthKey, -1));
+  const nextHref = calendarView === "week" ? weekHref(1) : calendarHref("month", shiftMonthKey(monthKey, 1));
+  const monthViewHref = calendarHref("month", monthKey);
+  const weekViewHref = calendarHref("week", monthKeyForDate(shiftDateKey(activeWeekStart, 3)), activeWeekStart);
   const createDaypartHref = calendarDaypartsHref(residency.id, previewMode, daypartsHref);
   const activeSourceDaypart = activeSuggestion?.sourceDaypartId ? dayparts.find((daypart) => daypart.id === activeSuggestion.sourceDaypartId) : undefined;
   const activeCalendarOnly = activeSourceDaypart?.scheduleMode === "calendar_only";
@@ -882,14 +898,15 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           <div className="calendar-title"><p className="eyebrow">{residency.name}</p><h1>Calendar</h1></div>
           <div className="calendar-month-cluster">
             <div className={`calendar-needs-summary ${needsDjCount ? "attention" : "clear"}`}><strong>{needsDjCount}</strong><span>{needsDjCount === 1 ? "slot needs scheduling" : "slots need scheduling"}</span></div>
-            <div className="month-navigation"><Link className="calendar-arrow" aria-label="Previous month" href={previousHref}>←</Link><h2>{monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label="Next month" href={nextHref}>→</Link></div>
+            <div className="month-navigation"><Link className="calendar-arrow" aria-label={`Previous ${calendarView}`} href={previousHref}>←</Link><h2>{calendarView === "week" ? weekLabel(activeWeekStart) : monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label={`Next ${calendarView}`} href={nextHref}>→</Link></div>
           </div>
         </div>
         <div className="calendar-command-secondary">
           <div className="calendar-view-filters">
-            {residencyOptions?.length ? <form className="calendar-filter-form" method="get"><input name="mode" type="hidden" value="hfy" /><input name="month" type="hidden" value={monthKey} />{residencySelectionParam === "residency" ? <input name="view" type="hidden" value="operations" /> : null}<div className="field calendar-filter"><label htmlFor="calendar-residency-switcher">Residency calendar</label><select id="calendar-residency-switcher" name={residencySelectionParam} defaultValue={residency.id}>{residencyOptions.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div><button className="button secondary" type="submit">View</button></form> : null}
+            {residencyOptions?.length ? <form className="calendar-filter-form" method="get"><input name="mode" type="hidden" value="hfy" /><input name="month" type="hidden" value={monthKey} />{calendarView === "week" ? <><input name="calendarView" type="hidden" value="week" /><input name="week" type="hidden" value={activeWeekStart} /></> : null}{residencySelectionParam === "residency" ? <input name="view" type="hidden" value="operations" /> : null}<div className="field calendar-filter"><label htmlFor="calendar-residency-switcher">Residency calendar</label><select id="calendar-residency-switcher" name={residencySelectionParam} defaultValue={residency.id}>{residencyOptions.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div><button className="button secondary" type="submit">View</button></form> : null}
             <div className="field"><label htmlFor="calendar-status-filter">Status</label><select id="calendar-status-filter" value={statusFilter} onChange={(event) => changeStatusFilter(event.target.value as StatusFilter)}><option value="all">All slots</option><option value="needs">Needs scheduling</option><option value="filled">Scheduled</option></select></div>
             <div className="field"><label htmlFor="calendar-daypart-filter">Daypart</label><select id="calendar-daypart-filter" value={daypartFilter} onChange={(event) => changeDaypartFilter(event.target.value)}><option value="all">All Dayparts</option>{dayparts.filter((daypart) => daypart.active).map((daypart) => <option value={daypart.id} key={daypart.id}>{daypart.name}</option>)}</select></div>
+            <div className="field calendar-view-filter"><label>View</label><div className="calendar-view-toggle" role="group" aria-label="Calendar view"><Link className={calendarView === "month" ? "active" : ""} aria-current={calendarView === "month" ? "page" : undefined} href={monthViewHref}>Month</Link><Link className={calendarView === "week" ? "active" : ""} aria-current={calendarView === "week" ? "page" : undefined} href={weekViewHref}>Week</Link></div></div>
           </div>
           <div className="calendar-command-actions">
             {canManage ? <Link className="button secondary calendar-daypart-setup-button" href={createDaypartHref}>+ Create New Daypart</Link> : null}
@@ -898,7 +915,9 @@ export function ResidencyCalendar({ residency, monthKey, events, dayparts, talen
           </div>
         </div>
       </header>
-      <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />
+      {calendarView === "week"
+        ? <WeekCalendar weekStart={activeWeekStart} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />
+        : <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />}
 
       {modal ? <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }}>
         <section className={`quick-modal ${modal.type === "edit" ? "quick-modal-edit" : ""}`} role="dialog" aria-modal="true" aria-labelledby="quick-modal-title">
