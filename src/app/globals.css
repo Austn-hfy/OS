@@ -938,6 +938,8 @@ button.daypart-room-color-bar:hover { transform: translateY(-1px); box-shadow: i
 .calendar-batch-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; padding-top: 3px; }
 .calendar-batch-editor-takeover { overflow: hidden; }
 .calendar-batch-editor-screen { position: relative; inset: auto; height: 100dvh; min-height: 0; max-height: 100dvh; overflow: hidden; }
+body.staging-environment .calendar-batch-editor-takeover { top: 26px; }
+body.staging-environment .calendar-batch-editor-screen { height: calc(100dvh - 26px); max-height: calc(100dvh - 26px); }
 .calendar-batch-editor-list { width: 100%; max-width: 100%; min-width: 0; min-height: 0; margin: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .calendar-batch-editor-row { min-width: 0; overflow: visible; scroll-margin-block: 14px; }
 .calendar-batch-editor-form { min-width: 0; overflow: visible; }
