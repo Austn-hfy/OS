@@ -15,7 +15,10 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
     VERCEL_ENV: process.env.VERCEL_ENV,
     VERCEL_TARGET_ENV: process.env.VERCEL_TARGET_ENV,
     VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF,
-  });
+  }) && Boolean(
+    process.env.PRODUCTION_SYNC_DATABASE_URL
+    && process.env.STAGING_SYNC_CONFIRMATION_SECRET,
+  );
   const [data, lastStagingSync] = await Promise.all([
     getSetupData(),
     stagingSyncEnabled ? getLastStagingStructureSync() : Promise.resolve(null),
