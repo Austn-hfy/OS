@@ -253,6 +253,13 @@
       "when": 1788428417000,
       "tag": "0035_staging_structure_export",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788428782871,
+      "tag": "0036_room_color_system",
+      "breakpoints": true
     }
   ]
 }

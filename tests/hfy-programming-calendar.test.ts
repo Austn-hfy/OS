@@ -43,7 +43,7 @@ describe("HFY Programming calendar and Day Parts integration", () => {
     expect(requests).toContain("createdAssignments");
   });
 
-  it("uses configured colors internally while keeping unscheduled requests pink", async () => {
+  it("uses room colors for HFY work while preserving status separately", async () => {
     const [page, colors] = await Promise.all([
       readFile(new URL("../src/app/app/calendar/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/domain/dayparts.ts", import.meta.url), "utf8"),
@@ -51,8 +51,8 @@ describe("HFY Programming calendar and Day Parts integration", () => {
 
     expect(page.match(/calendarColorForEconomics\([\s\S]*?"internal"/g)?.length).toBeGreaterThanOrEqual(2);
     expect(colors).toContain('audience: "client" | "internal" = "client"');
-    expect(colors).toContain('economicsMode === "hfy_request"');
-    expect(colors).toContain("return HFY_PENDING_COLOR;");
+    expect(colors).toContain("return calendarColorForShift(daypartColor, shiftCalendarColor)");
+    expect(colors).not.toContain("return HFY_PENDING_COLOR;");
   });
 
   it("links company-calendar events into the selected Residency calendar editor", async () => {

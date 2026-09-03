@@ -3,6 +3,7 @@ import {
   DEFAULT_DAYPART_COLOR,
   HFY_BOOKED_COLOR,
   HFY_PENDING_COLOR,
+  ROOM_HUE_ORDER,
   calendarColorForEconomics,
   calendarColorForShift,
   clockToMinute,
@@ -12,6 +13,8 @@ import {
   formatCompactMinuteRange,
   hasOverlappingAssignmentMinutes,
   localDateTimeForMinute,
+  roomColor,
+  roomDaypartColor,
   projectDaypartSlots,
   resolveAssignmentMinutes,
   resolveEndMinute,
@@ -21,18 +24,25 @@ import {
 } from "./dayparts";
 
 describe("Daypart weekly rules", () => {
-  it("lets a fulfilled HFY request override its Client Managed Daypart color", () => {
-    expect(calendarColorForShift("#2783DC", HFY_BOOKED_COLOR)).toBe(HFY_BOOKED_COLOR);
+  it("keeps room color when legacy HFY pink is present on a dated shift", () => {
+    expect(calendarColorForShift("#2783DC", HFY_BOOKED_COLOR)).toBe("#2783DC");
     expect(calendarColorForShift("#2783DC", null)).toBe("#2783DC");
     expect(calendarColorForShift(null, "#7A65D1")).toBe("#7A65D1");
   });
 
-  it("gives pending and fulfilled HFY slots distinct reserved colors", () => {
-    expect(calendarColorForEconomics("#2783DC", HFY_BOOKED_COLOR, "hfy_request")).toBe(HFY_PENDING_COLOR);
-    expect(calendarColorForEconomics("#2783DC", null, "hfy")).toBe(HFY_BOOKED_COLOR);
+  it("keeps pending and fulfilled HFY slots on the room color", () => {
+    expect(calendarColorForEconomics("#2783DC", HFY_PENDING_COLOR, "hfy_request")).toBe("#2783DC");
+    expect(calendarColorForEconomics("#2783DC", null, "hfy")).toBe("#2783DC");
     expect(calendarColorForEconomics("#2783DC", HFY_BOOKED_COLOR, "hfy", "internal")).toBe("#2783DC");
     expect(calendarColorForEconomics(null, HFY_BOOKED_COLOR, "hfy", "internal")).toBe(DEFAULT_DAYPART_COLOR);
     expect(calendarColorForEconomics("#2783DC", null, "client_owned")).toBe("#2783DC");
+  });
+
+  it("assigns distinct room hues deterministically and cycles three shades", () => {
+    expect(ROOM_HUE_ORDER).toEqual(["blue", "orange", "green", "purple", "yellow", "navy", "red", "teal"]);
+    expect(roomColor("blue", "dark")).toBe("#1B5FA7");
+    expect(roomColor("orange", "medium")).toBe("#E98332");
+    expect([0, 1, 2, 3].map((index) => roomDaypartColor("blue", index))).toEqual(["#1B5FA7", "#2783DC", "#5AA6E8", "#1B5FA7"]);
   });
 
   it("routes billed and tracking-only Dayparts to separate record chains", () => {

@@ -42,7 +42,7 @@ export function MonthCalendar({ monthKey, events, selectedDate, onDateClick, onE
             <div className="calendar-events">{visibleEvents.map((event) => {
               const eventStyle = event.color ? { "--daypart-color": event.color } as CSSProperties : undefined;
               const eventClassName = `calendar-event ${event.schedulingStatus ? `schedule-${event.schedulingStatus}` : event.color ? "custom-color" : event.tone ?? "blue"} ${event.bookingState ? event.bookingState.replace("_", "-") : ""}`;
-              const content = <><span className="calendar-event-line"><strong>{event.title}</strong><span>{event.time}</span></span>{compact ? null : <small>{event.residencyName}</small>}</>;
+              const content = <><span className="calendar-event-line"><strong>{event.title}</strong><span>{event.time}</span></span>{compact ? null : <small>{event.residencyName}</small>}{event.bookingState ? <i className="hfy-booking-indicator" aria-label={event.bookingState === "hfy_pending" ? "HFY request pending" : "HFY booked"} /> : null}</>;
               const tooltip = [event.title, event.room, event.time, compact ? event.residencyName : null].filter(Boolean).join(" · ");
               if (onEventClick) return <button className={eventClassName} style={eventStyle} type="button" title={tooltip} aria-label={`Open ${event.title} on ${event.date}`} onClick={() => onEventClick(event)} key={event.id}>{content}</button>;
               if (event.href) return <Link className={eventClassName} style={eventStyle} title={tooltip} aria-label={`Open ${event.title} on ${event.date}`} href={event.href} key={event.id}>{content}</Link>;

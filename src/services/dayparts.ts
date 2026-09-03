@@ -1,15 +1,17 @@
 import { and, asc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
+import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, rooms, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
-import { HFY_BOOKED_COLOR, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, isRoomHue, roomShadeColors, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType } from "@/domain/dayparts";
 import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import type { AuditActor } from "@/lib/auth";
 import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
+import { findOrCreateResidencyRoom, nextRoomDaypartColor } from "@/services/rooms";
 
 export type SaveDaypartInput = {
   id?: string;
   residencyId: string;
+  roomId?: string | null;
   name: string;
   room: string;
   color: string;
@@ -33,7 +35,7 @@ export async function getDaypartsForResidency(residencyId: string) {
 export async function getDaypartsForResidencies(residencyIds: string[]) {
   if (!residencyIds.length) return [];
   const database = getDb();
-  const [partRows, ruleRows] = await Promise.all([
+  const [partRows, ruleRows, roomRows] = await Promise.all([
     database.select().from(dayparts)
       .where(inArray(dayparts.residencyId, residencyIds))
       .orderBy(asc(dayparts.residencyId), asc(dayparts.sortOrder), asc(dayparts.name)),
@@ -41,9 +43,15 @@ export async function getDaypartsForResidencies(residencyIds: string[]) {
       .innerJoin(dayparts, eq(daypartDayRules.daypartId, dayparts.id))
       .where(inArray(dayparts.residencyId, residencyIds))
       .orderBy(asc(dayparts.residencyId), asc(daypartDayRules.weekday)),
+    database.select({ id: rooms.id, hue: rooms.hue }).from(rooms)
+      .where(inArray(rooms.residencyId, residencyIds)),
   ]);
   return partRows.map((daypart) => ({
     ...daypart,
+    roomHue: (() => {
+      const hue = roomRows.find((room) => room.id === daypart.roomId)?.hue;
+      return hue && isRoomHue(hue) ? hue : null;
+    })(),
     rules: ruleRows.filter((row) => row.daypart_day_rules.daypartId === daypart.id).map((row) => row.daypart_day_rules),
   }));
 }
@@ -242,7 +250,6 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
   const room = input.room.trim();
   let billingMode = input.type === "house_activity" ? null : input.billingMode;
   const requestedColor = input.color.trim().toUpperCase();
-  let color = billingMode === "billed_by_hfy" ? HFY_BOOKED_COLOR : requestedColor;
   let defaultTalentRateCents = input.type === "dj_artist" && billingMode === "billed_by_hfy"
     ? input.defaultTalentRateCents ?? null
     : null;
@@ -252,8 +259,8 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
   const activeUntil = input.activeUntil || null;
   if (!name || !room) throw new Error("Daypart name and room are required.");
   if (!/^#[0-9A-F]{6}$/.test(requestedColor)) throw new Error("Choose a valid Daypart color.");
-  if (billingMode !== "billed_by_hfy" && requestedColor === HFY_BOOKED_COLOR) {
-    throw new Error("HFY pink is reserved for HFY-booked slots. Choose another Daypart color.");
+  if (requestedColor === HFY_BOOKED_COLOR) {
+    throw new Error("HFY pink is a status indicator, not a Daypart color. Choose a room shade.");
   }
   if (input.type === "dj_artist" && billingMode !== "billed_by_hfy" && billingMode !== "tracking_only") {
     throw new Error("Choose how this Daypart is handled.");
@@ -281,10 +288,15 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
     if (residency.tier === "complete" && input.type === "dj_artist") {
       if (actor.kind === "residency") throw new Error("HFY manages Talent Activities for Full Programming accounts.");
       billingMode = "billed_by_hfy";
-      color = HFY_BOOKED_COLOR;
       clientDefaultRateCents = null;
       defaultTalentRateCents = input.defaultTalentRateCents ?? null;
     }
+
+    const assignedRoom = await findOrCreateResidencyRoom(tx, residency.id, room, input.roomId);
+    const allowedRoomColors = roomShadeColors(assignedRoom.hue);
+    const color = input.id
+      ? allowedRoomColors.includes(requestedColor) ? requestedColor : allowedRoomColors[0]
+      : await nextRoomDaypartColor(tx, assignedRoom.id);
 
     const duplicateNameWhere = input.id
       ? and(eq(dayparts.residencyId, residency.id), sql`lower(${dayparts.name}) = lower(${name})`, ne(dayparts.id, input.id))
@@ -301,7 +313,8 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
       if (!existing) throw new Error("Daypart not found in this Residency.");
       await tx.update(dayparts).set({
         name,
-        room,
+        roomId: assignedRoom.id,
+        room: assignedRoom.name,
         color,
         type: input.type,
         billingMode,
@@ -319,8 +332,9 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
     } else {
       const [created] = await tx.insert(dayparts).values({
         residencyId: residency.id,
+        roomId: assignedRoom.id,
         name,
-        room,
+        room: assignedRoom.name,
         color,
         type: input.type,
         billingMode,
@@ -344,7 +358,7 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
       action: input.id ? "daypart_updated" : "daypart_created",
       entityType: "daypart",
       entityId: daypartId,
-      details: { name, room, color, type: input.type, billingMode, scheduleMode: input.scheduleMode, suggestedStartMinute, suggestedEndMinute, defaultTalentRateCents, clientDefaultRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
+      details: { name, room: assignedRoom.name, roomId: assignedRoom.id, roomHue: assignedRoom.hue, color, type: input.type, billingMode, scheduleMode: input.scheduleMode, suggestedStartMinute, suggestedEndMinute, defaultTalentRateCents, clientDefaultRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
     });
     return { id: daypartId };
   });

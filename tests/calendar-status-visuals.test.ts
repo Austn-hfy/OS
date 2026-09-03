@@ -20,12 +20,17 @@ describe("calendar scheduling status visuals", () => {
     expect(legend).toContain("Checkmark: scheduled");
   });
 
-  it("retains distinct pending and fulfilled HFY colors", async () => {
-    const pilot = await readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8");
+  it("retains room fills and distinguishes pending and fulfilled HFY markers", async () => {
+    const [globals, pilot, month] = await Promise.all([
+      readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/month-calendar.tsx", import.meta.url), "utf8"),
+    ]);
 
-    expect(pilot).toContain(".calendar-event.hfy-pending");
-    expect(pilot).toContain("var(--daypart-color, #f9a8d4) 20%");
-    expect(pilot).toContain(".calendar-event.hfy-confirmed");
-    expect(pilot).toContain("var(--daypart-color, #ec4899) 42%");
+    expect(pilot).toContain("the room color remains the pill fill");
+    expect(globals).toContain(".hfy-booking-indicator");
+    expect(globals).toContain(".hfy-pending .hfy-booking-indicator");
+    expect(month).toContain('event.bookingState === "hfy_pending" ? "HFY request pending" : "HFY booked"');
+    expect(pilot).not.toContain("var(--daypart-color, #ec4899) 42%");
   });
 });

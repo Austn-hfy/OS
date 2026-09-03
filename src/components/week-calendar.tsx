@@ -34,7 +34,7 @@ export function WeekCalendar({ weekStart, events, selectedDate, onDateClick, onE
               const { timeRange, status } = eventDetails(event.time);
               const eventStyle = event.color ? { "--daypart-color": event.color } as CSSProperties : undefined;
               const eventClassName = `week-calendar-event ${event.schedulingStatus ? `schedule-${event.schedulingStatus}` : event.color ? "custom-color" : event.tone ?? "blue"} ${event.bookingState ? event.bookingState.replace("_", "-") : ""}`;
-              const content = <><strong>{event.title}</strong><span>{event.room || "Room not set"}</span><span>{timeRange}</span><b>{status}</b></>;
+              const content = <><strong>{event.title}</strong><span>{event.room || "Room not set"}</span><span>{timeRange}</span><b>{status}</b>{event.bookingState ? <i className="hfy-booking-indicator" aria-label={event.bookingState === "hfy_pending" ? "HFY request pending" : "HFY booked"} /> : null}</>;
               const label = `${event.title}, ${event.room || "room not set"}, ${event.time}`;
               if (onEventClick) return <button className={eventClassName} style={eventStyle} type="button" aria-label={`Open ${label} on ${event.date}`} onClick={() => onEventClick(event)} key={event.id}>{content}</button>;
               if (event.href) return <Link className={eventClassName} style={eventStyle} aria-label={`Open ${label} on ${event.date}`} href={event.href} key={event.id}>{content}</Link>;

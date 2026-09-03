@@ -46,17 +46,16 @@ describe("Calendar Only Dayparts", () => {
     expect(calendar).toContain("Back to handling options");
   });
 
-  it("shows every room's Dayparts in one date picker with Other last", async () => {
+  it("uses a room-first funnel with permanent create tiles last", async () => {
     const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
-    expect(calendar).toContain('addMode === "choose" ? "Choose a Daypart"');
-    expect(calendar).toContain("Choose any Daypart across all rooms, or create a one-time activity.");
-    expect(calendar).toContain("suggestions.filter((suggestion) => !suggestion.oneTime).map");
-    expect(calendar).toContain("{suggestion.room} · {suggestionScheduleLabel");
-    expect(calendar).toContain("<strong>Other</strong><small>Create a one-time activity.</small>");
-    expect(calendar.indexOf("suggestions.filter((suggestion) => !suggestion.oneTime).map")).toBeLessThan(calendar.indexOf("<strong>Other</strong><small>Create a one-time activity.</small>"));
-    expect(calendar).not.toContain("const roomOptions = useMemo");
-    expect(calendar).not.toContain("selectedRoomSuggestions");
-    expect(calendar).not.toContain("chooseRoom");
+    expect(calendar).toContain('addMode === "room" ? "Where is this happening?"');
+    expect(calendar).toContain('addMode === "activity" ? "What\'s happening here?"');
+    expect(calendar).toContain("availableRooms.map");
+    expect(calendar).toContain("roomSuggestions.map");
+    expect(calendar).toContain("<strong>Other / new space</strong>");
+    expect(calendar).toContain("<strong>Create new</strong>");
+    expect(calendar).toContain("createResidencyRoomAction");
+    expect(calendar.indexOf("availableRooms.map")).toBeLessThan(calendar.indexOf("<strong>Other / new space</strong>"));
   });
 
   it("uses Mark scheduled for both one-time activity types", async () => {
@@ -91,16 +90,18 @@ describe("Calendar Only Dayparts", () => {
     expect(actions).toContain("deleteOneTimeOccurrenceAction");
   });
 
-  it("uses the same compact scheduling-details row for new and existing activities", async () => {
+  it("keeps edit controls while removing manual color choice from the new flow", async () => {
     const [calendar, styles] = await Promise.all([
       readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
     ]);
     expect(calendar).toContain("function SchedulingActivityDetailsRow");
-    expect(calendar.match(/<SchedulingActivityDetailsRow/g)).toHaveLength(2);
+    expect(calendar.match(/<SchedulingActivityDetailsRow/g)).toHaveLength(1);
     expect(calendar).toContain("<label>Color</label>");
     expect(calendar).toContain("<label>Session name</label>");
     expect(calendar).toContain("<label>Slot time</label>");
+    expect(calendar).toContain("Color is assigned automatically from this room.");
+    expect(calendar).toContain('className="quick-new-activity-details"');
     expect(styles).toContain(".quick-activity-details-row");
     expect(styles).toContain("grid-template-columns: 66px");
   });

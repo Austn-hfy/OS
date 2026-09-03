@@ -7,10 +7,11 @@ describe("one-time calendar slot type", () => {
 
     expect(calendar).toContain('chooseOneTimeType("dj_artist")');
     expect(calendar).toContain('chooseOneTimeType("house_activity")');
-    expect(calendar).toContain("Choose Talent Activity or House Activity to continue.");
-    expect(calendar).toContain('ariaPrefix="one-time activity"');
+    expect(calendar).toContain('addMode === "new-type"');
+    expect(calendar).toContain('addMode === "new-repeat"');
+    expect(calendar).toContain("Does this repeat?");
     expect(calendar).toContain('className="quick-color-picker"');
-    expect(calendar).toContain("oneTimeColorPickerRef.current?.removeAttribute");
+    expect(calendar).toContain("Color is assigned automatically from this room.");
     expect(calendar).not.toContain('aria-label="One-time slot color" type="color"');
   });
 

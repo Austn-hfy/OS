@@ -51,6 +51,44 @@ export const DAYPART_COLOR_PRESET_ROWS: readonly DaypartColorPresetRow[] = [
 
 export const DAYPART_COLOR_PRESETS = DAYPART_COLOR_PRESET_ROWS.flatMap((row) => row.colors);
 
+export const ROOM_HUE_ORDER = ["blue", "orange", "green", "purple", "yellow", "navy", "red", "teal"] as const;
+export type RoomHue = (typeof ROOM_HUE_ORDER)[number];
+export type RoomShade = "dark" | "medium" | "light";
+
+const ROOM_HUE_PRESET_COLUMN: Record<RoomHue, number> = {
+  blue: 5,
+  orange: 1,
+  green: 3,
+  purple: 7,
+  yellow: 2,
+  navy: 6,
+  red: 0,
+  teal: 4,
+};
+
+const ROOM_SHADE_ROW: Record<RoomShade, number> = { dark: 0, medium: 1, light: 2 };
+export const ROOM_SHADE_ORDER = ["dark", "medium", "light"] as const;
+
+export function roomHueForIndex(index: number): RoomHue {
+  return ROOM_HUE_ORDER[Math.max(0, index) % ROOM_HUE_ORDER.length];
+}
+
+export function roomColor(hue: RoomHue, shade: RoomShade = "medium"): string {
+  return DAYPART_COLOR_PRESET_ROWS[ROOM_SHADE_ROW[shade]].colors[ROOM_HUE_PRESET_COLUMN[hue]].value;
+}
+
+export function roomDaypartColor(hue: RoomHue, itemIndex: number): string {
+  return roomColor(hue, ROOM_SHADE_ORDER[Math.max(0, itemIndex) % ROOM_SHADE_ORDER.length]);
+}
+
+export function roomShadeColors(hue: RoomHue): string[] {
+  return ROOM_SHADE_ORDER.map((shade) => roomColor(hue, shade));
+}
+
+export function isRoomHue(value: string): value is RoomHue {
+  return (ROOM_HUE_ORDER as readonly string[]).includes(value);
+}
+
 export type DaypartRuleInput = {
   weekday: number;
   startMinute: number;
@@ -64,8 +102,8 @@ export type DaypartScheduleMode = "standing_weekly" | "calendar_only";
 export type DaypartBookingRecordKind = "financial_shift" | "tracking_occurrence";
 
 export function calendarColorForShift(daypartColor: string | null, shiftCalendarColor: string | null): string | undefined {
-  if (shiftCalendarColor?.toUpperCase() === HFY_BOOKED_COLOR) return HFY_BOOKED_COLOR;
-  return daypartColor ?? shiftCalendarColor ?? undefined;
+  const datedColor = shiftCalendarColor?.toUpperCase() === HFY_BOOKED_COLOR ? null : shiftCalendarColor;
+  return daypartColor ?? datedColor ?? DEFAULT_DAYPART_COLOR;
 }
 
 export function calendarColorForEconomics(
@@ -74,12 +112,8 @@ export function calendarColorForEconomics(
   economicsMode: "hfy" | "client_owned" | "hfy_request" | undefined,
   audience: "client" | "internal" = "client",
 ): string | undefined {
-  if (economicsMode === "hfy_request") return HFY_PENDING_COLOR;
-  if (economicsMode === "hfy") {
-    if (audience === "client") return HFY_BOOKED_COLOR;
-    const internalShiftColor = shiftCalendarColor?.toUpperCase() === HFY_BOOKED_COLOR ? null : shiftCalendarColor;
-    return daypartColor ?? internalShiftColor ?? DEFAULT_DAYPART_COLOR;
-  }
+  void economicsMode;
+  void audience;
   return calendarColorForShift(daypartColor, shiftCalendarColor);
 }
 

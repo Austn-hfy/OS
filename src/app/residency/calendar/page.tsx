@@ -6,6 +6,7 @@ import { requireResidencyActor } from "@/lib/auth";
 import { calendarToneForSlot, monthKeyForDate, monthRange, normalizeCalendarView, normalizeMonthKey, normalizeWeekStart, shiftDateKey, weekRange } from "@/lib/calendar";
 import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
 import { ResidencyCalendar, type ResidencyEvent } from "@/app/app/calendar/residency-calendar";
+import { getRoomsForResidency } from "@/services/rooms";
 
 export default async function ResidencyClientCalendarPage({ searchParams }: { searchParams: Promise<{ month?: string; calendarView?: string; week?: string }> }) {
   const [actor, params] = await Promise.all([requireResidencyActor(), searchParams]);
@@ -14,10 +15,11 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
   const weekStart = normalizeWeekStart(params.week, requestedMonthKey);
   const monthKey = calendarView === "week" ? monthKeyForDate(shiftDateKey(weekStart, 3)) : requestedMonthKey;
   const range = calendarView === "week" ? weekRange(weekStart) : monthRange(monthKey);
-  const [calendar, occurrences, dayparts, roster, calendarLinkSettings, dateExceptions] = await Promise.all([
+  const [calendar, occurrences, dayparts, rooms, roster, calendarLinkSettings, dateExceptions] = await Promise.all([
     getCalendarData(actor.residencyId, range),
     getScheduleOccurrenceData(actor.residencyId, range),
     getDaypartsForResidency(actor.residencyId),
+    getRoomsForResidency(actor.residencyId),
     getResidencyClientSafeRoster(actor.residencyId),
     getPublicCalendarLinkSettings(actor.residencyId),
     getDaypartDateExceptionsForResidencies([actor.residencyId], range),
@@ -87,7 +89,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
   }));
   const events = [...savedShifts, ...savedOccurrences, ...projected].sort((left, right) => left.date.localeCompare(right.date) || left.shiftStartMinute - right.shiftStartMinute);
   const safeDayparts = dayparts.map((daypart) => ({
-    id: daypart.id, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode,
+    id: daypart.id, roomId: daypart.roomId, roomHue: daypart.roomHue, name: daypart.name, room: daypart.room, color: daypart.color, type: daypart.type, billingMode: daypart.billingMode,
     scheduleMode: daypart.scheduleMode, suggestedStartMinute: daypart.suggestedStartMinute, suggestedEndMinute: daypart.suggestedEndMinute,
     defaultTalentRateCents: null, activeUntil: daypart.activeUntil, active: daypart.active,
     rules: daypart.rules.map((rule) => ({ weekday: rule.weekday, startMinute: rule.startMinute, endMinute: rule.endMinute, defaultDjCount: rule.defaultDjCount })),
@@ -95,7 +97,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
 
   return <div className="calendar-page client-calendar-page"><ResidencyCalendar
     residency={{ id: actor.residencyId, name: actor.residencyName, timezone: actor.residencyTimezone, defaultTalentRateCents: 0, clientHourlyRateCents: 0, calendarLinkSettings }}
-    monthKey={monthKey} calendarView={calendarView} weekStart={weekStart} events={events} dayparts={safeDayparts}
+    monthKey={monthKey} calendarView={calendarView} weekStart={weekStart} events={events} rooms={rooms} dayparts={safeDayparts}
     talent={actor.residencyTier === "complete" ? [] : roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
     dateExceptions={dateExceptions}
     previewMode fullProgramming={actor.residencyTier === "complete"} calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}

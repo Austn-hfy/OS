@@ -1,12 +1,13 @@
 import { and, eq, gt, inArray, isNull, lt, ne, gte, lte, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAssignmentTerms, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
+import { assignments, auditLog, clientAssignmentTerms, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
 import { calculateBillableAmountCents, calculateCompensationCents, resolveRateCents, resolveTalentRateCents } from "@/domain/airtable-parity";
-import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute, type DaypartBillingMode, type DaypartType } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, daypartBookingRecordKind, hasOverlappingAssignmentMinutes, localDateTimeForMinute, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 import type { AuditActor } from "@/lib/auth";
 import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
+import { findOrCreateResidencyRoom, nextRoomDaypartColor } from "@/services/rooms";
 
 export type BookingAssignmentInput = {
   talentId?: string | null;
@@ -19,6 +20,7 @@ export type BookingAssignmentInput = {
 
 export type DaypartBookingInput = {
   daypartId: string | null;
+  roomId?: string | null;
   name?: string;
   room?: string;
   calendarColor?: string;
@@ -32,6 +34,10 @@ export type DaypartBookingInput = {
   programDetails?: string;
   manualHostName?: string;
   requestHfy?: boolean;
+  createDaypart?: {
+    scheduleMode: DaypartScheduleMode;
+    rules?: DaypartRuleInput[];
+  };
   assignments: BookingAssignmentInput[];
 };
 
@@ -76,8 +82,6 @@ function validateOneTimeRecordInput(input: UpdateOneTimeRecordInput) {
 
 export async function createResidencyDateBooking(actor: AuditActor, input: CreateResidencyDateBookingInput) {
   if (!input.dayparts.length) throw new Error("Choose at least one Daypart to book.");
-  const requestedIds = input.dayparts.map((item) => item.daypartId).filter((id): id is string => Boolean(id));
-  if (new Set(requestedIds).size !== requestedIds.length) throw new Error("Each Daypart can be booked only once per date.");
 
   return getDb().transaction(async (tx) => {
     const [residency] = await tx.select().from(residencies).where(and(
@@ -88,8 +92,88 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
     if (!residency) throw new Error("Residency not found.");
     const fullProgrammingClient = actor.kind === "residency" && residency.tier === "complete";
 
+    const normalizedDayparts: DaypartBookingInput[] = [];
+    for (const requested of input.dayparts) {
+      if (requested.daypartId || !requested.createDaypart) {
+        if (requested.daypartId) {
+          normalizedDayparts.push(requested);
+          continue;
+        }
+        const room = await findOrCreateResidencyRoom(tx, residency.id, requested.room ?? "", requested.roomId);
+        normalizedDayparts.push({
+          ...requested,
+          roomId: room.id,
+          room: room.name,
+          calendarColor: await nextRoomDaypartColor(tx, room.id),
+        });
+        continue;
+      }
+
+      const name = requested.name?.trim() ?? "";
+      const type = requested.type;
+      if (!name || !type) throw new Error("Name the activity and choose its type before scheduling it.");
+      if (residency.tier === "complete" && actor.kind === "residency" && type === "dj_artist") {
+        throw new Error("HFY manages Talent Activities for Full Programming accounts.");
+      }
+      const room = await findOrCreateResidencyRoom(tx, residency.id, requested.room ?? "", requested.roomId);
+      const [duplicate] = await tx.select({ id: dayparts.id }).from(dayparts).where(and(
+        eq(dayparts.residencyId, residency.id),
+        sql`lower(${dayparts.name}) = lower(${name})`,
+      )).limit(1);
+      if (duplicate) throw new Error(`A Daypart named “${name}” already exists in this Residency. Choose it from the room instead.`);
+
+      const scheduleMode = requested.createDaypart.scheduleMode;
+      const rules = scheduleMode === "standing_weekly" ? validateDaypartRules(requested.createDaypart.rules ?? []) : [];
+      if (scheduleMode === "standing_weekly" && !rules.some((rule) => rule.weekday === weekdayForDate(input.serviceDate))) {
+        throw new Error("A weekly activity scheduled today must include today's weekday.");
+      }
+      const billingMode = type === "house_activity"
+        ? null
+        : residency.tier === "complete" || actor.kind === "internal"
+          ? "billed_by_hfy" as const
+          : requested.billingMode ?? "tracking_only" as const;
+      const color = await nextRoomDaypartColor(tx, room.id);
+      const [createdDaypart] = await tx.insert(dayparts).values({
+        residencyId: residency.id,
+        roomId: room.id,
+        name,
+        room: room.name,
+        color,
+        type,
+        billingMode,
+        scheduleMode,
+        suggestedStartMinute: scheduleMode === "calendar_only" ? requested.startMinute : null,
+        suggestedEndMinute: scheduleMode === "calendar_only" ? requested.endMinute : null,
+        defaultTalentRateCents: null,
+        clientDefaultRateCents: type === "dj_artist" && billingMode === "tracking_only" ? requested.clientTalentDefaultRateCents ?? null : null,
+        active: true,
+      }).returning({ id: dayparts.id });
+      if (rules.length) await tx.insert(daypartDayRules).values(rules.map((rule) => ({ daypartId: createdDaypart.id, ...rule })));
+      await tx.insert(auditLog).values({
+        residencyId: residency.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "daypart_created_from_calendar",
+        entityType: "daypart",
+        entityId: createdDaypart.id,
+        details: { name, room: room.name, roomId: room.id, roomHue: room.hue, color, type, billingMode, scheduleMode, serviceDate: input.serviceDate, weekdays: rules.map((rule) => rule.weekday) },
+      });
+      normalizedDayparts.push({
+        ...requested,
+        daypartId: createdDaypart.id,
+        roomId: room.id,
+        room: room.name,
+        calendarColor: color,
+        billingMode,
+      });
+    }
+
+    const requestedIds = normalizedDayparts.map((item) => item.daypartId).filter((id): id is string => Boolean(id));
+    if (new Set(requestedIds).size !== requestedIds.length) throw new Error("Each Daypart can be booked only once per date.");
+
     const ruleRows = requestedIds.length ? await tx.select({
       daypartId: dayparts.id,
+      roomId: dayparts.roomId,
       name: dayparts.name,
       room: dayparts.room,
       color: dayparts.color,
@@ -120,7 +204,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
     ]) : [[], []];
     if (existingShifts.length || existingOccurrences.length) throw new Error("One of these Dayparts is already scheduled on this date.");
 
-    const talentIds = fullProgrammingClient ? [] : [...new Set(input.dayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
+    const talentIds = fullProgrammingClient ? [] : [...new Set(normalizedDayparts.flatMap((item) => item.assignments.map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))))];
     if (actor.kind === "internal" && talentIds.length) assertResidencyTalentRateConfigured(residency.defaultTalentRateCents);
     const talentRows = talentIds.length ? await tx.select({
       id: talent.id,
@@ -147,7 +231,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
 
     const createdShiftIds: string[] = [];
     const createdOccurrenceIds: string[] = [];
-    for (const requested of input.dayparts) {
+    for (const requested of normalizedDayparts) {
       if (!Number.isInteger(requested.startMinute) || requested.startMinute < 0 || requested.startMinute >= 1440
         || !Number.isInteger(requested.endMinute) || requested.endMinute <= requested.startMinute || requested.endMinute > requested.startMinute + 1440) {
         throw new Error("Choose valid Daypart hours.");
@@ -156,6 +240,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         ? ruleRows.find((item) => item.daypartId === requested.daypartId)!
         : {
             daypartId: null,
+            roomId: requested.roomId ?? null,
             name: requested.name?.trim() ?? "",
             room: requested.room?.trim() ?? "",
             color: requested.calendarColor ?? "#2783DC",
@@ -231,6 +316,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       if (recordKind === "tracking_occurrence") {
         const [occurrence] = await tx.insert(scheduleOccurrences).values({
           residencyId: residency.id,
+          roomId: rule.roomId,
           daypartId: rule.daypartId,
           serviceDate: input.serviceDate,
           name: rule.name,
@@ -288,6 +374,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       const clientRateCents = economicsMode === "hfy" ? resolveRateCents(requested.clientRateOverrideCents, residency.clientHourlyRateCents) : 0;
       const [shift] = await tx.insert(shifts).values({
         residencyId: residency.id,
+        roomId: rule.roomId,
         daypartId: rule.daypartId,
         invoiceId: linkedInvoice?.id ?? null,
         name: rule.name,
@@ -450,6 +537,8 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       && (!Number.isInteger(input.clientTalentDefaultRateCents) || (input.clientTalentDefaultRateCents ?? 0) <= 0)) {
       throw new Error("Enter a positive session artist rate.");
     }
+    const assignedRoom = await findOrCreateResidencyRoom(tx, shift.residencyId, clean.room);
+    const calendarColor = clean.calendarColor;
 
     const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.startMinute), shift.timezone);
     const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.endMinute), shift.timezone);
@@ -478,8 +567,9 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
 
     await tx.update(shifts).set({
       name: clean.name,
-      room: clean.room,
-      calendarColor: clean.calendarColor,
+      roomId: assignedRoom.id,
+      room: assignedRoom.name,
+      calendarColor,
       startsAt,
       endsAt,
       notes: input.notes?.trim() ?? "",
@@ -516,7 +606,7 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
       action: "one_time_shift_updated",
       entityType: "shift",
       entityId: shift.id,
-      details: { serviceDate: shift.serviceDate, name: clean.name, room: clean.room, calendarColor: clean.calendarColor, startMinute: input.startMinute, endMinute: input.endMinute, clientTalentDefaultRateCents: shift.economicsMode === "client_owned" ? input.clientTalentDefaultRateCents ?? null : null, pendingTalentInvoiceAdjustmentCents: adjustmentCents },
+      details: { serviceDate: shift.serviceDate, name: clean.name, room: assignedRoom.name, roomId: assignedRoom.id, calendarColor, startMinute: input.startMinute, endMinute: input.endMinute, clientTalentDefaultRateCents: shift.economicsMode === "client_owned" ? input.clientTalentDefaultRateCents ?? null : null, pendingTalentInvoiceAdjustmentCents: adjustmentCents },
     });
     return { id: shift.id };
   });
@@ -537,6 +627,8 @@ export async function updateOneTimeOccurrence(actor: AuditActor, input: UpdateOn
       .limit(1)
       .for("update");
     if (!occurrence || occurrence.daypartId !== null) throw new Error("Only one-time activities can be edited here.");
+    const assignedRoom = await findOrCreateResidencyRoom(tx, occurrence.residencyId, clean.room);
+    const calendarColor = clean.calendarColor;
     const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.startMinute), occurrence.timezone);
     const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.endMinute), occurrence.timezone);
     const outsideTalent = await tx.select({ id: scheduleOccurrenceTalent.id }).from(scheduleOccurrenceTalent).where(and(
@@ -546,8 +638,9 @@ export async function updateOneTimeOccurrence(actor: AuditActor, input: UpdateOn
     if (outsideTalent.length) throw new Error("Artist hours must stay inside the new activity window.");
     await tx.update(scheduleOccurrences).set({
       name: clean.name,
-      room: clean.room,
-      color: clean.calendarColor,
+      roomId: assignedRoom.id,
+      room: assignedRoom.name,
+      color: calendarColor,
       startsAt,
       endsAt,
       notes: input.notes?.trim() ?? "",
@@ -562,7 +655,7 @@ export async function updateOneTimeOccurrence(actor: AuditActor, input: UpdateOn
       action: "one_time_occurrence_updated",
       entityType: "schedule_occurrence",
       entityId: occurrence.id,
-      details: { serviceDate: occurrence.serviceDate, name: clean.name, room: clean.room, calendarColor: clean.calendarColor, startMinute: input.startMinute, endMinute: input.endMinute },
+      details: { serviceDate: occurrence.serviceDate, name: clean.name, room: assignedRoom.name, roomId: assignedRoom.id, calendarColor, startMinute: input.startMinute, endMinute: input.endMinute },
     });
     return { id: occurrence.id };
   });

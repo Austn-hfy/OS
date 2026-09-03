@@ -29,6 +29,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ resi
   return NextResponse.json({
     dayparts: dayparts.filter((daypart) => !hfyOnly || isStandingHfyDaypart(daypart)).map((daypart) => ({
       id: daypart.id,
+      roomId: daypart.roomId,
+      roomHue: daypart.roomHue,
       name: daypart.name,
       room: daypart.room,
       color: daypart.color,
