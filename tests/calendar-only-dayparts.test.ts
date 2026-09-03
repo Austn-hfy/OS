@@ -7,6 +7,8 @@ describe("Calendar Only Dayparts", () => {
     const manager = await readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8");
     expect(manager).toContain("<strong>Recurring Daypart</strong>");
     expect(manager).toContain("<strong>One-off / Occasional activity</strong>");
+    expect(manager).toContain('{draft.type ? <div className="field daypart-schedule-step">');
+    expect(manager).not.toContain('draft.type && (draft.type === "house_activity" || draft.billingMode) ? <div className="field daypart-schedule-step"');
     expect(manager).not.toContain("<strong>Standing weekly</strong>");
     expect(manager).not.toContain("<strong>Calendar Only</strong>");
   });
