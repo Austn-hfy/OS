@@ -180,3 +180,57 @@ export async function updateResidencyRoom(actor: AuditActor, input: { residencyI
     return { ...room, name, hue: input.hue, daypartCount: roomDayparts.length };
   });
 }
+
+function roomReferenceLabel(count: number, singular: string, plural: string): string | null {
+  if (!count) return null;
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+export async function deleteResidencyRoom(actor: AuditActor, input: { residencyId: string; roomId: string }) {
+  return getDb().transaction(async (tx) => {
+    const [residency] = await tx.select({ id: residencies.id }).from(residencies).where(and(
+      eq(residencies.id, input.residencyId),
+      eq(residencies.active, true),
+      eq(residencies.operatingMode, "operations"),
+    )).limit(1);
+    if (!residency) throw new Error("Residency not found.");
+
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${residency.id}, 0))`);
+    const [room] = await tx.select({ id: rooms.id, name: rooms.name, hue: rooms.hue })
+      .from(rooms)
+      .where(and(eq(rooms.id, input.roomId), eq(rooms.residencyId, residency.id)))
+      .limit(1)
+      .for("update");
+    if (!room) throw new Error("Room not found in this Residency.");
+
+    const [{ itemCount: daypartCount }] = await tx.select({ itemCount: count(dayparts.id) })
+      .from(dayparts)
+      .where(eq(dayparts.roomId, room.id));
+    const [{ itemCount: occurrenceCount }] = await tx.select({ itemCount: count(scheduleOccurrences.id) })
+      .from(scheduleOccurrences)
+      .where(eq(scheduleOccurrences.roomId, room.id));
+    const [{ itemCount: shiftCount }] = await tx.select({ itemCount: count(shifts.id) })
+      .from(shifts)
+      .where(eq(shifts.roomId, room.id));
+    const references = [
+      roomReferenceLabel(Number(daypartCount), "Daypart or template", "Dayparts or templates"),
+      roomReferenceLabel(Number(occurrenceCount), "one-time activity", "one-time activities"),
+      roomReferenceLabel(Number(shiftCount), "talent activity", "talent activities"),
+    ].filter((reference): reference is string => Boolean(reference));
+    if (references.length) {
+      throw new Error(`${room.name} can’t be deleted yet because it is used by ${references.join(", ")}. Move or delete those items first.`);
+    }
+
+    await tx.delete(rooms).where(and(eq(rooms.id, room.id), eq(rooms.residencyId, residency.id)));
+    await tx.insert(auditLog).values({
+      residencyId: residency.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "residency_room_deleted",
+      entityType: "room",
+      entityId: room.id,
+      details: { name: room.name, hue: safeHue(room.hue) },
+    });
+    return { id: room.id, name: room.name };
+  });
+}

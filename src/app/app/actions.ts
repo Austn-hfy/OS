@@ -24,7 +24,7 @@ import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-
 import { requestOrigin } from "@/lib/request-origin";
 import { isFullCalendarMonth } from "@/domain/talent-invoicing";
 import { sendResidencyAccountSetupEmail } from "@/services/account-setup-email";
-import { createResidencyRoom, updateResidencyRoom, type ResidencyRoom } from "@/services/rooms";
+import { createResidencyRoom, deleteResidencyRoom, updateResidencyRoom, type ResidencyRoom } from "@/services/rooms";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type CreateRoomActionState = ResidencyActionState & { room?: ResidencyRoom };
@@ -1738,6 +1738,24 @@ export async function updateResidencyRoomAction(formData: FormData): Promise<Cre
     return { status: "success", message: `${room.name} updated.`, room };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to update this room." };
+  }
+}
+
+export async function deleteResidencyRoomAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      roomId: z.uuid(),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    const room = await deleteResidencyRoom(actor, parsed);
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/dayparts");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/dayparts");
+    return { status: "success", message: `${room.name} deleted.` };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to delete this room." };
   }
 }
 
