@@ -17,6 +17,7 @@ describe("room selection safeguards", () => {
     expect(combobox).toContain("Similar room found:");
     expect(combobox).toContain("Create “{trimmedValue}”");
     expect(combobox).toContain("Choose an existing room from the list, or explicitly create a new space.");
+    expect(combobox).toContain('onMouseDown={(event) => event.preventDefault()}');
   });
 
   it("uses the picker for Calendar additions, one-time edits, and Daypart editing", async () => {
@@ -24,9 +25,22 @@ describe("room selection safeguards", () => {
     const dayparts = await readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8");
     expect(calendar.match(/<RoomCombobox/g)).toHaveLength(2);
     expect(calendar).toContain("creationConfirmed={newRoomPromptOpen}");
+    expect(calendar).toContain("function chooseRoom(room: RoomComboboxOption)");
+    expect(calendar).toContain("setNewRoomName(room.name)");
+    expect(calendar).toContain("onSelect={chooseRoom}");
     expect(calendar).toContain("editingOneTimeRoomReady");
     expect(dayparts).toContain("creationConfirmed={draft.createRoom}");
     expect(dayparts).toContain("disabled={pending || !hasSelectedRoom}");
+  });
+
+  it("keeps Calendar room choices inside a full-height responsive picker", async () => {
+    const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
+    const styles = await readFile(new URL("../src/app/globals.css", import.meta.url), "utf8");
+    expect(calendar).toContain("quick-modal-room-picker");
+    expect(styles).toContain(".quick-modal.quick-modal-room-picker");
+    expect(styles).toContain(".room-combobox.open .room-combobox-options");
+    expect(styles).toContain("position: static");
+    expect(styles).toContain("@media (max-height: 700px)");
   });
 
   it("rejects silent creation in the scheduling services", async () => {
