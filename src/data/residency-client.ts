@@ -7,6 +7,7 @@ import { calculateClientOwedCents, resolveClientHourlyRateCents } from "@/domain
 import { projectClientSafeRoster, projectClientSafeTalent, type ClientSafeManagedTalent } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
 import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents } from "@/domain/platform-billing";
+import { loadPlatformLiveUsage } from "@/services/platform-usage";
 
 export async function getResidencyClientCalendar(residencyId: string, range: { from: string; to: string }) {
   const database = getDb();
@@ -347,19 +348,28 @@ export async function getResidencyPlatformBilling(residencyId: string) {
     id: platformSubscriptions.id,
     status: platformSubscriptions.status,
     cadence: platformSubscriptions.cadence,
+    revision: platformSubscriptions.revision,
     talentProgramSessions: platformSubscriptions.talentProgramSessions,
     talentSessionUnitAmountCents: platformSubscriptions.talentSessionUnitAmountCents,
     housePrograms: platformSubscriptions.housePrograms,
     houseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
+    oneOffAllowance: platformSubscriptions.oneOffAllowance,
+    unitAmountCents: platformSubscriptions.unitAmountCents,
+    startsOn: platformSubscriptions.startsOn,
+    renewsOn: platformSubscriptions.renewsOn,
+    stripeSubscriptionId: platformSubscriptions.stripeSubscriptionId,
     cardBrand: platformSubscriptions.cardBrand,
     cardLast4: platformSubscriptions.cardLast4,
     nextChargeAt: platformSubscriptions.nextChargeAt,
+    paymentFailedAt: platformSubscriptions.paymentFailedAt,
+    paymentFailureMessage: platformSubscriptions.paymentFailureMessage,
   }).from(platformSubscriptions).where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
   if (!subscription) return { subscription: null, invoices: [] };
 
   const invoiceRows = await getDb().select({
     id: platformSubscriptionInvoices.id,
     stripeInvoiceId: platformSubscriptionInvoices.stripeInvoiceId,
+    invoiceNumber: platformSubscriptionInvoices.invoiceNumber,
     billingPeriodStart: platformSubscriptionInvoices.billingPeriodStart,
     billingPeriodEnd: platformSubscriptionInvoices.billingPeriodEnd,
     invoiceDate: platformSubscriptionInvoices.invoiceDate,
@@ -367,22 +377,39 @@ export async function getResidencyPlatformBilling(residencyId: string) {
     amountPaidCents: platformSubscriptionInvoices.amountPaidCents,
     status: platformSubscriptionInvoices.status,
     hostedInvoiceUrl: platformSubscriptionInvoices.hostedInvoiceUrl,
+    pdfStoragePath: platformSubscriptionInvoices.pdfStoragePath,
   }).from(platformSubscriptionInvoices)
     .where(and(
       eq(platformSubscriptionInvoices.platformSubscriptionId, subscription.id),
       eq(platformSubscriptionInvoices.residencyId, residencyId),
     ))
     .orderBy(desc(platformSubscriptionInvoices.invoiceDate), desc(platformSubscriptionInvoices.createdAt));
-  const monthlyAmountCents = calculatePlatformMonthlyAmountCents(subscription);
+  const monthlyAmountCents = calculatePlatformMonthlyAmountCents({ ...subscription, unitAmountCents: subscription.unitAmountCents });
+  const liveUsage = await loadPlatformLiveUsage(residencyId);
   return {
     subscription: {
       ...subscription,
       nextChargeAt: subscription.nextChargeAt?.toISOString() ?? null,
+      paymentFailedAt: subscription.paymentFailedAt?.toISOString() ?? null,
       monthlyAmountCents,
       nextChargeAmountCents: platformCadenceChargeCents(monthlyAmountCents, subscription.cadence),
     },
     invoices: invoiceRows,
+    liveUsage: liveUsage?.usage ?? null,
+    comparison: liveUsage?.comparison ?? null,
+    usagePeriod: liveUsage ? { start: liveUsage.periodStart, end: liveUsage.periodEnd } : null,
   };
+}
+
+export async function getResidencyPaymentFailure(residencyId: string) {
+  const [row] = await getDb().select({
+    paymentFailedAt: platformSubscriptions.paymentFailedAt,
+    paymentFailureMessage: platformSubscriptions.paymentFailureMessage,
+  }).from(platformSubscriptions).where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
+  return row?.paymentFailedAt ? {
+    failedAt: row.paymentFailedAt.toISOString(),
+    message: row.paymentFailureMessage,
+  } : null;
 }
 
 export async function getResidencyClientSettings(residencyId: string) {

@@ -1776,3 +1776,75 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 @media (max-width: 560px) {
   .daypart-setting-tiles { grid-template-columns: 1fr; }
 }
+
+/* Platform subscription billing — isolated from the Talent invoice workspace. */
+.platform-test-mode-badge { width: max-content; display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid rgba(29,120,209,.28); border-radius: 999px; color: #0f5ea8; background: #eaf4ff; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.platform-test-mode-badge::before { width: 7px; height: 7px; border-radius: 50%; background: #2783dc; content: ""; box-shadow: 0 0 0 3px rgba(39,131,220,.12); }
+.platform-payment-failure-banner { position: sticky; top: 0; z-index: 95; display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: -1px -1px 20px; padding: 13px 18px; border: 1px solid #ad1f2b; border-radius: 13px; color: #fff; background: linear-gradient(110deg, #a71928, #d53843); box-shadow: 0 12px 34px rgba(126,11,26,.24); }
+.platform-payment-failure-banner > div { display: grid; gap: 2px; }
+.platform-payment-failure-banner strong { font-size: 12px; }
+.platform-payment-failure-banner span { color: rgba(255,255,255,.86); font-size: 10px; line-height: 1.35; }
+.platform-payment-failure-banner a { flex: 0 0 auto; padding: 8px 11px; border-radius: 9px; color: #891420; background: #fff; font-size: 10px; font-weight: 900; }
+.platform-payment-failed-inline { display: flex; align-items: center; gap: 13px; padding: 14px 16px; border: 1px solid #e4a8ae; border-radius: 14px; color: #7f1520; background: #fff0f1; }
+.platform-payment-failed-inline strong { flex: 0 0 auto; }
+.platform-payment-failed-inline span { flex: 1; font-size: 11px; line-height: 1.45; }
+.platform-payment-failed-inline form { margin-left: auto; }
+.platform-payment-failed-inline .button { background: #a71928; }
+.workspace-surface-platform-console, .workspace-surface-platform-billing { display: grid; gap: 18px; }
+.platform-billing-residencies { display: grid; gap: 18px; }
+.platform-owner-card { display: grid; gap: 18px; padding: 22px; }
+.platform-owner-card > header, .platform-owner-card-heading, .platform-comparison-heading, .residency-overview-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.platform-owner-card h2, .platform-live-comparison h2, .platform-plan-breakdown h2, .platform-invoice-history h2 { font-size: 22px; }
+.platform-owner-card header p:not(.eyebrow), .platform-plan-breakdown p, .platform-live-comparison p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
+.platform-owner-statuses, .platform-owner-actions, .platform-card-actions, .platform-invoice-links { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.platform-owner-plan-summary, .platform-billing-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.platform-billing-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.platform-owner-plan-summary > div, .platform-billing-summary > article { display: grid; gap: 5px; min-width: 0; padding: 15px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.64); }
+.platform-owner-plan-summary small, .platform-billing-summary small { color: var(--muted); font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.platform-owner-plan-summary strong, .platform-billing-summary strong { overflow-wrap: anywhere; font-family: "Plus Jakarta Sans", sans-serif; font-size: 18px; }
+.platform-billing-summary span { font-size: 9px; }
+.platform-live-comparison { display: grid; gap: 14px; padding: 17px; border: 1px solid #cbdff4; border-radius: 17px; background: linear-gradient(145deg, #f5faff, #edf5fd); }
+.platform-usage-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.platform-usage-metric { display: grid; gap: 4px; padding: 12px; border: 1px solid rgba(25,80,130,.13); border-radius: 13px; background: rgba(255,255,255,.78); }
+.platform-usage-metric span, .platform-usage-metric small { color: var(--muted); font-size: 9px; }
+.platform-usage-metric strong { font-family: "Plus Jakarta Sans", sans-serif; font-size: 20px; }
+.platform-usage-metric.within strong, .platform-usage-within { color: #17633f; }
+.platform-usage-metric.over { border-color: #e2a3a8; background: #fff1f2; }
+.platform-usage-metric.over strong, .platform-usage-over { color: #9e1d2a; }
+.platform-plan-form { display: grid; gap: 14px; padding-top: 8px; }
+.platform-plan-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.platform-plan-reason { grid-column: span 2; }
+.platform-plan-form .privacy-note, .platform-live-comparison .privacy-note { margin: 0; }
+.platform-plan-editor, .platform-plan-history { padding-top: 13px; border-top: 1px solid var(--line); }
+.platform-plan-editor summary, .platform-plan-history summary { cursor: pointer; font-size: 11px; font-weight: 800; }
+.platform-plan-history ol { display: grid; gap: 8px; margin: 13px 0 0; padding-left: 20px; }
+.platform-plan-history li { padding-left: 4px; }
+.platform-plan-history li strong, .platform-plan-history li span, .platform-plan-history li small { display: block; }
+.platform-plan-history li span, .platform-plan-history li small { margin-top: 2px; font-size: 9px; }
+.platform-stripe-connected { color: #17633f; font-size: 10px; font-weight: 800; }
+.platform-plan-breakdown { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr); gap: 24px; padding: 20px; }
+.platform-plan-breakdown dl, .residency-overview-plan-list { display: grid; gap: 9px; margin: 0; }
+.platform-plan-breakdown dl > div, .residency-overview-plan-list > div { display: flex; justify-content: space-between; gap: 14px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
+.platform-plan-breakdown dt, .residency-overview-plan-list dt { color: var(--muted); font-size: 10px; }
+.platform-plan-breakdown dd, .residency-overview-plan-list dd { margin: 0; font-size: 10px; font-weight: 800; text-align: right; text-transform: capitalize; }
+.platform-invoice-history { display: grid; gap: 16px; padding: 20px; }
+.platform-invoice-history table { min-width: 860px; }
+.platform-invoice-history .button { min-height: 30px; padding: 7px 9px; font-size: 9px; }
+.platform-billing-empty { padding: 28px; }
+.residency-overview-surface { display: grid; gap: 18px; }
+.residency-overview-grid { display: grid; gap: 18px; }
+.residency-overview-grid > .card { display: grid; align-content: start; gap: 14px; min-height: 250px; padding: 22px; }
+.residency-overview-grid > .card > .button { align-self: end; justify-self: start; margin-top: auto; }
+.residency-overview-grid h2 { font-size: 24px; }
+.residency-overview-grid p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+@media (max-width: 1050px) {
+  .platform-owner-plan-summary, .platform-plan-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .platform-payment-failure-banner, .platform-payment-failed-inline, .platform-owner-card > header, .platform-owner-card-heading, .platform-comparison-heading { align-items: stretch; flex-direction: column; }
+  .platform-payment-failure-banner a, .platform-payment-failed-inline form, .platform-payment-failed-inline .button { width: 100%; margin-left: 0; text-align: center; }
+  .platform-owner-plan-summary, .platform-billing-summary, .platform-usage-grid, .platform-plan-form-grid, .platform-plan-breakdown { grid-template-columns: 1fr; }
+  .platform-plan-reason { grid-column: auto; }
+}

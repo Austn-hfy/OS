@@ -76,6 +76,7 @@ beforeAll(async () => {
   const widerRoomShades = await readFile(new URL("../drizzle/0038_wider_room_shades.sql", import.meta.url), "utf8");
   const crossEnvironmentAccessLog = await readFile(new URL("../drizzle/0039_cross_environment_access_log.sql", import.meta.url), "utf8");
   const persistentCalendarLinks = await readFile(new URL("../drizzle/0041_cheerful_meteorite.sql", import.meta.url), "utf8");
+  const platformBillingSystem = await readFile(new URL("../drizzle/0042_platform_billing_system.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -161,6 +162,7 @@ beforeAll(async () => {
   await database.exec(widerRoomShades.replaceAll("--> statement-breakpoint", ""));
   await database.exec(crossEnvironmentAccessLog.replaceAll("--> statement-breakpoint", ""));
   await database.exec(persistentCalendarLinks.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(platformBillingSystem.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -234,6 +236,15 @@ describe("database replacements for Airtable audit formulas", () => {
     await expect(database.exec(`
       UPDATE platform_subscription_invoices SET residency_id = '${ids.residencyB}' WHERE id = '${ids.platformInvoice}';
     `)).rejects.toThrow(/must match its subscription Residency/);
+    await expect(database.exec(`
+      INSERT INTO platform_usage_snapshots
+        (residency_id, platform_subscription_id, snapshot_date, period_start, period_end, talent_sessions, house_programs, one_offs)
+      VALUES ('${ids.residencyB}', '${ids.platformSubscription}', '2026-09-04', '2026-09-01', '2026-09-30', 8, 3, 0);
+    `)).rejects.toThrow(/must match its subscription Residency/);
+    await expect(database.exec(`
+      INSERT INTO stripe_webhook_events (id, type, livemode)
+      VALUES ('evt_live_forbidden', 'invoice.paid', true);
+    `)).rejects.toThrow(/stripe_webhook_events_test_only|check constraint/i);
   });
 
   it("locks monthly talent schedules and scopes carry-forward adjustments to their Residency", async () => {

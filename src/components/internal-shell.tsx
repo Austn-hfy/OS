@@ -22,7 +22,7 @@ export function resolveOwnerMode(pathname: string, requestedMode: string | null)
   if (hfyOnlyRoute) return "hfy";
   if (requestedMode === "developer") return "developer";
   if (requestedMode === "hfy") return "hfy";
-  return pathname.startsWith("/app/setup") ? "developer" : "hfy";
+  return pathname.startsWith("/app/setup") || pathname.startsWith("/app/platform-billing") ? "developer" : "hfy";
 }
 
 export function InternalShell({ actor, residencies, developerResidencies, initialPrivacyMode, children }: { actor: InternalActor; residencies: ResidencyOption[]; developerResidencies: ResidencyOption[]; initialPrivacyMode: boolean; children: React.ReactNode }) {
@@ -53,6 +53,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
     { label: "Setup", href: `/app/setup${residencySuffix}`, description: "Program configuration", icon: "setup" },
   ] : mode === "developer" ? [
     { label: "Residencies", href: "/app?mode=developer", description: "Platform workspaces", icon: "residencies" },
+    { label: "Platform Billing", href: "/app/platform-billing?mode=developer", description: "Plans, usage, and Stripe", icon: "invoices" },
     { label: "Admin Settings", href: "/app/setup?mode=developer", description: "Company identity", icon: "settings" },
   ] : [
     { label: "Work Queue", href: "/app?mode=hfy", description: "Requests and standing work", icon: "workqueue" },

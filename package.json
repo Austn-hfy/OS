@@ -28,7 +28,9 @@
     "talent:import-airtable": "tsx scripts/import-airtable-talent.ts",
     "talent:verify-airtable": "tsx scripts/verify-airtable-talent-import.ts",
     "security:verify-ace": "tsx scripts/verify-ace-rls.ts",
-    "pdf:sample": "tsx scripts/render-sample-invoice.ts"
+    "pdf:sample": "tsx scripts/render-sample-invoice.ts",
+    "pdf:sample:platform": "tsx scripts/render-sample-platform-invoice.ts",
+    "stripe:verify:platform": "tsx --env-file=.env.development.local scripts/verify-platform-stripe-test.ts"
   },
   "dependencies": {
     "@sentry/nextjs": "10.71.0",
@@ -45,6 +47,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "resend": "6.21.0",
+    "stripe": "^22.6.1",
     "zod": "4.4.3"
   },
   "devDependencies": {

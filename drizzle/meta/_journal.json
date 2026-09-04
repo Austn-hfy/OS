@@ -295,6 +295,13 @@
       "when": 1788613200000,
       "tag": "0041_cheerful_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1788699600000,
+      "tag": "0042_platform_billing_system",
+      "breakpoints": true
     }
   ]
 }
