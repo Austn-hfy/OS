@@ -10,7 +10,12 @@ describe("owner View As safety", () => {
       readFile(new URL("../src/app/app/calendar/page.tsx", import.meta.url), "utf8"),
     ]);
     expect(viewAsActions).toContain('redirect("/residency/calendar")');
+    expect(residencyLayout).toContain('import { PrivacyModeProvider } from "@/components/privacy-mode";');
+    expect(residencyLayout).toContain("<PrivacyModeProvider initialEnabled={false}>");
     expect(residencyLayout).toContain("<ResidencyShell actor={actor}>");
+    expect(residencyLayout.indexOf("<PrivacyModeProvider")).toBeLessThan(
+      residencyLayout.indexOf("<ResidencyShell"),
+    );
     expect(internalShell).not.toContain("if (viewAsResidency)");
     expect(internalShell).not.toContain("Residency preview");
     expect(internalCalendar).not.toContain("viewAsResidencyId");
