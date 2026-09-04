@@ -25,4 +25,15 @@ describe("public calendar layout", () => {
     expect(styles).toMatch(/\.public-calendar-artist strong,[\s\S]*?overflow-wrap: anywhere;/);
     expect(styles).toContain(".public-calendar-detail { max-height: 560px; }");
   });
+
+  it("keeps the opened event hierarchy compact and aligned at every breakpoint", async () => {
+    const styles = await readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8");
+
+    expect(styles).toMatch(/\.public-calendar-agenda-heading h2 \{[^}]*margin: 0;[^}]*line-height: 1\.1;/);
+    expect(styles).toMatch(/\.public-calendar-detail-heading \{[^}]*gap: 0;[^}]*padding: 18px;/);
+    expect(styles).toMatch(/\.public-calendar-detail-heading h2 \{[^}]*margin: 0;[^}]*clamp\(20px, 1\.55vw, 24px\)/);
+    expect(styles).toMatch(/\.public-calendar-detail-body \{[^}]*padding: 0 18px 18px;/);
+    expect(styles).toMatch(/@media \(max-width: 850px\)[\s\S]*?\.public-calendar-detail-heading \{ padding: 16px; \}[\s\S]*?\.public-calendar-detail-body \{ padding: 0 16px 16px; \}/);
+    expect(styles).toMatch(/@media \(max-width: 520px\)[\s\S]*?\.public-calendar-detail-heading \{ padding: 14px; \}[\s\S]*?\.public-calendar-detail-body \{ padding: 0 14px 14px; \}/);
+  });
 });
