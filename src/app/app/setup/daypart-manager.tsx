@@ -129,7 +129,7 @@ function draftFromDaypart(daypart: DaypartRow, resolvedRoom?: ResidencyRoom): Ed
     suggestedEnd: minuteToClock(daypart.suggestedEndMinute ?? daypart.rules[0]?.endMinute ?? 1260),
     defaultTalentRate: daypart.defaultTalentRateCents === null ? "" : (daypart.defaultTalentRateCents / 100).toFixed(2),
     clientDefaultRate: daypart.clientDefaultRateCents === null ? "" : (daypart.clientDefaultRateCents / 100).toFixed(2),
-    activeUntil: daypart.activeUntil ?? "",
+    activeUntil: daypart.scheduleMode === "calendar_only" ? "" : daypart.activeUntil ?? "",
     active: daypart.active,
     sortOrder: daypart.sortOrder,
     rules: weekdayNames.map((_, weekday) => {
@@ -167,10 +167,15 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   const [dateValidationRequested, setDateValidationRequested] = useState(false);
   const [removePending, setRemovePending] = useState(false);
   const [removeState, setRemoveState] = useState<ResidencyActionState>(initialActionState);
+  const [activeUntilExpanded, setActiveUntilExpanded] = useState(false);
+  const [editorActionsOpen, setEditorActionsOpen] = useState(false);
+  const editorActionsRef = useRef<HTMLDivElement>(null);
   const submitDaypart = async (previous: ResidencyActionState, formData: FormData) => {
     const result = await saveDaypartAction(previous, formData);
     if (result.status === "success") {
       setDraft(null);
+      setActiveUntilExpanded(false);
+      setEditorActionsOpen(false);
       onSaved?.();
     }
     return result;
@@ -207,14 +212,30 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   useEffect(() => {
     if (!draft) return;
     const priorOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setDraft(null); };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (editorActionsOpen) setEditorActionsOpen(false);
+      else {
+        setDraft(null);
+        setActiveUntilExpanded(false);
+      }
+    };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = priorOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [draft]);
+  }, [draft, editorActionsOpen]);
+
+  useEffect(() => {
+    if (!editorActionsOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!editorActionsRef.current?.contains(event.target as Node)) setEditorActionsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [editorActionsOpen]);
 
   useEffect(() => {
     if (!roomDraft) return;
@@ -288,7 +309,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
       suggestedEndMinute,
       defaultTalentRateCents: draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? centsFromOptionalDollars(draft.defaultTalentRate) : null,
       clientDefaultRateCents: draft.type === "dj_artist" && draft.billingMode === "tracking_only" ? centsFromOptionalDollars(draft.clientDefaultRate) : null,
-      activeUntil: draft.activeUntil || null,
+      activeUntil: draft.scheduleMode === "calendar_only" ? null : draft.activeUntil || null,
       active: draft.active,
       sortOrder: draft.sortOrder,
       rules: draft.scheduleMode === "calendar_only" ? [] : draft.rules.flatMap((rule, weekday) => {
@@ -457,6 +478,8 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
     setRemoveState(result);
     if (result.status === "success") {
       setDraft(null);
+      setActiveUntilExpanded(false);
+      setEditorActionsOpen(false);
       onSaved?.();
     }
   }
@@ -548,7 +571,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
       {roomDraft ? <div className="room-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setRoomDraft(null); }}><aside className="room-editor-panel" role="dialog" aria-modal="true" aria-labelledby="room-editor-title"><div className="room-editor-heading"><div><p className="eyebrow">Room &amp; space</p><h2 id="room-editor-title">Edit room</h2></div><button className="quick-modal-close" type="button" aria-label="Close room editor" onClick={() => setRoomDraft(null)}>×</button></div><div className="room-editor-body"><div className="field"><label htmlFor="room-editor-name">Room name</label><input id="room-editor-name" value={roomDraft.name} onChange={(event) => setRoomDraft({ ...roomDraft, name: event.target.value })} maxLength={160} autoFocus required /></div><div className="field"><label>Room color</label><RoomHuePicker value={roomDraft.hue} onChange={(hue) => setRoomDraft({ ...roomDraft, hue })} ariaLabel={`Choose the room color for ${roomDraft.name}`} /><small>Saving updates the room name everywhere and recolors its Dayparts and reusable templates across four high-contrast shades.</small></div><div className="daypart-danger-zone"><div><strong>Delete room</strong><small>Only an empty room can be deleted. Existing Dayparts, templates, and dated Calendar activities are always preserved.</small></div><button className="remove-dj-button" type="button" disabled={roomPending || roomDeletePending} onClick={() => void deleteRoom()}>{roomDeletePending ? "Deleting…" : "Delete room"}</button></div>{roomState.status === "error" ? <p className="error" aria-live="polite">{roomState.message}</p> : null}</div><div className="room-editor-actions"><button className="button secondary" type="button" disabled={roomPending || roomDeletePending} onClick={() => setRoomDraft(null)}>Cancel</button><button className="button" type="button" disabled={roomPending || roomDeletePending || !roomDraft.name.trim()} onClick={() => void saveRoom()}>{roomPending ? "Saving…" : "Save room"}</button></div></aside></div> : roomState.status === "success" ? <p className="success" aria-live="polite">{roomState.message}</p> : null}
 
       {draft ? (
-        <div className="daypart-drawer-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setDraft(null); }}>
+        <div className="daypart-drawer-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) { setDraft(null); setActiveUntilExpanded(false); setEditorActionsOpen(false); } }}>
           <aside className="daypart-drawer" role="dialog" aria-modal="true" aria-labelledby="daypart-editor-title">
             <form className="daypart-editor" action={formAction} onSubmit={(event) => {
               if (draft.scheduleMode === "calendar_only" || draft.rules.some((rule) => rule.enabled && rule.start && rule.end)) return;
@@ -556,21 +579,20 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
               setDateValidationRequested(true);
             }}>
               <input name="payload" type="hidden" value={payload} />
-              <div className="daypart-editor-heading"><div><p className="eyebrow">{draft.id ? draft.scheduleMode === "calendar_only" ? "Edit reusable template" : "Edit Daypart" : "New Daypart"}</p><h2 id="daypart-editor-title">{draft.id ? draft.name : draft.scheduleMode === "calendar_only" ? "Create reusable template" : "Add standing hours"}</h2></div><button className="quick-modal-close" type="button" aria-label="Close Daypart editor" onClick={() => setDraft(null)}>×</button></div>
+              <div className="daypart-editor-heading"><div><p className="eyebrow">{draft.id ? draft.scheduleMode === "calendar_only" ? "Edit reusable template" : "Edit Daypart" : "New Daypart"}</p><div className="daypart-editor-title-row"><h2 id="daypart-editor-title">{draft.id ? draft.name : draft.scheduleMode === "calendar_only" ? "Create reusable template" : "Add standing hours"}</h2>{draft.id && draft.scheduleMode === "standing_weekly" ? <span className={`daypart-editor-status ${draft.active ? "" : "paused"}`}>{draft.active ? "Active" : "Paused"}</span> : null}</div></div><button className="quick-modal-close" type="button" aria-label="Close Daypart editor" onClick={() => { setDraft(null); setActiveUntilExpanded(false); setEditorActionsOpen(false); }}>×</button></div>
               <div className="daypart-editor-scroll">
                 <div className="field"><label>Type</label><div className="daypart-type-options">{fullProgrammingClient ? null : <button className={draft.type === "dj_artist" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "dj_artist", billingMode: draft.type === "dj_artist" ? draft.billingMode : null })}><strong>Talent Activity</strong><small>Schedule programming with talent. Assignments and financial tracking follow the billing choice you select next.</small></button>}<button className={draft.type === "house_activity" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, type: "house_activity", billingMode: null, defaultTalentRate: "", clientDefaultRate: "", rules: draft.rules.map((rule) => ({ ...rule, defaultDjCount: "0" })) })}><strong>House Activity</strong><small>Schedule an activity or optional host without creating talent financial records.</small></button></div></div>
                 {draft.type === "dj_artist" && !fullProgrammingClient ? <div className="field daypart-billing-step"><label>Billing</label><div className="daypart-type-options"><button className={draft.billingMode === "billed_by_hfy" ? "active standing-hfy" : "standing-hfy"} type="button" onClick={() => setDraft({ ...draft, billingMode: "billed_by_hfy", clientDefaultRate: "" })}><strong>Standing HFY Booking</strong><small>HFY handles talent and billing for every occurrence of this Daypart automatically — no per-date request needed.</small></button><button className={draft.billingMode === "tracking_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, billingMode: "tracking_only", defaultTalentRate: "" })}><strong>Client Managed</strong><small>You handle talent and billing yourself. You can still request HFY for individual dates from the Calendar.</small></button></div></div> : null}
-                {draft.type ? <div className="field daypart-schedule-step"><label>Choose the schedule type up front</label><div className="daypart-type-options"><button className={draft.scheduleMode === "standing_weekly" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, scheduleMode: "standing_weekly" })}><strong>Recurring Daypart</strong><small>Automatically appears on the weekdays you select.</small></button><button className={draft.scheduleMode === "calendar_only" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, scheduleMode: "calendar_only" })}><strong>Reusable One-off Template</strong><small>Save this as a reusable one-off template you can schedule onto any date later.</small></button></div></div> : null}
+                {draft.type ? <div className="field daypart-schedule-step"><label>Choose the schedule type up front</label><div className="daypart-type-options"><button className={draft.scheduleMode === "standing_weekly" ? "active" : ""} type="button" onClick={() => setDraft({ ...draft, scheduleMode: "standing_weekly" })}><strong>Recurring Daypart</strong><small>Automatically appears on the weekdays you select.</small></button><button className={draft.scheduleMode === "calendar_only" ? "active" : ""} type="button" onClick={() => { setActiveUntilExpanded(false); setDraft({ ...draft, scheduleMode: "calendar_only", activeUntil: "" }); }}><strong>Reusable One-off Template</strong><small>Save this as a reusable one-off template you can schedule onto any date later.</small></button></div></div> : null}
                 {draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <>
                 {draft.scheduleMode === "calendar_only" ? <div className="template-defaults-note" role="note"><strong>Template defaults only</strong><span>Name, type, billing, and recommended hours prefill the next date you schedule. Saving changes here never updates dates already scheduled, and you can override the time or details for any individual date.</span></div> : null}
-                <div className="row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /></div><div className="field"><label>Room / space</label><RoomCombobox rooms={residencyRooms} value={draft.room} selectedRoomId={draft.roomId} creationConfirmed={draft.createRoom} placeholder="Start typing, for example Amigo" ariaLabel="Daypart room or space" onChange={updateDraftRoom} onSelect={selectDraftRoom} onCreate={selectNewDraftRoom} /></div></div>
-                <div className="daypart-definition-row">
-                  <div className="field daypart-color-field"><label>{draft.roomId ? "Room color shade" : draft.createRoom ? "New room color" : "Room color"}</label>{draft.roomId && draft.roomHue ? <><DaypartColorPicker ariaLabel={`${draft.room} color shades`} hue={draft.roomHue} value={draft.color} onChange={(color) => setDraft({ ...draft, color })} /><small>Choose from four high-contrast shades. The room’s hue stays fixed.{draft.billingMode === "billed_by_hfy" ? " HFY status appears as a pink corner marker." : ""}</small></> : draft.createRoom && draft.roomHue ? <><RoomHuePicker value={draft.roomHue} onChange={(roomHue) => setDraft({ ...draft, roomHue, color: roomDaypartColor(roomHue, 0) })} ariaLabel={`Choose the room color for ${draft.room}`} /><small>The next automatic color is preselected. This first Daypart uses its dark shade.</small></> : <><div className="daypart-color-control"><span style={{ background: draft.color }} aria-hidden="true" /><strong>Choose a room</strong></div><small>Select an existing room or explicitly create a new space above.</small></>}</div>
+                <div className="row daypart-identity-row"><div className="field"><label>Name</label><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Vinyl Night" required /><small className="daypart-field-spacer" aria-hidden="true">Room selection status</small></div><div className="field"><label>Room / space</label><RoomCombobox rooms={residencyRooms} value={draft.room} selectedRoomId={draft.roomId} creationConfirmed={draft.createRoom} placeholder="Start typing, for example Amigo" ariaLabel="Daypart room or space" onChange={updateDraftRoom} onSelect={selectDraftRoom} onCreate={selectNewDraftRoom} /></div></div>
+                <div className={`daypart-definition-row ${draft.scheduleMode === "calendar_only" ? "template" : "recurring"} ${draft.type === "dj_artist" && (draft.billingMode === "tracking_only" || (!hideFinancials && draft.billingMode === "billed_by_hfy")) ? "has-rate" : ""}`}>
+                  <div className="field daypart-color-field"><label>{draft.roomId ? "Room color shade" : draft.createRoom ? "New room color" : "Room color"}</label>{draft.roomId && draft.roomHue ? <DaypartColorPicker ariaLabel={`${draft.room} color shades`} hue={draft.roomHue} value={draft.color} onChange={(color) => setDraft({ ...draft, color })} /> : draft.createRoom && draft.roomHue ? <><RoomHuePicker value={draft.roomHue} onChange={(roomHue) => setDraft({ ...draft, roomHue, color: roomDaypartColor(roomHue, 0) })} ariaLabel={`Choose the room color for ${draft.room}`} /><small>The next automatic color is preselected. This first Daypart uses its dark shade.</small></> : <><div className="daypart-color-control"><span style={{ background: draft.color }} aria-hidden="true" /><strong>Choose a room</strong></div><small>Select an existing room or explicitly create a new space above.</small></>}</div>
                   {!hideFinancials && draft.type === "dj_artist" && draft.billingMode === "billed_by_hfy" ? <div className={`field daypart-rate-field ${draftNeedsRate ? "needs-attention" : ""}`}><label>Default talent rate ($/hr) {draftNeedsRate ? <span className="daypart-rate-needed-label">Needed</span> : null}</label><SensitiveInput type="number" min="0" step="0.01" value={draft.defaultTalentRate} onChange={(event) => setDraft({ ...draft, defaultTalentRate: event.target.value })} placeholder="Enter the hourly rate" /><small>Required before HFY OS can calculate artist pay for this Daypart. You can save now and finish it later.</small></div> : null}
                   {draft.type === "dj_artist" && draft.billingMode === "tracking_only" ? <div className={`field daypart-rate-field ${draftNeedsRate ? "needs-attention" : ""}`}><label>Default artist rate ($/hr) {draftNeedsRate ? <span className="daypart-rate-needed-label">Needed</span> : null}</label><input name="clientDefaultRate" type="number" min="0" step="0.01" value={draft.clientDefaultRate} onChange={(event) => setDraft({ ...draft, clientDefaultRate: event.target.value })} placeholder="Enter the hourly rate" /><small>Required before HFY OS can calculate what the artist is owed. You can override a specific date in Payouts.</small></div> : null}
-                  <div className="field"><label>Active until <span>optional</span></label><input type="date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><small>Blank means this Daypart continues indefinitely.</small></div>
+                  {draft.scheduleMode === "standing_weekly" ? <div className="daypart-end-date-field">{activeUntilExpanded || draft.activeUntil ? <div className="daypart-end-date-controls"><input type="date" aria-label="Daypart end date" value={draft.activeUntil} onChange={(event) => setDraft({ ...draft, activeUntil: event.target.value })} /><button className="daypart-end-date-reset" type="button" onClick={() => { setDraft({ ...draft, activeUntil: "" }); setActiveUntilExpanded(false); }}>Reset</button></div> : <button className="daypart-end-date-toggle" type="button" onClick={() => setActiveUntilExpanded(true)}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z" /><path d="M12 14v5M9.5 16.5h5" /></svg><span>Add end date</span></button>}</div> : null}
                 </div>
-                <label className="checkbox-row"><input checked={draft.active} onChange={(event) => setDraft({ ...draft, active: event.target.checked })} type="checkbox" /> Active Daypart</label>
                 {draft.scheduleMode === "calendar_only" ? <div className="week-rule-selection calendar-only-hours"><div className="week-rule-intro"><div><strong>Recommended default hours</strong><small>These hours prefill only the next date you schedule. You can adjust them for that date without changing the template.</small></div></div><div className="quick-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel="Reusable template default start time" value={draft.suggestedStart} onChange={(suggestedStart) => setDraft({ ...draft, suggestedStart })} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel="Reusable template default end time" value={draft.suggestedEnd} onChange={(suggestedEnd) => setDraft({ ...draft, suggestedEnd })} stepMinutes={15} required /></div></div></div> : <>
                 <div className={`week-rule-selection ${showDateValidation ? "invalid" : ""}`} ref={dateSectionRef} role="group" aria-labelledby="daypart-weekly-hours-label" aria-describedby={showDateValidation ? "daypart-date-validation" : undefined}>
                 <div className="week-rule-intro"><div><strong id="daypart-weekly-hours-label">Weekly hours</strong><small>Select every day this Daypart runs. Each day can keep different hours.</small></div><button className="button secondary" type="button" title="Copy the first selected day’s start and end times to the other selected days" onClick={applyToAllSelected}>Sync times to selected days</button></div>
@@ -586,12 +608,14 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
                 </div>
                 </>}
                 {draft.type === "dj_artist" ? <p className="privacy-note">{draft.scheduleMode === "calendar_only" ? "Reusable one-off templates never appear until someone schedules a specific date. Each scheduled date keeps its own saved details." : "Talent count is optional. Leave it at 0 when the number of registered artists changes by date."}</p> : <p className="privacy-note">House Activities never create Artist, Assignment, Payout, or Invoice records.</p>}
-                {draft.id ? <div className="daypart-danger-zone"><div><strong>{draft.scheduleMode === "calendar_only" ? "Remove template" : "Remove Daypart"}</strong><small>Unused {draft.scheduleMode === "calendar_only" ? "templates" : "Dayparts"} are deleted. Anything with scheduled or historical records is archived so its history stays intact.</small></div><button className="remove-dj-button" type="button" disabled={removePending} onClick={removeCurrentDaypart}>{removePending ? "Removing…" : draft.scheduleMode === "calendar_only" ? "Delete / archive template" : "Delete / archive Daypart"}</button></div> : null}
                 </> : <div className="card empty daypart-type-gate">{!draft.type ? "Choose Talent Activity or House Activity to continue." : draft.type === "dj_artist" && !draft.billingMode ? "Choose Standing HFY Booking or Client Managed to continue." : "Choose Recurring Daypart or Reusable One-off Template to continue."}</div>}
                 {state.status === "error" && !missingDateServerError ? <p className="error" aria-live="polite">{state.message}</p> : null}
                 {removeState.status === "error" ? <p className="error" aria-live="polite">{removeState.message}</p> : null}
               </div>
-              <div className="daypart-editor-actions"><button className="button secondary" type="button" onClick={() => setDraft(null)}>Cancel</button>{draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <button className="button" disabled={pending || !hasSelectedRoom} type="submit">{pending ? "Saving…" : draft.scheduleMode === "calendar_only" ? "Save template" : "Save Daypart"}</button> : null}</div>
+              <div className="daypart-editor-actions">
+                {draft.id ? <div className="daypart-editor-more" ref={editorActionsRef}><button className="daypart-editor-more-trigger" type="button" aria-haspopup="menu" aria-expanded={editorActionsOpen} onClick={() => setEditorActionsOpen((open) => !open)}>More actions <span aria-hidden="true">⌄</span></button>{editorActionsOpen ? <div className="daypart-editor-more-menu" role="menu">{draft.scheduleMode === "standing_weekly" ? <button type="button" role="menuitem" onClick={() => { setDraft({ ...draft, active: !draft.active }); setEditorActionsOpen(false); }}>{draft.active ? "Pause Daypart" : "Resume Daypart"}</button> : null}<button className="danger" type="button" role="menuitem" disabled={removePending} onClick={() => { setEditorActionsOpen(false); void removeCurrentDaypart(); }}>{removePending ? "Removing…" : draft.scheduleMode === "calendar_only" ? "Delete / archive template" : "Delete / archive Daypart"}</button></div> : null}</div> : null}
+                <div className="daypart-editor-primary-actions"><button className="button secondary" type="button" onClick={() => { setDraft(null); setActiveUntilExpanded(false); setEditorActionsOpen(false); }}>Cancel</button>{draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <button className="button" disabled={pending || !hasSelectedRoom} type="submit">{pending ? "Saving…" : draft.scheduleMode === "calendar_only" ? "Save template" : "Save Daypart"}</button> : null}</div>
+              </div>
             </form>
           </aside>
         </div>
