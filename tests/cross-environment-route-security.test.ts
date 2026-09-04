@@ -29,6 +29,7 @@ describe("cross-environment route security", () => {
     expect(source.indexOf("await beginCrossEnvironmentAccess(identity)")).toBeLessThan(source.indexOf("await loadProductionStructureExport"));
     expect(source).not.toContain("PRODUCTION_SYNC_DATABASE_URL");
     expect(source).not.toMatch(/console\.(?:log|error)[^\n]*(?:token|snapshot|authorization)/i);
+    expect(source).toContain('console.error("Production structure export failed.", JSON.stringify(safeExportError(error)))');
     expect(source).toContain('"Cache-Control": "no-store"');
   });
 

@@ -69,6 +69,19 @@ function deniedAlert(input: {
   });
 }
 
+function safeExportError(error: unknown) {
+  if (!(error instanceof Error)) return { name: "UnknownError", message: "Unknown production export failure." };
+  const details = error as Error & { code?: unknown; cause?: unknown };
+  const cause = details.cause instanceof Error ? details.cause : null;
+  return {
+    name: details.name.slice(0, 80),
+    message: details.message.slice(0, 500),
+    code: typeof details.code === "string" ? details.code.slice(0, 40) : null,
+    causeName: cause?.name.slice(0, 80) ?? null,
+    causeMessage: cause?.message.slice(0, 500) ?? null,
+  };
+}
+
 export async function POST(request: NextRequest) {
   if (!isProductionExportEnvironment(request.nextUrl.hostname, productionEnvironment())) {
     return json({ error: "Not found." }, 404);
@@ -157,7 +170,7 @@ export async function POST(request: NextRequest) {
     });
     alertCrossEnvironmentAccess({ ...identity, outcome: "succeeded", reasonCode: null, recordCounts });
     return json({ snapshot }, 200);
-  } catch {
+  } catch (error) {
     try {
       await finishCrossEnvironmentAccess({
         requestId: parsed.requestId,
@@ -169,6 +182,7 @@ export async function POST(request: NextRequest) {
     } catch {
       // The response still fails closed when the terminal audit write is unavailable.
     }
+    console.error("Production structure export failed.", JSON.stringify(safeExportError(error)));
     alertCrossEnvironmentAccess({ ...identity, outcome: "failed", reasonCode: "export_failed" });
     return json({ error: "The production structure export could not be completed." }, 500);
   }
