@@ -60,14 +60,16 @@ describe("Calendar Only Dayparts", () => {
     expect(manager).not.toContain("Active until <span>optional</span>");
     expect(manager).not.toContain("Active Daypart");
     expect(manager).not.toContain("Choose from four high-contrast shades. The room’s hue stays fixed.");
-    expect(manager).toContain("Add end date");
+    expect(manager).toContain("None — runs indefinitely");
     expect(manager).toContain('aria-label="Daypart end date"');
-    expect(manager).toContain("Reset");
+    expect(manager).toContain("Change");
+    expect(manager).toContain("Clear");
     expect(manager).toContain("More actions");
     expect(manager).toContain("Pause Daypart");
     expect(manager).toContain("Resume Daypart");
     expect(styles).toContain(".daypart-color-spectrum.single-hue { display: flex;");
-    expect(styles).toContain(".daypart-end-date-toggle");
+    expect(styles).toContain(".daypart-setting-tiles");
+    expect(styles).toContain(".daypart-setting-tile");
     expect(styles).toContain(".daypart-editor-more-menu");
   });
 

@@ -45,7 +45,9 @@ describe("Daypart default-rate attention", () => {
     ]);
     expect(manager).toContain("daypart-rate-attention-banner");
     expect(manager).toContain("daypart-rate-needed-mark");
-    expect(manager).toContain("daypart-rate-field");
+    expect(manager).toContain("daypart-setting-tile rate");
+    expect(manager).toContain("formatDraftHourlyRate");
+    expect(manager).toContain('draftNeedsRate ? "Required"');
     expect(manager).toContain("calendar-only-daypart-card ${needsRate ? \"needs-rate\"");
     expect(calendar).not.toContain("daypart-rate-attention");
     expect(residencyShell).toContain("attention={needsDaypartRateAttention}");
