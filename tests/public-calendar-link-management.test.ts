@@ -76,12 +76,17 @@ describe("persistent public calendar link management", () => {
       "Included Dayparts",
     ]) expect(manager).toContain(label);
     expect(manager).not.toContain("Regenerate link");
+    expect(manager).not.toContain("Copy again");
+    expect(manager).toContain("Copied to clipboard");
+    expect(manager).toContain("manualCopyFallback");
     expect(button).toContain('role="dialog"');
     expect(button).toContain('aria-modal="true"');
     expect(button).toContain('event.key === "Escape"');
     expect(button).toContain('event.key !== "Tab"');
     expect(button).toContain('aria-describedby="calendar-share-description"');
+    expect(button).toContain("createPortal");
     expect(styles).toContain(".daypartChildPanel");
+    expect(styles).toContain(".modalBackdrop");
     expect(styles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
   });
 });

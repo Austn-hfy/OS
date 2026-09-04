@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { PublicCalendarLinkManager } from "@/components/public-calendar-link-manager";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
 import styles from "./public-calendar-link-manager.module.css";
@@ -56,16 +57,16 @@ export function CalendarShareButton({ residencyId, residencyName, linkSettings, 
       </svg>
       <span>Share calendar</span>
     </button>
-    {open ? <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setOpen(false); }}>
+    {open ? createPortal(<div className={`quick-modal-backdrop ${styles.modalBackdrop}`} onMouseDown={(event) => { if (event.currentTarget === event.target) setOpen(false); }}>
       <section className={`quick-modal ${styles.modal}`} ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="calendar-share-title" aria-describedby="calendar-share-description">
-        <header className="quick-modal-header">
+        <header className={`quick-modal-header ${styles.modalHeader}`}>
           <div><p className="eyebrow">{residencyName}</p><h2 id="calendar-share-title">Share calendar</h2><p id="calendar-share-description">Create and manage read-only links for trusted partners.</p></div>
           <button className="quick-modal-close" type="button" ref={closeRef} aria-label="Close share calendar" onClick={() => setOpen(false)}>×</button>
         </header>
-        <div className="quick-modal-body">
+        <div className={`quick-modal-body ${styles.modalBody}`}>
           <PublicCalendarLinkManager residencyId={residencyId} linkSettings={linkSettings} dayparts={dayparts} />
         </div>
       </section>
-    </div> : null}
+    </div>, document.body) : null}
   </>;
 }
