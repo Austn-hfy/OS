@@ -106,16 +106,24 @@ describe("Platform Invoice document", () => {
 
 describe("payment failure access invariant", () => {
   it("shows the failure on every Residency page without changing authorization", async () => {
-    const [layout, auth, alerts] = await Promise.all([
+    const [layout, auth, alerts, accountSetup, invoiceDelivery, outboundEmail, eslintConfig] = await Promise.all([
       readSource("../src/app/residency/layout.tsx"),
       readSource("../src/lib/auth.ts"),
       readSource("../src/services/platform-billing-alerts.ts"),
+      readSource("../src/services/account-setup-email.ts"),
+      readSource("../src/services/invoice-delivery.ts"),
+      readSource("../src/services/outbound-email.ts"),
+      readSource("../eslint.config.mjs"),
     ]);
     expect(layout).toContain("getResidencyPaymentFailure");
     expect(layout).toContain("platform-payment-failure-banner");
     expect(layout).toContain("Your portal remains fully available");
     expect(auth).not.toContain("paymentFailedAt");
     expect(alerts).toContain('accessBehavior: "never_restrict"');
-    expect(alerts).toContain('requiredEnv("PLATFORM_BILLING_TEST_RECIPIENT_EMAIL")');
+    expect([alerts, accountSetup, invoiceDelivery].every((source) => source.includes("sendEmail"))).toBe(true);
+    expect([alerts, accountSetup, invoiceDelivery].every((source) => !source.includes('from "resend"'))).toBe(true);
+    expect(outboundEmail).toContain("routeOutboundEmailForEnvironment");
+    expect(eslintConfig).toContain('name: "resend"');
+    expect(eslintConfig).toContain('ignores: ["src/services/outbound-email.ts"]');
   });
 });

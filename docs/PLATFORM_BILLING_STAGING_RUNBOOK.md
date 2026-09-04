@@ -30,8 +30,9 @@ NEXT_PUBLIC_APP_URL=https://staging.hfy.app
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
+RESEND_API_KEY=re_...
+STAGING_EMAIL_RECIPIENT_OVERRIDE=<controlled test inbox>
 PLATFORM_BILLING_OWNER_EMAIL=<owner billing address>
-PLATFORM_BILLING_TEST_RECIPIENT_EMAIL=<controlled test inbox>
 PLATFORM_BILLING_FROM_EMAIL=<verified staging sender>
 PLATFORM_BILLING_REPLY_TO=<staging reply-to>
 PLATFORM_BILLING_LEGAL_NAME=HFY LLC
@@ -39,7 +40,7 @@ PLATFORM_PRODUCT_NAME=Platform
 PLATFORM_BILLING_ADDRESS=<invoice address>
 ```
 
-Staging records separate intended owner and hotel notifications, but the dispatcher sends both to `PLATFORM_BILLING_TEST_RECIPIENT_EMAIL`. This prevents a staging failure simulation from contacting a real hotel.
+All application-level Resend delivery uses one central gateway. On the `staging` Preview deployment, it replaces every To recipient with `STAGING_EMAIL_RECIPIENT_OVERRIDE`, removes all Cc and Bcc recipients, and fails closed if the override is absent or invalid. The original recipients remain visible in the staging-only subject prefix. This protects account-setup and Talent invoice flows as well as Platform billing alerts, regardless of current or future staging test data.
 
 Create a Stripe test-mode webhook endpoint at:
 

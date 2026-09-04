@@ -1,7 +1,6 @@
 import "server-only";
 
 import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
-import { Resend } from "resend";
 import { getDb } from "@/db/client";
 import {
   attentionItems,
@@ -13,6 +12,7 @@ import {
 } from "@/db/schema";
 import { requiredEnv } from "@/lib/env";
 import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
+import { sendEmail } from "@/services/outbound-email";
 
 function escapeHtml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
@@ -179,17 +179,13 @@ export async function sendPendingPlatformBillingAlerts(limit = 25, alertIds?: st
   for (const alert of pending) {
     const attemptedAt = new Date();
     try {
-      const resend = new Resend(requiredEnv("RESEND_API_KEY"));
       const content = alertContent(alert);
-      const result = await resend.emails.send({
+      const result = await sendEmail({
         from: process.env.PLATFORM_BILLING_FROM_EMAIL || requiredEnv("INVOICE_FROM_EMAIL"),
-        // Staging is deliberately unable to email a real hotel address. Both
-        // owner/hotel notifications remain separate outbox records, but every
-        // test delivery is captured by one explicit test inbox.
-        to: requiredEnv("PLATFORM_BILLING_TEST_RECIPIENT_EMAIL"),
+        to: alert.recipientEmail,
         replyTo: process.env.PLATFORM_BILLING_REPLY_TO || process.env.INVOICE_REPLY_TO || "billing@hearforyou.group",
-        subject: `[STAGING for ${alert.audience}: ${alert.recipientEmail}] ${content.subject}`,
-        html: `<p><strong>Staging test delivery.</strong> Intended recipient: ${escapeHtml(alert.recipientEmail)}</p>${content.html}`,
+        subject: content.subject,
+        html: content.html,
       }, { idempotencyKey: alert.idempotencyKey });
       if (result.error) throw new Error(result.error.message);
       await database.update(platformBillingAlerts).set({
