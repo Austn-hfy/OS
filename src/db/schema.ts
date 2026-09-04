@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -209,15 +210,31 @@ export const platformSubscriptionInvoices = pgTable("platform_subscription_invoi
 ]);
 
 export const publicCalendarLinks = pgTable("public_calendar_links", {
-  residencyId: uuid("residency_id").primaryKey().references(() => residencies.id, { onDelete: "cascade" }),
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
   tokenHash: text("token_hash").notNull(),
+  tokenCiphertext: text("token_ciphertext"),
   scope: text("scope").$type<"all" | "selected">().notNull().default("all"),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  updatedByUserId: uuid("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
   rotatedByUserId: uuid("rotated_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokedByUserId: uuid("revoked_by_user_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   rotatedAt: timestamp("rotated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("public_calendar_links_token_hash_unique").on(table.tokenHash),
+  uniqueIndex("public_calendar_links_id_residency_unique").on(table.id, table.residencyId),
+  uniqueIndex("public_calendar_links_active_name_unique")
+    .on(table.residencyId, sql`lower(btrim(${table.name}))`)
+    .where(sql`${table.revokedAt} IS NULL`),
+  index("public_calendar_links_residency_status_idx").on(table.residencyId, table.revokedAt, table.createdAt),
+  check("public_calendar_links_name_not_blank", sql`length(btrim(${table.name})) > 0`),
+  check("public_calendar_links_name_length", sql`length(${table.name}) <= 80`),
   check("public_calendar_links_token_hash_valid", sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+  check("public_calendar_links_token_ciphertext_valid", sql`${table.tokenCiphertext} IS NULL OR ${table.tokenCiphertext} LIKE 'v1:%'`),
   check("public_calendar_links_scope_valid", sql`${table.scope} IN ('all', 'selected')`),
 ]);
 
@@ -276,12 +293,24 @@ export const dayparts = pgTable("dayparts", {
 ]);
 
 export const publicCalendarLinkDayparts = pgTable("public_calendar_link_dayparts", {
-  residencyId: uuid("residency_id").notNull().references(() => publicCalendarLinks.residencyId, { onDelete: "cascade" }),
-  daypartId: uuid("daypart_id").notNull().references(() => dayparts.id, { onDelete: "cascade" }),
+  linkId: uuid("link_id").notNull(),
+  residencyId: uuid("residency_id").notNull(),
+  daypartId: uuid("daypart_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  primaryKey({ columns: [table.residencyId, table.daypartId] }),
+  primaryKey({ columns: [table.linkId, table.daypartId] }),
+  foreignKey({
+    columns: [table.linkId, table.residencyId],
+    foreignColumns: [publicCalendarLinks.id, publicCalendarLinks.residencyId],
+    name: "public_calendar_link_dayparts_link_residency_fk",
+  }).onDelete("cascade"),
+  foreignKey({
+    columns: [table.daypartId, table.residencyId],
+    foreignColumns: [dayparts.id, dayparts.residencyId],
+    name: "public_calendar_link_dayparts_daypart_residency_fk",
+  }).onDelete("cascade"),
   index("public_calendar_link_dayparts_daypart_idx").on(table.daypartId),
+  index("public_calendar_link_dayparts_residency_idx").on(table.residencyId),
 ]);
 
 export const daypartDayRules = pgTable("daypart_day_rules", {

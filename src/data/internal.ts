@@ -221,27 +221,67 @@ export async function getPendingHfyTalentRequests() {
   };
 }
 
-export type PublicCalendarLinkSettings = {
-  hasLink: boolean;
+export type ManagedPublicCalendarLink = {
+  id: string;
+  name: string;
   scope: "all" | "selected";
-  daypartIds: string[];
+  dayparts: Array<{ id: string; name: string; room: string }>;
+  createdAt: string;
+  updatedAt: string;
+  revokedAt: string | null;
+  createdBy: string | null;
+  recoverable: boolean;
+};
+
+export type PublicCalendarLinkSettings = {
+  links: ManagedPublicCalendarLink[];
 };
 
 export async function getPublicCalendarLinkSettings(residencyId: string): Promise<PublicCalendarLinkSettings> {
   const rows = await getDb().select({
-    residencyId: publicCalendarLinks.residencyId,
+    id: publicCalendarLinks.id,
+    name: publicCalendarLinks.name,
     scope: publicCalendarLinks.scope,
+    tokenCiphertext: publicCalendarLinks.tokenCiphertext,
+    createdAt: publicCalendarLinks.createdAt,
+    updatedAt: publicCalendarLinks.updatedAt,
+    revokedAt: publicCalendarLinks.revokedAt,
+    createdBy: users.displayName,
     daypartId: publicCalendarLinkDayparts.daypartId,
+    daypartName: dayparts.name,
+    daypartRoom: dayparts.room,
   })
     .from(publicCalendarLinks)
-    .leftJoin(publicCalendarLinkDayparts, eq(publicCalendarLinks.residencyId, publicCalendarLinkDayparts.residencyId))
+    .leftJoin(users, eq(publicCalendarLinks.createdByUserId, users.id))
+    .leftJoin(publicCalendarLinkDayparts, eq(publicCalendarLinks.id, publicCalendarLinkDayparts.linkId))
+    .leftJoin(dayparts, eq(publicCalendarLinkDayparts.daypartId, dayparts.id))
     .where(eq(publicCalendarLinks.residencyId, residencyId))
-    .orderBy(asc(publicCalendarLinkDayparts.daypartId));
-  if (!rows.length) return { hasLink: false, scope: "all", daypartIds: [] };
+    .orderBy(desc(publicCalendarLinks.createdAt), asc(dayparts.sortOrder), asc(dayparts.name));
+
+  const grouped = new Map<string, ManagedPublicCalendarLink>();
+  for (const row of rows) {
+    const link = grouped.get(row.id) ?? {
+      id: row.id,
+      name: row.name,
+      scope: row.scope,
+      dayparts: [],
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      revokedAt: row.revokedAt?.toISOString() ?? null,
+      createdBy: row.createdBy,
+      recoverable: Boolean(row.tokenCiphertext),
+    };
+    if (row.daypartId && row.daypartName !== null && row.daypartRoom !== null) {
+      link.dayparts.push({ id: row.daypartId, name: row.daypartName, room: row.daypartRoom });
+    }
+    grouped.set(row.id, link);
+  }
+
   return {
-    hasLink: true,
-    scope: rows[0].scope,
-    daypartIds: rows.flatMap((row) => row.daypartId ? [row.daypartId] : []),
+    links: [...grouped.values()].sort((left, right) => {
+      if (Boolean(left.revokedAt) !== Boolean(right.revokedAt)) return left.revokedAt ? 1 : -1;
+      return right.createdAt.localeCompare(left.createdAt);
+    }),
   };
 }
 
@@ -826,7 +866,7 @@ export async function getSetupData() {
       .leftJoin(users, eq(residencyContacts.userId, users.id))
       .where(eq(residencyContacts.active, true))
       .orderBy(asc(residencyContacts.name)),
-    database.select({ residencyId: publicCalendarLinks.residencyId }).from(publicCalendarLinks),
+    database.select({ residencyId: publicCalendarLinks.residencyId }).from(publicCalendarLinks).where(isNull(publicCalendarLinks.revokedAt)),
     getInvoiceBrandingSettings(),
   ]);
   const linkedResidencies = new Set(calendarLinks.map((link) => link.residencyId));
