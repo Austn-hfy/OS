@@ -31,6 +31,9 @@ const ids = {
   talentScheduleLock: "00000000-0000-4000-8000-000000000085",
   privateEligibleTalent: "00000000-0000-4000-8000-000000000086",
   privateEligibleShift: "00000000-0000-4000-8000-000000000087",
+  calendarLinkSocial: "00000000-0000-4000-8000-000000000091",
+  calendarLinkHotel: "00000000-0000-4000-8000-000000000092",
+  calendarLinkSelected: "00000000-0000-4000-8000-000000000093",
 };
 
 let database: PGlite;
@@ -72,6 +75,7 @@ beforeAll(async () => {
   const aceRoomColorSwap = await readFile(new URL("../drizzle/0037_ace_room_color_swap.sql", import.meta.url), "utf8");
   const widerRoomShades = await readFile(new URL("../drizzle/0038_wider_room_shades.sql", import.meta.url), "utf8");
   const crossEnvironmentAccessLog = await readFile(new URL("../drizzle/0039_cross_environment_access_log.sql", import.meta.url), "utf8");
+  const persistentCalendarLinks = await readFile(new URL("../drizzle/0041_cheerful_meteorite.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -134,6 +138,10 @@ beforeAll(async () => {
       ('${ids.daypartA}', 0, 720, 1140, 2),
       ('${ids.daypartB}', 5, 1260, 1440, 1),
       ('${ids.daypartB}', 6, 1260, 1440, 1);
+    INSERT INTO public_calendar_links (residency_id, token_hash, rotated_by_user_id, scope)
+    VALUES ('${ids.residencyA}', repeat('a', 64), '${ids.admin}', 'selected');
+    INSERT INTO public_calendar_link_dayparts (residency_id, daypart_id)
+    VALUES ('${ids.residencyA}', '${ids.daypartA}');
     INSERT INTO talent (id, stage_name, roster_status, talent_status) VALUES
       ('${ids.talent}', 'DJ Constraint', 'ready', 'active');
     INSERT INTO talent (id, stage_name, roster_status, talent_status, exclusive_residency_id) VALUES
@@ -152,6 +160,7 @@ beforeAll(async () => {
   await database.exec(aceRoomColorSwap.replaceAll("--> statement-breakpoint", ""));
   await database.exec(widerRoomShades.replaceAll("--> statement-breakpoint", ""));
   await database.exec(crossEnvironmentAccessLog.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(persistentCalendarLinks.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -327,37 +336,121 @@ describe("database replacements for Airtable audit formulas", () => {
     expect(secondUse.rows).toEqual([]);
   });
 
-  it("rotates one hashed public calendar token per Residency and invalidates the old hash", async () => {
-    const oldHash = "a".repeat(64);
-    const newHash = "b".repeat(64);
-    await database.exec(`
-      INSERT INTO public_calendar_links (residency_id, token_hash, rotated_by_user_id)
-      VALUES ('${ids.residencyA}', '${oldHash}', '${ids.admin}');
-      INSERT INTO public_calendar_links (residency_id, token_hash, rotated_by_user_id)
-      VALUES ('${ids.residencyA}', '${newHash}', '${ids.admin}')
-      ON CONFLICT (residency_id) DO UPDATE SET token_hash = EXCLUDED.token_hash, rotated_at = now();
+  it("preserves the existing calendar link and its selected Dayparts during migration", async () => {
+    const links = await database.query<{
+      id: string;
+      name: string;
+      token_hash: string;
+      token_ciphertext: string | null;
+      created_by_user_id: string;
+      updated_by_user_id: string;
+      scope: string;
+    }>(`
+      SELECT id, name, token_hash, token_ciphertext, created_by_user_id, updated_by_user_id, scope
+      FROM public_calendar_links
+      WHERE residency_id = '${ids.residencyA}';
     `);
-    const oldResult = await database.query(`SELECT residency_id FROM public_calendar_links WHERE token_hash = '${oldHash}';`);
-    const newResult = await database.query(`SELECT residency_id FROM public_calendar_links WHERE token_hash = '${newHash}';`);
-    expect(oldResult.rows).toEqual([]);
-    expect(newResult.rows).toHaveLength(1);
-    await expect(database.exec(`UPDATE public_calendar_links SET token_hash = 'plaintext-token' WHERE residency_id = '${ids.residencyA}';`)).rejects.toThrow();
+    expect(links.rows).toHaveLength(1);
+    expect(links.rows[0]).toMatchObject({
+      name: "Existing calendar link",
+      token_hash: "a".repeat(64),
+      token_ciphertext: null,
+      created_by_user_id: ids.admin,
+      updated_by_user_id: ids.admin,
+      scope: "selected",
+    });
+    const selected = await database.query<{ link_id: string; residency_id: string; daypart_id: string }>(`
+      SELECT link_id, residency_id, daypart_id FROM public_calendar_link_dayparts;
+    `);
+    expect(selected.rows).toEqual([{
+      link_id: links.rows[0].id,
+      residency_id: ids.residencyA,
+      daypart_id: ids.daypartA,
+    }]);
   });
 
-  it("stores an explicit Daypart allow-list for a scoped public calendar", async () => {
+  it("supports multiple independently named active calendar links", async () => {
     await database.exec(`
-      UPDATE public_calendar_links SET scope = 'selected' WHERE residency_id = '${ids.residencyA}';
-      INSERT INTO public_calendar_link_dayparts (residency_id, daypart_id)
-      VALUES ('${ids.residencyA}', '${ids.daypartA}');
+      INSERT INTO public_calendar_links
+        (id, residency_id, name, token_hash, token_ciphertext, scope, created_by_user_id, updated_by_user_id, rotated_by_user_id)
+      VALUES
+        ('${ids.calendarLinkSocial}', '${ids.residencyA}', 'Social Media', repeat('b', 64), 'v1:encrypted-social', 'all', '${ids.admin}', '${ids.admin}', '${ids.admin}'),
+        ('${ids.calendarLinkHotel}', '${ids.residencyA}', 'Hotel Management', repeat('c', 64), 'v1:encrypted-hotel', 'all', '${ids.admin}', '${ids.admin}', '${ids.admin}'),
+        ('${ids.calendarLinkSelected}', '${ids.residencyA}', 'Selected Programs', repeat('d', 64), 'v1:encrypted-selected', 'selected', '${ids.admin}', '${ids.admin}', '${ids.admin}');
+      INSERT INTO public_calendar_link_dayparts (link_id, residency_id, daypart_id)
+      VALUES
+        ('${ids.calendarLinkSelected}', '${ids.residencyA}', '${ids.daypartA}'),
+        ('${ids.calendarLinkSelected}', '${ids.residencyA}', '${ids.daypartB}');
     `);
-    const result = await database.query<{ scope: string; daypart_id: string }>(`
-      SELECT l.scope, d.daypart_id
-      FROM public_calendar_links l
-      JOIN public_calendar_link_dayparts d ON d.residency_id = l.residency_id
-      WHERE l.residency_id = '${ids.residencyA}';
+    const links = await database.query<{ name: string; scope: string }>(`
+      SELECT name, scope FROM public_calendar_links
+      WHERE residency_id = '${ids.residencyA}' AND revoked_at IS NULL
+      ORDER BY name;
     `);
-    expect(result.rows).toEqual([{ scope: "selected", daypart_id: ids.daypartA }]);
-    await expect(database.exec(`UPDATE public_calendar_links SET scope = 'private' WHERE residency_id = '${ids.residencyA}';`)).rejects.toThrow();
+    expect(links.rows).toEqual([
+      { name: "Existing calendar link", scope: "selected" },
+      { name: "Hotel Management", scope: "all" },
+      { name: "Selected Programs", scope: "selected" },
+      { name: "Social Media", scope: "all" },
+    ]);
+    const selected = await database.query<{ daypart_id: string }>(`
+      SELECT daypart_id FROM public_calendar_link_dayparts
+      WHERE link_id = '${ids.calendarLinkSelected}'
+      ORDER BY daypart_id;
+    `);
+    expect(selected.rows.map((row) => row.daypart_id)).toEqual([ids.daypartA, ids.daypartB]);
+
+    await expect(database.exec(`
+      INSERT INTO public_calendar_links (residency_id, name, token_hash, scope)
+      VALUES ('${ids.residencyA}', ' social media ', repeat('e', 64), 'all');
+    `)).rejects.toThrow(/unique|duplicate/i);
+    await expect(database.exec(`
+      UPDATE public_calendar_links SET token_hash = 'plaintext-token' WHERE id = '${ids.calendarLinkSocial}';
+    `)).rejects.toThrow();
+    await expect(database.exec(`
+      UPDATE public_calendar_links SET token_ciphertext = 'plaintext-token' WHERE id = '${ids.calendarLinkSocial}';
+    `)).rejects.toThrow();
+  });
+
+  it("keeps every selected Daypart scoped to both its link and Residency", async () => {
+    await database.exec(`
+      INSERT INTO public_calendar_link_dayparts (link_id, residency_id, daypart_id)
+      VALUES ('${ids.calendarLinkSocial}', '${ids.residencyA}', '${ids.daypartA}');
+    `);
+    await expect(database.exec(`
+      INSERT INTO public_calendar_link_dayparts (link_id, residency_id, daypart_id)
+      VALUES ('${ids.calendarLinkHotel}', '${ids.residencyB}', '${ids.daypartA}');
+    `)).rejects.toThrow();
+    await expect(database.exec(`
+      INSERT INTO public_calendar_link_dayparts (link_id, residency_id, daypart_id)
+      VALUES ('${ids.calendarLinkHotel}', '${ids.residencyA}', '${ids.shiftB}');
+    `)).rejects.toThrow();
+  });
+
+  it("stops one link without changing the others and allows its name to be reused", async () => {
+    const before = await database.query<{ token_hash: string }>(`
+      SELECT token_hash FROM public_calendar_links WHERE id = '${ids.calendarLinkSocial}';
+    `);
+    await database.exec(`
+      UPDATE public_calendar_links
+      SET revoked_at = now(), revoked_by_user_id = '${ids.admin}', token_ciphertext = NULL
+      WHERE id = '${ids.calendarLinkSocial}';
+      INSERT INTO public_calendar_links
+        (residency_id, name, token_hash, token_ciphertext, scope, created_by_user_id, updated_by_user_id)
+      VALUES
+        ('${ids.residencyA}', 'Social Media', repeat('f', 64), 'v1:replacement-social', 'all', '${ids.admin}', '${ids.admin}');
+    `);
+    const stopped = await database.query<{ token_hash: string; token_ciphertext: string | null; revoked: boolean }>(`
+      SELECT token_hash, token_ciphertext, revoked_at IS NOT NULL AS revoked
+      FROM public_calendar_links WHERE id = '${ids.calendarLinkSocial}';
+    `);
+    expect(stopped.rows[0]).toEqual({ token_hash: before.rows[0].token_hash, token_ciphertext: null, revoked: true });
+    const active = await database.query<{ name: string }>(`
+      SELECT name FROM public_calendar_links
+      WHERE residency_id = '${ids.residencyA}' AND revoked_at IS NULL;
+    `);
+    expect(active.rows.filter((row) => row.name === "Social Media")).toHaveLength(1);
+    expect(active.rows.some((row) => row.name === "Hotel Management")).toBe(true);
   });
 
   it("requires exactly one valid Shift parent", async () => {

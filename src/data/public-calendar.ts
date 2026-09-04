@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, dayparts, publicCalendarLinkDayparts, publicCalendarLinks, residencies, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { calendarColorForEconomics, DEFAULT_DAYPART_COLOR } from "@/domain/dayparts";
@@ -14,6 +14,7 @@ export async function getPublicCalendarByToken(token: string): Promise<PublicCal
 
   const database = getDb();
   const [link] = await database.select({
+    id: publicCalendarLinks.id,
     residencyId: publicCalendarLinks.residencyId,
     scope: publicCalendarLinks.scope,
     timezone: residencies.timezone,
@@ -22,6 +23,7 @@ export async function getPublicCalendarByToken(token: string): Promise<PublicCal
     .innerJoin(residencies, eq(publicCalendarLinks.residencyId, residencies.id))
     .where(and(
       eq(publicCalendarLinks.tokenHash, tokenHash),
+      isNull(publicCalendarLinks.revokedAt),
       eq(residencies.active, true),
       eq(residencies.operatingMode, "operations"),
     )).limit(1);
@@ -31,7 +33,7 @@ export async function getPublicCalendarByToken(token: string): Promise<PublicCal
   const selectedDayparts = link.scope === "selected"
     ? await database.select({ daypartId: publicCalendarLinkDayparts.daypartId })
       .from(publicCalendarLinkDayparts)
-      .where(eq(publicCalendarLinkDayparts.residencyId, link.residencyId))
+      .where(eq(publicCalendarLinkDayparts.linkId, link.id))
     : [];
   const selectedDaypartIds = selectedDayparts.map(({ daypartId }) => daypartId);
   const selectedDaypartIdSet = new Set(selectedDaypartIds);

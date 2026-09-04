@@ -3,10 +3,9 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, publicCalendarLinkDayparts, publicCalendarLinks, residencies, residencyContacts, residencyMemberships, residencyTalent, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments, talentPaymentProfiles, talentScheduleLocks, users } from "@/db/schema";
+import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, invoiceLineItems, invoices, residencies, residencyContacts, residencyMemberships, residencyTalent, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments, talentPaymentProfiles, talentScheduleLocks, users } from "@/db/schema";
 import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { ROOM_HUE_ORDER } from "@/domain/dayparts";
@@ -19,16 +18,13 @@ import { addAssignmentToShift, createResidencyDateBooking, deleteOneTimeOccurren
 import { createShift, deleteShift, updateCalendarShiftDetails } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { issuePublicCalendarToken } from "@/domain/public-calendar";
 import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
-import { requestOrigin } from "@/lib/request-origin";
 import { isFullCalendarMonth } from "@/domain/talent-invoicing";
 import { sendResidencyAccountSetupEmail } from "@/services/account-setup-email";
 import { createResidencyRoom, deleteResidencyRoom, updateResidencyRoom, type ResidencyRoom } from "@/services/rooms";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type CreateRoomActionState = ResidencyActionState & { room?: ResidencyRoom };
-export type PublicCalendarLinkActionState = ResidencyActionState & { url?: string };
 export type CredentialLinkActionState = ResidencyActionState & { setupLink?: string };
 export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_client_roster" | "remove_from_client_roster";
 
@@ -139,70 +135,6 @@ export async function createResidencyAction(_previous: ResidencyActionState, for
     return { status: "success", message: `${parsed.residencyName} is ready in Operations.` };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to create this Residency." };
-  }
-}
-
-export async function rotatePublicCalendarLinkAction(_previous: PublicCalendarLinkActionState, formData: FormData): Promise<PublicCalendarLinkActionState> {
-  try {
-    const { residencyId, scope } = z.object({
-      residencyId: z.uuid(),
-      scope: z.enum(["all", "selected"]),
-    }).parse(Object.fromEntries(formData));
-    const actor = await requireActorForResidency(residencyId, { manager: true });
-    const baseUrl = requestOrigin(await headers());
-    const selectedDaypartIds = z.array(z.uuid()).max(100).parse([...new Set(formData.getAll("daypartIds").map(String))]);
-    if (scope === "selected" && !selectedDaypartIds.length) throw new Error("Select at least one Daypart for this link.");
-    const { token, tokenHash } = issuePublicCalendarToken();
-    const database = getDb();
-    await database.transaction(async (tx) => {
-      const [residency] = await tx.select({ id: residencies.id, name: residencies.name }).from(residencies).where(and(
-        eq(residencies.id, residencyId),
-        eq(residencies.active, true),
-        eq(residencies.operatingMode, "operations"),
-      )).limit(1);
-      if (!residency) throw new Error("Residency not found.");
-
-      if (scope === "selected") {
-        const allowedDayparts = await tx.select({ id: dayparts.id }).from(dayparts).where(and(
-          eq(dayparts.residencyId, residencyId),
-          eq(dayparts.active, true),
-          inArray(dayparts.id, selectedDaypartIds),
-        ));
-        if (allowedDayparts.length !== selectedDaypartIds.length) throw new Error("One or more selected Dayparts are unavailable for this Residency.");
-      }
-
-      await tx.insert(publicCalendarLinks).values({
-        residencyId,
-        tokenHash,
-        scope,
-        rotatedByUserId: actor.userId,
-      }).onConflictDoUpdate({
-        target: publicCalendarLinks.residencyId,
-        set: { tokenHash, scope, rotatedByUserId: actor.userId, rotatedAt: new Date() },
-      });
-      await tx.delete(publicCalendarLinkDayparts).where(eq(publicCalendarLinkDayparts.residencyId, residencyId));
-      if (scope === "selected") {
-        await tx.insert(publicCalendarLinkDayparts).values(selectedDaypartIds.map((daypartId) => ({ residencyId, daypartId })));
-      }
-      await tx.insert(auditLog).values({
-        residencyId,
-        actorUserId: actor.userId,
-        actorLabel: actor.email,
-        action: "public_calendar_link_rotated",
-        entityType: "residency",
-        entityId: residencyId,
-        details: { residencyName: residency.name, scope, daypartIds: scope === "selected" ? selectedDaypartIds : [] },
-      });
-    });
-    revalidatePath("/app/calendar");
-    revalidatePath("/app/setup");
-    return {
-      status: "success",
-      message: "New public calendar link created. The previous link, if any, is now invalid.",
-      url: new URL(`/share/calendar/${token}`, baseUrl).toString(),
-    };
-  } catch (error) {
-    return { status: "error", message: error instanceof Error ? error.message : "Unable to create a public calendar link." };
   }
 }
 

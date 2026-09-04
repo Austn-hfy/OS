@@ -1,47 +1,332 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { rotatePublicCalendarLinkAction, type PublicCalendarLinkActionState } from "@/app/app/actions";
-import type { PublicCalendarLinkSettings } from "@/data/internal";
+import { useState, useTransition } from "react";
+import {
+  copyPublicCalendarLinkAction,
+  createPublicCalendarLinkAction,
+  replacePublicCalendarLinkAction,
+  stopPublicCalendarLinkAction,
+  updatePublicCalendarLinkAction,
+  type PublicCalendarLinkActionResult,
+} from "@/app/app/calendar-share-actions";
+import type { ManagedPublicCalendarLink, PublicCalendarLinkSettings } from "@/data/internal";
+import styles from "./public-calendar-link-manager.module.css";
 
-const initialState: PublicCalendarLinkActionState = { status: "idle", message: "" };
 type ShareableDaypart = { id: string; name: string; room: string; color: string };
+type Scope = "all" | "selected";
+type ManagerView = "list" | "create" | "created" | "edit" | "stop" | "replace" | "history";
 
-export function PublicCalendarLinkManager({ residencyId, linkSettings, dayparts, compact = false }: { residencyId: string; linkSettings: PublicCalendarLinkSettings; dayparts: ShareableDaypart[]; compact?: boolean }) {
-  const [state, action, pending] = useActionState(rotatePublicCalendarLinkAction, initialState);
-  const [copied, setCopied] = useState(false);
-  const [scope, setScope] = useState<"all" | "selected">(linkSettings.scope);
-  const [selectedDaypartIds, setSelectedDaypartIds] = useState<string[]>(linkSettings.daypartIds);
-  const hasActiveLink = linkSettings.hasLink || state.status === "success";
-  const displayedScope = state.status === "success" ? scope : linkSettings.scope;
-  const displayedDaypartCount = state.status === "success" ? selectedDaypartIds.length : linkSettings.daypartIds.length;
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+}
+
+function linkScopeLabel(link: ManagedPublicCalendarLink) {
+  if (link.scope === "all") return "All Dayparts";
+  if (link.dayparts.length === 0) return "No available Dayparts";
+  const names = link.dayparts.map((daypart) => daypart.name);
+  return names.length <= 2 ? names.join(" + ") : `${names.slice(0, 2).join(" + ")} + ${names.length - 2} more`;
+}
+
+function replaceLink(links: ManagedPublicCalendarLink[], next: ManagedPublicCalendarLink) {
+  const withoutCurrent = links.filter((link) => link.id !== next.id);
+  return [next, ...withoutCurrent].sort((left, right) => {
+    if (Boolean(left.revokedAt) !== Boolean(right.revokedAt)) return left.revokedAt ? 1 : -1;
+    return right.createdAt.localeCompare(left.createdAt);
+  });
+}
+
+export function PublicCalendarLinkManager({ residencyId, linkSettings, dayparts }: {
+  residencyId: string;
+  linkSettings: PublicCalendarLinkSettings;
+  dayparts: ShareableDaypart[];
+}) {
+  const [links, setLinks] = useState(linkSettings.links);
+  const [view, setView] = useState<ManagerView>("list");
+  const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [scope, setScope] = useState<Scope>("all");
+  const [selectedDaypartIds, setSelectedDaypartIds] = useState<string[]>([]);
+  const [createdResult, setCreatedResult] = useState<{ link: ManagedPublicCalendarLink; url: string } | null>(null);
+  const [revealedUrls, setRevealedUrls] = useState<Record<string, string>>({});
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<PublicCalendarLinkActionResult | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const activeLinks = links.filter((link) => !link.revokedAt);
+  const stoppedLinks = links.filter((link) => Boolean(link.revokedAt));
+  const selectedLink = selectedLinkId ? links.find((link) => link.id === selectedLinkId) ?? null : null;
+
+  function resetFeedback() {
+    setFeedback(null);
+    setCopiedLinkId(null);
+  }
+
+  function openList() {
+    resetFeedback();
+    setSelectedLinkId(null);
+    setView("list");
+  }
+
+  function openCreate(prefill?: ManagedPublicCalendarLink) {
+    resetFeedback();
+    setSelectedLinkId(null);
+    setName(prefill?.name ?? "");
+    setScope(prefill?.scope ?? "all");
+    setSelectedDaypartIds(prefill?.dayparts.map((daypart) => daypart.id).filter((id) => dayparts.some((daypart) => daypart.id === id)) ?? []);
+    setView("create");
+  }
+
+  function openEdit(link: ManagedPublicCalendarLink) {
+    resetFeedback();
+    setSelectedLinkId(link.id);
+    setName(link.name);
+    setScope(link.scope);
+    setSelectedDaypartIds(link.dayparts.map((daypart) => daypart.id).filter((id) => dayparts.some((daypart) => daypart.id === id)));
+    setView("edit");
+  }
+
+  function openConfirmation(nextView: "stop" | "replace", link: ManagedPublicCalendarLink) {
+    resetFeedback();
+    setSelectedLinkId(link.id);
+    setView(nextView);
+  }
 
   function toggleDaypart(daypartId: string) {
-    setSelectedDaypartIds((current) => current.includes(daypartId) ? current.filter((id) => id !== daypartId) : [...current, daypartId]);
+    setSelectedDaypartIds((current) => current.includes(daypartId)
+      ? current.filter((id) => id !== daypartId)
+      : [...current, daypartId]);
   }
 
-  async function copy() {
-    if (!state.url) return;
-    await navigator.clipboard.writeText(state.url);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+  async function writeClipboard(url: string, linkId: string) {
+    setRevealedUrls((current) => ({ ...current, [linkId]: url }));
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLinkId(linkId);
+      window.setTimeout(() => setCopiedLinkId((current) => current === linkId ? null : current), 1800);
+      return true;
+    } catch {
+      setFeedback({ status: "error", message: "Copy was blocked by the browser. Select the link shown below and copy it manually." });
+      return false;
+    }
   }
 
-  return <article className={compact ? "public-calendar-link-card public-calendar-link-compact" : "card residency-setup-card public-calendar-link-card"}>
-    {!compact ? <div><p className="eyebrow">Calendar sharing</p><h2>Public calendar link</h2><p className="subhead">A read-only link for trusted partners. It exposes only Instagram handles and scheduled date/time.</p></div> : null}
-    <div className="public-calendar-boundary"><strong>{hasActiveLink ? `Active link · ${displayedScope === "all" ? "All Dayparts" : `${displayedDaypartCount} selected Daypart${displayedDaypartCount === 1 ? "" : "s"}`}` : "No public link yet"}</strong><span>The token never expires. Regenerating it immediately revokes the previous link.</span></div>
-    {state.url ? <div className="public-calendar-copy"><label htmlFor="public-calendar-url">New link</label><div><input id="public-calendar-url" readOnly value={state.url} /><button className="button secondary" type="button" onClick={() => void copy()}>{copied ? "Copied" : "Copy"}</button></div><small>Copy this now. HFY OS stores only a one-way hash and cannot reveal this exact token again.</small></div> : null}
-    {state.message ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}
-    <form className="public-calendar-scope-form" action={action}>
-      <input name="residencyId" type="hidden" value={residencyId} />
-      <fieldset>
-        <legend>What should this link include?</legend>
-        <label className={scope === "all" ? "selected" : ""}><input type="radio" name="scope" value="all" checked={scope === "all"} onChange={() => setScope("all")} /><span><strong>Include all Dayparts</strong><small>Show every scheduled Daypart in this Residency.</small></span></label>
-        <label className={scope === "selected" ? "selected" : ""}><input type="radio" name="scope" value="selected" checked={scope === "selected"} disabled={!dayparts.length} onChange={() => setScope("selected")} /><span><strong>Select Dayparts</strong><small>Share only the rooms or programs checked below.</small></span></label>
-      </fieldset>
-      {scope === "selected" ? <div className="public-calendar-dayparts" aria-label="Dayparts included in shared calendar">{dayparts.map((daypart) => <label className={selectedDaypartIds.includes(daypart.id) ? "selected" : ""} key={daypart.id}><input type="checkbox" name="daypartIds" value={daypart.id} checked={selectedDaypartIds.includes(daypart.id)} onChange={() => toggleDaypart(daypart.id)} /><span className="public-calendar-daypart-color" style={{ backgroundColor: daypart.color }} aria-hidden="true" /><span><strong>{daypart.name}</strong><small>{daypart.room}</small></span></label>)}</div> : null}
-      {scope === "selected" && !selectedDaypartIds.length ? <p className="draft-notice">Select at least one Daypart.</p> : null}
-      <button className={hasActiveLink ? "button secondary" : "button"} disabled={pending || (scope === "selected" && !selectedDaypartIds.length)} type="submit">{pending ? "Creating…" : hasActiveLink ? "Regenerate link" : "Create public link"}</button>
-    </form>
-  </article>;
+  function copyExistingLink(link: ManagedPublicCalendarLink) {
+    resetFeedback();
+    startTransition(async () => {
+      const result = await copyPublicCalendarLinkAction({ residencyId, linkId: link.id });
+      if (result.status === "success" && result.url) {
+        const copied = await writeClipboard(result.url, link.id);
+        if (copied) setFeedback({ status: "success", message: `${link.name} was copied.` });
+      } else {
+        setFeedback(result);
+      }
+    });
+  }
+
+  function submitCreate() {
+    resetFeedback();
+    startTransition(async () => {
+      const result = await createPublicCalendarLinkAction({ residencyId, name, scope, daypartIds: selectedDaypartIds });
+      if (result.status === "success" && result.link && result.url) {
+        const createdLink = result.link;
+        setLinks((current) => replaceLink(current, createdLink));
+        setCreatedResult({ link: createdLink, url: result.url });
+        setView("created");
+      } else {
+        setFeedback(result);
+      }
+    });
+  }
+
+  function submitEdit() {
+    if (!selectedLink) return;
+    resetFeedback();
+    startTransition(async () => {
+      const result = await updatePublicCalendarLinkAction({
+        residencyId,
+        linkId: selectedLink.id,
+        name,
+        scope,
+        daypartIds: selectedDaypartIds,
+      });
+      if (result.status === "success" && result.link) {
+        const updatedLink = result.link;
+        setLinks((current) => replaceLink(current, updatedLink));
+        setFeedback(result);
+        setView("list");
+      } else {
+        setFeedback(result);
+      }
+    });
+  }
+
+  function confirmStop() {
+    if (!selectedLink) return;
+    resetFeedback();
+    startTransition(async () => {
+      const result = await stopPublicCalendarLinkAction({ residencyId, linkId: selectedLink.id });
+      if (result.status === "success" && result.link) {
+        const stoppedLink = result.link;
+        setLinks((current) => replaceLink(current, stoppedLink));
+        setFeedback(result);
+        setView("history");
+      } else {
+        setFeedback(result);
+      }
+    });
+  }
+
+  function confirmReplace() {
+    if (!selectedLink) return;
+    resetFeedback();
+    startTransition(async () => {
+      const result = await replacePublicCalendarLinkAction({ residencyId, linkId: selectedLink.id });
+      if (result.status === "success" && result.link && result.url) {
+        const replacedLink = result.link;
+        setLinks((current) => replaceLink(current, replacedLink));
+        setCreatedResult({ link: replacedLink, url: result.url });
+        setView("created");
+      } else {
+        setFeedback(result);
+      }
+    });
+  }
+
+  function copyCreatedLink() {
+    if (!createdResult) return;
+    resetFeedback();
+    void writeClipboard(createdResult.url, createdResult.link.id).then((copied) => {
+      if (copied) setFeedback({ status: "success", message: `${createdResult.link.name} was copied.` });
+    });
+  }
+
+  function feedbackMessage() {
+    return feedback ? <p className={feedback.status === "error" ? styles.errorMessage : styles.successMessage} role={feedback.status === "error" ? "alert" : "status"}>{feedback.message}</p> : null;
+  }
+
+  function renderDaypartSelector() {
+    if (scope !== "selected") return null;
+    return <div className={styles.daypartChildPanel}>
+      <div className={styles.daypartChildHeading}>
+        <span><strong>Included Dayparts</strong><small>Attached to “Select Dayparts” above</small></span>
+        <span aria-live="polite">{selectedDaypartIds.length} selected</span>
+      </div>
+      <div className={styles.daypartGrid} aria-label="Dayparts included in this calendar link">
+        {dayparts.map((daypart) => <label className={`${styles.daypartOption} ${selectedDaypartIds.includes(daypart.id) ? styles.daypartOptionSelected : ""}`} key={daypart.id}>
+          <input type="checkbox" checked={selectedDaypartIds.includes(daypart.id)} onChange={() => toggleDaypart(daypart.id)} />
+          <span className={styles.daypartColor} style={{ backgroundColor: daypart.color }} aria-hidden="true" />
+          <span><strong>{daypart.name}</strong><small>{daypart.room}</small></span>
+        </label>)}
+      </div>
+      {dayparts.length === 0 ? <p className={styles.emptyInline}>No active Dayparts are available.</p> : null}
+    </div>;
+  }
+
+  function renderScopeSelector() {
+    return <fieldset className={styles.scopeFieldset}>
+      <legend>What should this link include?</legend>
+      <div className={styles.scopeOptions}>
+        <label className={`${styles.scopeOption} ${scope === "all" ? styles.scopeOptionSelected : ""}`}>
+          <input type="radio" name="calendar-link-scope" value="all" checked={scope === "all"} onChange={() => setScope("all")} />
+          <span><strong>Include all Dayparts</strong><small>Every scheduled Daypart in this Residency.</small></span>
+        </label>
+        <label className={`${styles.scopeOption} ${scope === "selected" ? styles.scopeOptionSelected : ""}`}>
+          <input type="radio" name="calendar-link-scope" value="selected" checked={scope === "selected"} disabled={!dayparts.length} onChange={() => setScope("selected")} />
+          <span><strong>Select Dayparts</strong><small>Only the rooms or programs selected below.</small></span>
+        </label>
+      </div>
+      {renderDaypartSelector()}
+    </fieldset>;
+  }
+
+  if (view === "create" || view === "edit") {
+    const editing = view === "edit";
+    const valid = name.trim().length >= 2 && name.trim().length <= 80 && (scope === "all" || selectedDaypartIds.length > 0);
+    return <section className={styles.manager}>
+      <button className={styles.backButton} type="button" onClick={openList}>← Back to existing links</button>
+      <div className={styles.formHeading}>
+        <h3>{editing ? "Edit calendar link" : "Create a new link"}</h3>
+        <p>{editing ? "Changes appear immediately for everyone using this link." : "Name the audience, then choose what they should be able to see."}</p>
+      </div>
+      <div className={styles.nameField}>
+        <label htmlFor="calendar-share-link-name">Link name</label>
+        <input id="calendar-share-link-name" maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="Example: Social Media Team" />
+        <small>Use the person, team, or purpose so you can recognize it later.</small>
+      </div>
+      {renderScopeSelector()}
+      {editing ? <div className={styles.persistenceNote}><strong>The URL will stay the same.</strong><span>Existing bookmarks automatically show the updated selection.</span></div> : null}
+      {feedbackMessage()}
+      <div className={styles.formActions}>
+        {editing && selectedLink ? <button className={styles.replaceTextButton} type="button" disabled={pending} onClick={() => openConfirmation("replace", selectedLink)}>Replace URL</button> : null}
+        <button className={styles.secondaryButton} type="button" disabled={pending} onClick={openList}>Cancel</button>
+        <button className={styles.primaryButton} type="button" disabled={pending || !valid} onClick={editing ? submitEdit : submitCreate}>{pending ? "Saving…" : editing ? "Save changes" : "Create link"}</button>
+      </div>
+    </section>;
+  }
+
+  if (view === "created" && createdResult) {
+    return <section className={styles.centerPanel}>
+      <span className={styles.successIcon} aria-hidden="true">✓</span>
+      <h3>{createdResult.link.name} is ready</h3>
+      <p>This link stays active until you stop it. You can return here and copy it again at any time.</p>
+      <div className={styles.linkResult}>
+        <strong>Calendar link · {createdResult.link.scope === "all" ? "All Dayparts" : `${createdResult.link.dayparts.length} selected`}</strong>
+        <div><input readOnly value={createdResult.url} aria-label="New calendar link" /><button className={styles.primaryButton} type="button" onClick={copyCreatedLink}>{copiedLinkId === createdResult.link.id ? "Copied" : "Copy link"}</button></div>
+      </div>
+      {feedbackMessage()}
+      <div className={styles.centerActions}><button className={styles.secondaryButton} type="button" onClick={() => openEdit(createdResult.link)}>Edit link</button><button className={styles.primaryButton} type="button" onClick={openList}>Done</button></div>
+    </section>;
+  }
+
+  if ((view === "stop" || view === "replace") && selectedLink) {
+    const replacing = view === "replace";
+    return <section className={styles.centerPanel}>
+      <span className={styles.warningIcon} aria-hidden="true">!</span>
+      <h3>{replacing ? `Replace “${selectedLink.name}” with a new URL?` : `Stop sharing “${selectedLink.name}”?`}</h3>
+      <p>{replacing ? "The existing URL will stop working immediately. Everyone who still needs access must receive the new URL." : "Anyone using this link will lose access immediately. This exact URL cannot be reactivated."}</p>
+      <div className={styles.confirmSummary}><strong>{selectedLink.name}</strong><span>{linkScopeLabel(selectedLink)} · Created {formatDate(selectedLink.createdAt)}</span></div>
+      {feedbackMessage()}
+      <div className={styles.centerActions}>
+        <button className={styles.secondaryButton} type="button" disabled={pending} onClick={openList}>{replacing ? "Keep current URL" : "Keep active"}</button>
+        <button className={styles.dangerButton} type="button" disabled={pending} onClick={replacing ? confirmReplace : confirmStop}>{pending ? "Working…" : replacing ? "Replace URL" : "Stop sharing"}</button>
+      </div>
+    </section>;
+  }
+
+  if (view === "history") {
+    return <section className={styles.manager}>
+      <button className={styles.backButton} type="button" onClick={openList}>← Back to existing links</button>
+      <div className={styles.sectionHeading}><div><h3>Stopped links</h3><p>These URLs no longer provide access and cannot be reactivated.</p></div><span>{stoppedLinks.length} stopped</span></div>
+      {feedbackMessage()}
+      {stoppedLinks.length ? <div className={styles.linkList}>{stoppedLinks.map((link) => <article className={`${styles.linkItem} ${styles.stoppedItem}`} key={link.id}>
+        <div><div className={styles.linkNameRow}><strong>{link.name}</strong><span className={styles.stoppedStatus}>Stopped</span></div><p>{linkScopeLabel(link)}</p><small>Stopped {link.revokedAt ? formatDate(link.revokedAt) : ""} · Previously shared {formatDate(link.createdAt)}</small></div>
+        <div className={styles.linkActions}><button className={styles.secondaryButton} type="button" onClick={() => openCreate(link)}>Create replacement</button></div>
+      </article>)}</div> : <div className={styles.emptyHistory}><strong>No stopped links</strong><span>Links you stop will remain here as a record.</span></div>}
+    </section>;
+  }
+
+  return <section className={styles.manager}>
+    {activeLinks.length ? <>
+      <div className={styles.sectionHeading}><div><h3>Existing links</h3><p>Copy, update, or stop any calendar link you have shared.</p></div><span>{activeLinks.length} active</span></div>
+      {feedbackMessage()}
+      <div className={styles.linkList}>{activeLinks.map((link) => <article className={styles.linkItem} key={link.id}>
+        <div><div className={styles.linkNameRow}><strong>{link.name}</strong><span className={styles.activeStatus}>Active</span>{!link.recoverable ? <span className={styles.legacyStatus}>Older link</span> : null}</div><p>{linkScopeLabel(link)}</p><small>{link.scope === "selected" ? "Selected Dayparts" : "All Dayparts"} · Created {formatDate(link.createdAt)}{link.createdBy ? ` by ${link.createdBy}` : ""}{link.updatedAt !== link.createdAt ? ` · Updated ${formatDate(link.updatedAt)}` : ""}</small></div>
+        <div className={styles.linkActions}>
+          {link.recoverable ? <button className={styles.primaryButton} type="button" disabled={pending} onClick={() => copyExistingLink(link)}>{copiedLinkId === link.id ? "Copied" : "Copy link"}</button> : <button className={styles.primaryButton} type="button" disabled={pending} onClick={() => openConfirmation("replace", link)}>Replace to copy</button>}
+          <button className={styles.secondaryButton} type="button" disabled={pending} onClick={() => openEdit(link)}>Edit</button>
+          <button className={styles.stopTextButton} type="button" disabled={pending} onClick={() => openConfirmation("stop", link)}>Stop</button>
+        </div>
+        {revealedUrls[link.id] ? <div className={styles.revealedLink}><input readOnly value={revealedUrls[link.id]} aria-label={`${link.name} calendar link`} /><button className={styles.secondaryButton} type="button" onClick={() => void writeClipboard(revealedUrls[link.id], link.id)}>Copy again</button></div> : null}
+      </article>)}</div>
+      <div className={styles.divider} />
+      <div className={styles.createCallout}><div><strong>Create another calendar link</strong><span>Give each audience its own link so it can be managed separately.</span></div><button className={styles.primaryButton} type="button" onClick={() => openCreate()}>Create new link</button></div>
+    </> : <div className={styles.centerPanel}>
+      <span className={styles.emptyIcon} aria-hidden="true">↗</span>
+      <h3>No active calendar links</h3>
+      <p>Create a named link for a hotel team, social partner, or anyone else who needs a read-only calendar.</p>
+      {feedbackMessage()}
+      <div className={styles.centerActions}><button className={styles.primaryButton} type="button" onClick={() => openCreate()}>Create your first link</button></div>
+    </div>}
+    {stoppedLinks.length ? <button className={styles.historyButton} type="button" onClick={() => { resetFeedback(); setView("history"); }}>View stopped links ({stoppedLinks.length})</button> : null}
+  </section>;
 }

@@ -288,6 +288,13 @@
       "when": 1788526800000,
       "tag": "0040_grant_production_export_to_app",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788613200000,
+      "tag": "0041_cheerful_meteorite",
+      "breakpoints": true
     }
   ]
 }
