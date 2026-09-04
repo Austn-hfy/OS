@@ -13,6 +13,15 @@ describe("public calendar layout", () => {
     expect(agendaDayRule).not.toContain("border-bottom");
   });
 
+  it("gives the agenda a distinct but restrained masthead", async () => {
+    const styles = await readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8");
+
+    expect(styles).toMatch(/\.public-calendar-agenda-heading \{[\s\S]*?border-bottom: 1px solid rgba\(48, 68, 84, 0\.09\);[\s\S]*?linear-gradient\(135deg,/);
+    expect(styles).toMatch(/\.public-calendar-agenda-heading::before \{[\s\S]*?width: 4px;[\s\S]*?var\(--hfy-action-strong\)/);
+    expect(styles).toMatch(/\.public-calendar-agenda-heading > p \{[\s\S]*?width: fit-content;[\s\S]*?border-radius: 999px;/);
+    expect(styles).toMatch(/@media \(max-width: 520px\)[\s\S]*?\.public-calendar-agenda-heading \{ min-height: 78px; padding: 13px 16px 12px 27px; \}/);
+  });
+
   it("wraps opened event content and gives every constrained panel its own safe scroll behavior", async () => {
     const styles = await readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8");
 
