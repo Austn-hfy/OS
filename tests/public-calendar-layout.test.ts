@@ -13,13 +13,19 @@ describe("public calendar layout", () => {
     expect(agendaDayRule).not.toContain("border-bottom");
   });
 
-  it("gives the agenda a distinct but restrained masthead", async () => {
-    const styles = await readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8");
+  it("uses the established page-heading pattern with more breathing room", async () => {
+    const [styles, view] = await Promise.all([
+      readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
+      readFile(new URL("../src/components/public-calendar-view.tsx", import.meta.url), "utf8"),
+    ]);
+    const agendaHeadingRule = styles.match(/\.hfy-style-system \.public-calendar-agenda-heading \{([^}]*)\}/)?.[1] ?? "";
 
-    expect(styles).toMatch(/\.public-calendar-agenda-heading \{[\s\S]*?border-bottom: 1px solid rgba\(48, 68, 84, 0\.09\);[\s\S]*?linear-gradient\(135deg,/);
-    expect(styles).toMatch(/\.public-calendar-agenda-heading::before \{[\s\S]*?width: 4px;[\s\S]*?var\(--hfy-action-strong\)/);
-    expect(styles).toMatch(/\.public-calendar-agenda-heading > p \{[\s\S]*?width: fit-content;[\s\S]*?border-radius: 999px;/);
-    expect(styles).toMatch(/@media \(max-width: 520px\)[\s\S]*?\.public-calendar-agenda-heading \{ min-height: 78px; padding: 13px 16px 12px 27px; \}/);
+    expect(view).toContain('<p className="eyebrow">Schedule overview</p>');
+    expect(agendaHeadingRule).toContain("padding: 22px 22px 18px");
+    expect(agendaHeadingRule).not.toMatch(/background|border-bottom|box-shadow/);
+    expect(styles).toMatch(/\.public-calendar-agenda-heading \.eyebrow \{ margin: 0 0 13px;/);
+    expect(styles).toMatch(/\.public-calendar-agenda-heading h2 \{ margin: 0 0 7px; font-size: clamp\(26px, 2vw, 30px\);/);
+    expect(styles).toMatch(/@media \(max-width: 520px\)[\s\S]*?\.public-calendar-agenda-heading \{ padding: 18px 16px 15px; \}/);
   });
 
   it("wraps opened event content and gives every constrained panel its own safe scroll behavior", async () => {
@@ -38,7 +44,7 @@ describe("public calendar layout", () => {
   it("keeps the opened event hierarchy compact and aligned at every breakpoint", async () => {
     const styles = await readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8");
 
-    expect(styles).toMatch(/\.public-calendar-agenda-heading h2 \{[^}]*margin: 0;[^}]*line-height: 1\.1;/);
+    expect(styles).toMatch(/\.public-calendar-agenda-heading h2 \{[^}]*margin: 0 0 7px;[^}]*line-height: 1\.04;/);
     expect(styles).toMatch(/\.public-calendar-detail-heading \{[^}]*gap: 0;[^}]*padding: 18px;/);
     expect(styles).toMatch(/\.public-calendar-detail-heading h2 \{[^}]*margin: 0;[^}]*clamp\(20px, 1\.55vw, 24px\)/);
     expect(styles).toMatch(/\.public-calendar-detail-body \{[^}]*padding: 0 18px 18px;/);

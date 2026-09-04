@@ -113,6 +113,7 @@ export function PublicCalendarView({ token, monthKey, calendar }: {
           </div>
         </div> : <>
           <header className="public-calendar-agenda-heading">
+            <p className="eyebrow">Schedule overview</p>
             <h2 id="public-calendar-agenda-title">At a glance</h2>
             <p>{visibleEntries.length} {visibleEntries.length === 1 ? "slot" : "slots"}, in chronological order.</p>
           </header>
