@@ -1633,41 +1633,23 @@
 }
 
 .hfy-style-system .public-calendar-agenda-heading {
-  position: relative;
-  min-height: 88px;
+  min-height: 0;
   display: grid;
-  align-content: center;
-  gap: 6px;
-  padding: 15px 22px 14px 32px;
-  overflow: hidden;
-  border-bottom: 1px solid rgba(48, 68, 84, 0.09);
-  background:
-    radial-gradient(circle at 88% 18%, rgba(255, 255, 255, 0.82), transparent 35%),
-    linear-gradient(135deg, rgba(207, 231, 246, 0.52), rgba(246, 249, 250, 0.62));
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.84);
+  align-content: start;
+  gap: 0;
+  padding: 22px 22px 18px;
 }
 
-.hfy-style-system .public-calendar-agenda-heading::before {
-  content: "";
-  position: absolute;
-  top: 21px;
-  bottom: 21px;
-  left: 19px;
-  width: 4px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--hfy-action-strong), var(--hfy-action));
-  box-shadow: 0 0 0 4px rgba(83, 168, 220, 0.08);
-}
-
-.hfy-style-system .public-calendar-agenda-heading h2 { margin: 0; font-size: clamp(22px, 1.8vw, 27px); line-height: 1.1; }
-.hfy-style-system .public-calendar-agenda-heading > p { width: fit-content; max-width: 100%; margin: 0; padding: 3px 8px; border: 1px solid rgba(48, 68, 84, 0.08); border-radius: 999px; color: var(--hfy-muted); background: rgba(255, 255, 255, 0.54); font-size: 9px; line-height: 1.35; }
+.hfy-style-system .public-calendar-agenda-heading .eyebrow { margin: 0 0 13px; line-height: 1; }
+.hfy-style-system .public-calendar-agenda-heading h2 { margin: 0 0 7px; font-size: clamp(26px, 2vw, 30px); line-height: 1.04; }
+.hfy-style-system .public-calendar-agenda-heading > p:not(.eyebrow) { margin: 0; color: var(--hfy-muted); font-size: 10px; line-height: 1.45; }
 .hfy-style-system .public-calendar-agenda-list {
   min-width: 0;
   min-height: 0;
   display: grid;
   align-content: start;
   gap: 15px;
-  padding: 14px 14px 18px;
+  padding: 16px 14px 18px;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -1771,8 +1753,8 @@
   .hfy-style-system .public-calendar-page { width: calc(100% - 20px); padding-top: 10px; }
   .hfy-style-system .public-calendar-shell { min-height: 720px; padding: 12px; }
   .hfy-style-system .public-calendar-heading { min-height: 60px; }
-  .hfy-style-system .public-calendar-agenda-heading { min-height: 82px; padding: 14px 18px 13px 29px; }
-  .hfy-style-system .public-calendar-agenda-heading::before { top: 19px; bottom: 19px; left: 17px; }
+  .hfy-style-system .public-calendar-agenda-heading { padding: 20px 18px 16px; }
+  .hfy-style-system .public-calendar-agenda-heading .eyebrow { margin-bottom: 11px; }
   .hfy-style-system .public-calendar-detail-heading { padding: 16px; }
   .hfy-style-system .public-calendar-detail-body { padding: 0 16px 16px; }
 }
@@ -1780,8 +1762,8 @@
 @media (max-width: 520px) {
   .hfy-style-system .public-calendar-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
   .hfy-style-system .public-calendar-heading .eyebrow { min-height: 0; padding-right: 0; border-right: 0; }
-  .hfy-style-system .public-calendar-agenda-heading { min-height: 78px; padding: 13px 16px 12px 27px; }
-  .hfy-style-system .public-calendar-agenda-heading::before { top: 18px; bottom: 18px; left: 15px; width: 3px; }
+  .hfy-style-system .public-calendar-agenda-heading { padding: 18px 16px 15px; }
+  .hfy-style-system .public-calendar-agenda-heading h2 { font-size: 26px; }
   .hfy-style-system .public-calendar-agenda-day { grid-template-columns: minmax(0, 1fr); gap: 7px; }
   .hfy-style-system .public-calendar-agenda-day h3 { padding: 0 4px; }
   .hfy-style-system .public-calendar-detail-heading { padding: 14px; }
