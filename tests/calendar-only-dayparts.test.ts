@@ -24,14 +24,19 @@ describe("Calendar Only Dayparts", () => {
     expect(manager).not.toContain("Dayparts and templates");
     expect(manager).not.toContain("Reusable template is listed above");
     expect(manager).not.toContain("Click open space to add");
-    expect(manager).toContain("daypart.roomId === room.id");
+    expect(manager).toContain("function daypartBelongsToRoom");
+    expect(manager).toContain("if (daypart.roomId) return daypart.roomId === room.id");
+    expect(manager).toContain("roomNameKey(daypart.room) === roomNameKey(room.name)");
+    expect(manager).toContain("templatesByRoomId.get(room.id) ?? []");
     expect(manager).toContain("roomTemplates.length ? <button");
     expect(manager).toContain('className="room-template-trigger"');
     expect(manager).toContain('roomTemplates.length === 1 ? "template" : "templates"');
     expect(manager).toContain('className="room-template-popover"');
     expect(manager).toContain('daypart.type === "house_activity" ? "House Activity" : "Talent Activity"');
     expect(manager).toContain("<em>Default hours</em>");
+    expect(manager).toContain("setDraft(draftFromDaypart(daypart, room))");
     expect(styles).toContain(".room-template-popover { position: fixed;");
+    expect(styles).toContain("text-decoration-style: dotted;");
   });
 
   it("explains that reusable template settings are editable defaults", async () => {
