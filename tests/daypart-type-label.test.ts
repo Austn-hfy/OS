@@ -12,10 +12,11 @@ describe("Daypart type language", () => {
   });
 
   it("keeps the existing palette while restricting edits to a room hue", async () => {
-    const [manager, dayparts, picker] = await Promise.all([
+    const [manager, dayparts, picker, styles] = await Promise.all([
       readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/domain/dayparts.ts", import.meta.url), "utf8"),
       readFile(new URL("../src/components/daypart-color-picker.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
     ]);
 
     expect(dayparts).toContain('label: "Ocean blue"');
@@ -25,9 +26,10 @@ describe("Daypart type language", () => {
     expect(dayparts.indexOf('label: "Medium"')).toBeLessThan(dayparts.indexOf('label: "Light"'));
     expect(picker).toContain("DAYPART_COLOR_PRESET_ROWS.map");
     expect(manager).toContain("<DaypartColorPicker");
-    expect(manager).toContain("The room’s hue stays fixed");
+    expect(manager).not.toContain("The room’s hue stays fixed");
     expect(manager).toContain("hue={draft.roomHue}");
     expect(picker).toContain("roomShadeColors(hue)");
+    expect(styles).toContain(".daypart-color-spectrum.single-hue { display: flex;");
     expect(manager).not.toContain('aria-label="Daypart color" type="color"');
   });
 });

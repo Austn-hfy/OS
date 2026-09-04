@@ -37,6 +37,8 @@ describe("Calendar Only Dayparts", () => {
     expect(manager).toContain("setDraft(draftFromDaypart(daypart, room))");
     expect(styles).toContain(".room-template-popover { position: fixed;");
     expect(styles).toContain("text-decoration-style: dotted;");
+    expect(styles).toContain("grid-template-columns: 12px minmax(0, 1fr)");
+    expect(styles).toContain("overflow-wrap: normal; word-break: normal;");
   });
 
   it("explains that reusable template settings are editable defaults", async () => {
@@ -45,7 +47,28 @@ describe("Calendar Only Dayparts", () => {
     expect(manager).toContain("Saving changes here never updates dates already scheduled");
     expect(manager).toContain("you can override the time or details for any individual date");
     expect(manager).toContain("Recommended default hours");
+    expect(manager).toContain('activeUntil: daypart.scheduleMode === "calendar_only" ? ""');
+    expect(manager).toContain('activeUntil: draft.scheduleMode === "calendar_only" ? null');
     expect(manager).toContain('draft.scheduleMode === "calendar_only" ? "Save template" : "Save Daypart"');
+  });
+
+  it("keeps optional lifecycle controls compact in the shared editor", async () => {
+    const [manager, styles] = await Promise.all([
+      readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
+    ]);
+    expect(manager).not.toContain("Active until <span>optional</span>");
+    expect(manager).not.toContain("Active Daypart");
+    expect(manager).not.toContain("Choose from four high-contrast shades. The room’s hue stays fixed.");
+    expect(manager).toContain("Add end date");
+    expect(manager).toContain('aria-label="Daypart end date"');
+    expect(manager).toContain("Reset");
+    expect(manager).toContain("More actions");
+    expect(manager).toContain("Pause Daypart");
+    expect(manager).toContain("Resume Daypart");
+    expect(styles).toContain(".daypart-color-spectrum.single-hue { display: flex;");
+    expect(styles).toContain(".daypart-end-date-toggle");
+    expect(styles).toContain(".daypart-editor-more-menu");
   });
 
   it("never projects recurring calendar slots", () => {
