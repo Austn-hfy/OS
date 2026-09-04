@@ -8,11 +8,39 @@ describe("Calendar Only Dayparts", () => {
     expect(manager).toContain("<strong>Recurring Daypart</strong>");
     expect(manager).toContain("<strong>Reusable One-off Template</strong>");
     expect(manager).toContain("Save this as a reusable one-off template you can schedule onto any date later.");
-    expect(manager).toContain("Reusable one-off templates");
+    expect(manager).not.toContain("Saved for later");
+    expect(manager).not.toContain('className="calendar-only-dayparts"');
     expect(manager).toContain('{draft.type ? <div className="field daypart-schedule-step">');
     expect(manager).not.toContain('draft.type && (draft.type === "house_activity" || draft.billingMode) ? <div className="field daypart-schedule-step"');
     expect(manager).not.toContain("<strong>Standing weekly</strong>");
     expect(manager).not.toContain("<strong>Calendar Only</strong>");
+  });
+
+  it("keeps reusable templates quiet and scoped to each room", async () => {
+    const [manager, styles] = await Promise.all([
+      readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
+    ]);
+    expect(manager).not.toContain("Dayparts and templates");
+    expect(manager).not.toContain("Reusable template is listed above");
+    expect(manager).not.toContain("Click open space to add");
+    expect(manager).toContain("daypart.roomId === room.id");
+    expect(manager).toContain("roomTemplates.length ? <button");
+    expect(manager).toContain('className="room-template-trigger"');
+    expect(manager).toContain('roomTemplates.length === 1 ? "template" : "templates"');
+    expect(manager).toContain('className="room-template-popover"');
+    expect(manager).toContain('daypart.type === "house_activity" ? "House Activity" : "Talent Activity"');
+    expect(manager).toContain("<em>Default hours</em>");
+    expect(styles).toContain(".room-template-popover { position: fixed;");
+  });
+
+  it("explains that reusable template settings are editable defaults", async () => {
+    const manager = await readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8");
+    expect(manager).toContain("Template defaults only");
+    expect(manager).toContain("Saving changes here never updates dates already scheduled");
+    expect(manager).toContain("you can override the time or details for any individual date");
+    expect(manager).toContain("Recommended default hours");
+    expect(manager).toContain('draft.scheduleMode === "calendar_only" ? "Save template" : "Save Daypart"');
   });
 
   it("never projects recurring calendar slots", () => {

@@ -52,11 +52,12 @@ describe("Calendar occasional activity follow-up", () => {
     expect(rateDialog).toContain("Enter the hourly rate for this artist and booking.");
   });
 
-  it("puts reusable templates before the weekly grid and explains their names", async () => {
+  it("folds reusable templates into each room instead of a global banner", async () => {
     const manager = await readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8");
-    expect(manager.indexOf("Reusable one-off templates")).toBeLessThan(manager.indexOf("daypart-week-board"));
-    expect(manager).toContain("Listed by activity name. Program and host details stay attached only to each scheduled Calendar date.");
-    expect(manager).toContain("Reusable");
-    expect(manager).toContain("listed above");
+    expect(manager).not.toContain("Saved for later");
+    expect(manager).not.toContain("Listed by activity name. Program and host details stay attached only to each scheduled Calendar date.");
+    expect(manager).not.toContain("listed above");
+    expect(manager).toContain('className="room-template-trigger"');
+    expect(manager).toContain('className="room-template-popover"');
   });
 });
