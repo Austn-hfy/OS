@@ -48,6 +48,7 @@ export function renderPlatformInvoiceHtml(snapshot: PlatformInvoiceDocumentSnaps
       .mark { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid #76acd5; border-radius: 16px; color: #164c74; background: rgba(255,255,255,.76); font-size: 17pt; font-weight: 800; }
       .product { font-size: 17pt; font-weight: 780; letter-spacing: -.03em; }
       .legal { color: #687b8a; font-size: 8.5pt; }
+      .issuer-address { margin-top: 3px; color: #687b8a; font-size: 8pt; line-height: 1.3; }
       .invoice-label { color: #de6c55; font-size: 8.5pt; font-weight: 800; letter-spacing: .14em; text-align: right; text-transform: uppercase; }
       h1 { margin: 4px 0 0; font-size: 26pt; line-height: 1; letter-spacing: -.045em; }
       .summary { display: grid; grid-template-columns: 1fr 1fr; gap: .55in; padding: .36in 0 .34in; }
@@ -79,7 +80,7 @@ export function renderPlatformInvoiceHtml(snapshot: PlatformInvoiceDocumentSnaps
   <body>
     <main class="page">
       <header>
-        <div class="brand"><div class="mark">P</div><div><div class="product">${escapeHtml(snapshot.issuer.productName)}</div><div class="legal">Billed by ${escapeHtml(snapshot.issuer.legalName)} · ${escapeHtml(snapshot.issuer.email)}</div></div></div>
+        <div class="brand"><div class="mark">P</div><div><div class="product">${escapeHtml(snapshot.issuer.productName)}</div><div class="legal">Billed by ${escapeHtml(snapshot.issuer.legalName)} · ${escapeHtml(snapshot.issuer.email)}</div>${snapshot.issuer.addressLines.length ? `<div class="issuer-address">${addressLines(snapshot.issuer.addressLines)}</div>` : ""}</div></div>
         <div><div class="invoice-label">Platform Subscription Invoice</div><h1>${escapeHtml(snapshot.invoice.number)}</h1></div>
       </header>
       <section class="summary">

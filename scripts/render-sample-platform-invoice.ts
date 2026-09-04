@@ -21,7 +21,7 @@ const snapshot = createPlatformInvoiceDocumentSnapshot({
     legalName: "HFY LLC",
     productName: "Platform",
     email: "billing@hearforyou.group",
-    address: "Los Angeles, CA",
+    address: process.env.PLATFORM_BILLING_ADDRESS || "69365 El Canto Rd\nCathedral City, CA 92234",
   },
   billTo: {
     residencyName: "Sample Hotel — Stripe Test Mode",
