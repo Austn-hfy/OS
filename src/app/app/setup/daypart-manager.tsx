@@ -104,14 +104,23 @@ function blankDraft(options: { room?: string; roomId?: string | null; roomHue?: 
   };
 }
 
-function draftFromDaypart(daypart: DaypartRow): EditorDraft {
+function roomNameKey(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function daypartBelongsToRoom(daypart: Pick<DaypartRow, "roomId" | "room">, room: Pick<ResidencyRoom, "id" | "name">): boolean {
+  if (daypart.roomId) return daypart.roomId === room.id;
+  return roomNameKey(daypart.room) === roomNameKey(room.name);
+}
+
+function draftFromDaypart(daypart: DaypartRow, resolvedRoom?: ResidencyRoom): EditorDraft {
   return {
     id: daypart.id,
-    roomId: daypart.roomId,
-    roomHue: daypart.roomHue,
+    roomId: daypart.roomId ?? resolvedRoom?.id ?? null,
+    roomHue: daypart.roomHue ?? resolvedRoom?.hue ?? null,
     createRoom: false,
     name: daypart.name,
-    room: daypart.room,
+    room: resolvedRoom?.name ?? daypart.room,
     color: daypart.color,
     type: daypart.type,
     billingMode: daypart.type === "house_activity" ? null : daypart.billingMode ?? "billed_by_hfy",
@@ -172,6 +181,10 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   useReportDaypartRateAttention({ residencyId, audience: rateAttentionAudience, needsAttention: missingRateDayparts.length > 0 });
   const standingDayparts = useMemo(() => dayparts.filter((daypart) => daypart.scheduleMode === "standing_weekly"), [dayparts]);
   const calendarOnlyDayparts = useMemo(() => dayparts.filter((daypart) => daypart.scheduleMode === "calendar_only"), [dayparts]);
+  const templatesByRoomId = useMemo(() => new Map(residencyRooms.map((room) => [
+    room.id,
+    calendarOnlyDayparts.filter((daypart) => daypartBelongsToRoom(daypart, room)),
+  ])), [calendarOnlyDayparts, residencyRooms]);
   const defaultNewRoomHue = roomHueForIndex(Math.max(-1, ...residencyRooms.map((room) => room.sortOrder)) + 1);
   const range = useMemo(() => displayRange(standingDayparts), [standingDayparts]);
   const rangeMinutes = range.end - range.start;
@@ -460,7 +473,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
         <div className="daypart-week-corner"><strong>Room</strong><span>{formatLocalMinute(range.start)}–{formatLocalMinute(range.end)}</span></div>
         {weekdayNames.map((weekday) => <div className="daypart-week-heading" key={weekday}>{weekday.slice(0, 3)}</div>)}
         {residencyRooms.map((room) => {
-          const roomTemplates = calendarOnlyDayparts.filter((daypart) => daypart.roomId === room.id);
+          const roomTemplates = templatesByRoomId.get(room.id) ?? [];
           return <div className="daypart-week-row" key={room.id}>
           <div className="daypart-room-label">
             {readOnly ? <span className="daypart-room-color-bar" style={{ "--room-color": roomColor(room.hue), "--room-tint": roomColor(room.hue, "pale") } as CSSProperties} aria-hidden="true" /> : <button className="daypart-room-color-bar" style={{ "--room-color": roomColor(room.hue), "--room-tint": roomColor(room.hue, "pale") } as CSSProperties} type="button" aria-label={`Edit ${room.name}`} title={`Edit ${room.name}`} onClick={() => { setRoomState(initialActionState); setRoomDraft({ roomId: room.id, name: room.name, hue: room.hue }); }}><span aria-hidden="true">✎</span></button>}
@@ -485,7 +498,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
                   type="button"
                   title={`Edit ${daypart.name}${daypartNeedsDefaultArtistRate(daypart, rateAttentionAudience) ? " — default artist rate needed" : ""}`}
                   disabled={readOnly || (fullProgrammingClient && daypart.type === "dj_artist")}
-                  onClick={readOnly || (fullProgrammingClient && daypart.type === "dj_artist") ? undefined : () => setDraft(draftFromDaypart(daypart))}
+                  onClick={readOnly || (fullProgrammingClient && daypart.type === "dj_artist") ? undefined : () => setDraft(draftFromDaypart(daypart, room))}
                   style={{
                     "--daypart-color": daypart.color,
                     "--daypart-text-color": contrastTextColor(daypart.color),
@@ -510,7 +523,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
 
       {templatePopover && typeof document !== "undefined" ? (() => {
         const room = residencyRooms.find((item) => item.id === templatePopover.roomId);
-        const roomTemplates = calendarOnlyDayparts.filter((daypart) => daypart.roomId === templatePopover.roomId);
+        const roomTemplates = templatesByRoomId.get(templatePopover.roomId) ?? [];
         if (!room || !roomTemplates.length) return null;
         return createPortal(<div
           className="room-template-popover"
@@ -527,7 +540,7 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
             const disabled = readOnly || (fullProgrammingClient && daypart.type === "dj_artist");
             const typeLabel = daypart.type === "house_activity" ? "House Activity" : "Talent Activity";
             const hoursLabel = `${formatLocalMinute(daypart.suggestedStartMinute ?? 1080)}–${formatLocalMinute(daypart.suggestedEndMinute ?? 1260)}`;
-            return <button className={`calendar-only-daypart-card ${needsRate ? "needs-rate" : ""} room-template-card`} type="button" disabled={disabled} aria-label={`${disabled ? "Saved template" : "Edit saved template"} ${daypart.name}: ${typeLabel}, default hours ${hoursLabel}`} onClick={disabled ? undefined : () => { setTemplatePopover(null); setDraft(draftFromDaypart(daypart)); }} key={daypart.id} style={{ "--daypart-color": daypart.color, "--daypart-text-color": contrastTextColor(daypart.color) } as CSSProperties}><span aria-hidden="true" /><div><strong>{daypart.name}</strong><small>{typeLabel}</small></div><div className="calendar-only-daypart-meta"><em>Default hours</em><span>{hoursLabel}</span>{needsRate ? <b>! Rate needed</b> : null}</div></button>;
+            return <button className={`calendar-only-daypart-card ${needsRate ? "needs-rate" : ""} room-template-card`} type="button" disabled={disabled} aria-label={`${disabled ? "Saved template" : "Edit saved template"} ${daypart.name}: ${typeLabel}, default hours ${hoursLabel}`} onClick={disabled ? undefined : () => { setTemplatePopover(null); setDraft(draftFromDaypart(daypart, room)); }} key={daypart.id} style={{ "--daypart-color": daypart.color, "--daypart-text-color": contrastTextColor(daypart.color) } as CSSProperties}><span aria-hidden="true" /><div><strong>{daypart.name}</strong><small>{typeLabel}</small></div><div className="calendar-only-daypart-meta"><em>Default hours</em><span>{hoursLabel}</span>{needsRate ? <b>! Rate needed</b> : null}</div></button>;
           })}</div>
         </div>, document.body);
       })() : null}

@@ -704,11 +704,11 @@ button.daypart-room-color-bar:hover { transform: translateY(-1px); box-shadow: i
 .daypart-room-color-bar span { width: 10px; height: 18px; position: absolute; right: 1px; bottom: 2px; display: grid; place-items: center; border-radius: 999px; color: var(--room-tint); background: color-mix(in srgb, var(--room-color) 76%, #081a2a); font-size: 9px; font-weight: 900; line-height: 1; }
 .daypart-room-label-copy { min-width: 0; display: grid; align-content: start; gap: 5px; }
 .daypart-room-label-copy strong { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
-.room-template-trigger { appearance: none; width: max-content; max-width: 100%; display: inline-flex; align-items: flex-start; gap: 4px; padding: 1px 0; border: 0; color: var(--forest); background: transparent; text-align: left; cursor: pointer; }
-.room-template-trigger:hover, .room-template-trigger[aria-expanded="true"] { color: color-mix(in srgb, var(--forest) 78%, #081a2a); text-decoration: underline; text-underline-offset: 2px; }
+.room-template-trigger { appearance: none; width: max-content; max-width: 100%; display: inline-flex; align-items: center; gap: 5px; padding: 1px 0; border: 0; color: var(--muted); background: transparent; text-align: left; cursor: pointer; }
+.room-template-trigger:hover, .room-template-trigger[aria-expanded="true"] { color: var(--ink); }
 .room-template-trigger:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; border-radius: 3px; }
-.room-template-trigger svg { width: 11px; height: 11px; flex: 0 0 11px; margin-top: 1px; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
-.room-template-trigger span { min-width: 0; overflow-wrap: anywhere; font-size: 9px; font-weight: 750; line-height: 1.3; }
+.room-template-trigger svg { width: 12px; height: 12px; flex: 0 0 12px; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
+.room-template-trigger span { min-width: 0; overflow-wrap: anywhere; font-size: 9px; font-weight: 750; line-height: 1.3; text-decoration-line: underline; text-decoration-style: dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .daypart-week-cell { position: relative; min-height: 230px; overflow: hidden; background: rgba(251,251,251,.96); background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(12.5% - 1px), rgba(20,28,38,.055) 12.5%); }
 .daypart-week-add { appearance: none; position: absolute; inset: 0; width: 100%; border: 0; background: transparent; color: transparent; }
 .daypart-week-add span { position: absolute; right: 7px; bottom: 6px; width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid rgba(24,24,24,.1); border-radius: 50%; background: rgba(255,255,255,.7); color: #8b8b8b; opacity: .55; }
