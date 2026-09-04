@@ -11,7 +11,6 @@ import {
   stripeWebhookEvents,
 } from "@/db/schema";
 import { queuePlatformPaymentFailedAlerts, resolvePlatformPaymentFailure, sendPendingPlatformBillingAlerts } from "@/services/platform-billing-alerts";
-import { generatePlatformInvoicePdfSafely } from "@/services/platform-invoices";
 import { getStripe } from "@/lib/stripe";
 
 function objectId(value: string | { id: string } | null | undefined) {
@@ -204,6 +203,7 @@ async function applyInvoiceEvent(event: Stripe.Event, invoice: Stripe.Invoice) {
     await resolvePlatformPaymentFailure(record.platformSubscriptionId);
   }
   if (["invoice.finalized", "invoice.payment_succeeded", "invoice.paid"].includes(event.type)) {
+    const { generatePlatformInvoicePdfSafely } = await import("@/services/platform-invoices");
     await generatePlatformInvoicePdfSafely(record.id);
   }
 }

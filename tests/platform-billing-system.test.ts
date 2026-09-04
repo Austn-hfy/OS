@@ -57,15 +57,19 @@ describe("Stripe staging safety", () => {
   });
 
   it("verifies raw signed webhooks, rejects live events, and updates the existing subscription", async () => {
-    const [webhookRoute, webhookService, stripeService] = await Promise.all([
+    const [webhookRoute, webhookService, stripeService, nextConfig] = await Promise.all([
       readSource("../src/app/api/stripe/webhook/route.ts"),
       readSource("../src/services/platform-stripe-webhooks.ts"),
       readSource("../src/services/platform-stripe.ts"),
+      readSource("../next.config.ts"),
     ]);
     expect(webhookRoute).toContain("request.text()");
     expect(webhookRoute).toContain("webhooks.constructEvent");
     expect(webhookRoute).toContain("event.livemode");
     expect(webhookService).toContain("onConflictDoNothing()");
+    expect(webhookService).toContain('await import("@/services/platform-invoices")');
+    expect(nextConfig).toContain('"/api/stripe/webhook"');
+    expect(nextConfig).toContain('"./node_modules/playwright-core/browsers.json"');
     expect(stripeService).toContain("stripe.subscriptions.update(subscription.id");
     expect(stripeService).toContain('proration_behavior: "none"');
     expect(stripeService).not.toContain("subscriptions.create");
