@@ -2,6 +2,116 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
 
+interface QueryError {
+  message: string;
+}
+
+interface QueryResult<Row> {
+  data: Row[] | null;
+  error: QueryError | null;
+}
+
+type ReadQuery<Row> = PromiseLike<QueryResult<Row>>;
+type ServiceTier = "operations_only" | "complete";
+type OperatingMode = "pipeline" | "operations";
+type DaypartType = "dj_artist" | "house_activity";
+type DaypartBillingMode = "billed_by_hfy" | "tracking_only";
+type InvoiceStatus = "draft" | "approved" | "sent" | "paid" | "void";
+type TalentStatus = "active" | "inactive";
+type BookingStatus = "open" | "offered" | "pending_hfy_confirmation" | "confirmed" | "completed" | "cancelled";
+type PayoutStatus = "not_ready" | "ready_to_pay" | "paid" | "na";
+
+interface ResidencyDetailRow {
+  id: string;
+  client_account_id: string;
+  slug: string;
+  name: string;
+  city_state: string;
+  timezone: string;
+  tier: ServiceTier;
+  operating_mode: OperatingMode;
+  active: boolean;
+  default_talent_rate_cents: number;
+  client_hourly_rate_cents: number;
+  payment_terms_days: number;
+  invoice_frequency: string;
+  billing_cycle_start_weekday: number;
+  billing_cycle_length_days: number;
+  scheduling_pattern: string;
+  invoice_prefix: string;
+}
+
+interface DaypartRow {
+  id: string;
+  name: string;
+  room: string;
+  color: string;
+  type: DaypartType;
+  billing_mode: DaypartBillingMode | null;
+  default_talent_rate_cents: number | null;
+  active_until: string | null;
+  active: boolean;
+  sort_order: number;
+}
+
+interface DaypartRuleRow {
+  id: string;
+  daypart_id: string;
+  weekday: number;
+  start_minute: number;
+  end_minute: number;
+  default_dj_count: number | null;
+}
+
+interface ShiftRow {
+  id: string;
+  daypart_id: string | null;
+  service_date: string;
+  invoice_id: string | null;
+  name: string;
+}
+
+interface ScheduleOccurrenceRow {
+  id: string;
+  daypart_id: string | null;
+  service_date: string;
+  name: string;
+}
+
+interface InvoiceRow {
+  id: string;
+  status: InvoiceStatus;
+}
+
+interface ResidencyTalentRow {
+  id: string;
+  talent_id: string;
+  active: boolean;
+}
+
+interface AssignmentRow {
+  id: string;
+  shift_id: string;
+  booking_status: BookingStatus;
+  payout_status: PayoutStatus;
+}
+
+interface ResidencySummaryRow {
+  id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+  operating_mode: OperatingMode;
+}
+
+interface TalentRow {
+  id: string;
+  airtable_record_id: string | null;
+  stage_name: string;
+  talent_status: TalentStatus;
+  exclusive_residency_id: string | null;
+}
+
 function required(name: string) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required.`);
@@ -41,41 +151,48 @@ const supabase = createClient(
   },
 );
 
-async function rows(table: string, select: string, apply?: (query: any) => any) {
-  let query: any = supabase.from(table).select(select);
-  if (apply) query = apply(query);
+async function rows<Row>(table: string, query: ReadQuery<Row>) {
   const result = await query;
   if (result.error) throw new Error(`${table}: ${result.error.message}`);
   return result.data ?? [];
 }
 
-const aceRows = await rows(
+const aceRows = await rows<ResidencyDetailRow>(
   "residencies",
-  "id,client_account_id,slug,name,city_state,timezone,tier,operating_mode,active,default_talent_rate_cents,client_hourly_rate_cents,payment_terms_days,invoice_frequency,billing_cycle_start_weekday,billing_cycle_length_days,scheduling_pattern,invoice_prefix",
-  (query) => query.ilike("name", "%Ace%"),
+  supabase
+    .from("residencies")
+    .select("id,client_account_id,slug,name,city_state,timezone,tier,operating_mode,active,default_talent_rate_cents,client_hourly_rate_cents,payment_terms_days,invoice_frequency,billing_cycle_start_weekday,billing_cycle_length_days,scheduling_pattern,invoice_prefix")
+    .ilike("name", "%Ace%"),
 );
 
 const detail = [];
-for (const residency of aceRows as any[]) {
+for (const residency of aceRows) {
   const [dayparts, rules, shifts, occurrences, invoices, approvals] = await Promise.all([
-    rows("dayparts", "id,name,room,color,type,billing_mode,default_talent_rate_cents,active_until,active,sort_order", (query) => query.eq("residency_id", residency.id).order("sort_order")),
-    rows("daypart_day_rules", "id,daypart_id,weekday,start_minute,end_minute,default_dj_count"),
-    rows("shifts", "id,daypart_id,service_date,invoice_id,name", (query) => query.eq("residency_id", residency.id)),
-    rows("schedule_occurrences", "id,daypart_id,service_date,name", (query) => query.eq("residency_id", residency.id)),
-    rows("invoices", "id,status", (query) => query.eq("residency_id", residency.id)),
-    rows("residency_talent", "id,talent_id,active", (query) => query.eq("residency_id", residency.id)),
+    rows<DaypartRow>("dayparts", supabase.from("dayparts").select("id,name,room,color,type,billing_mode,default_talent_rate_cents,active_until,active,sort_order").eq("residency_id", residency.id).order("sort_order")),
+    rows<DaypartRuleRow>("daypart_day_rules", supabase.from("daypart_day_rules").select("id,daypart_id,weekday,start_minute,end_minute,default_dj_count")),
+    rows<ShiftRow>("shifts", supabase.from("shifts").select("id,daypart_id,service_date,invoice_id,name").eq("residency_id", residency.id)),
+    rows<ScheduleOccurrenceRow>("schedule_occurrences", supabase.from("schedule_occurrences").select("id,daypart_id,service_date,name").eq("residency_id", residency.id)),
+    rows<InvoiceRow>("invoices", supabase.from("invoices").select("id,status").eq("residency_id", residency.id)),
+    rows<ResidencyTalentRow>("residency_talent", supabase.from("residency_talent").select("id,talent_id,active").eq("residency_id", residency.id)),
   ]);
-  const daypartIds = new Set((dayparts as any[]).map((row) => row.id));
-  const scopedRules = (rules as any[]).filter((row) => daypartIds.has(row.daypart_id));
-  const shiftIds = (shifts as any[]).map((row) => row.id);
+  const daypartIds = new Set(dayparts.map((row) => row.id));
+  const scopedRules = rules.filter((row) => daypartIds.has(row.daypart_id));
+  const shiftIds = shifts.map((row) => row.id);
   const assignments = shiftIds.length
-    ? await rows("assignments", "id,shift_id,booking_status,payout_status", (query) => query.in("shift_id", shiftIds))
+    ? await rows<AssignmentRow>("assignments", supabase.from("assignments").select("id,shift_id,booking_status,payout_status").in("shift_id", shiftIds))
     : [];
   detail.push({
     residency,
-    dayparts: (dayparts as any[]).map((daypart) => ({
+    dayparts: dayparts.map((daypart) => ({
       ...daypart,
-      rules: scopedRules.filter((rule) => rule.daypart_id === daypart.id).map(({ id: _id, daypart_id: _daypartId, ...rule }) => rule),
+      rules: scopedRules
+        .filter((rule) => rule.daypart_id === daypart.id)
+        .map((rule) => ({
+          weekday: rule.weekday,
+          start_minute: rule.start_minute,
+          end_minute: rule.end_minute,
+          default_dj_count: rule.default_dj_count,
+        })),
     })),
     counts: {
       shifts: shifts.length,
@@ -86,13 +203,13 @@ for (const residency of aceRows as any[]) {
     },
     shiftSummary: shifts,
     occurrenceSummary: occurrences,
-    invoiceStatuses: (invoices as any[]).map((row) => row.status),
+    invoiceStatuses: invoices.map((row) => row.status),
   });
 }
 
 const [allResidencies, talentRows] = await Promise.all([
-  rows("residencies", "id,name,slug,active,operating_mode"),
-  rows("talent", "id,airtable_record_id,stage_name,talent_status,exclusive_residency_id"),
+  rows<ResidencySummaryRow>("residencies", supabase.from("residencies").select("id,name,slug,active,operating_mode")),
+  rows<TalentRow>("talent", supabase.from("talent").select("id,airtable_record_id,stage_name,talent_status,exclusive_residency_id")),
 ]);
 
 console.log(JSON.stringify({
@@ -100,8 +217,8 @@ console.log(JSON.stringify({
   ace: detail,
   talent: {
     total: talentRows.length,
-    airtableLinked: (talentRows as any[]).filter((row) => row.airtable_record_id).length,
-    exclusive: (talentRows as any[]).filter((row) => row.exclusive_residency_id).length,
-    active: (talentRows as any[]).filter((row) => row.talent_status === "active").length,
+    airtableLinked: talentRows.filter((row) => row.airtable_record_id).length,
+    exclusive: talentRows.filter((row) => row.exclusive_residency_id).length,
+    active: talentRows.filter((row) => row.talent_status === "active").length,
   },
 }, null, 2));
