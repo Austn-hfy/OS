@@ -9,8 +9,9 @@ describe("public calendar layout", () => {
     expect(styles).toContain("grid-template-columns: minmax(0, 1.95fr) minmax(400px, 1fr)");
     expect(styles).toContain("gap: 18px");
     expect(styles).toMatch(/\.public-calendar-agenda \{[\s\S]*?border-radius: 20px;[\s\S]*?box-shadow:/);
-    expect(styles).toMatch(/\.public-calendar-agenda-list \{[\s\S]*?gap: 15px;[\s\S]*?overflow-y: auto;/);
+    expect(styles).toMatch(/\.public-calendar-agenda-list \{[\s\S]*?gap: 0;[\s\S]*?overflow-y: auto;/);
     expect(agendaDayRule).not.toContain("border-bottom");
+    expect(styles).toMatch(/\.public-calendar-agenda-day \+ \.public-calendar-agenda-day \{[\s\S]*?margin-top: 16px;[\s\S]*?border-top: 1px solid rgba\(48, 68, 84, 0\.09\);/);
   });
 
   it("uses the established page-heading pattern with more breathing room", async () => {
@@ -22,7 +23,8 @@ describe("public calendar layout", () => {
 
     expect(view).toContain('<p className="eyebrow">Schedule overview</p>');
     expect(agendaHeadingRule).toContain("padding: 22px 22px 18px");
-    expect(agendaHeadingRule).not.toMatch(/background|border-bottom|box-shadow/);
+    expect(agendaHeadingRule).toContain("border-bottom: 1px solid rgba(48, 68, 84, 0.11)");
+    expect(agendaHeadingRule).not.toMatch(/background|box-shadow/);
     expect(styles).toMatch(/\.public-calendar-agenda-heading \.eyebrow \{ margin: 0 0 13px;/);
     expect(styles).toMatch(/\.public-calendar-agenda-heading h2 \{ margin: 0 0 7px; font-size: clamp\(26px, 2vw, 30px\);/);
     expect(styles).toMatch(/@media \(max-width: 520px\)[\s\S]*?\.public-calendar-agenda-heading \{ padding: 18px 16px 15px; \}/);
