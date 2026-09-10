@@ -1,8 +1,8 @@
 # Hear For You Programming & HFYOS — Business Model
 
-**Version:** v10
-**Last updated:** September 9, 2026
-**Changed this revision:** Added a missing open question to Section 11 — whether "Payment Status" stays visible to a Full Programming client. This existed only in Claude's memory from an earlier session and had never actually been written into this document, which defeats the purpose of having one written source of truth. No other content changed.
+**Version:** v11
+**Last updated:** September 10, 2026
+**Changed this revision:** Two fixes, both correcting real drift rather than adding new decisions. (1) `main` and `staging` had silently diverged — `main` was on v10, `staging` was still on v9 — because an earlier update was only pushed to one branch. This revision replaces both with a single file, identical on both branches, closing that gap for good. (2) Section 5.1 ("The billing unit") is rewritten to explicitly define what a "session" is. The prior wording ("one actual appearance on the calendar... 5 sessions that week, counted individually") was genuinely ambiguous — it was misread as "bill per actual calendar date within the month," when the real, working rule (established in the original pricing session and matching both the Ace worked example in Section 6 and the live production code) is "bill per distinct standing weekly slot, flat, regardless of how many times that slot falls within a given month." One-off (non-standing) activities are the one case where actual dates genuinely do matter, and that distinction was previously buried inside the House Program bullet instead of being called out as its own axis. No pricing numbers changed — this is a clarity fix, not a pricing change.
 
 **Status: WORKING DRAFT — still a snapshot of current thinking, not a locked decision.**
 
@@ -67,7 +67,7 @@ This isn't a fixed number across every hotel — it scales with what a given pro
 
 *(This hourly-markup pricing is entirely separate from HFYOS's own $1,000/month platform floor in Section 5 — different business, different floor, different reason for existing. Do not blend these two numbers together.)*
 
-**Note on status:** this reflects current understanding as of this session. Still unresolved: how this interacts with whether a Full Programming client also owes a separate HFYOS subscription fee (see Section 11).
+**Note on status:** this reflects current understanding as of this session. Still unresolved: how this interacts with whether a Full Programming client also owes a separate HFYOS subscription fee (see Section 9 — this is now resolved, kept here for revision-history continuity).
 
 ### 3.2 Special Events
 
@@ -102,15 +102,29 @@ Selecting "HFY" sends a request to Aus, who sources/assigns/pays a real DJ from 
 
 ## 5. HFYOS Pricing Structure
 
-### 5.1 The billing unit
-**A session/occurrence is one actual appearance on the calendar** — not an assumed recurring pattern. If Pool runs Mon–Fri one week, that's 5 sessions that week, counted individually.
+### 5.1 The billing unit — what counts as "one session"
 
-- **Talent Program** — any program with an outside paid person (DJ, instructor, host, performer). **$135 per session, every time it occurs.**
-- **House Program** — no outside paid vendor. Billing depends on whether it's standing or one-off:
-  - **Standing/recurring House program** — **$60/month flat**, regardless of how many times per week it runs (e.g. Deep Dives: Poolside Movie, every Sunday, still just $60/month total).
-  - **One-off House program** — **$60 per occurrence.** A one-off that happens to run on multiple days (e.g. a two-day pop-up) bills once per day it runs, same logic as Talent — it is not "one program" just because it shares a name across consecutive days.
+Two independent questions determine what something costs. Keeping them separate is the whole point of this section — conflating them is exactly what caused confusion in an earlier revision of this document.
 
-**The dividing line between Talent and House:** does someone external get paid and tracked to run this — not "is there a DJ" specifically.
+**Question 1 — What TYPE of program is it? This sets the *rate*.**
+- **Talent Program** — any program with an outside paid person (DJ, instructor, host, performer): **$135 per session.**
+- **House Program** — no outside paid vendor: **$60 per session.**
+- **The dividing line:** does someone external get paid and tracked to run this — not "is there a DJ" specifically.
+
+**Question 2 — Is it STANDING or ONE-OFF? This sets how sessions are *counted*.**
+
+- **Standing** (a permanent, recurring part of the weekly schedule): **one session per distinct weekday slot, billed flat every month — regardless of how many times that weekday actually falls within a given month.** A program running Friday, Saturday, and Sunday is **three standing sessions**, one per weekday it's scheduled on. Whether a given month has four Fridays or five does not change the bill. The session count changes only when a weekday slot is added to or removed from the standing schedule — never because of the calendar.
+
+- **One-off** (occasional, irregular, not a permanent weekly fixture): **billed per actual date it runs.** A one-off that happens to run on multiple consecutive days (e.g. a two-day pop-up) bills once per day it actually runs — it is not "one program" just because it shares a name across consecutive days.
+
+**Putting the two together:**
+
+| | Standing | One-off |
+|---|---|---|
+| **Talent** | $135/month per weekday slot, flat, regardless of frequency that month | $135 per actual date it runs |
+| **House** | $60/month per weekday slot, flat, regardless of frequency that month | $60 per actual date it runs |
+
+If a program's classification along either axis changes, the bill changes accordingly — but the calendar itself (how many Mondays were in a given month) never silently changes a standing program's price.
 
 ### 5.2 No allowance
 There is no free monthly allowance for one-off/occasional activities. **Everything that appears on the calendar bills, every time, no exceptions.**
@@ -119,7 +133,7 @@ There is no free monthly allowance for one-off/occasional activities. **Everythi
 **$1,000/month standard floor.** Below this, the per-session math still applies in full — the floor exists specifically to prevent an account from being priced entirely on cheap House-only activity. **$500/month is a known, case-by-case exception floor** — granted individually as a discretionary favor, not advertised as a standard lower tier.
 
 ### 5.4 The plain-language explanation (for a GM)
-> "We charge based on what you're running. Any program where you're paying an outside person is $135 a month per session. A standing thing without an outside vendor is a flat $60 a month, no matter how often it happens. A one-off thing, even without a vendor, is $60 each time it happens."
+> "We charge based on what you're running. Any standing program where you're paying an outside person is $135 a month, flat, per time it runs each week — a DJ playing Friday, Saturday, and Sunday is three separate $135 lines, but it doesn't matter whether a given month has four Fridays or five, the price doesn't move. A standing thing without an outside vendor works the same way, just at $60. A one-off thing — something that isn't a permanent part of your weekly schedule — is billed each time it actually happens, whether that's a DJ at $135 a date or a non-vendor activity at $60 a date."
 
 ### 5.5 Commitment-tier pricing (concept, not finalized)
 Month-to-month is the real, full-value rate — never discounted as a sales tactic. Quarterly/annual commitment tiers get a discount off that base rate. Exact percentages not yet set.
@@ -146,6 +160,8 @@ Month-to-month is the real, full-value rate — never discounted as a sales tact
 | Deep Dives: Poolside Movie (standing) | Sun | House | $60 |
 | **Standing total** | | | **$1,275/month** |
 
+Every row above is a standing weekday slot, billed flat per Section 5.1 — none of these totals change based on how many of that weekday actually occur in a given month.
+
 ### 6.2 This week's one-off activity (real example, no allowance applied)
 
 | Program | Occurrence(s) | Type | Cost |
@@ -155,6 +171,8 @@ Month-to-month is the real, full-value rate — never discounted as a sales tact
 | Mahjong Club | Wed | House (one-off) | $60 |
 | Desert Ink (tattoo pop-up) | Fri + Sat | House (one-off) | 2 × $60 = $120 |
 | **One-off total** | | | **$585** |
+
+Every row above is a one-off, billed per actual date per Section 5.1 — this is the one place actual calendar dates directly set the price.
 
 ### 6.3 Request HFY (separate, does not affect the platform total)
 Hear For You Programming currently covers only **Friday's Main Pool session**, billed per Section 3.1's hourly model. Every other program above — including Sat/Sun Pool, Amigo Room, and all one-offs — is either self-managed by Ace or unfilled, and generates **zero Hear For You Programming revenue** regardless of HFYOS billing it.
@@ -216,13 +234,13 @@ Hear For You Programming currently covers only **Friday's Main Pool session**, b
 
 ## 11. Open Questions / Not Yet Decided
 
-- **Whether "Payment Status" stays visible to a Full Programming client** — undecided; leaning toward hidden-by-default (same toggle mechanism already used for Ace) since it's a purely internal HFY-DJ relationship in this tier, but not decided.
 - **Whether a full program handoff to HFY should reduce a hotel's committed HFYOS plan size** — live idea, not decided.
 - **Commitment-tier discount percentages (Section 5.5)** — concept confirmed, exact numbers not set.
 - **HFYOS official naming/branding** — no name settled, not a current priority.
 - **Talent directory add-on pricing** and interaction with HFY's existing roster exclusivity.
 - **Multi-property multiplier exact structure** — no portfolio discount, but exact per-property number not set.
-- **Whether this should eventually split into two separate documents** (a Hear For You Programming business model and a standalone HFYOS business model) rather than one combined doc — raised as a preference (Sept 9) but not decided; kept combined for now, with the two businesses' sections kept clearly separated internally (Section 3 = Programming, Sections 4-10 = HFYOS/shared) so a future split stays easy if this direction is chosen later.
+- **Whether "Payment Status" stays visible to a Full Programming client** — undecided; leaning toward hidden-by-default (same toggle mechanism already used for Ace) since it's a purely internal HFY-DJ relationship in this tier, but not decided.
+- **Whether this should eventually split into two separate documents** (a Hear For You Programming business model and a standalone HFYOS business model) rather than one combined doc — raised as a preference but not decided; kept combined for now, with the two businesses' sections kept clearly separated internally (Section 3 = Programming, Sections 4-10 = HFYOS/shared) so a future split stays easy if this direction is chosen later.
 
 *(`HFY_Core_Services.md` and `HFY_Pricing_Framework_v7.md` have both been fully reviewed and deleted — their content is either superseded or absorbed above. Neither needs further tracking here.)*
 
