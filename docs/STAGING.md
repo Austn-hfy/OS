@@ -113,3 +113,4 @@ Add `--apply` only after reviewing the all-Residency dry-run. This is still a sc
 - For a staging-only problem, revert the staging commit or redeploy the last known-good staging deployment. Production is unaffected.
 - For a database problem, prefer a forward corrective migration. Do not reuse production backups in staging.
 - Production rollback remains a separate, deliberate action and is never triggered by changes to `staging`.
+<!-- sync-verification-test: 2026-09-09 -->
