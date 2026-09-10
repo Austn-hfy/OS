@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { isLiveBillingNotApprovedError } from "@/domain/live-billing";
 import { requireInternalActor } from "@/lib/auth";
 import { createPlatformSubscriptionCheckout, updateCommittedPlan } from "@/services/platform-stripe";
 import { reconcilePlatformUsage } from "@/services/platform-usage";
@@ -42,7 +43,13 @@ export async function saveCommittedPlanAction(_previous: PlatformPlanActionState
 export async function startPlatformStripeCheckoutAction(formData: FormData) {
   const actor = await requireInternalActor();
   const residencyId = z.uuid().parse(formData.get("residencyId"));
-  const url = await createPlatformSubscriptionCheckout(actor, residencyId);
+  let url: string;
+  try {
+    url = await createPlatformSubscriptionCheckout(actor, residencyId);
+  } catch (error) {
+    if (isLiveBillingNotApprovedError(error)) redirect("/app/platform-billing?mode=developer&liveBilling=blocked");
+    throw error;
+  }
   redirect(url);
 }
 

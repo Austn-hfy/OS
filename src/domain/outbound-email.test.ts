@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isStagingEmailEnvironment, routeOutboundEmailForEnvironment } from "@/domain/outbound-email";
+import { isStagingEmailEnvironment, routeOutboundEmailForEnvironment, routeOutboundEmailForLiveBillingApproval } from "@/domain/outbound-email";
 
 const staging = {
   NEXT_PUBLIC_APP_URL: "https://staging.hfy.app",
@@ -58,5 +58,38 @@ describe("staging-wide outbound email safety", () => {
       VERCEL_ENV: "production",
       VERCEL_GIT_COMMIT_REF: "main",
     })).toBe(email);
+  });
+});
+
+describe("per-Residency live-billing email hold", () => {
+  it("reroutes every intended recipient to the owner billing inbox and prefixes the subject", () => {
+    const routed = routeOutboundEmailForLiveBillingApproval({
+      from: "HFY <billing@hearforyou.group>",
+      to: "hotel@example.com",
+      cc: ["finance@example.com"],
+      bcc: "archive@example.com",
+      subject: "Payment failed",
+      html: "<p>Test</p>",
+    }, {
+      liveBillingApproved: false,
+      ownerBillingEmail: "owner-billing@example.com",
+    });
+
+    expect(routed.to).toBe("owner-billing@example.com");
+    expect(routed.cc).toBeUndefined();
+    expect(routed.bcc).toBeUndefined();
+    expect(routed.subject).toBe("[LIVE-BILLING HOLD for hotel@example.com, finance@example.com, archive@example.com] Payment failed");
+  });
+
+  it("leaves approved email unchanged and fails closed without a valid safe inbox", () => {
+    const email = { to: "hotel@example.com", subject: "Payment resolved" };
+    expect(routeOutboundEmailForLiveBillingApproval(email, {
+      liveBillingApproved: true,
+      ownerBillingEmail: "not-used",
+    })).toBe(email);
+    expect(() => routeOutboundEmailForLiveBillingApproval(email, {
+      liveBillingApproved: false,
+      ownerBillingEmail: "",
+    })).toThrow(/valid owner billing email/);
   });
 });

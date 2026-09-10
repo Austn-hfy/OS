@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { queuePlatformPaymentFailedAlerts, resolvePlatformPaymentFailure, sendPendingPlatformBillingAlerts } from "@/services/platform-billing-alerts";
 import { getStripe } from "@/lib/stripe";
+import { requireResidencyLiveBillingApproval } from "@/services/live-billing-safety";
 
 function objectId(value: string | { id: string } | null | undefined) {
   return typeof value === "string" ? value : value?.id ?? null;
@@ -161,6 +162,16 @@ async function applyCompletedCheckout(session: Stripe.Checkout.Session) {
     return null;
   }
   if (session.mode === "setup" && session.metadata?.purpose === "update_platform_subscription_card") {
+    const residencyId = session.metadata.hfy_residency_id;
+    const platformSubscriptionId = session.metadata.hfy_platform_subscription_id;
+    if (!residencyId || !platformSubscriptionId) throw new Error("Completed card-update Checkout Session is missing HFY metadata.");
+    await requireResidencyLiveBillingApproval({
+      residencyId,
+      action: "stripe_subscription_update",
+      entityType: "platform_subscription",
+      entityId: platformSubscriptionId,
+      details: { source: "stripe_checkout_webhook", checkoutSessionId: session.id },
+    });
     const setupIntentId = objectId(session.setup_intent);
     const customerId = objectId(session.customer);
     const subscriptionId = session.metadata.stripe_subscription_id;

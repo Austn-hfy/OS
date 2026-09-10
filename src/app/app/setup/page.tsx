@@ -6,6 +6,7 @@ import { WorkspaceSurface } from "@/components/workspace-surface";
 import { getLastStagingStructureSync } from "@/data/staging-sync";
 import { isStableStagingSyncEnvironment } from "@/domain/staging-sync-admin";
 import { StagingSyncCard } from "./staging-sync-card";
+import { LiveBillingSafetyControl } from "./live-billing-safety-control";
 
 export default async function SetupPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
   const { residency } = await searchParams;
@@ -34,6 +35,7 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
         {!selected && stagingSyncEnabled ? <StagingSyncCard initialLastSync={lastStagingSync} /> : null}
         {selected ? <>
           <ResidencyProfileEditor residency={selected} />
+          <LiveBillingSafetyControl residency={selected} />
           <ResidencyContactsManager residencyId={selected.id} contacts={data.contacts.filter((contact) => contact.residencyId === selected.id)} />
         </> : null}
 

@@ -19,6 +19,7 @@ import {
 import type { AuditActor, InternalActor } from "@/lib/auth";
 import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
 import { getStripe, stagingBillingReturnUrl } from "@/lib/stripe";
+import { requireResidencyLiveBillingApproval } from "@/services/live-billing-safety";
 
 export type CommittedPlanInput = {
   residencyId: string;
@@ -272,6 +273,17 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
     });
   }
 
+  if (current.stripeSubscriptionId) {
+    await requireResidencyLiveBillingApproval({
+      residencyId: current.residencyId,
+      action: "stripe_subscription_update",
+      actor,
+      entityType: "platform_subscription",
+      entityId: current.id,
+      details: { nextRevision: current.revision + 1 },
+    });
+  }
+
   const revision = current.revision + 1;
   const [pendingRevision] = await database.insert(platformSubscriptionRevisions).values({
     platformSubscriptionId: current.id,
@@ -382,6 +394,14 @@ export async function createPlatformSubscriptionCheckout(actor: AuditActor, resi
     .where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
   if (!row) throw new Error("Create a Committed Plan before connecting Stripe.");
   if (row.plan.stripeSubscriptionId) throw new Error("This Residency already has its continuous Stripe subscription.");
+  await requireResidencyLiveBillingApproval({
+    residencyId,
+    action: "stripe_checkout_session_create",
+    actor,
+    entityType: "platform_subscription",
+    entityId: row.plan.id,
+    details: { checkoutMode: "subscription", planRevision: row.plan.revision, includesSubscriptionCreation: true },
+  });
   const { customerId, productId } = await ensureStripeCustomerAndProduct(row.plan, row.residency);
   const amount = planAmount(row.plan).cadenceAmountCents;
   const recurring = platformCadenceInterval(row.plan.cadence);
@@ -436,11 +456,19 @@ export async function createPlatformSubscriptionCheckout(actor: AuditActor, resi
   return session.url;
 }
 
-export async function createPlatformPaymentMethodCheckout(residencyId: string) {
+export async function createPlatformPaymentMethodCheckout(actor: AuditActor, residencyId: string) {
   assertCurrentPlatformBillingStaging();
   const [plan] = await getDb().select().from(platformSubscriptions)
     .where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
   if (!plan?.stripeCustomerId || !plan.stripeSubscriptionId) throw new Error("This Platform subscription is not connected to Stripe yet.");
+  await requireResidencyLiveBillingApproval({
+    residencyId,
+    action: "stripe_checkout_session_create",
+    actor,
+    entityType: "platform_subscription",
+    entityId: plan.id,
+    details: { checkoutMode: "setup", purpose: "update_platform_subscription_card" },
+  });
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.create({
     mode: "setup",

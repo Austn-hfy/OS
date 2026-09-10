@@ -4,6 +4,7 @@ import { ResidencyPageHeader } from "@/components/residency-page-header";
 import { WorkspaceSurface } from "@/components/workspace-surface";
 import { getResidencyPlatformBilling } from "@/data/residency-client";
 import { canResidencyRoleAccess } from "@/domain/residency-access";
+import { LIVE_BILLING_HOLD_MESSAGE } from "@/domain/live-billing";
 import { requireResidencyActor } from "@/lib/auth";
 import { startResidencyPlatformCheckoutAction, updateResidencyPlatformCardAction } from "./actions";
 
@@ -26,7 +27,7 @@ function safeHostedInvoiceUrl(value: string | null) {
   }
 }
 
-export default async function ResidencyPlatformBillingPage({ searchParams }: { searchParams: Promise<{ stripe?: string; card?: string }> }) {
+export default async function ResidencyPlatformBillingPage({ searchParams }: { searchParams: Promise<{ stripe?: string; card?: string; liveBilling?: string }> }) {
   const actor = await requireResidencyActor();
   if (!canResidencyRoleAccess(actor.accessRole, "settings")) redirect("/residency/calendar");
   const [billing, query] = await Promise.all([getResidencyPlatformBilling(actor.residencyId), searchParams]);
@@ -34,6 +35,7 @@ export default async function ResidencyPlatformBillingPage({ searchParams }: { s
   return <WorkspaceSurface className="residency-workspace-surface workspace-surface-settings workspace-surface-platform-billing">
     <ResidencyPageHeader eyebrow="Settings · Billing" title="Platform subscription"><span className="platform-test-mode-badge">Stripe test mode only</span></ResidencyPageHeader>
     <nav className="settings-tabs" aria-label="Settings sections"><Link href="/residency/settings">Account</Link><Link className="active" href="/residency/settings/billing">Billing</Link></nav>
+    {query.liveBilling === "blocked" ? <p className="error" role="alert">{LIVE_BILLING_HOLD_MESSAGE}</p> : null}
     {query.stripe === "success" ? <p className="success">Test Checkout completed. Subscription details will update when Stripe confirms the event.</p> : null}
     {query.stripe === "cancelled" || query.card === "cancelled" ? <p className="muted">Stripe Checkout was cancelled. Nothing changed.</p> : null}
     {query.card === "updated" ? <p className="success">Your test card update was submitted. Stripe confirmation may take a moment.</p> : null}

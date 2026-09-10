@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import Stripe from "stripe";
 import { describe, expect, it } from "vitest";
 import { comparePlatformUsage, calculatePlatformMonthlyAmountCents, platformCadenceChargeCents, platformCadenceInterval } from "@/domain/platform-billing";
+import { LIVE_BILLING_HOLD_MESSAGE } from "@/domain/live-billing";
 import { createPlatformInvoiceDocumentSnapshot } from "@/domain/platform-invoice-document";
 import { assertPlatformBillingStaging, assertStripeTestConfiguration } from "@/domain/stripe-test-mode";
 import { renderPlatformInvoiceHtml } from "@/services/invoice-pdf/platform-template";
@@ -85,6 +86,35 @@ describe("Stripe staging safety", () => {
   });
 });
 
+describe("per-Residency live-billing safety", () => {
+  it("guards all Platform email and Stripe mutation entry points without replacing the environment gate", async () => {
+    const [schema, migration, emailService, alerts, stripeService, webhookService, ownerAction, residencyAction, eslintConfig] = await Promise.all([
+      readSource("../src/db/schema.ts"),
+      readSource("../drizzle/0043_live_billing_safety_switch.sql"),
+      readSource("../src/services/platform-billing-email.ts"),
+      readSource("../src/services/platform-billing-alerts.ts"),
+      readSource("../src/services/platform-stripe.ts"),
+      readSource("../src/services/platform-stripe-webhooks.ts"),
+      readSource("../src/app/app/actions.ts"),
+      readSource("../src/app/residency/settings/billing/actions.ts"),
+      readSource("../eslint.config.mjs"),
+    ]);
+    expect(schema).toContain('liveBillingApproved: boolean("live_billing_approved").notNull().default(false)');
+    expect(migration).toContain('"live_billing_approved" boolean DEFAULT false NOT NULL');
+    expect(emailService).toContain("routeOutboundEmailForLiveBillingApproval");
+    expect(emailService).toContain("logLiveBillingBlock");
+    expect(alerts).toContain("sendPlatformBillingEmail");
+    expect(stripeService).toContain("requireResidencyLiveBillingApproval");
+    expect(stripeService).toContain("assertCurrentPlatformBillingStaging");
+    expect(webhookService).toContain("requireResidencyLiveBillingApproval");
+    expect(ownerAction).toContain("requireInternalActor");
+    expect(ownerAction).toContain("liveBillingApprovalPhrase");
+    expect(residencyAction).toContain("liveBilling=blocked");
+    expect(eslintConfig).toContain("per-Residency platform-billing-email safety service");
+    expect(LIVE_BILLING_HOLD_MESSAGE).toBe("Live billing is not yet approved for this Residency.");
+  });
+});
+
 describe("Platform Invoice document", () => {
   it("uses a distinct subscription template and escapes client content", () => {
     const snapshot = createPlatformInvoiceDocumentSnapshot({
@@ -120,7 +150,8 @@ describe("payment failure access invariant", () => {
     expect(layout).toContain("Your portal remains fully available");
     expect(auth).not.toContain("paymentFailedAt");
     expect(alerts).toContain('accessBehavior: "never_restrict"');
-    expect([alerts, accountSetup, invoiceDelivery].every((source) => source.includes("sendEmail"))).toBe(true);
+    expect(alerts).toContain("sendPlatformBillingEmail");
+    expect([accountSetup, invoiceDelivery].every((source) => source.includes("sendEmail"))).toBe(true);
     expect([alerts, accountSetup, invoiceDelivery].every((source) => !source.includes('from "resend"'))).toBe(true);
     expect(outboundEmail).toContain("routeOutboundEmailForEnvironment");
     expect(eslintConfig).toContain('name: "resend"');

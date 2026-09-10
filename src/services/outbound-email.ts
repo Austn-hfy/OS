@@ -4,6 +4,8 @@ import { Resend, type CreateEmailOptions, type CreateEmailRequestOptions } from 
 import { routeOutboundEmailForEnvironment } from "@/domain/outbound-email";
 import { requiredEnv } from "@/lib/env";
 
+export type OutboundEmail = CreateEmailOptions;
+
 export async function sendEmail(email: CreateEmailOptions, options?: CreateEmailRequestOptions) {
   const routedEmail = routeOutboundEmailForEnvironment(email, process.env);
   const resend = new Resend(requiredEnv("RESEND_API_KEY"));

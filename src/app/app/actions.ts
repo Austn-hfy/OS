@@ -9,6 +9,7 @@ import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, in
 import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { ROOM_HUE_ORDER } from "@/domain/dayparts";
+import { liveBillingApprovalPhrase } from "@/domain/live-billing";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { requireActorForResidency, requireInternalActor } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
@@ -1582,6 +1583,63 @@ export async function updateResidencyProfileAction(_previous: ResidencyActionSta
     return { status: "success", message: "Residency profile saved." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to save the Residency profile." };
+  }
+}
+
+export async function updateResidencyLiveBillingApprovalAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      approved: z.enum(["true", "false"]).transform((value) => value === "true"),
+      confirmation: z.string().max(500).optional().default(""),
+    }).parse(Object.fromEntries(formData));
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [residency] = await tx.select({
+        id: residencies.id,
+        name: residencies.name,
+        liveBillingApproved: residencies.liveBillingApproved,
+      }).from(residencies).where(and(
+        eq(residencies.id, parsed.residencyId),
+        eq(residencies.operatingMode, "operations"),
+      )).limit(1);
+      if (!residency) throw new Error("Residency not found.");
+      if (parsed.approved && !residency.liveBillingApproved) {
+        const requiredPhrase = liveBillingApprovalPhrase(residency.name);
+        if (parsed.confirmation !== requiredPhrase) {
+          throw new Error(`Type “${requiredPhrase}” exactly to approve live billing.`);
+        }
+      }
+      if (residency.liveBillingApproved === parsed.approved) return;
+      await tx.update(residencies).set({
+        liveBillingApproved: parsed.approved,
+        updatedAt: new Date(),
+      }).where(eq(residencies.id, residency.id));
+      await tx.insert(auditLog).values({
+        residencyId: residency.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_live_billing_approval_updated",
+        entityType: "residency",
+        entityId: residency.id,
+        details: {
+          previousLiveBillingApproved: residency.liveBillingApproved,
+          liveBillingApproved: parsed.approved,
+        },
+      });
+    });
+    revalidatePath("/app/setup");
+    revalidatePath("/app/platform-billing");
+    revalidatePath("/residency/settings/billing");
+    return {
+      status: "success",
+      message: parsed.approved
+        ? "Live billing approved for this Residency. The separate environment gate still applies."
+        : "Live billing turned off for this Residency.",
+    };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update live-billing approval." };
   }
 }
 
