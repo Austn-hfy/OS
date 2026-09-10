@@ -1,8 +1,8 @@
 # Hear For You Programming & HFYOS — Business Model
 
-**Version:** v9
+**Version:** v10
 **Last updated:** September 9, 2026
-**Changed this revision:** `HFY_Pricing_Framework_v7.md` fully reviewed and deleted — its old slot/retainer system is dead (replaced entirely by the hourly-markup model in Section 3.1), and its talent-markup mechanism was already captured. Two real resolutions folded in: (1) Full Programming clients pay BOTH the HFYOS subscription and HFY talent invoices, no discount, as two separate invoices — this was an open question, now resolved (Section 9). (2) The Assessment process's actual content (what gets asked) lives in the Rundown app/documentation, not a separate written doc — this was flagged as "undefined" for months; it wasn't undefined, it just lived somewhere else (Section 8).
+**Changed this revision:** Added a missing open question to Section 11 — whether "Payment Status" stays visible to a Full Programming client. This existed only in Claude's memory from an earlier session and had never actually been written into this document, which defeats the purpose of having one written source of truth. No other content changed.
 
 **Status: WORKING DRAFT — still a snapshot of current thinking, not a locked decision.**
 
@@ -216,6 +216,7 @@ Hear For You Programming currently covers only **Friday's Main Pool session**, b
 
 ## 11. Open Questions / Not Yet Decided
 
+- **Whether "Payment Status" stays visible to a Full Programming client** — undecided; leaning toward hidden-by-default (same toggle mechanism already used for Ace) since it's a purely internal HFY-DJ relationship in this tier, but not decided.
 - **Whether a full program handoff to HFY should reduce a hotel's committed HFYOS plan size** — live idea, not decided.
 - **Commitment-tier discount percentages (Section 5.5)** — concept confirmed, exact numbers not set.
 - **HFYOS official naming/branding** — no name settled, not a current priority.
