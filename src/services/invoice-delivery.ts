@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { Resend } from "resend";
 import { getDb } from "@/db/client";
 import { attentionItems, auditLog, invoiceDeliveries, invoices, residencies } from "@/db/schema";
 import { addDays } from "@/domain/airtable-parity";
 import { requiredEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { sendEmail } from "@/services/outbound-email";
 
 export async function sendApprovedInvoice(invoiceId: string) {
   const database = getDb();
@@ -50,8 +50,7 @@ export async function sendApprovedInvoice(invoiceId: string) {
     if (invoice.pdfSha256 && createHash("sha256").update(attachment).digest("hex") !== invoice.pdfSha256) {
       throw new Error("Stored Invoice PDF checksum does not match its approved record.");
     }
-    const resend = new Resend(requiredEnv("RESEND_API_KEY"));
-    const result = await resend.emails.send({
+    const result = await sendEmail({
       from: requiredEnv("INVOICE_FROM_EMAIL"),
       to: invoice.billingContactEmail,
       replyTo: process.env.INVOICE_REPLY_TO || "billing@hearforyou.group",
