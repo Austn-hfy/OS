@@ -79,6 +79,7 @@ beforeAll(async () => {
   const persistentCalendarLinks = await readFile(new URL("../drizzle/0041_cheerful_meteorite.sql", import.meta.url), "utf8");
   const platformBillingSystem = await readFile(new URL("../drizzle/0042_platform_billing_system.sql", import.meta.url), "utf8");
   const liveBillingSafetySwitch = await readFile(new URL("../drizzle/0046_live_billing_safety_switch.sql", import.meta.url), "utf8");
+  const foundingClientTracking = await readFile(new URL("../drizzle/0048_founding_client_tracking.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -166,6 +167,7 @@ beforeAll(async () => {
   await database.exec(persistentCalendarLinks.replaceAll("--> statement-breakpoint", ""));
   await database.exec(platformBillingSystem.replaceAll("--> statement-breakpoint", ""));
   await database.exec(liveBillingSafetySwitch.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(foundingClientTracking.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -173,6 +175,30 @@ afterAll(async () => {
 });
 
 describe("database replacements for Airtable audit formulas", () => {
+  it("stores complete eligible Founding Client windows and rejects invalid enrollment timestamps", async () => {
+    await database.exec(`
+      UPDATE residencies
+      SET founding_client_signed_at = '2027-07-31T12:00:00Z', founding_client_ends_at = '2028-01-31T12:00:00Z'
+      WHERE id = '${ids.residencyA}';
+    `);
+    const stored = await database.query<{ signed_at: Date; ends_at: Date }>(`
+      SELECT founding_client_signed_at AS signed_at, founding_client_ends_at AS ends_at
+      FROM residencies WHERE id = '${ids.residencyA}';
+    `);
+    expect(new Date(stored.rows[0].signed_at).toISOString()).toBe("2027-07-31T12:00:00.000Z");
+    expect(new Date(stored.rows[0].ends_at).toISOString()).toBe("2028-01-31T12:00:00.000Z");
+
+    await expect(database.exec(`
+      UPDATE residencies
+      SET founding_client_signed_at = '2027-08-01T00:00:00Z', founding_client_ends_at = '2028-02-01T00:00:00Z'
+      WHERE id = '${ids.residencyB}';
+    `)).rejects.toThrow(/founding_client_eligible/);
+    await expect(database.exec(`
+      UPDATE residencies SET founding_client_signed_at = '2027-07-01T00:00:00Z'
+      WHERE id = '${ids.residencyB}';
+    `)).rejects.toThrow(/founding_client_window_complete/);
+  });
+
   it("defaults live billing to off for existing and new Residencies", async () => {
     const existing = await database.query<{ live_billing_approved: boolean }>(`
       SELECT live_billing_approved FROM residencies WHERE id = '${ids.residencyA}';

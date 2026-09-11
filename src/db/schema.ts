@@ -156,6 +156,8 @@ export const residencies = pgTable("residencies", {
   billingContactName: text("billing_contact_name").notNull().default(""),
   billingAddress: text("billing_address").notNull().default(""),
   liveBillingApproved: boolean("live_billing_approved").notNull().default(false),
+  foundingClientSignedAt: timestamp("founding_client_signed_at", { withTimezone: true }),
+  foundingClientEndsAt: timestamp("founding_client_ends_at", { withTimezone: true }),
   invoicePrefix: text("invoice_prefix").notNull(),
   autoSendInvoices: boolean("auto_send_invoices").notNull().default(false),
   autoSendReason: text("auto_send_reason").notNull().default(""),
@@ -170,6 +172,9 @@ export const residencies = pgTable("residencies", {
   check("residencies_rates_nonnegative", sql`${table.defaultTalentRateCents} >= 0 AND ${table.clientHourlyRateCents} >= 0`),
   check("residencies_payment_terms_valid", sql`${table.paymentTermsDays} >= 0 AND ${table.paymentTermsDays} <= 365`),
   check("residencies_billing_cycle_valid", sql`${table.billingCycleStartWeekday} >= 0 AND ${table.billingCycleStartWeekday} <= 6 AND ${table.billingCycleLengthDays} >= 1 AND ${table.billingCycleLengthDays} <= 31`),
+  check("residencies_founding_client_window_complete", sql`(${table.foundingClientSignedAt} IS NULL AND ${table.foundingClientEndsAt} IS NULL) OR (${table.foundingClientSignedAt} IS NOT NULL AND ${table.foundingClientEndsAt} IS NOT NULL)`),
+  check("residencies_founding_client_eligible", sql`${table.foundingClientSignedAt} IS NULL OR ${table.foundingClientSignedAt} < '2027-08-01T00:00:00.000Z'::timestamptz`),
+  check("residencies_founding_client_dates_valid", sql`${table.foundingClientSignedAt} IS NULL OR ${table.foundingClientEndsAt} > ${table.foundingClientSignedAt}`),
 ]);
 
 export const platformSubscriptions = pgTable("platform_subscriptions", {

@@ -20,21 +20,23 @@ export function CommittedPlanForm({
   residencyId,
   residencyName,
   value,
+  foundingClientActive = false,
 }: {
   residencyId: string;
   residencyName: string;
   value: CommittedPlanFormValue;
+  foundingClientActive?: boolean;
 }) {
   const [state, action, pending] = useActionState(saveCommittedPlanAction, initialState);
   return <form action={action} className="platform-plan-form">
     <input type="hidden" name="residencyId" value={residencyId} />
     <div className="platform-plan-form-grid">
       <div className="field"><label htmlFor={`${residencyId}-talent`}>Talent sessions</label><input id={`${residencyId}-talent`} name="talentProgramSessions" type="number" min="0" step="1" defaultValue={value.talentProgramSessions} required /></div>
-      <div className="field"><label htmlFor={`${residencyId}-talent-rate`}>Talent Program session rate ($/month)</label><input id={`${residencyId}-talent-rate`} name="talentSessionUnitAmount" type="number" min="0" step="0.01" defaultValue={(value.talentSessionUnitAmountCents / 100).toFixed(2)} required /></div>
+      {!foundingClientActive ? <div className="field"><label htmlFor={`${residencyId}-talent-rate`}>Talent Program session rate ($/month)</label><input id={`${residencyId}-talent-rate`} name="talentSessionUnitAmount" type="number" min="0" step="0.01" defaultValue={(value.talentSessionUnitAmountCents / 100).toFixed(2)} required /></div> : null}
       <div className="field"><label htmlFor={`${residencyId}-house`}>House programs</label><input id={`${residencyId}-house`} name="housePrograms" type="number" min="0" step="1" defaultValue={value.housePrograms} required /></div>
-      <div className="field"><label htmlFor={`${residencyId}-house-rate`}>House Program Daypart rate ($/month)</label><input id={`${residencyId}-house-rate`} name="houseProgramUnitAmount" type="number" min="0" step="0.01" defaultValue={(value.houseProgramUnitAmountCents / 100).toFixed(2)} required /></div>
+      {!foundingClientActive ? <div className="field"><label htmlFor={`${residencyId}-house-rate`}>House Program Daypart rate ($/month)</label><input id={`${residencyId}-house-rate`} name="houseProgramUnitAmount" type="number" min="0" step="0.01" defaultValue={(value.houseProgramUnitAmountCents / 100).toFixed(2)} required /></div> : null}
       <div className="field"><label htmlFor={`${residencyId}-oneoffs`}>Monthly one-offs included</label><input id={`${residencyId}-oneoffs`} name="oneOffAllowance" type="number" min="0" step="1" defaultValue={value.oneOffAllowance} required /></div>
-      <div className="field"><label htmlFor={`${residencyId}-cadence`}>Billing cadence</label><select id={`${residencyId}-cadence`} name="cadence" defaultValue={value.cadence}><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option></select></div>
+      {!foundingClientActive ? <div className="field"><label htmlFor={`${residencyId}-cadence`}>Billing cadence</label><select id={`${residencyId}-cadence`} name="cadence" defaultValue={value.cadence}><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option></select></div> : <div className="platform-founding-rate-summary"><span>Founding Client pricing</span><strong>$60 Talent · $60 House</strong><small>Monthly billing · no term selection</small></div>}
       <div className="field"><label htmlFor={`${residencyId}-starts`}>Plan starts</label><input id={`${residencyId}-starts`} name="startsOn" type="date" defaultValue={value.startsOn} required /></div>
       <div className="field"><label htmlFor={`${residencyId}-renews`}>Next renewal</label><input id={`${residencyId}-renews`} name="renewsOn" type="date" defaultValue={value.renewsOn} required /></div>
       <div className="field platform-plan-reason"><label htmlFor={`${residencyId}-reason`}>Reason for manual change</label><input id={`${residencyId}-reason`} name="changeReason" type="text" minLength={3} maxLength={500} placeholder={`Confirmed plan for ${residencyName}`} required /></div>

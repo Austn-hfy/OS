@@ -59,6 +59,31 @@ describe("Platform committed billing", () => {
   });
 });
 
+describe("Founding Client tracking", () => {
+  it("stores an explicit six-month window and exposes the owner-only enrollment and expired-tier indicator", async () => {
+    const [schema, migration, form, action, page, stripeService] = await Promise.all([
+      readSource("../src/db/schema.ts"),
+      readSource("../drizzle/0048_founding_client_tracking.sql"),
+      readSource("../src/app/app/platform-billing/committed-plan-form.tsx"),
+      readSource("../src/app/app/platform-billing/actions.ts"),
+      readSource("../src/app/app/platform-billing/page.tsx"),
+      readSource("../src/services/platform-stripe.ts"),
+    ]);
+
+    expect(schema).toContain('foundingClientSignedAt: timestamp("founding_client_signed_at", { withTimezone: true })');
+    expect(schema).toContain('foundingClientEndsAt: timestamp("founding_client_ends_at", { withTimezone: true })');
+    expect(migration).toContain('"founding_client_signed_at" timestamp with time zone');
+    expect(migration).toContain('"founding_client_ends_at" timestamp with time zone');
+    expect(form).toContain("foundingClientActive");
+    expect(form).toContain("no term selection");
+    expect(action).toContain("requireInternalActorForMutation");
+    expect(action).toContain("enrollFoundingClient");
+    expect(page).toContain("Commitment-tier selection needed");
+    expect(stripeService).toContain("enforceFoundingClientPlan");
+    expect(stripeService).toContain("FOUNDING_CLIENT_UNIT_AMOUNT_CENTS");
+  });
+});
+
 describe("Stripe staging safety", () => {
   const safe = {
     STRIPE_SECRET_KEY: "sk_test_example",
