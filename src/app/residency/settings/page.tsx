@@ -5,15 +5,17 @@ import { ResidencySettingsForm } from "./settings-form";
 import { getResidencyClientSettings } from "@/data/residency-client";
 import { canResidencyRoleAccess } from "@/domain/residency-access";
 import { requireResidencyActor } from "@/lib/auth";
+import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
 import Link from "next/link";
 
 export default async function ResidencySettingsPage() {
+  const platformBillingAvailable = isCurrentPlatformBillingAvailable();
   const actor = await requireResidencyActor();
   if (!canResidencyRoleAccess(actor.accessRole, "settings")) redirect("/residency/calendar");
   const settings = await getResidencyClientSettings(actor.residencyId);
   return <WorkspaceSurface className="residency-workspace-surface workspace-surface-settings">
     <ResidencyPageHeader eyebrow="Residency workspace" title="Settings" />
-    <nav className="settings-tabs" aria-label="Settings sections"><Link className="active" href="/residency/settings">Account</Link><Link href="/residency/settings/billing">Billing</Link></nav>
+    <nav className="settings-tabs" aria-label="Settings sections"><Link className="active" href="/residency/settings">Account</Link>{platformBillingAvailable ? <Link href="/residency/settings/billing">Billing</Link> : null}</nav>
     <ResidencySettingsForm settings={settings} />
   </WorkspaceSurface>;
 }

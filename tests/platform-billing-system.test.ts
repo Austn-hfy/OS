@@ -1,13 +1,16 @@
 import { readFile } from "node:fs/promises";
 import Stripe from "stripe";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { comparePlatformUsage, calculatePlatformMonthlyAmountCents, platformCadenceChargeCents, platformCadenceInterval } from "@/domain/platform-billing";
 import { LIVE_BILLING_HOLD_MESSAGE } from "@/domain/live-billing";
 import { createPlatformInvoiceDocumentSnapshot } from "@/domain/platform-invoice-document";
 import { assertPlatformBillingStaging, assertStripeTestConfiguration } from "@/domain/stripe-test-mode";
+import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
 import { renderPlatformInvoiceHtml } from "@/services/invoice-pdf/platform-template";
 
 const readSource = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("Platform committed billing", () => {
   it("collects and stores split rates while retaining the blended columns only for compatibility", async () => {
@@ -156,6 +159,16 @@ describe("Stripe staging safety", () => {
     expect(() => assertPlatformBillingStaging({ VERCEL: "1", VERCEL_ENV: "production", NEXT_PUBLIC_APP_URL: "https://hfy.app" })).toThrow(/staging-only/);
   });
 
+  it("reports the current production deployment as unavailable without changing the throwing lock", () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("VERCEL_TARGET_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://hfy.app");
+
+    expect(isCurrentPlatformBillingAvailable()).toBe(false);
+    expect(() => assertPlatformBillingStaging({ VERCEL: "1", VERCEL_ENV: "production" })).toThrow("Platform billing is staging-only and is disabled in the production deployment.");
+  });
+
   it("verifies raw signed webhooks, rejects live events, and updates the existing subscription", async () => {
     const [webhookRoute, webhookService, stripeService, nextConfig] = await Promise.all([
       readSource("../src/app/api/stripe/webhook/route.ts"),
@@ -208,9 +221,41 @@ describe("per-Residency live-billing safety", () => {
     expect(webhookService).toContain("requireResidencyLiveBillingApproval");
     expect(ownerAction).toContain("requireInternalActor");
     expect(ownerAction).toContain("liveBillingApprovalPhrase");
-    expect(residencyAction).toContain("liveBilling=blocked");
+    expect(residencyAction).toContain('status: "error"');
     expect(eslintConfig).toContain("per-Residency platform-billing-email safety service");
     expect(LIVE_BILLING_HOLD_MESSAGE).toBe("Live billing is not yet approved for this Residency.");
+  });
+});
+
+describe("production billing visibility hold", () => {
+  it("removes billing navigation and gates every billing surface before data loads", async () => {
+    const [appLayout, internalShell, ownerPage, residencyLayout, residencyShell, residencyOverview, settingsPage, residencyBillingPage, setupPage, ownerPdf, residencyPdf] = await Promise.all([
+      readSource("../src/app/app/layout.tsx"),
+      readSource("../src/components/internal-shell.tsx"),
+      readSource("../src/app/app/platform-billing/page.tsx"),
+      readSource("../src/app/residency/layout.tsx"),
+      readSource("../src/components/residency-shell.tsx"),
+      readSource("../src/app/residency/page.tsx"),
+      readSource("../src/app/residency/settings/page.tsx"),
+      readSource("../src/app/residency/settings/billing/page.tsx"),
+      readSource("../src/app/app/setup/page.tsx"),
+      readSource("../src/app/app/platform-billing/invoices/[invoiceId]/pdf/route.ts"),
+      readSource("../src/app/residency/settings/billing/invoices/[invoiceId]/pdf/route.ts"),
+    ]);
+
+    expect(appLayout).toContain("platformBillingAvailable={platformBillingAvailable}");
+    expect(internalShell).toContain('...(platformBillingAvailable ? [{ label: "Platform Billing"');
+    expect(ownerPage.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(ownerPage.indexOf("getPlatformRevenueDashboard()"));
+    expect(ownerPage).toContain("notFound()");
+    expect(residencyLayout).toContain("platformBillingAvailable ? await getResidencyPaymentFailure");
+    expect(residencyShell).toContain("canManage && platformBillingAvailable");
+    expect(residencyOverview.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(residencyOverview.indexOf("getResidencyPlatformBilling(actor.residencyId)"));
+    expect(settingsPage).toContain('platformBillingAvailable ? <Link href="/residency/settings/billing">Billing</Link> : null');
+    expect(residencyBillingPage.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(residencyBillingPage.indexOf("getResidencyPlatformBilling(actor.residencyId)"));
+    expect(residencyBillingPage).toContain("notFound()");
+    expect(setupPage).toContain("platformBillingAvailable ? <LiveBillingSafetyControl");
+    expect(ownerPdf).toContain("if (!isCurrentPlatformBillingAvailable()) notFound()");
+    expect(residencyPdf).toContain("if (!isCurrentPlatformBillingAvailable()) notFound()");
   });
 });
 
@@ -251,6 +296,7 @@ describe("payment failure access invariant", () => {
       readSource("../eslint.config.mjs"),
     ]);
     expect(layout).toContain("getResidencyPaymentFailure");
+    expect(layout).toContain("platformBillingAvailable ? await getResidencyPaymentFailure");
     expect(layout).toContain("platform-payment-failure-banner");
     expect(layout).toContain("Your portal remains fully available");
     expect(auth).not.toContain("paymentFailedAt");

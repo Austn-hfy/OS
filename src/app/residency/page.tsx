@@ -4,6 +4,7 @@ import { ResidencyPageHeader } from "@/components/residency-page-header";
 import { WorkspaceSurface } from "@/components/workspace-surface";
 import { getResidencyClientOverview, getResidencyPlatformBilling } from "@/data/residency-client";
 import { requireResidencyActor } from "@/lib/auth";
+import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -17,6 +18,7 @@ function date(value: string | null) {
 
 export default async function ResidencyOverviewPage() {
   const actor = await requireResidencyActor();
+  if (!isCurrentPlatformBillingAvailable()) redirect("/residency/calendar");
   if (actor.accessRole !== "manager") redirect("/residency/calendar");
   const [overview, billing] = await Promise.all([
     getResidencyClientOverview(actor.residencyId),

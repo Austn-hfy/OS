@@ -149,7 +149,11 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
 }
 
 export async function generatePlatformInvoicePdfSafely(platformInvoiceId: string) {
-  assertCurrentPlatformBillingStaging();
+  try {
+    assertCurrentPlatformBillingStaging();
+  } catch (error) {
+    return { status: "on_hold" as const, error: error instanceof Error ? error.message : "Platform Invoice PDF generation is on hold." };
+  }
   try {
     return await generatePlatformInvoicePdf(platformInvoiceId);
   } catch (error) {

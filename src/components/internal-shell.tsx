@@ -25,7 +25,7 @@ export function resolveOwnerMode(pathname: string, requestedMode: string | null)
   return pathname.startsWith("/app/setup") || pathname.startsWith("/app/platform-billing") ? "developer" : "hfy";
 }
 
-export function InternalShell({ actor, residencies, developerResidencies, pendingShiftChangeRequestCount, initialPrivacyMode, children }: { actor: InternalActor; residencies: ResidencyOption[]; developerResidencies: ResidencyOption[]; pendingShiftChangeRequestCount: number; initialPrivacyMode: boolean; children: React.ReactNode }) {
+export function InternalShell({ actor, residencies, developerResidencies, pendingShiftChangeRequestCount, initialPrivacyMode, platformBillingAvailable, children }: { actor: InternalActor; residencies: ResidencyOption[]; developerResidencies: ResidencyOption[]; pendingShiftChangeRequestCount: number; initialPrivacyMode: boolean; platformBillingAvailable: boolean; children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const mode = resolveOwnerMode(pathname, searchParams.get("mode"));
@@ -53,7 +53,7 @@ export function InternalShell({ actor, residencies, developerResidencies, pendin
     { label: "Setup", href: `/app/setup${residencySuffix}`, description: "Program configuration", icon: "setup" },
   ] : mode === "developer" ? [
     { label: "Residencies", href: "/app?mode=developer", description: "Platform workspaces", icon: "residencies" },
-    { label: "Platform Billing", href: "/app/platform-billing?mode=developer", description: "Plans, usage, and Stripe", icon: "invoices" },
+    ...(platformBillingAvailable ? [{ label: "Platform Billing", href: "/app/platform-billing?mode=developer", description: "Plans, usage, and Stripe", icon: "invoices" as const }] : []),
     { label: "Admin Settings", href: "/app/setup?mode=developer", description: "Company identity", icon: "settings" },
   ] : [
     { label: "Work Queue", href: "/app?mode=hfy", description: "Requests and standing work", icon: "workqueue", badgeCount: pendingShiftChangeRequestCount },

@@ -10,3 +10,12 @@ export function assertCurrentPlatformBillingStaging() {
     VERCEL_TARGET_ENV: process.env.VERCEL_TARGET_ENV,
   });
 }
+
+export function isCurrentPlatformBillingAvailable() {
+  try {
+    assertCurrentPlatformBillingStaging();
+    return true;
+  } catch {
+    return false;
+  }
+}
