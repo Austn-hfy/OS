@@ -20,8 +20,8 @@ export function CompedResidencyControl({ residency }: {
       <div><p className="eyebrow">Owner only · permanent pricing</p><h2>Comped Residency</h2></div>
       <span className={`status ${residency.comped ? "active" : "paused"}`}>{residency.comped ? "Comped" : "Standard"}</span>
     </header>
-    <p className="subhead">Comped Residencies stay at $0 for both Platform Talent-session and House-program rates, outside Founding Client and commitment-tier programs.</p>
-    {residency.comped ? <p className="warning">Permanent comp status is active. Removing it leaves the current $0 Committed Plan in place until an owner sets reviewed rates.</p> : null}
+    <p className="subhead">Comped Residencies are charged $0 while their underlying Committed Plan rates, tier, and term remain preserved.</p>
+    {residency.comped ? <p className="warning">Permanent comp status is active. Removing it immediately restores the exact preserved Committed Plan pricing and term.</p> : null}
     <div className="field">
       <label htmlFor={`comped-confirmation-${residency.id}`}>Type this phrase to {residency.comped ? "remove" : "enable"} permanent comp status</label>
       <code>{confirmationPhrase}</code>

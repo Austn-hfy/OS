@@ -1,6 +1,7 @@
 import type { PlatformBillingCadence } from "./platform-billing";
 
 export const COMPED_UNIT_AMOUNT_CENTS = 0;
+export const COMPED_DEFAULT_STORED_UNIT_AMOUNT_CENTS = 6_000;
 
 export function compedResidencyConfirmationPhrase(residencyName: string, comped: boolean) {
   return comped
@@ -19,7 +20,7 @@ export function assertCompedResidencyConfirmation(input: {
   }
 }
 
-export function enforceCompedPlan<T extends {
+export function effectiveCompedPlan<T extends {
   cadence: PlatformBillingCadence;
   talentSessionUnitAmountCents: number;
   houseProgramUnitAmountCents: number;
