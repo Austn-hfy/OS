@@ -104,6 +104,24 @@ describe("Calendar Only Dayparts", () => {
     expect(calendar).toContain("Back to handling options");
   });
 
+  it("offers the same staffing choices for an already-materialized Client Managed Talent occurrence", async () => {
+    const [calendar, actions, bookings] = await Promise.all([
+      readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/actions.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8"),
+    ]);
+
+    expect(calendar).toContain("materializedTrackingTalentOccurrence");
+    expect(calendar).toContain('collapsedEyebrow="Client Managed"');
+    expect(calendar).toContain('label="Add your own artist"');
+    expect(calendar).toContain("requestHfyForExistingOccurrence");
+    expect(calendar).toContain("materializedOccurrenceTalentEditor");
+    expect(actions).toContain("addScheduleOccurrenceTalentAction");
+    expect(actions).toContain("requestHfyForScheduleOccurrenceAction");
+    expect(bookings).toContain("tx.insert(scheduleOccurrenceTalent)");
+    expect(bookings).toContain("explicitHfyRequest");
+  });
+
   it("uses a room-first funnel with searchable existing rooms and explicit creation", async () => {
     const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
     expect(calendar).toContain('addMode === "room" ? "Where is this happening?"');

@@ -83,6 +83,13 @@ export type UpdateDaypartOccurrenceInput = {
   manualHostName?: string;
 };
 
+export type AddScheduleOccurrenceTalentInput = {
+  occurrenceId: string;
+  talentId: string;
+  startsAtMinute: number;
+  endsAtMinute: number;
+};
+
 function validateOneTimeRecordInput(input: UpdateOneTimeRecordInput) {
   const name = input.name.trim();
   const room = input.room.trim();
@@ -278,9 +285,12 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       let endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.endMinute), residency.timezone);
       const fullProgrammingAutoRequest = fullProgrammingClient && (rule.type === "dj_artist" || requested.assignments.some((assignment) => Boolean(assignment.talentId)));
       const requestHfy = Boolean(requested.requestHfy || fullProgrammingAutoRequest);
+      const explicitHfyRequest = Boolean(requested.requestHfy && !fullProgrammingAutoRequest);
       const effectiveAssignments = fullProgrammingAutoRequest ? [] : requested.assignments;
       const standingDaypart = rule.daypartId && rule.scheduleMode === "standing_weekly";
-      const recordKind = standingDaypart
+      const recordKind = explicitHfyRequest
+        ? "financial_shift" as const
+        : standingDaypart
         ? daypartBookingRecordKind(rule.type, rule.billingMode)
         : requestHfy || (actor.kind === "residency" && rule.type === "dj_artist")
           ? "financial_shift" as const
@@ -332,7 +342,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         if (financialConflict.length || trackingConflict.length) throw new Error(`${selectedTalent.stageName} already has an overlapping active booking.`);
       }
 
-      const materializedRecord = standingDaypart ? await materializeStandingDaypartDateInTransaction(tx, {
+      const materializedRecord = standingDaypart && !explicitHfyRequest ? await materializeStandingDaypartDateInTransaction(tx, {
         residencyId: residency.id,
         daypartId: rule.daypartId!,
         serviceDate: input.serviceDate,
@@ -760,6 +770,191 @@ export async function updateDaypartOccurrence(actor: AuditActor, input: UpdateDa
       details: { serviceDate: occurrence.serviceDate, daypartId: occurrence.daypartId, name: occurrence.name, startMinute: input.startMinute, endMinute: input.endMinute },
     });
     return { id: occurrence.id };
+  });
+}
+
+export async function addTalentToScheduleOccurrence(actor: AuditActor, input: AddScheduleOccurrenceTalentInput) {
+  if (actor.kind !== "residency") throw new Error("Only a Residency manager can add an artist to a Client Managed occurrence.");
+  if (!Number.isInteger(input.startsAtMinute) || input.startsAtMinute < 0 || input.startsAtMinute > 2879
+    || !Number.isInteger(input.endsAtMinute) || input.endsAtMinute <= input.startsAtMinute || input.endsAtMinute > 2879) {
+    throw new Error("Choose valid artist hours.");
+  }
+
+  return getDb().transaction(async (tx) => {
+    const [occurrence] = await tx.select({
+      id: scheduleOccurrences.id,
+      residencyId: scheduleOccurrences.residencyId,
+      daypartId: scheduleOccurrences.daypartId,
+      serviceDate: scheduleOccurrences.serviceDate,
+      name: scheduleOccurrences.name,
+      type: scheduleOccurrences.type,
+      startsAt: scheduleOccurrences.startsAt,
+      endsAt: scheduleOccurrences.endsAt,
+      daypartType: dayparts.type,
+      billingMode: dayparts.billingMode,
+      timezone: residencies.timezone,
+    }).from(scheduleOccurrences)
+      .innerJoin(dayparts, and(
+        eq(scheduleOccurrences.daypartId, dayparts.id),
+        eq(dayparts.residencyId, scheduleOccurrences.residencyId),
+      ))
+      .innerJoin(residencies, eq(scheduleOccurrences.residencyId, residencies.id))
+      .where(and(
+        eq(scheduleOccurrences.id, input.occurrenceId),
+        eq(residencies.active, true),
+        eq(residencies.operatingMode, "operations"),
+      ))
+      .limit(1)
+      .for("update");
+    if (!occurrence || occurrence.residencyId !== actor.residencyId || occurrence.daypartId === null
+      || occurrence.type !== "dj_artist" || occurrence.daypartType !== "dj_artist" || occurrence.billingMode !== "tracking_only") {
+      throw new Error("Only a materialized Client Managed Talent occurrence can accept a registered artist here.");
+    }
+
+    const [selectedTalent] = await tx.select({
+      id: talent.id,
+      stageName: talent.stageName,
+    }).from(talent)
+      .innerJoin(residencyTalent, and(
+        eq(residencyTalent.talentId, talent.id),
+        eq(residencyTalent.residencyId, occurrence.residencyId),
+        eq(residencyTalent.active, true),
+        eq(residencyTalent.clientVisible, true),
+      ))
+      .where(and(
+        eq(talent.id, input.talentId),
+        eq(talent.ownership, "residency"),
+        eq(talent.owningResidencyId, occurrence.residencyId),
+        eq(talent.talentStatus, "active"),
+        isNull(talent.archivedAt),
+        or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, occurrence.residencyId)),
+      ))
+      .limit(1);
+    if (!selectedTalent) throw new Error("Choose an active registered artist from this Residency.");
+
+    const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.startsAtMinute), occurrence.timezone);
+    const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(occurrence.serviceDate, input.endsAtMinute), occurrence.timezone);
+    if (startsAt < occurrence.startsAt || endsAt > occurrence.endsAt) {
+      throw new Error("Artist hours must stay inside the scheduled occurrence.");
+    }
+
+    const [financialConflict, trackingConflict] = await Promise.all([
+      tx.select({ id: assignments.id }).from(assignments).where(and(
+        eq(assignments.talentId, selectedTalent.id),
+        inArray(assignments.bookingStatus, ["pending_hfy_confirmation", "offered", "confirmed"]),
+        lt(assignments.startsAt, endsAt),
+        gt(assignments.endsAt, startsAt),
+      )).limit(1),
+      tx.select({ id: scheduleOccurrenceTalent.id }).from(scheduleOccurrenceTalent).where(and(
+        eq(scheduleOccurrenceTalent.talentId, selectedTalent.id),
+        lt(scheduleOccurrenceTalent.startsAt, endsAt),
+        gt(scheduleOccurrenceTalent.endsAt, startsAt),
+      )).limit(1),
+    ]);
+    if (financialConflict.length || trackingConflict.length) {
+      throw new Error(`${selectedTalent.stageName} already has an overlapping active booking.`);
+    }
+
+    const [link] = await tx.insert(scheduleOccurrenceTalent).values({
+      occurrenceId: occurrence.id,
+      talentId: selectedTalent.id,
+      startsAt,
+      endsAt,
+    }).returning({ id: scheduleOccurrenceTalent.id });
+    await tx.insert(auditLog).values({
+      residencyId: occurrence.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "schedule_occurrence_talent_added",
+      entityType: "schedule_occurrence",
+      entityId: occurrence.id,
+      details: { daypartId: occurrence.daypartId, serviceDate: occurrence.serviceDate, talentId: selectedTalent.id },
+    });
+    return link;
+  });
+}
+
+export async function requestHfyForScheduleOccurrence(actor: AuditActor, occurrenceId: string) {
+  if (actor.kind !== "residency") throw new Error("Only the Residency can request HFY for this occurrence.");
+
+  return getDb().transaction(async (tx) => {
+    const [occurrence] = await tx.select({
+      id: scheduleOccurrences.id,
+      residencyId: scheduleOccurrences.residencyId,
+      roomId: scheduleOccurrences.roomId,
+      daypartId: scheduleOccurrences.daypartId,
+      serviceDate: scheduleOccurrences.serviceDate,
+      name: scheduleOccurrences.name,
+      room: scheduleOccurrences.room,
+      type: scheduleOccurrences.type,
+      startsAt: scheduleOccurrences.startsAt,
+      endsAt: scheduleOccurrences.endsAt,
+      notes: scheduleOccurrences.notes,
+      programDetails: scheduleOccurrences.programDetails,
+      manualHostName: scheduleOccurrences.manualHostName,
+      daypartType: dayparts.type,
+      billingMode: dayparts.billingMode,
+      residencyTier: residencies.tier,
+    }).from(scheduleOccurrences)
+      .innerJoin(dayparts, and(
+        eq(scheduleOccurrences.daypartId, dayparts.id),
+        eq(dayparts.residencyId, scheduleOccurrences.residencyId),
+      ))
+      .innerJoin(residencies, eq(scheduleOccurrences.residencyId, residencies.id))
+      .where(and(
+        eq(scheduleOccurrences.id, occurrenceId),
+        eq(residencies.active, true),
+        eq(residencies.operatingMode, "operations"),
+      ))
+      .limit(1)
+      .for("update");
+    if (!occurrence || occurrence.residencyId !== actor.residencyId || occurrence.daypartId === null
+      || occurrence.type !== "dj_artist" || occurrence.daypartType !== "dj_artist" || occurrence.billingMode !== "tracking_only") {
+      throw new Error("Only a materialized Client Managed Talent occurrence can be sent to HFY here.");
+    }
+    if (occurrence.residencyTier === "complete") throw new Error("HFY already manages Talent Activities for Full Programming accounts.");
+    const linkedTalent = await tx.select({ id: scheduleOccurrenceTalent.id }).from(scheduleOccurrenceTalent)
+      .where(eq(scheduleOccurrenceTalent.occurrenceId, occurrence.id)).limit(1);
+    if (linkedTalent.length) throw new Error("Remove the client-managed artist before requesting HFY for this date.");
+
+    await tx.delete(scheduleOccurrences).where(eq(scheduleOccurrences.id, occurrence.id));
+    const [shift] = await tx.insert(shifts).values({
+      residencyId: occurrence.residencyId,
+      roomId: occurrence.roomId,
+      daypartId: occurrence.daypartId,
+      invoiceId: null,
+      name: occurrence.name,
+      serviceDate: occurrence.serviceDate,
+      room: occurrence.room,
+      calendarColor: null,
+      startsAt: occurrence.startsAt,
+      endsAt: occurrence.endsAt,
+      notes: occurrence.notes,
+      programDetails: occurrence.programDetails,
+      manualHostName: occurrence.manualHostName,
+      economicsMode: "hfy_request",
+      clientTalentDefaultRateCents: null,
+      clientRateOverrideCents: null,
+      clientRateCents: 0,
+      billingStatus: "not_billable",
+      invoiceLinkIssue: false,
+      invoiceLinkNote: "",
+    }).returning({ id: shifts.id });
+    const [request] = await tx.insert(hfyTalentRequests).values({
+      residencyId: occurrence.residencyId,
+      shiftId: shift.id,
+      createdByUserId: actor.userId,
+    }).returning({ id: hfyTalentRequests.id });
+    await tx.insert(auditLog).values({
+      residencyId: occurrence.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "hfy_talent_requested",
+      entityType: "hfy_talent_request",
+      entityId: request.id,
+      details: { shiftId: shift.id, serviceDate: occurrence.serviceDate, daypartId: occurrence.daypartId, sourceOccurrenceId: occurrence.id },
+    });
+    return { shiftId: shift.id, requestId: request.id };
   });
 }
 
