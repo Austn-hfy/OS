@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
+import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import { platformSubscriptionInvoices } from "@/db/schema";
 import { requireInternalActor } from "@/lib/auth";
+import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -12,6 +14,7 @@ function safeFilename(value: string) {
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ invoiceId: string }> }) {
+  if (!isCurrentPlatformBillingAvailable()) notFound();
   await requireInternalActor();
   const { invoiceId } = await params;
   const [invoice] = await getDb().select({

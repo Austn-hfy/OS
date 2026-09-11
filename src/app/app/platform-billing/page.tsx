@@ -1,11 +1,14 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { formatMoney } from "@/components/format";
 import { WorkspaceSurface } from "@/components/workspace-surface";
+import { PlatformBillingActionForm } from "@/components/platform-billing-action-form";
 import { getDeveloperResidencyList, getPlatformRevenueDashboard } from "@/data/internal";
 import { getCommitmentTierState } from "@/domain/commitment-tier";
 import { FOUNDING_CLIENT_CUTOFF, getFoundingClientState, type FoundingClientState } from "@/domain/founding-client";
 import { LIVE_BILLING_HOLD_MESSAGE } from "@/domain/live-billing";
 import { requireInternalActor } from "@/lib/auth";
+import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
 import { CommittedPlanForm } from "./committed-plan-form";
 import { FoundingClientEnrollmentForm } from "./founding-client-enrollment-form";
 import { refreshPlatformUsageAction, startPlatformStripeCheckoutAction } from "./actions";
@@ -51,6 +54,7 @@ function CommitmentTierPanel({ state }: { state: NonNullable<ReturnType<typeof g
 }
 
 export default async function PlatformBillingPage({ searchParams }: { searchParams: Promise<{ stripe?: string; liveBilling?: string }> }) {
+  if (!isCurrentPlatformBillingAvailable()) notFound();
   await requireInternalActor();
   const [{ stripe, liveBilling }, residencies, plans] = await Promise.all([searchParams, getDeveloperResidencyList(), getPlatformRevenueDashboard()]);
   const planByResidency = new Map(plans.map((plan) => [plan.residencyId, plan]));
@@ -82,11 +86,11 @@ export default async function PlatformBillingPage({ searchParams }: { searchPara
           <section className="platform-owner-plan-summary">
             <div><small>Monthly plan</small><strong>{formatMoney(plan.monthlyAmountCents)}</strong></div><div><small>{plan.cadence} charge</small><strong>{formatMoney(plan.cadenceChargeCents)}</strong></div><div><small>Next invoice</small><strong>{date(plan.nextChargeAt ?? plan.renewsOn)}</strong></div><div><small>Card</small><strong>{plan.cardLast4 ? `${plan.cardBrand} •••• ${plan.cardLast4}` : "Not added"}</strong></div>
           </section>
-          <section className="platform-live-comparison"><div className="platform-comparison-heading"><div><p className="eyebrow">Live Usage · {plan.usagePeriod ? `${date(plan.usagePeriod.start)}–${date(plan.usagePeriod.end)}` : "current month"}</p><h3>{comparison?.withinPlan ? "Within plan" : comparison ? `Over plan by ${comparison.totalOverBy}` : "No usage snapshot"}</h3></div><form action={refreshPlatformUsageAction}><input type="hidden" name="residencyId" value={residency.id} /><button className="button secondary" type="submit">Refresh & log</button></form></div>
+          <section className="platform-live-comparison"><div className="platform-comparison-heading"><div><p className="eyebrow">Live Usage · {plan.usagePeriod ? `${date(plan.usagePeriod.start)}–${date(plan.usagePeriod.end)}` : "current month"}</p><h3>{comparison?.withinPlan ? "Within plan" : comparison ? `Over plan by ${comparison.totalOverBy}` : "No usage snapshot"}</h3></div><PlatformBillingActionForm action={refreshPlatformUsageAction} residencyId={residency.id} label="Refresh & log" pendingLabel="Refreshing…" buttonClassName="button secondary" /></div>
             {plan.liveUsage && comparison ? <div className="platform-usage-grid"><UsageMetric label="Talent sessions" committed={plan.talentProgramSessions} live={plan.liveUsage.talentSessions} /><UsageMetric label="House programs" committed={plan.housePrograms} live={plan.liveUsage.housePrograms} /><UsageMetric label="One-offs" committed={plan.oneOffAllowance} live={plan.liveUsage.oneOffs} /></div> : <p className="muted">Usage is available after the first plan refresh.</p>}
           </section>
           <div className="platform-owner-actions">
-            {!plan.stripeSubscriptionId ? <form action={startPlatformStripeCheckoutAction}><input type="hidden" name="residencyId" value={residency.id} /><button className="button" type="submit">Add test card & start subscription</button></form> : <span className="platform-stripe-connected">One continuous Stripe subscription connected</span>}
+            {!plan.stripeSubscriptionId ? <PlatformBillingActionForm action={startPlatformStripeCheckoutAction} residencyId={residency.id} label="Add test card & start subscription" pendingLabel="Starting Checkout…" /> : <span className="platform-stripe-connected">One continuous Stripe subscription connected</span>}
             {plan.latestInvoice ? <Link className="button secondary" href={`/app/platform-billing/invoices/${plan.latestInvoice.id}/pdf`}>Latest Platform invoice</Link> : null}
           </div>
           <details className="platform-plan-editor"><summary>Edit Committed Plan</summary><CommittedPlanForm residencyId={residency.id} residencyName={residency.name} foundingClientActive={foundingState.active} commitmentTierEligible={foundingState.needsCommitmentTierSelection} value={{ cadence: plan.cadence, commitmentTier: plan.commitmentTier, talentProgramSessions: plan.talentProgramSessions, talentSessionUnitAmountCents: plan.talentSessionUnitAmountCents, housePrograms: plan.housePrograms, houseProgramUnitAmountCents: plan.houseProgramUnitAmountCents, oneOffAllowance: plan.oneOffAllowance, startsOn: plan.startsOn, renewsOn: plan.renewsOn }} /></details>

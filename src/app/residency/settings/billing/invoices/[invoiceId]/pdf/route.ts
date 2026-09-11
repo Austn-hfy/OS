@@ -1,10 +1,13 @@
 import { and, eq } from "drizzle-orm";
+import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import { platformSubscriptionInvoices } from "@/db/schema";
 import { requireResidencyActor } from "@/lib/auth";
+import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(_request: Request, context: { params: Promise<{ invoiceId: string }> }) {
+  if (!isCurrentPlatformBillingAvailable()) notFound();
   const actor = await requireResidencyActor();
   if (actor.accessRole !== "manager") return new Response("Not found", { status: 404 });
   const { invoiceId } = await context.params;

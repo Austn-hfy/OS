@@ -1,4 +1,5 @@
 import { isAuthorizedCron } from "@/lib/cron";
+import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
 import { queueMonthlyOverageHeadsUps, sendPendingPlatformBillingAlerts } from "@/services/platform-billing-alerts";
 import { reconcileAllPlatformUsage } from "@/services/platform-usage";
 
@@ -7,6 +8,15 @@ export const maxDuration = 60;
 
 export async function GET(request: Request) {
   if (!isAuthorizedCron(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    assertCurrentPlatformBillingStaging();
+  } catch (error) {
+    return Response.json({
+      ok: true,
+      onHold: true,
+      message: error instanceof Error ? error.message : "Platform billing is on hold in this deployment.",
+    });
+  }
   try {
     const usage = await reconcileAllPlatformUsage();
     const headsUps = await queueMonthlyOverageHeadsUps();

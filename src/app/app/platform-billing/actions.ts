@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { isLiveBillingNotApprovedError } from "@/domain/live-billing";
+import type { PlatformBillingActionState } from "@/components/platform-billing-action-form";
 import { requireInternalActor, requireInternalActorForMutation } from "@/lib/auth";
 import { createPlatformSubscriptionCheckout, enrollFoundingClient, updateCommittedPlan } from "@/services/platform-stripe";
 import { reconcilePlatformUsage } from "@/services/platform-usage";
@@ -73,22 +73,26 @@ export async function enrollFoundingClientAction(_previous: FoundingClientAction
   }
 }
 
-export async function startPlatformStripeCheckoutAction(formData: FormData) {
-  const actor = await requireInternalActor();
-  const residencyId = z.uuid().parse(formData.get("residencyId"));
+export async function startPlatformStripeCheckoutAction(_previous: PlatformBillingActionState, formData: FormData): Promise<PlatformBillingActionState> {
   let url: string;
   try {
+    const actor = await requireInternalActor();
+    const residencyId = z.uuid().parse(formData.get("residencyId"));
     url = await createPlatformSubscriptionCheckout(actor, residencyId);
   } catch (error) {
-    if (isLiveBillingNotApprovedError(error)) redirect("/app/platform-billing?mode=developer&liveBilling=blocked");
-    throw error;
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to start Platform Checkout." };
   }
   redirect(url);
 }
 
-export async function refreshPlatformUsageAction(formData: FormData) {
-  await requireInternalActor();
-  const residencyId = z.uuid().parse(formData.get("residencyId"));
-  await reconcilePlatformUsage(residencyId);
-  revalidatePath("/app/platform-billing");
+export async function refreshPlatformUsageAction(_previous: PlatformBillingActionState, formData: FormData): Promise<PlatformBillingActionState> {
+  try {
+    await requireInternalActor();
+    const residencyId = z.uuid().parse(formData.get("residencyId"));
+    await reconcilePlatformUsage(residencyId);
+    revalidatePath("/app/platform-billing");
+    return { status: "success", message: "Platform usage refreshed." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to refresh Platform usage." };
+  }
 }
