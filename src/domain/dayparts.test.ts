@@ -19,6 +19,7 @@ import {
   projectDaypartSlots,
   resolveAssignmentMinutes,
   resolveEndMinute,
+  scheduleOccurrenceScheduling,
   slotSchedulingStatus,
   validateDaypartRules,
   weekdayForDate,
@@ -124,6 +125,28 @@ describe("Daypart weekly rules", () => {
       { startMinute: 720, endMinute: 900 },
       { startMinute: 930, endMinute: 1140 },
     ])).toBe("partial");
+  });
+
+  it("marks Talent occurrences according to their linked talent", () => {
+    expect(scheduleOccurrenceScheduling("dj_artist", false)).toEqual({
+      schedulingStatus: "empty",
+      label: "Needs scheduling",
+    });
+    expect(scheduleOccurrenceScheduling("dj_artist", true)).toEqual({
+      schedulingStatus: "filled",
+      label: "Scheduled",
+    });
+  });
+
+  it("keeps House occurrences scheduled without linked talent", () => {
+    expect(scheduleOccurrenceScheduling("house_activity", false)).toEqual({
+      schedulingStatus: "filled",
+      label: "Scheduled",
+    });
+    expect(scheduleOccurrenceScheduling("house_activity", true)).toEqual({
+      schedulingStatus: "filled",
+      label: "Scheduled",
+    });
   });
 
   it("detects overlapping DJs but allows back-to-back handoffs", () => {
