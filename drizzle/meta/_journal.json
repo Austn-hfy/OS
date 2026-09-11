@@ -351,6 +351,13 @@
       "when": 1789097087000,
       "tag": "0049_commitment_ladder_clawback",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789107550000,
+      "tag": "0050_comped_residencies",
+      "breakpoints": true
     }
   ]
 }

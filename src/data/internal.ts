@@ -79,6 +79,7 @@ export const getDeveloperResidencyList = cache(async function getDeveloperReside
     timezone: residencies.timezone,
     defaultTalentRateCents: residencies.defaultTalentRateCents,
     clientHourlyRateCents: residencies.clientHourlyRateCents,
+    comped: residencies.comped,
     foundingClientSignedAt: residencies.foundingClientSignedAt,
     foundingClientEndsAt: residencies.foundingClientEndsAt,
   }).from(residencies)
@@ -92,6 +93,7 @@ export async function getPlatformRevenueDashboard() {
     residencyId: residencies.id,
     residencyName: residencies.name,
     residencyActive: residencies.active,
+    comped: residencies.comped,
     foundingClientSignedAt: residencies.foundingClientSignedAt,
     foundingClientEndsAt: residencies.foundingClientEndsAt,
     status: platformSubscriptions.status,
@@ -969,6 +971,7 @@ export async function getSetupData() {
       tier: residencies.tier,
       active: residencies.active,
       liveBillingApproved: residencies.liveBillingApproved,
+      comped: residencies.comped,
       internalNotes: residencies.internalNotes,
     }).from(residencies).where(eq(residencies.operatingMode, "operations")).orderBy(desc(residencies.active), asc(residencies.name)),
     database.select({

@@ -4,6 +4,7 @@ export const FOUNDING_CLIENT_CUTOFF = new Date("2027-08-01T00:00:00.000Z");
 export const FOUNDING_CLIENT_UNIT_AMOUNT_CENTS = 6_000;
 
 export type FoundingClientWindow = {
+  comped?: boolean;
   foundingClientSignedAt: Date | null;
   foundingClientEndsAt: Date | null;
 };
@@ -40,6 +41,9 @@ export function assertFoundingClientEnrollmentEligible(now: Date): void {
 
 export function getFoundingClientState(window: FoundingClientWindow, now = new Date()): FoundingClientState {
   assertValidDate(now, "Current time");
+  if (window.comped) {
+    return { enrolled: false, active: false, needsCommitmentTierSelection: false, signedAt: null, endsAt: null };
+  }
   const { foundingClientSignedAt: signedAt, foundingClientEndsAt: endsAt } = window;
   if (!signedAt && !endsAt) {
     return { enrolled: false, active: false, needsCommitmentTierSelection: false, signedAt: null, endsAt: null };

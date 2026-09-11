@@ -84,4 +84,12 @@ describe("Platform commitment tiers", () => {
       foundingClientEndsAt: new Date("2027-07-01T00:00:00.000Z"),
     }, new Date("2027-04-01T00:00:00.000Z"))).toThrow(/cannot select/);
   });
+
+  it("keeps comped Residencies outside the commitment ladder", () => {
+    expect(() => assertCommitmentTierSelectionAllowed({
+      comped: true,
+      foundingClientSignedAt: null,
+      foundingClientEndsAt: null,
+    })).toThrow(/does not use commitment tiers/);
+  });
 });

@@ -44,4 +44,18 @@ describe("Founding Client policy", () => {
     expect(getFoundingClientState({ foundingClientSignedAt: signedAt, foundingClientEndsAt: endsAt }, endsAt))
       .toMatchObject({ enrolled: true, active: false, needsCommitmentTierSelection: true });
   });
+
+  it("keeps a comped Residency entirely outside the Founding Client window", () => {
+    expect(getFoundingClientState({
+      comped: true,
+      foundingClientSignedAt: new Date("2027-01-01T00:00:00.000Z"),
+      foundingClientEndsAt: new Date("2027-07-01T00:00:00.000Z"),
+    }, new Date("2028-01-01T00:00:00.000Z"))).toEqual({
+      enrolled: false,
+      active: false,
+      needsCommitmentTierSelection: false,
+      signedAt: null,
+      endsAt: null,
+    });
+  });
 });

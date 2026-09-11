@@ -87,6 +87,33 @@ describe("Founding Client tracking", () => {
   });
 });
 
+describe("permanently comped Residencies", () => {
+  it("persists an owner-only flag, requires confirmation, and presents unmistakable $0 status", async () => {
+    const [schema, migration, setup, control, ownerAction, ownerPage, planForm, stripeService] = await Promise.all([
+      readSource("../src/db/schema.ts"),
+      readSource("../drizzle/0050_comped_residencies.sql"),
+      readSource("../src/app/app/setup/page.tsx"),
+      readSource("../src/app/app/setup/comped-residency-control.tsx"),
+      readSource("../src/app/app/actions.ts"),
+      readSource("../src/app/app/platform-billing/page.tsx"),
+      readSource("../src/app/app/platform-billing/committed-plan-form.tsx"),
+      readSource("../src/services/platform-stripe.ts"),
+    ]);
+
+    expect(schema).toContain('comped: boolean("comped").notNull().default(false)');
+    expect(migration).toContain('"comped" boolean DEFAULT false NOT NULL');
+    expect(migration).toContain("residencies_comped_not_founding");
+    expect(setup).toContain("<CompedResidencyControl");
+    expect(control).toContain("compedResidencyConfirmationPhrase");
+    expect(ownerAction).toContain("requireInternalActorForMutation");
+    expect(ownerAction).toContain("updateResidencyCompedStatus");
+    expect(ownerPage).toContain("Permanently comped · $0 Platform rates");
+    expect(ownerPage).toContain("COMPED · $0");
+    expect(planForm).toContain("$0 Talent · $0 House");
+    expect(stripeService).toContain("enforceCompedPlan");
+  });
+});
+
 describe("Commitment ladder and clawback", () => {
   it("persists tier terms and queues a guarded clawback line on the next test invoice", async () => {
     const [schema, migration, form, action, stripeService, webhookService, page] = await Promise.all([

@@ -82,6 +82,7 @@ beforeAll(async () => {
   const platformSubscriptionRevisionSplitRates = await readFile(new URL("../drizzle/0047_platform_subscription_revision_split_rates.sql", import.meta.url), "utf8");
   const foundingClientTracking = await readFile(new URL("../drizzle/0048_founding_client_tracking.sql", import.meta.url), "utf8");
   const commitmentLadderClawback = await readFile(new URL("../drizzle/0049_commitment_ladder_clawback.sql", import.meta.url), "utf8");
+  const compedResidencies = await readFile(new URL("../drizzle/0050_comped_residencies.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -172,6 +173,7 @@ beforeAll(async () => {
   await database.exec(platformSubscriptionRevisionSplitRates.replaceAll("--> statement-breakpoint", ""));
   await database.exec(foundingClientTracking.replaceAll("--> statement-breakpoint", ""));
   await database.exec(commitmentLadderClawback.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(compedResidencies.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -215,6 +217,21 @@ describe("database replacements for Airtable audit formulas", () => {
       RETURNING live_billing_approved;
     `);
     expect(inserted.rows[0].live_billing_approved).toBe(false);
+  });
+
+  it("defaults permanent comp status to off and keeps comped Residencies outside Founding Client enrollment", async () => {
+    const existing = await database.query<{ comped: boolean }>(`
+      SELECT comped FROM residencies WHERE id = '${ids.residencyB}';
+    `);
+    expect(existing.rows[0].comped).toBe(false);
+
+    await database.exec(`UPDATE residencies SET comped = true WHERE id = '${ids.residencyB}';`);
+    await expect(database.exec(`
+      UPDATE residencies
+      SET founding_client_signed_at = '2027-01-01T00:00:00Z', founding_client_ends_at = '2027-07-01T00:00:00Z'
+      WHERE id = '${ids.residencyB}';
+    `)).rejects.toThrow(/comped_not_founding/);
+    await database.exec(`UPDATE residencies SET comped = false WHERE id = '${ids.residencyB}';`);
   });
 
   it("stores complete commitment terms and Residency-scoped clawbacks", async () => {
