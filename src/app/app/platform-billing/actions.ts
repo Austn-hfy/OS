@@ -14,6 +14,7 @@ export type FoundingClientActionState = PlatformPlanActionState;
 const planSchema = z.object({
   residencyId: z.uuid(),
   cadence: z.enum(["monthly", "quarterly", "annual"]).optional().default("monthly"),
+  commitmentTier: z.enum(["month_to_month", "three_month", "six_month", "twelve_month"]).optional(),
   talentProgramSessions: z.coerce.number().int().min(0).max(10_000),
   talentSessionUnitAmount: z.coerce.number().min(0).max(1_000_000).optional().default(60),
   housePrograms: z.coerce.number().int().min(0).max(10_000),
@@ -36,6 +37,7 @@ export async function saveCommittedPlanAction(_previous: PlatformPlanActionState
     await updateCommittedPlan(actor, {
       residencyId: parsed.residencyId,
       cadence: parsed.cadence,
+      commitmentTier: parsed.commitmentTier ?? null,
       talentProgramSessions: parsed.talentProgramSessions,
       talentSessionUnitAmountCents,
       housePrograms: parsed.housePrograms,

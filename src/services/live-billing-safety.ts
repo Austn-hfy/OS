@@ -9,6 +9,7 @@ import type { AuditActor } from "@/lib/auth";
 export type LiveBillingAction =
   | "platform_billing_email"
   | "stripe_checkout_session_create"
+  | "stripe_invoice_item_create"
   | "stripe_subscription_create"
   | "stripe_subscription_update";
 

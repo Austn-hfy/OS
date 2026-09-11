@@ -25,7 +25,7 @@ describe("Platform committed billing", () => {
     expect(form).not.toContain('name="unitAmount"');
     expect(action).toContain("talentSessionUnitAmountCents");
     expect(action).toContain("houseProgramUnitAmountCents");
-    expect(stripeService).not.toContain("unitAmountCents:");
+    expect(stripeService).not.toContain("unitAmountCents: planInput.");
     expect(invoiceService).toContain("revisionTalentSessionUnitAmountCents");
     expect(invoiceService).toContain("revisionHouseProgramUnitAmountCents");
     expect(schema).toContain('talentSessionUnitAmountCents: integer("talent_session_unit_amount_cents").notNull()');
@@ -81,6 +81,57 @@ describe("Founding Client tracking", () => {
     expect(page).toContain("Commitment-tier selection needed");
     expect(stripeService).toContain("enforceFoundingClientPlan");
     expect(stripeService).toContain("FOUNDING_CLIENT_UNIT_AMOUNT_CENTS");
+  });
+});
+
+describe("Commitment ladder and clawback", () => {
+  it("persists tier terms and queues a guarded clawback line on the next test invoice", async () => {
+    const [schema, migration, form, action, stripeService, webhookService, page] = await Promise.all([
+      readSource("../src/db/schema.ts"),
+      readSource("../drizzle/0049_commitment_ladder_clawback.sql"),
+      readSource("../src/app/app/platform-billing/committed-plan-form.tsx"),
+      readSource("../src/app/app/platform-billing/actions.ts"),
+      readSource("../src/services/platform-stripe.ts"),
+      readSource("../src/services/platform-stripe-webhooks.ts"),
+      readSource("../src/app/app/platform-billing/page.tsx"),
+    ]);
+
+    expect(schema).toContain('platformCommitmentTier("commitment_tier")');
+    expect(schema).toContain('platformSubscriptionClawbacks = pgTable("platform_subscription_clawbacks"');
+    expect(migration).toContain('CREATE TYPE "public"."platform_commitment_tier"');
+    expect(migration).toContain('CREATE TABLE "platform_subscription_clawbacks"');
+    expect(form).toContain('name="commitmentTier"');
+    expect(form).toContain("House stays $60 at every tier");
+    expect(action).toContain("commitmentTier: parsed.commitmentTier ?? null");
+    expect(stripeService).toContain("calculateCommitmentClawback");
+    expect(stripeService).toContain("queueCommitmentCancellationClawback");
+    expect(webhookService).toContain('event.type === "invoice.created"');
+    expect(webhookService).toContain('action: "stripe_invoice_item_create"');
+    expect(webhookService).toContain("stripe.invoiceItems.create");
+    expect(page).toContain("pastForgivenessWindow");
+  });
+
+  it("renders a clawback as its own invoice line", () => {
+    const snapshot = createPlatformInvoiceDocumentSnapshot({
+      invoice: { id: "invoice", stripeInvoiceId: "in_test", number: "PLAT-1002", invoiceDate: "2027-04-01", billingPeriodStart: "2027-04-01", billingPeriodEnd: "2027-04-30", currency: "USD", amountDueCents: 82_000, amountPaidCents: 0, status: "open" },
+      issuer: { legalName: "HFY LLC", productName: "Platform", email: "billing@example.test", address: "" },
+      billTo: { residencyName: "Hotel", contactName: "Billing", contactEmail: "hotel@example.test", address: "" },
+      committedPlan: { revision: 3, cadence: "monthly", talentSessions: 8, talentSessionUnitAmountCents: 6_000, housePrograms: 0, houseProgramUnitAmountCents: 6_000, oneOffAllowance: 0 },
+      adjustments: [{
+        description: "Early termination clawback — 6-month commitment",
+        quantity: 17,
+        unitAmountCents: 2_000,
+        amountCents: 34_000,
+        detail: "Recovery of the commitment discount on Talent sessions already billed",
+      }],
+    });
+    expect(snapshot.lines.at(-1)).toMatchObject({
+      description: "Early termination clawback — 6-month commitment",
+      quantity: 17,
+      unitAmountCents: 2_000,
+      amountCents: 34_000,
+    });
+    expect(renderPlatformInvoiceHtml(snapshot)).toContain("Recovery of the commitment discount");
   });
 });
 

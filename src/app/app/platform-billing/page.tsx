@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatMoney } from "@/components/format";
 import { WorkspaceSurface } from "@/components/workspace-surface";
 import { getDeveloperResidencyList, getPlatformRevenueDashboard } from "@/data/internal";
+import { getCommitmentTierState } from "@/domain/commitment-tier";
 import { FOUNDING_CLIENT_CUTOFF, getFoundingClientState, type FoundingClientState } from "@/domain/founding-client";
 import { LIVE_BILLING_HOLD_MESSAGE } from "@/domain/live-billing";
 import { requireInternalActor } from "@/lib/auth";
@@ -27,11 +28,26 @@ function UsageMetric({ label, committed, live }: { label: string; committed: num
   return <div className={overBy ? "platform-usage-metric over" : "platform-usage-metric within"}><span>{label}</span><strong>{live} / {committed}</strong><small>{overBy ? `Over by ${overBy}` : `${committed - live} remaining`}</small></div>;
 }
 
-function FoundingClientPanel({ residencyId, state, enrollmentOpen }: { residencyId: string; state: FoundingClientState; enrollmentOpen: boolean }) {
+function FoundingClientPanel({ residencyId, state, enrollmentOpen, commitmentTierSelected }: { residencyId: string; state: FoundingClientState; enrollmentOpen: boolean; commitmentTierSelected: boolean }) {
   if (state.active) return <div className="platform-founding-state active"><div><strong>Founding Client pricing active</strong><span>$60 Talent and $60 House through {date(state.endsAt)}. No term selection is required.</span></div><span className="status active">Founding</span></div>;
-  if (state.needsCommitmentTierSelection) return <div className="platform-founding-state needs-tier" role="status"><div><strong>Commitment-tier selection needed</strong><span>Founding Client pricing ended {date(state.endsAt)}. This Residency now needs a standard commitment tier.</span></div><span className="status failed">Action needed</span></div>;
+  if (state.needsCommitmentTierSelection && !commitmentTierSelected) return <div className="platform-founding-state needs-tier" role="status"><div><strong>Commitment-tier selection needed</strong><span>Founding Client pricing ended {date(state.endsAt)}. This Residency now needs a standard commitment tier.</span></div><span className="status failed">Action needed</span></div>;
   if (!state.enrolled && enrollmentOpen) return <FoundingClientEnrollmentForm residencyId={residencyId} />;
+  if (commitmentTierSelected) return null;
   return <div className="platform-founding-state closed"><div><strong>Founding enrollment closed</strong><span>This Residency was not enrolled before August 1, 2027.</span></div></div>;
+}
+
+function CommitmentTierPanel({ state }: { state: NonNullable<ReturnType<typeof getCommitmentTierState>> }) {
+  const termLabel = state.tier === "month_to_month" ? "Rolling monthly" : `${state.lengthMonths}-month term`;
+  const timing = state.tier === "month_to_month"
+    ? "No fixed commitment or clawback."
+    : state.termComplete
+      ? `The ${state.lengthMonths}-month term is complete.`
+      : state.forgivenessStartsAt === null
+        ? `Inside the committed term through ${date(state.termEndsAt)}. This tier has no forgiveness window.`
+        : state.pastForgivenessWindow
+          ? `Past the forgiveness point. A change now carries no clawback; the term ends ${date(state.termEndsAt)}.`
+          : `Inside the clawback window through ${date(state.forgivenessStartsAt)}; the term ends ${date(state.termEndsAt)}.`;
+  return <div className="platform-founding-state commitment"><div><strong>{state.label} commitment · {formatMoney(state.talentRateCents)} Talent</strong><span>Started {date(state.startedAt)} · {termLabel} · House stays $60. {timing}</span></div><span className={`status ${state.pastForgivenessWindow || state.termComplete || state.tier === "month_to_month" ? "active" : "incomplete"}`}>{state.pastForgivenessWindow ? "Forgiven" : state.termComplete ? "Complete" : "Current"}</span></div>;
 }
 
 export default async function PlatformBillingPage({ searchParams }: { searchParams: Promise<{ stripe?: string; liveBilling?: string }> }) {
@@ -50,16 +66,18 @@ export default async function PlatformBillingPage({ searchParams }: { searchPara
       {residencies.map((residency) => {
         const plan = planByResidency.get(residency.id);
         const foundingState = getFoundingClientState(residency, now);
-        const foundingPanel = <FoundingClientPanel residencyId={residency.id} state={foundingState} enrollmentOpen={now < FOUNDING_CLIENT_CUTOFF} />;
+        const commitmentState = plan ? getCommitmentTierState(plan, now) : null;
+        const foundingPanel = <FoundingClientPanel residencyId={residency.id} state={foundingState} enrollmentOpen={now < FOUNDING_CLIENT_CUTOFF} commitmentTierSelected={Boolean(commitmentState)} />;
         if (!plan) return <article className="card platform-owner-card" key={residency.id}>
           <header><div><p className="eyebrow">No Committed Plan</p><h2>{residency.name}</h2><p>{residency.cityState || "Location pending"}</p></div><span className="status incomplete">Not connected</span></header>
           {foundingPanel}
-          <CommittedPlanForm residencyId={residency.id} residencyName={residency.name} foundingClientActive={foundingState.active} value={{ cadence: "monthly", talentProgramSessions: 0, talentSessionUnitAmountCents: 6_000, housePrograms: 0, houseProgramUnitAmountCents: 6_000, oneOffAllowance: 0, startsOn: defaults.start, renewsOn: defaults.renewal }} />
+          <CommittedPlanForm residencyId={residency.id} residencyName={residency.name} foundingClientActive={foundingState.active} commitmentTierEligible={foundingState.needsCommitmentTierSelection} value={{ cadence: "monthly", commitmentTier: null, talentProgramSessions: 0, talentSessionUnitAmountCents: 6_000, housePrograms: 0, houseProgramUnitAmountCents: 6_000, oneOffAllowance: 0, startsOn: defaults.start, renewsOn: defaults.renewal }} />
         </article>;
         const comparison = plan.comparison;
         return <article className="card platform-owner-card" key={residency.id}>
           <header className="platform-owner-card-heading"><div><p className="eyebrow">Committed Plan · revision {plan.revision}</p><h2>{plan.residencyName}</h2><p>{plan.residencyActive ? plan.residencyName : `${plan.residencyName} · inactive`}</p></div><div className="platform-owner-statuses"><span className="platform-test-mode-badge">TEST</span><span className={`status ${plan.status}`}>{plan.status.replaceAll("_", " ")}</span></div></header>
           {foundingPanel}
+          {commitmentState ? <CommitmentTierPanel state={commitmentState} /> : null}
           {plan.paymentFailedAt ? <div className="platform-payment-failed-inline" role="alert"><strong>Payment failed</strong><span>{plan.paymentFailureMessage || "Stripe could not collect the latest payment."} Hotel access remains active.</span></div> : null}
           <section className="platform-owner-plan-summary">
             <div><small>Monthly plan</small><strong>{formatMoney(plan.monthlyAmountCents)}</strong></div><div><small>{plan.cadence} charge</small><strong>{formatMoney(plan.cadenceChargeCents)}</strong></div><div><small>Next invoice</small><strong>{date(plan.nextChargeAt ?? plan.renewsOn)}</strong></div><div><small>Card</small><strong>{plan.cardLast4 ? `${plan.cardBrand} •••• ${plan.cardLast4}` : "Not added"}</strong></div>
@@ -71,7 +89,7 @@ export default async function PlatformBillingPage({ searchParams }: { searchPara
             {!plan.stripeSubscriptionId ? <form action={startPlatformStripeCheckoutAction}><input type="hidden" name="residencyId" value={residency.id} /><button className="button" type="submit">Add test card & start subscription</button></form> : <span className="platform-stripe-connected">One continuous Stripe subscription connected</span>}
             {plan.latestInvoice ? <Link className="button secondary" href={`/app/platform-billing/invoices/${plan.latestInvoice.id}/pdf`}>Latest Platform invoice</Link> : null}
           </div>
-          <details className="platform-plan-editor"><summary>Edit Committed Plan</summary><CommittedPlanForm residencyId={residency.id} residencyName={residency.name} foundingClientActive={foundingState.active} value={{ cadence: plan.cadence, talentProgramSessions: plan.talentProgramSessions, talentSessionUnitAmountCents: plan.talentSessionUnitAmountCents, housePrograms: plan.housePrograms, houseProgramUnitAmountCents: plan.houseProgramUnitAmountCents, oneOffAllowance: plan.oneOffAllowance, startsOn: plan.startsOn, renewsOn: plan.renewsOn }} /></details>
+          <details className="platform-plan-editor"><summary>Edit Committed Plan</summary><CommittedPlanForm residencyId={residency.id} residencyName={residency.name} foundingClientActive={foundingState.active} commitmentTierEligible={foundingState.needsCommitmentTierSelection} value={{ cadence: plan.cadence, commitmentTier: plan.commitmentTier, talentProgramSessions: plan.talentProgramSessions, talentSessionUnitAmountCents: plan.talentSessionUnitAmountCents, housePrograms: plan.housePrograms, houseProgramUnitAmountCents: plan.houseProgramUnitAmountCents, oneOffAllowance: plan.oneOffAllowance, startsOn: plan.startsOn, renewsOn: plan.renewsOn }} /></details>
           {plan.recentRevisions.length ? <details className="platform-plan-history"><summary>Plan history</summary><ol>{plan.recentRevisions.map((revision) => <li key={revision.id}><strong>Revision {revision.revision}</strong><span>{date(revision.createdAt)} · {revision.changeReason}</span><small className={revision.stripeSyncStatus === "failed" ? "error" : "muted"}>{revision.stripeSyncStatus.replaceAll("_", " ")}{revision.stripeSyncError ? ` · ${revision.stripeSyncError}` : ""}</small></li>)}</ol></details> : null}
         </article>;
       })}
