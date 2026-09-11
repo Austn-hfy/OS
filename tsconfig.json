@@ -36,6 +36,9 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "HFY_OS_Database_Crash_Fix_Package_2026-08-31",
+    "**/* 2.ts",
+    "**/* 2.tsx"
   ]
 }
