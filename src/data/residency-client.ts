@@ -354,7 +354,6 @@ export async function getResidencyPlatformBilling(residencyId: string) {
     housePrograms: platformSubscriptions.housePrograms,
     houseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
     oneOffAllowance: platformSubscriptions.oneOffAllowance,
-    unitAmountCents: platformSubscriptions.unitAmountCents,
     startsOn: platformSubscriptions.startsOn,
     renewsOn: platformSubscriptions.renewsOn,
     stripeSubscriptionId: platformSubscriptions.stripeSubscriptionId,
@@ -384,7 +383,7 @@ export async function getResidencyPlatformBilling(residencyId: string) {
       eq(platformSubscriptionInvoices.residencyId, residencyId),
     ))
     .orderBy(desc(platformSubscriptionInvoices.invoiceDate), desc(platformSubscriptionInvoices.createdAt));
-  const monthlyAmountCents = calculatePlatformMonthlyAmountCents({ ...subscription, unitAmountCents: subscription.unitAmountCents });
+  const monthlyAmountCents = calculatePlatformMonthlyAmountCents(subscription);
   const liveUsage = await loadPlatformLiveUsage(residencyId);
   return {
     subscription: {

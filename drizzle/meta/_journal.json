@@ -330,6 +330,13 @@
       "when": 1789089417000,
       "tag": "0046_live_billing_safety_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789092501000,
+      "tag": "0047_platform_subscription_revision_split_rates",
+      "breakpoints": true
     }
   ]
 }

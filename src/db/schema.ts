@@ -251,9 +251,11 @@ export const platformSubscriptionRevisions = pgTable("platform_subscription_revi
   revision: integer("revision").notNull(),
   cadence: platformBillingCadence("cadence").notNull(),
   talentProgramSessions: integer("talent_program_sessions").notNull(),
+  talentSessionUnitAmountCents: integer("talent_session_unit_amount_cents").notNull().default(0),
   housePrograms: integer("house_programs").notNull(),
+  houseProgramUnitAmountCents: integer("house_program_unit_amount_cents").notNull().default(0),
   oneOffAllowance: integer("one_off_allowance").notNull(),
-  unitAmountCents: integer("unit_amount_cents").notNull(),
+  unitAmountCents: integer("unit_amount_cents").notNull().default(0),
   startsOn: date("starts_on", { mode: "string" }).notNull(),
   renewsOn: date("renews_on", { mode: "string" }).notNull(),
   changeReason: text("change_reason").notNull(),
@@ -267,7 +269,7 @@ export const platformSubscriptionRevisions = pgTable("platform_subscription_revi
   uniqueIndex("platform_subscription_revisions_subscription_revision_unique").on(table.platformSubscriptionId, table.revision),
   index("platform_subscription_revisions_residency_created_idx").on(table.residencyId, table.createdAt),
   check("platform_subscription_revisions_revision_positive", sql`${table.revision} > 0`),
-  check("platform_subscription_revisions_values_valid", sql`${table.talentProgramSessions} >= 0 AND ${table.housePrograms} >= 0 AND ${table.oneOffAllowance} >= 0 AND ${table.unitAmountCents} >= 0`),
+  check("platform_subscription_revisions_values_valid", sql`${table.talentProgramSessions} >= 0 AND ${table.talentSessionUnitAmountCents} >= 0 AND ${table.housePrograms} >= 0 AND ${table.houseProgramUnitAmountCents} >= 0 AND ${table.oneOffAllowance} >= 0 AND ${table.unitAmountCents} >= 0`),
   check("platform_subscription_revisions_dates_valid", sql`${table.renewsOn} >= ${table.startsOn}`),
 ]);
 

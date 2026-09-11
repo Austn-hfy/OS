@@ -3,7 +3,6 @@ export type PlatformPlanInputs = {
   talentSessionUnitAmountCents: number;
   housePrograms: number;
   houseProgramUnitAmountCents: number;
-  unitAmountCents?: number;
 };
 
 export type PlatformBillingCadence = "monthly" | "quarterly" | "annual";
@@ -17,12 +16,6 @@ export function calculatePlatformMonthlyAmountCents(input: PlatformPlanInputs): 
   ];
   if (values.some((value) => !Number.isInteger(value) || value < 0)) {
     throw new Error("Platform plan counts and unit prices must be nonnegative whole numbers.");
-  }
-  if (input.unitAmountCents !== undefined) {
-    if (!Number.isInteger(input.unitAmountCents) || input.unitAmountCents < 0) {
-      throw new Error("Platform per-unit price must be a nonnegative whole number.");
-    }
-    return (input.talentProgramSessions + input.housePrograms) * input.unitAmountCents;
   }
   return (input.talentProgramSessions * input.talentSessionUnitAmountCents)
     + (input.housePrograms * input.houseProgramUnitAmountCents);

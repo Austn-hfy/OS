@@ -25,9 +25,10 @@ export type CommittedPlanInput = {
   residencyId: string;
   cadence: PlatformBillingCadence;
   talentProgramSessions: number;
+  talentSessionUnitAmountCents: number;
   housePrograms: number;
+  houseProgramUnitAmountCents: number;
   oneOffAllowance: number;
-  unitAmountCents: number;
   startsOn: string;
   renewsOn: string;
   changeReason: string;
@@ -39,13 +40,12 @@ function stripeId(value: string | { id: string } | null | undefined) {
   return typeof value === "string" ? value : value?.id ?? null;
 }
 
-function planAmount(input: Pick<CommittedPlanInput, "talentProgramSessions" | "housePrograms" | "unitAmountCents" | "cadence">) {
+function planAmount(input: Pick<CommittedPlanInput, "talentProgramSessions" | "talentSessionUnitAmountCents" | "housePrograms" | "houseProgramUnitAmountCents" | "cadence">) {
   const monthlyAmountCents = calculatePlatformMonthlyAmountCents({
     talentProgramSessions: input.talentProgramSessions,
-    talentSessionUnitAmountCents: input.unitAmountCents,
+    talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
     housePrograms: input.housePrograms,
-    houseProgramUnitAmountCents: input.unitAmountCents,
-    unitAmountCents: input.unitAmountCents,
+    houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
   });
   return {
     monthlyAmountCents,
@@ -236,11 +236,10 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
         cadence: input.cadence,
         revision: 1,
         talentProgramSessions: input.talentProgramSessions,
-        talentSessionUnitAmountCents: input.unitAmountCents,
+        talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
         housePrograms: input.housePrograms,
-        houseProgramUnitAmountCents: input.unitAmountCents,
+        houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
         oneOffAllowance: input.oneOffAllowance,
-        unitAmountCents: input.unitAmountCents,
         startsOn: input.startsOn,
         renewsOn: input.renewsOn,
         updatedByUserId: actor.userId,
@@ -251,9 +250,10 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
         revision: 1,
         cadence: input.cadence,
         talentProgramSessions: input.talentProgramSessions,
+        talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
         housePrograms: input.housePrograms,
+        houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
         oneOffAllowance: input.oneOffAllowance,
-        unitAmountCents: input.unitAmountCents,
         startsOn: input.startsOn,
         renewsOn: input.renewsOn,
         changeReason: input.changeReason,
@@ -291,9 +291,10 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
     revision,
     cadence: input.cadence,
     talentProgramSessions: input.talentProgramSessions,
+    talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
     housePrograms: input.housePrograms,
+    houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
     oneOffAllowance: input.oneOffAllowance,
-    unitAmountCents: input.unitAmountCents,
     startsOn: input.startsOn,
     renewsOn: input.renewsOn,
     changeReason: input.changeReason,
@@ -337,11 +338,10 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
       cadence: input.cadence,
       revision,
       talentProgramSessions: input.talentProgramSessions,
-      talentSessionUnitAmountCents: input.unitAmountCents,
+      talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
       housePrograms: input.housePrograms,
-      houseProgramUnitAmountCents: input.unitAmountCents,
+      houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
       oneOffAllowance: input.oneOffAllowance,
-      unitAmountCents: input.unitAmountCents,
       startsOn: input.startsOn,
       renewsOn: effectiveRenewsOn,
       stripeSubscriptionItemId: stripeUpdate?.stripeSubscriptionItemId ?? current.stripeSubscriptionItemId,
