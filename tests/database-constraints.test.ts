@@ -78,7 +78,7 @@ beforeAll(async () => {
   const crossEnvironmentAccessLog = await readFile(new URL("../drizzle/0039_cross_environment_access_log.sql", import.meta.url), "utf8");
   const persistentCalendarLinks = await readFile(new URL("../drizzle/0041_cheerful_meteorite.sql", import.meta.url), "utf8");
   const platformBillingSystem = await readFile(new URL("../drizzle/0042_platform_billing_system.sql", import.meta.url), "utf8");
-  const liveBillingSafetySwitch = await readFile(new URL("../drizzle/0043_live_billing_safety_switch.sql", import.meta.url), "utf8");
+  const liveBillingSafetySwitch = await readFile(new URL("../drizzle/0046_live_billing_safety_switch.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`

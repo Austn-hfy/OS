@@ -68,6 +68,8 @@ export const daypartScheduleMode = pgEnum("daypart_schedule_mode", ["standing_we
 export const daypartDateExceptionKind = pgEnum("daypart_date_exception_kind", ["skip", "override"]);
 export const talentOwnership = pgEnum("talent_ownership", ["hfy", "residency"]);
 export const shiftEconomicsMode = pgEnum("shift_economics_mode", ["hfy", "client_owned", "hfy_request"]);
+export const shiftChangeRequestType = pgEnum("shift_change_request_type", ["change_time", "cancel_occurrence", "delete_permanent"]);
+export const shiftChangeRequestStatus = pgEnum("shift_change_request_status", ["pending", "approved", "denied"]);
 export const hfyTalentRequestStatus = pgEnum("hfy_talent_request_status", ["pending", "fulfilled", "cancelled"]);
 export const platformBillingCadence = pgEnum("platform_billing_cadence", ["monthly", "quarterly", "annual"]);
 export const platformSubscriptionStatus = pgEnum("platform_subscription_status", ["incomplete", "trialing", "active", "past_due", "unpaid", "paused", "cancelled"]);
@@ -766,6 +768,38 @@ export const shifts = pgTable("shifts", {
   `),
 ]);
 
+export const shiftChangeRequests = pgTable("shift_change_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  shiftId: uuid("shift_id").references(() => shifts.id, { onDelete: "set null" }),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  requestedBy: uuid("requested_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  requestType: shiftChangeRequestType("request_type").notNull(),
+  managerNote: text("manager_note").notNull(),
+  proposedStartAt: timestamp("proposed_start_at", { withTimezone: true }),
+  proposedEndAt: timestamp("proposed_end_at", { withTimezone: true }),
+  status: shiftChangeRequestStatus("status").notNull().default("pending"),
+  resolvedBy: uuid("resolved_by").references(() => users.id, { onDelete: "restrict" }),
+  resolutionNote: text("resolution_note"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  index("shift_change_requests_residency_status_created_idx").on(table.residencyId, table.status, table.createdAt),
+  index("shift_change_requests_shift_created_idx").on(table.shiftId, table.createdAt),
+  uniqueIndex("shift_change_requests_one_pending_per_shift_unique").on(table.shiftId).where(sql`${table.status} = 'pending'`),
+  check("shift_change_requests_pending_shift_required", sql`${table.status} <> 'pending' OR ${table.shiftId} IS NOT NULL`),
+  check("shift_change_requests_manager_note_required", sql`length(btrim(${table.managerNote})) > 0`),
+  check("shift_change_requests_proposed_time_valid", sql`
+    (${table.requestType} = 'change_time' AND ${table.proposedStartAt} IS NOT NULL AND ${table.proposedEndAt} IS NOT NULL AND ${table.proposedEndAt} > ${table.proposedStartAt})
+    OR
+    (${table.requestType} <> 'change_time' AND ${table.proposedStartAt} IS NULL AND ${table.proposedEndAt} IS NULL)
+  `),
+  check("shift_change_requests_resolution_valid", sql`
+    (${table.status} = 'pending' AND ${table.resolvedBy} IS NULL AND ${table.resolutionNote} IS NULL AND ${table.resolvedAt} IS NULL)
+    OR
+    (${table.status} <> 'pending' AND ${table.resolvedBy} IS NOT NULL AND ${table.resolvedAt} IS NOT NULL)
+  `),
+]);
+
 export const talentInvoiceAdjustments = pgTable("talent_invoice_adjustments", {
   id: uuid("id").primaryKey().defaultRandom(),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "restrict" }),
@@ -977,5 +1011,6 @@ export type ScheduleOccurrence = typeof scheduleOccurrences.$inferSelect;
 export type ScheduleOccurrenceTalent = typeof scheduleOccurrenceTalent.$inferSelect;
 export type Talent = typeof talent.$inferSelect;
 export type Shift = typeof shifts.$inferSelect;
+export type ShiftChangeRequest = typeof shiftChangeRequests.$inferSelect;
 export type Assignment = typeof assignments.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;

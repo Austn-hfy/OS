@@ -14,7 +14,7 @@ import { DaypartRateAttentionReportProvider, type DaypartRateAttentionReport } f
 
 type ResidencyOption = { id: string; name: string; cityState: string | null; tier: string; active: boolean; needsDaypartRateAttention?: boolean };
 type OwnerMode = "developer" | "hfy";
-type InternalNavItem = { label: string; href: string; description: string; icon: WorkspaceNavIconName };
+type InternalNavItem = { label: string; href: string; description: string; icon: WorkspaceNavIconName; badgeCount?: number };
 
 export function resolveOwnerMode(pathname: string, requestedMode: string | null): OwnerMode {
   const hfyOnlyRoute = ["/app/leads", "/app/calendar", "/app/dayparts", "/app/payouts", "/app/invoices", "/app/talent"]
@@ -25,7 +25,7 @@ export function resolveOwnerMode(pathname: string, requestedMode: string | null)
   return pathname.startsWith("/app/setup") || pathname.startsWith("/app/platform-billing") ? "developer" : "hfy";
 }
 
-export function InternalShell({ actor, residencies, developerResidencies, initialPrivacyMode, children }: { actor: InternalActor; residencies: ResidencyOption[]; developerResidencies: ResidencyOption[]; initialPrivacyMode: boolean; children: React.ReactNode }) {
+export function InternalShell({ actor, residencies, developerResidencies, pendingShiftChangeRequestCount, initialPrivacyMode, children }: { actor: InternalActor; residencies: ResidencyOption[]; developerResidencies: ResidencyOption[]; pendingShiftChangeRequestCount: number; initialPrivacyMode: boolean; children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const mode = resolveOwnerMode(pathname, searchParams.get("mode"));
@@ -56,7 +56,7 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
     { label: "Platform Billing", href: "/app/platform-billing?mode=developer", description: "Plans, usage, and Stripe", icon: "invoices" },
     { label: "Admin Settings", href: "/app/setup?mode=developer", description: "Company identity", icon: "settings" },
   ] : [
-    { label: "Work Queue", href: "/app?mode=hfy", description: "Requests and standing work", icon: "workqueue" },
+    { label: "Work Queue", href: "/app?mode=hfy", description: "Requests and standing work", icon: "workqueue", badgeCount: pendingShiftChangeRequestCount },
     { label: "Operations", href: "/app?mode=hfy&view=operations", description: "Residencies and programs", icon: "operations" },
     { label: "Pipeline", href: "/app/leads?mode=hfy", description: "Leads and conversions", icon: "pipeline" },
     { label: "Calendar", href: "/app/calendar?mode=hfy", description: "All Residency schedules", icon: "calendar" },
@@ -136,8 +136,8 @@ export function InternalShell({ actor, residencies, developerResidencies, initia
         </div>
         <nav className="nav residency-workspace-nav owner-workspace-nav">
           <p className="nav-label">{inResidency ? "Residency" : mode === "developer" ? "Developer" : "HFY"}</p>
-          {links.map(({ label, href, description, icon }) => <div className="nav-entry" key={href}>
-            <WorkspaceNavLink label={label} href={href} description={description} icon={icon} active={isActive(label, href)} attention={inResidency && label === "Day Parts" && Boolean(residency && rateAttentionByResidency[residency.id])} />
+          {links.map(({ label, href, description, icon, badgeCount }) => <div className="nav-entry" key={href}>
+            <WorkspaceNavLink label={label} href={href} description={description} icon={icon} active={isActive(label, href)} attention={inResidency && label === "Day Parts" && Boolean(residency && rateAttentionByResidency[residency.id])} badgeCount={badgeCount} />
             {mode === "hfy" && !inResidency && label === "Calendar" ? <div className={`residency-talent-nav day-parts-nav-owner ${daypartsExpanded ? "expanded" : ""}`}>
               <button className={`residency-nav-item residency-talent-toggle ${hasDaypartRateAttention ? "needs-attention" : ""}`} type="button" aria-expanded={daypartsExpanded} onClick={() => {
                 if (inResidency && residency) {

@@ -15,7 +15,7 @@ vi.mock("@/db/client", () => ({
   }),
 }));
 
-import { reconcileShiftInvoiceLinks } from "./shifts";
+import { reconcileShiftInvoiceLinks, updateShiftTime } from "./shifts";
 
 const residencyA = "00000000-0000-4000-8000-000000000001";
 const residencyB = "00000000-0000-4000-8000-000000000002";
@@ -113,5 +113,30 @@ describe("Shift invoice-link reconciliation", () => {
 
   it("returns zero counts when a Residency has no eligible Shifts", async () => {
     await expect(reconcileShiftInvoiceLinks(residencyA)).resolves.toEqual({ processed: 0, changed: 0 });
+  });
+});
+
+describe("Shift time authorization", () => {
+  it("rejects a Residency-scoped actor with 403 before accessing Shift data", async () => {
+    const residencyActor = {
+      kind: "residency" as const,
+      userId: "00000000-0000-4000-8000-000000000099",
+      email: "manager@example.com",
+      displayName: "Residency manager",
+      residencyId: residencyA,
+      residencyName: "Residency A",
+      residencyTimezone: "America/Los_Angeles",
+      residencyTier: "operations_only" as const,
+      accessRole: "manager" as const,
+      isViewAs: false,
+      isInternalTest: false,
+      availableResidencies: [],
+    };
+
+    await expect(updateShiftTime(residencyActor, {
+      shiftId: "00000000-0000-4000-8000-000000000021",
+      startsAt: new Date("2026-09-05T18:00:00Z"),
+      endsAt: new Date("2026-09-05T22:00:00Z"),
+    })).rejects.toMatchObject({ status: 403 });
   });
 });

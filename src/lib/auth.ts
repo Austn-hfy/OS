@@ -187,6 +187,20 @@ export async function requireInternalActor(): Promise<InternalActor> {
   return actor;
 }
 
+export async function requireInternalActorForMutation(): Promise<InternalActor> {
+  const current = await currentProfile();
+  if (!current) throw new ResidencyAccessError(401, "Sign in to continue.");
+  if (current.profile.role !== "internal_admin") {
+    throw new ResidencyAccessError(403, "Owner/admin access is required for this change.");
+  }
+  return {
+    kind: "internal",
+    userId: current.profile.id,
+    email: current.profile.email,
+    displayName: current.profile.displayName,
+  };
+}
+
 export async function requireResidencyActor(): Promise<ResidencyActor> {
   const actor = await currentResidencyActor();
   if (!actor) redirect("/login");

@@ -749,6 +749,19 @@ button.daypart-room-color-bar:hover { transform: translateY(-1px); box-shadow: i
 .calendar-only-daypart-meta > span { color: currentColor; font-size: 9px; font-weight: 750; white-space: nowrap; }
 .calendar-only-daypart-meta b { color: #8a3b35; font-size: 8px; white-space: nowrap; }
 .one-time-record-editor { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.72); }
+.shift-time-editor { display: grid; gap: 12px; padding: 14px; border: 1px solid rgba(2,116,222,.22); border-radius: 16px; background: #f3f8fe; }
+.shift-time-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.shift-time-editor-heading > div, .shift-time-confirmation-heading { display: grid; gap: 3px; }
+.shift-time-editor-heading span, .shift-time-confirmation-heading span { color: var(--forest); font-size: 8px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.shift-time-editor-heading strong, .shift-time-confirmation-heading strong { font-size: 13px; }
+.shift-time-editor-heading small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.shift-time-editor-heading > button:not(.button) { appearance: none; border: 0; padding: 4px; color: var(--muted); background: transparent; font-size: 9px; font-weight: 750; cursor: pointer; }
+.shift-time-confirmation { display: grid; gap: 12px; padding: 13px; border: 1px solid rgba(2,116,222,.2); border-radius: 13px; background: white; }
+.shift-time-total-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.shift-time-total-grid > div { display: grid; gap: 4px; padding: 11px; border-radius: 11px; background: rgba(7,26,49,.04); }
+.shift-time-total-grid span { color: var(--muted); font-size: 9px; }
+.shift-time-total-grid strong { font-size: 12px; }
+.shift-time-confirmation p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
 .daypart-occurrence-edit-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .daypart-occurrence-edit-heading > div { display: grid; gap: 3px; }
 .daypart-occurrence-edit-heading span { color: var(--muted); font-size: 9px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }

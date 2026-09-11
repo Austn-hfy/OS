@@ -90,7 +90,7 @@ describe("per-Residency live-billing safety", () => {
   it("guards all Platform email and Stripe mutation entry points without replacing the environment gate", async () => {
     const [schema, migration, emailService, alerts, stripeService, webhookService, ownerAction, residencyAction, eslintConfig] = await Promise.all([
       readSource("../src/db/schema.ts"),
-      readSource("../drizzle/0043_live_billing_safety_switch.sql"),
+      readSource("../drizzle/0046_live_billing_safety_switch.sql"),
       readSource("../src/services/platform-billing-email.ts"),
       readSource("../src/services/platform-billing-alerts.ts"),
       readSource("../src/services/platform-stripe.ts"),

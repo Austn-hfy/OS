@@ -306,8 +306,29 @@
     {
       "idx": 43,
       "version": "7",
-      "when": 1789052400000,
-      "tag": "0043_live_billing_safety_switch",
+      "when": 1789082811000,
+      "tag": "0043_shift_change_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1789084647000,
+      "tag": "0044_shift_change_request_pending_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1789085042000,
+      "tag": "0045_preserve_resolved_shift_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1789089417000,
+      "tag": "0046_live_billing_safety_switch",
       "breakpoints": true
     }
   ]
