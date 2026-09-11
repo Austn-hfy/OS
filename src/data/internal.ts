@@ -19,6 +19,7 @@ import {
   publicCalendarLinkDayparts,
   publicCalendarLinks,
   platformSubscriptionInvoices,
+  platformSubscriptionRevisions,
   platformSubscriptions,
   scheduleOccurrences,
   scheduleOccurrenceTalent,
@@ -78,6 +79,9 @@ export const getDeveloperResidencyList = cache(async function getDeveloperReside
     timezone: residencies.timezone,
     defaultTalentRateCents: residencies.defaultTalentRateCents,
     clientHourlyRateCents: residencies.clientHourlyRateCents,
+    comped: residencies.comped,
+    foundingClientSignedAt: residencies.foundingClientSignedAt,
+    foundingClientEndsAt: residencies.foundingClientEndsAt,
   }).from(residencies)
     .where(eq(residencies.operatingMode, "operations"))
     .orderBy(desc(residencies.active), asc(residencies.name));
@@ -89,12 +93,26 @@ export async function getPlatformRevenueDashboard() {
     residencyId: residencies.id,
     residencyName: residencies.name,
     residencyActive: residencies.active,
+    comped: residencies.comped,
+    foundingClientSignedAt: residencies.foundingClientSignedAt,
+    foundingClientEndsAt: residencies.foundingClientEndsAt,
     status: platformSubscriptions.status,
     cadence: platformSubscriptions.cadence,
+    commitmentTier: platformSubscriptions.commitmentTier,
+    commitmentStartedAt: platformSubscriptions.commitmentStartedAt,
+    commitmentLengthMonths: platformSubscriptions.commitmentLengthMonths,
+    revision: platformSubscriptions.revision,
     talentProgramSessions: platformSubscriptions.talentProgramSessions,
     talentSessionUnitAmountCents: platformSubscriptions.talentSessionUnitAmountCents,
     housePrograms: platformSubscriptions.housePrograms,
     houseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
+    oneOffAllowance: platformSubscriptions.oneOffAllowance,
+    startsOn: platformSubscriptions.startsOn,
+    renewsOn: platformSubscriptions.renewsOn,
+    stripeCustomerId: platformSubscriptions.stripeCustomerId,
+    stripeSubscriptionId: platformSubscriptions.stripeSubscriptionId,
+    paymentFailedAt: platformSubscriptions.paymentFailedAt,
+    paymentFailureMessage: platformSubscriptions.paymentFailureMessage,
     cardBrand: platformSubscriptions.cardBrand,
     cardLast4: platformSubscriptions.cardLast4,
     nextChargeAt: platformSubscriptions.nextChargeAt,
@@ -107,18 +125,43 @@ export async function getPlatformRevenueDashboard() {
     status: platformSubscriptionInvoices.status,
     invoiceDate: platformSubscriptionInvoices.invoiceDate,
     amountDueCents: platformSubscriptionInvoices.amountDueCents,
+    id: platformSubscriptionInvoices.id,
+    invoiceNumber: platformSubscriptionInvoices.invoiceNumber,
+    pdfStoragePath: platformSubscriptionInvoices.pdfStoragePath,
   }).from(platformSubscriptionInvoices)
     .where(inArray(platformSubscriptionInvoices.platformSubscriptionId, plans.map((plan) => plan.id)))
     .orderBy(desc(platformSubscriptionInvoices.invoiceDate), desc(platformSubscriptionInvoices.createdAt)) : [];
 
-  return plans.map((plan) => {
+  const revisionRows = plans.length ? await getDb().select({
+    id: platformSubscriptionRevisions.id,
+    platformSubscriptionId: platformSubscriptionRevisions.platformSubscriptionId,
+    revision: platformSubscriptionRevisions.revision,
+    changeReason: platformSubscriptionRevisions.changeReason,
+    stripeSyncStatus: platformSubscriptionRevisions.stripeSyncStatus,
+    stripeSyncError: platformSubscriptionRevisions.stripeSyncError,
+    createdAt: platformSubscriptionRevisions.createdAt,
+  }).from(platformSubscriptionRevisions)
+    .where(inArray(platformSubscriptionRevisions.platformSubscriptionId, plans.map((plan) => plan.id)))
+    .orderBy(desc(platformSubscriptionRevisions.createdAt)) : [];
+  const { loadPlatformLiveUsage } = await import("@/services/platform-usage");
+  const liveRows = await Promise.all(plans.map((plan) => loadPlatformLiveUsage(plan.residencyId)));
+
+  return plans.map((plan, index) => {
     const monthlyAmountCents = calculatePlatformMonthlyAmountCents(plan);
     return {
       ...plan,
       nextChargeAt: plan.nextChargeAt?.toISOString() ?? null,
+      paymentFailedAt: plan.paymentFailedAt?.toISOString() ?? null,
       monthlyAmountCents,
       cadenceChargeCents: platformCadenceChargeCents(monthlyAmountCents, plan.cadence),
       latestInvoice: latestInvoiceRows.find((invoice) => invoice.platformSubscriptionId === plan.id) ?? null,
+      recentRevisions: revisionRows.filter((revision) => revision.platformSubscriptionId === plan.id).slice(0, 5).map((revision) => ({
+        ...revision,
+        createdAt: revision.createdAt.toISOString(),
+      })),
+      liveUsage: liveRows[index]?.usage ?? null,
+      comparison: liveRows[index]?.comparison ?? null,
+      usagePeriod: liveRows[index] ? { start: liveRows[index].periodStart, end: liveRows[index].periodEnd } : null,
     };
   });
 }
@@ -927,6 +970,8 @@ export async function getSetupData() {
       timezone: residencies.timezone,
       tier: residencies.tier,
       active: residencies.active,
+      liveBillingApproved: residencies.liveBillingApproved,
+      comped: residencies.comped,
       internalNotes: residencies.internalNotes,
     }).from(residencies).where(eq(residencies.operatingMode, "operations")).orderBy(desc(residencies.active), asc(residencies.name)),
     database.select({

@@ -1,6 +1,6 @@
 export type OutboundEmailEnvironment = Readonly<Record<string, string | undefined>>;
 
-type RoutableEmail = {
+export type RoutableEmail = {
   to: string | string[];
   cc?: string | string[];
   bcc?: string | string[];
@@ -9,6 +9,31 @@ type RoutableEmail = {
 
 function recipientList(value?: string | string[]) {
   return value ? (Array.isArray(value) ? value : [value]) : [];
+}
+
+export function routeOutboundEmailForLiveBillingApproval<T extends RoutableEmail>(
+  email: T,
+  input: { liveBillingApproved: boolean; ownerBillingEmail: string },
+): T {
+  if (input.liveBillingApproved) return email;
+
+  const ownerBillingEmail = input.ownerBillingEmail.trim();
+  if (!/^[^\s,@]+@[^\s,@]+\.[^\s,@]+$/.test(ownerBillingEmail)) {
+    throw new Error("A valid owner billing email is required while live billing is on hold.");
+  }
+
+  const intendedRecipients = [
+    ...recipientList(email.to),
+    ...recipientList(email.cc),
+    ...recipientList(email.bcc),
+  ];
+  return {
+    ...email,
+    to: ownerBillingEmail,
+    cc: undefined,
+    bcc: undefined,
+    subject: `[LIVE-BILLING HOLD for ${intendedRecipients.join(", ")}]${email.subject ? ` ${email.subject}` : ""}`,
+  };
 }
 
 function appHostname(value?: string) {

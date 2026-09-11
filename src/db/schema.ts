@@ -16,6 +16,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { InvoiceDocumentSnapshot } from "@/domain/invoice-document";
+import type { PlatformInvoiceDocumentSnapshot } from "@/domain/platform-invoice-document";
 
 export const userRole = pgEnum("user_role", ["internal_admin", "hotel_user"]);
 export const residencyAccessRole = pgEnum("residency_access_role", ["manager", "calendar_viewer"]);
@@ -71,8 +72,14 @@ export const shiftChangeRequestType = pgEnum("shift_change_request_type", ["chan
 export const shiftChangeRequestStatus = pgEnum("shift_change_request_status", ["pending", "approved", "denied"]);
 export const hfyTalentRequestStatus = pgEnum("hfy_talent_request_status", ["pending", "fulfilled", "cancelled"]);
 export const platformBillingCadence = pgEnum("platform_billing_cadence", ["monthly", "quarterly", "annual"]);
+export const platformCommitmentTier = pgEnum("platform_commitment_tier", ["month_to_month", "three_month", "six_month", "twelve_month"]);
 export const platformSubscriptionStatus = pgEnum("platform_subscription_status", ["incomplete", "trialing", "active", "past_due", "unpaid", "paused", "cancelled"]);
 export const platformSubscriptionInvoiceStatus = pgEnum("platform_subscription_invoice_status", ["open", "paid", "void", "uncollectible"]);
+export const platformPlanSyncStatus = pgEnum("platform_plan_sync_status", ["pending", "synced", "not_connected", "failed"]);
+export const platformClawbackStatus = pgEnum("platform_clawback_status", ["pending", "queued", "applied", "void"]);
+export const platformUsageMetric = pgEnum("platform_usage_metric", ["talent_sessions", "house_programs", "one_offs"]);
+export const platformBillingAlertKind = pgEnum("platform_billing_alert_kind", ["payment_failed", "payment_resolved", "overage_heads_up"]);
+export const platformBillingAudience = pgEnum("platform_billing_audience", ["owner", "hotel"]);
 export const talentInvoiceAdjustmentStatus = pgEnum("talent_invoice_adjustment_status", ["pending", "applied", "void"]);
 
 const timestamps = {
@@ -150,6 +157,10 @@ export const residencies = pgTable("residencies", {
   billingContactEmail: text("billing_contact_email").notNull().default(""),
   billingContactName: text("billing_contact_name").notNull().default(""),
   billingAddress: text("billing_address").notNull().default(""),
+  liveBillingApproved: boolean("live_billing_approved").notNull().default(false),
+  comped: boolean("comped").notNull().default(false),
+  foundingClientSignedAt: timestamp("founding_client_signed_at", { withTimezone: true }),
+  foundingClientEndsAt: timestamp("founding_client_ends_at", { withTimezone: true }),
   invoicePrefix: text("invoice_prefix").notNull(),
   autoSendInvoices: boolean("auto_send_invoices").notNull().default(false),
   autoSendReason: text("auto_send_reason").notNull().default(""),
@@ -164,6 +175,10 @@ export const residencies = pgTable("residencies", {
   check("residencies_rates_nonnegative", sql`${table.defaultTalentRateCents} >= 0 AND ${table.clientHourlyRateCents} >= 0`),
   check("residencies_payment_terms_valid", sql`${table.paymentTermsDays} >= 0 AND ${table.paymentTermsDays} <= 365`),
   check("residencies_billing_cycle_valid", sql`${table.billingCycleStartWeekday} >= 0 AND ${table.billingCycleStartWeekday} <= 6 AND ${table.billingCycleLengthDays} >= 1 AND ${table.billingCycleLengthDays} <= 31`),
+  check("residencies_founding_client_window_complete", sql`(${table.foundingClientSignedAt} IS NULL AND ${table.foundingClientEndsAt} IS NULL) OR (${table.foundingClientSignedAt} IS NOT NULL AND ${table.foundingClientEndsAt} IS NOT NULL)`),
+  check("residencies_founding_client_eligible", sql`${table.foundingClientSignedAt} IS NULL OR ${table.foundingClientSignedAt} < '2027-08-01T00:00:00.000Z'::timestamptz`),
+  check("residencies_founding_client_dates_valid", sql`${table.foundingClientSignedAt} IS NULL OR ${table.foundingClientEndsAt} > ${table.foundingClientSignedAt}`),
+  check("residencies_comped_not_founding", sql`NOT ${table.comped} OR (${table.foundingClientSignedAt} IS NULL AND ${table.foundingClientEndsAt} IS NULL)`),
 ]);
 
 export const platformSubscriptions = pgTable("platform_subscriptions", {
@@ -171,22 +186,65 @@ export const platformSubscriptions = pgTable("platform_subscriptions", {
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  stripeSubscriptionItemId: text("stripe_subscription_item_id"),
+  stripeProductId: text("stripe_product_id"),
+  stripePriceId: text("stripe_price_id"),
   status: platformSubscriptionStatus("status").notNull().default("incomplete"),
   cadence: platformBillingCadence("cadence").notNull().default("monthly"),
+  commitmentTier: platformCommitmentTier("commitment_tier"),
+  commitmentStartedAt: timestamp("commitment_started_at", { withTimezone: true }),
+  commitmentLengthMonths: integer("commitment_length_months"),
+  revision: integer("revision").notNull().default(1),
   talentProgramSessions: integer("talent_program_sessions").notNull().default(0),
   talentSessionUnitAmountCents: integer("talent_session_unit_amount_cents").notNull().default(0),
   housePrograms: integer("house_programs").notNull().default(0),
   houseProgramUnitAmountCents: integer("house_program_unit_amount_cents").notNull().default(0),
+  oneOffAllowance: integer("one_off_allowance").notNull().default(0),
+  unitAmountCents: integer("unit_amount_cents").notNull().default(0),
+  startsOn: date("starts_on", { mode: "string" }).notNull().default(sql`CURRENT_DATE`),
+  renewsOn: date("renews_on", { mode: "string" }).notNull().default(sql`CURRENT_DATE`),
   currency: text("currency").notNull().default("USD"),
   cardBrand: text("card_brand").notNull().default(""),
   cardLast4: text("card_last4").notNull().default(""),
   nextChargeAt: timestamp("next_charge_at", { withTimezone: true }),
+  paymentFailedAt: timestamp("payment_failed_at", { withTimezone: true }),
+  paymentFailureMessage: text("payment_failure_message").notNull().default(""),
+  lastStripeSyncedAt: timestamp("last_stripe_synced_at", { withTimezone: true }),
+  updatedByUserId: uuid("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
   ...timestamps,
 }, (table) => [
   uniqueIndex("platform_subscriptions_residency_unique").on(table.residencyId),
   uniqueIndex("platform_subscriptions_stripe_subscription_unique").on(table.stripeSubscriptionId).where(sql`${table.stripeSubscriptionId} IS NOT NULL`),
   check("platform_subscriptions_program_counts_nonnegative", sql`${table.talentProgramSessions} >= 0 AND ${table.housePrograms} >= 0`),
-  check("platform_subscriptions_unit_amounts_nonnegative", sql`${table.talentSessionUnitAmountCents} >= 0 AND ${table.houseProgramUnitAmountCents} >= 0`),
+  check("platform_subscriptions_unit_amounts_nonnegative", sql`${table.talentSessionUnitAmountCents} >= 0 AND ${table.houseProgramUnitAmountCents} >= 0 AND ${table.unitAmountCents} >= 0`),
+  check("platform_subscriptions_allowance_nonnegative", sql`${table.oneOffAllowance} >= 0`),
+  check("platform_subscriptions_revision_positive", sql`${table.revision} > 0`),
+  check("platform_subscriptions_dates_valid", sql`${table.renewsOn} >= ${table.startsOn}`),
+  check("platform_subscriptions_commitment_complete", sql`
+    (${table.commitmentTier} IS NULL AND ${table.commitmentStartedAt} IS NULL AND ${table.commitmentLengthMonths} IS NULL)
+    OR
+    (${table.commitmentTier} IS NOT NULL AND ${table.commitmentStartedAt} IS NOT NULL AND ${table.commitmentLengthMonths} IS NOT NULL)
+  `),
+  check("platform_subscriptions_commitment_length_valid", sql`
+    ${table.commitmentTier} IS NULL
+    OR (${table.commitmentTier} = 'month_to_month' AND ${table.commitmentLengthMonths} = 1)
+    OR (${table.commitmentTier} = 'three_month' AND ${table.commitmentLengthMonths} = 3)
+    OR (${table.commitmentTier} = 'six_month' AND ${table.commitmentLengthMonths} = 6)
+    OR (${table.commitmentTier} = 'twelve_month' AND ${table.commitmentLengthMonths} = 12)
+  `),
+  check("platform_subscriptions_commitment_pricing_valid", sql`
+    ${table.commitmentTier} IS NULL
+    OR (
+      ${table.cadence} = 'monthly'
+      AND ${table.houseProgramUnitAmountCents} = 6000
+      AND (
+        (${table.commitmentTier} = 'month_to_month' AND ${table.talentSessionUnitAmountCents} = 9000)
+        OR (${table.commitmentTier} = 'three_month' AND ${table.talentSessionUnitAmountCents} = 8000)
+        OR (${table.commitmentTier} = 'six_month' AND ${table.talentSessionUnitAmountCents} = 7000)
+        OR (${table.commitmentTier} = 'twelve_month' AND ${table.talentSessionUnitAmountCents} = 6000)
+      )
+    )
+  `),
   check("platform_subscriptions_currency_valid", sql`${table.currency} = 'USD'`),
   check("platform_subscriptions_card_complete", sql`(${table.cardBrand} = '' AND ${table.cardLast4} = '') OR (${table.cardBrand} <> '' AND ${table.cardLast4} ~ '^[0-9]{4}$')`),
 ]);
@@ -196,19 +254,196 @@ export const platformSubscriptionInvoices = pgTable("platform_subscription_invoi
   platformSubscriptionId: uuid("platform_subscription_id").notNull().references(() => platformSubscriptions.id, { onDelete: "cascade" }),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "restrict" }),
   stripeInvoiceId: text("stripe_invoice_id").notNull(),
+  invoiceNumber: text("invoice_number").notNull().default(""),
+  planRevision: integer("plan_revision").notNull().default(1),
   billingPeriodStart: date("billing_period_start", { mode: "string" }).notNull(),
   billingPeriodEnd: date("billing_period_end", { mode: "string" }).notNull(),
   invoiceDate: date("invoice_date", { mode: "string" }).notNull(),
   amountDueCents: integer("amount_due_cents").notNull(),
   amountPaidCents: integer("amount_paid_cents").notNull().default(0),
   status: platformSubscriptionInvoiceStatus("status").notNull().default("open"),
+  currency: text("currency").notNull().default("USD"),
   hostedInvoiceUrl: text("hosted_invoice_url"),
+  stripePdfUrl: text("stripe_pdf_url"),
+  pdfStoragePath: text("pdf_storage_path"),
+  pdfSha256: text("pdf_sha256"),
+  pdfByteSize: integer("pdf_byte_size"),
+  pdfGeneratedAt: timestamp("pdf_generated_at", { withTimezone: true }),
+  pdfSnapshot: jsonb("pdf_snapshot").$type<PlatformInvoiceDocumentSnapshot>(),
   ...timestamps,
 }, (table) => [
   uniqueIndex("platform_subscription_invoices_stripe_invoice_unique").on(table.stripeInvoiceId),
   index("platform_subscription_invoices_residency_period_idx").on(table.residencyId, table.billingPeriodStart, table.billingPeriodEnd),
   check("platform_subscription_invoices_period_valid", sql`${table.billingPeriodEnd} >= ${table.billingPeriodStart}`),
   check("platform_subscription_invoices_amounts_nonnegative", sql`${table.amountDueCents} >= 0 AND ${table.amountPaidCents} >= 0`),
+  check("platform_subscription_invoices_currency_valid", sql`${table.currency} = 'USD'`),
+  check("platform_subscription_invoices_pdf_size_positive", sql`${table.pdfByteSize} IS NULL OR ${table.pdfByteSize} > 0`),
+  check("platform_subscription_invoices_plan_revision_positive", sql`${table.planRevision} > 0`),
+]);
+
+export const platformSubscriptionRevisions = pgTable("platform_subscription_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  platformSubscriptionId: uuid("platform_subscription_id").notNull().references(() => platformSubscriptions.id, { onDelete: "cascade" }),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  revision: integer("revision").notNull(),
+  cadence: platformBillingCadence("cadence").notNull(),
+  commitmentTier: platformCommitmentTier("commitment_tier"),
+  commitmentStartedAt: timestamp("commitment_started_at", { withTimezone: true }),
+  commitmentLengthMonths: integer("commitment_length_months"),
+  talentProgramSessions: integer("talent_program_sessions").notNull(),
+  talentSessionUnitAmountCents: integer("talent_session_unit_amount_cents").notNull().default(0),
+  housePrograms: integer("house_programs").notNull(),
+  houseProgramUnitAmountCents: integer("house_program_unit_amount_cents").notNull().default(0),
+  oneOffAllowance: integer("one_off_allowance").notNull(),
+  unitAmountCents: integer("unit_amount_cents").notNull().default(0),
+  startsOn: date("starts_on", { mode: "string" }).notNull(),
+  renewsOn: date("renews_on", { mode: "string" }).notNull(),
+  changeReason: text("change_reason").notNull(),
+  changedByUserId: uuid("changed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  stripeSyncStatus: platformPlanSyncStatus("stripe_sync_status").notNull().default("pending"),
+  stripeSyncError: text("stripe_sync_error").notNull().default(""),
+  stripePriceId: text("stripe_price_id"),
+  syncedAt: timestamp("synced_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("platform_subscription_revisions_subscription_revision_unique").on(table.platformSubscriptionId, table.revision),
+  index("platform_subscription_revisions_residency_created_idx").on(table.residencyId, table.createdAt),
+  check("platform_subscription_revisions_revision_positive", sql`${table.revision} > 0`),
+  check("platform_subscription_revisions_values_valid", sql`${table.talentProgramSessions} >= 0 AND ${table.talentSessionUnitAmountCents} >= 0 AND ${table.housePrograms} >= 0 AND ${table.houseProgramUnitAmountCents} >= 0 AND ${table.oneOffAllowance} >= 0 AND ${table.unitAmountCents} >= 0`),
+  check("platform_subscription_revisions_dates_valid", sql`${table.renewsOn} >= ${table.startsOn}`),
+  check("platform_subscription_revisions_commitment_complete", sql`
+    (${table.commitmentTier} IS NULL AND ${table.commitmentStartedAt} IS NULL AND ${table.commitmentLengthMonths} IS NULL)
+    OR
+    (${table.commitmentTier} IS NOT NULL AND ${table.commitmentStartedAt} IS NOT NULL AND ${table.commitmentLengthMonths} IS NOT NULL)
+  `),
+  check("platform_subscription_revisions_commitment_length_valid", sql`
+    ${table.commitmentTier} IS NULL
+    OR (${table.commitmentTier} = 'month_to_month' AND ${table.commitmentLengthMonths} = 1)
+    OR (${table.commitmentTier} = 'three_month' AND ${table.commitmentLengthMonths} = 3)
+    OR (${table.commitmentTier} = 'six_month' AND ${table.commitmentLengthMonths} = 6)
+    OR (${table.commitmentTier} = 'twelve_month' AND ${table.commitmentLengthMonths} = 12)
+  `),
+  check("platform_subscription_revisions_commitment_pricing_valid", sql`
+    ${table.commitmentTier} IS NULL
+    OR (
+      ${table.cadence} = 'monthly'
+      AND ${table.houseProgramUnitAmountCents} = 6000
+      AND (
+        (${table.commitmentTier} = 'month_to_month' AND ${table.talentSessionUnitAmountCents} = 9000)
+        OR (${table.commitmentTier} = 'three_month' AND ${table.talentSessionUnitAmountCents} = 8000)
+        OR (${table.commitmentTier} = 'six_month' AND ${table.talentSessionUnitAmountCents} = 7000)
+        OR (${table.commitmentTier} = 'twelve_month' AND ${table.talentSessionUnitAmountCents} = 6000)
+      )
+    )
+  `),
+]);
+
+export const platformSubscriptionClawbacks = pgTable("platform_subscription_clawbacks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  platformSubscriptionId: uuid("platform_subscription_id").notNull().references(() => platformSubscriptions.id, { onDelete: "cascade" }),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  sourceRevision: integer("source_revision").notNull(),
+  sourceCommitmentTier: platformCommitmentTier("source_commitment_tier").notNull(),
+  sourceCommitmentStartedAt: timestamp("source_commitment_started_at", { withTimezone: true }).notNull(),
+  targetCommitmentTier: platformCommitmentTier("target_commitment_tier"),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull(),
+  talentSessionsBilled: integer("talent_sessions_billed").notNull(),
+  unitAmountCents: integer("unit_amount_cents").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  status: platformClawbackStatus("status").notNull().default("pending"),
+  stripeInvoiceItemId: text("stripe_invoice_item_id"),
+  appliedInvoiceId: uuid("applied_invoice_id").references(() => platformSubscriptionInvoices.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("platform_subscription_clawbacks_pending_idx").on(table.platformSubscriptionId, table.status, table.createdAt),
+  uniqueIndex("platform_subscription_clawbacks_stripe_item_unique").on(table.stripeInvoiceItemId).where(sql`${table.stripeInvoiceItemId} IS NOT NULL`),
+  check("platform_subscription_clawbacks_source_revision_positive", sql`${table.sourceRevision} > 0`),
+  check("platform_subscription_clawbacks_source_committed", sql`${table.sourceCommitmentTier} IN ('three_month', 'six_month', 'twelve_month')`),
+  check("platform_subscription_clawbacks_target_changed", sql`${table.targetCommitmentTier} IS DISTINCT FROM ${table.sourceCommitmentTier}`),
+  check("platform_subscription_clawbacks_unit_amount_valid", sql`
+    (${table.sourceCommitmentTier} = 'three_month' AND ${table.unitAmountCents} = 1000)
+    OR (${table.sourceCommitmentTier} = 'six_month' AND ${table.unitAmountCents} = 2000)
+    OR (${table.sourceCommitmentTier} = 'twelve_month' AND ${table.unitAmountCents} = 3000)
+  `),
+  check("platform_subscription_clawbacks_amount_valid", sql`
+    ${table.talentSessionsBilled} > 0
+    AND ${table.unitAmountCents} > 0
+    AND ${table.amountCents} = ${table.talentSessionsBilled} * ${table.unitAmountCents}
+  `),
+]);
+
+export const platformUsageSnapshots = pgTable("platform_usage_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  platformSubscriptionId: uuid("platform_subscription_id").notNull().references(() => platformSubscriptions.id, { onDelete: "cascade" }),
+  snapshotDate: date("snapshot_date", { mode: "string" }).notNull(),
+  periodStart: date("period_start", { mode: "string" }).notNull(),
+  periodEnd: date("period_end", { mode: "string" }).notNull(),
+  talentSessions: integer("talent_sessions").notNull().default(0),
+  housePrograms: integer("house_programs").notNull().default(0),
+  oneOffs: integer("one_offs").notNull().default(0),
+  capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("platform_usage_snapshots_residency_date_unique").on(table.residencyId, table.snapshotDate),
+  index("platform_usage_snapshots_subscription_period_idx").on(table.platformSubscriptionId, table.periodStart, table.periodEnd),
+  check("platform_usage_snapshots_period_valid", sql`${table.periodEnd} >= ${table.periodStart} AND ${table.snapshotDate} >= ${table.periodStart} AND ${table.snapshotDate} <= ${table.periodEnd}`),
+  check("platform_usage_snapshots_counts_nonnegative", sql`${table.talentSessions} >= 0 AND ${table.housePrograms} >= 0 AND ${table.oneOffs} >= 0`),
+]);
+
+export const platformOverageEvents = pgTable("platform_overage_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  platformSubscriptionId: uuid("platform_subscription_id").notNull().references(() => platformSubscriptions.id, { onDelete: "cascade" }),
+  periodStart: date("period_start", { mode: "string" }).notNull(),
+  periodEnd: date("period_end", { mode: "string" }).notNull(),
+  metric: platformUsageMetric("metric").notNull(),
+  committedCount: integer("committed_count").notNull(),
+  liveCount: integer("live_count").notNull(),
+  overBy: integer("over_by").notNull(),
+  firstDetectedAt: timestamp("first_detected_at", { withTimezone: true }).notNull().defaultNow(),
+  lastDetectedAt: timestamp("last_detected_at", { withTimezone: true }).notNull().defaultNow(),
+  notifiedAt: timestamp("notified_at", { withTimezone: true }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+}, (table) => [
+  uniqueIndex("platform_overage_events_residency_period_metric_unique").on(table.residencyId, table.periodStart, table.metric),
+  index("platform_overage_events_open_idx").on(table.periodEnd, table.notifiedAt, table.resolvedAt),
+  check("platform_overage_events_period_valid", sql`${table.periodEnd} >= ${table.periodStart}`),
+  check("platform_overage_events_counts_valid", sql`${table.committedCount} >= 0 AND ${table.liveCount} > ${table.committedCount} AND ${table.overBy} = ${table.liveCount} - ${table.committedCount}`),
+]);
+
+export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  livemode: boolean("livemode").notNull(),
+  status: text("status").notNull().default("processing"),
+  error: text("error").notNull().default(""),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+}, (table) => [
+  index("stripe_webhook_events_status_received_idx").on(table.status, table.receivedAt),
+  check("stripe_webhook_events_test_only", sql`${table.livemode} = false`),
+  check("stripe_webhook_events_status_valid", sql`${table.status} IN ('processing', 'processed', 'failed')`),
+]);
+
+export const platformBillingAlerts = pgTable("platform_billing_alerts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
+  platformSubscriptionId: uuid("platform_subscription_id").notNull().references(() => platformSubscriptions.id, { onDelete: "cascade" }),
+  kind: platformBillingAlertKind("kind").notNull(),
+  audience: platformBillingAudience("audience").notNull(),
+  recipientEmail: text("recipient_email").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  status: deliveryStatus("status").notNull().default("pending"),
+  providerMessageId: text("provider_message_id"),
+  error: text("error").notNull().default(""),
+  attemptedAt: timestamp("attempted_at", { withTimezone: true }),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("platform_billing_alerts_idempotency_unique").on(table.idempotencyKey),
+  index("platform_billing_alerts_pending_idx").on(table.status, table.createdAt),
+  check("platform_billing_alerts_recipient_valid", sql`length(btrim(${table.recipientEmail})) > 3`),
 ]);
 
 export const publicCalendarLinks = pgTable("public_calendar_links", {

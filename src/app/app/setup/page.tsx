@@ -6,8 +6,12 @@ import { WorkspaceSurface } from "@/components/workspace-surface";
 import { getLastStagingStructureSync } from "@/data/staging-sync";
 import { isStableStagingSyncEnvironment } from "@/domain/staging-sync-admin";
 import { StagingSyncCard } from "./staging-sync-card";
+import { LiveBillingSafetyControl } from "./live-billing-safety-control";
+import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
+import { CompedResidencyControl } from "./comped-residency-control";
 
 export default async function SetupPage({ searchParams }: { searchParams: Promise<{ residency?: string }> }) {
+  const platformBillingAvailable = isCurrentPlatformBillingAvailable();
   const { residency } = await searchParams;
   const stagingSyncEnabled = !residency && isStableStagingSyncEnvironment({
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
@@ -34,6 +38,8 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
         {!selected && stagingSyncEnabled ? <StagingSyncCard initialLastSync={lastStagingSync} /> : null}
         {selected ? <>
           <ResidencyProfileEditor residency={selected} />
+          {platformBillingAvailable ? <LiveBillingSafetyControl residency={selected} /> : null}
+          {platformBillingAvailable ? <CompedResidencyControl residency={selected} /> : null}
           <ResidencyContactsManager residencyId={selected.id} contacts={data.contacts.filter((contact) => contact.residencyId === selected.id)} />
         </> : null}
 

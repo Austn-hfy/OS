@@ -16,6 +16,14 @@
     {
       "path": "/api/cron/reconcile",
       "schedule": "15 12 * * *"
+    },
+    {
+      "path": "/api/cron/platform-billing",
+      "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/materialize-standing-dayparts",
+      "schedule": "5 12 * * *"
     }
   ]
 }

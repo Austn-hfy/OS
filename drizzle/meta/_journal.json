@@ -316,6 +316,48 @@
       "when": 1789085042000,
       "tag": "0044_preserve_resolved_shift_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1789085043000,
+      "tag": "0045_platform_billing_system",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1789089417000,
+      "tag": "0046_live_billing_safety_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789092501000,
+      "tag": "0047_platform_subscription_revision_split_rates",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789095575000,
+      "tag": "0048_founding_client_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789097087000,
+      "tag": "0049_commitment_ladder_clawback",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789107550000,
+      "tag": "0050_comped_residencies",
+      "breakpoints": true
     }
   ]
 }
