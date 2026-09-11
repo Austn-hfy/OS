@@ -31,15 +31,17 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
     currentRevision: platformSubscriptions.revision,
     currentCadence: platformSubscriptions.cadence,
     currentTalentSessions: platformSubscriptions.talentProgramSessions,
+    currentTalentSessionUnitAmountCents: platformSubscriptions.talentSessionUnitAmountCents,
     currentHousePrograms: platformSubscriptions.housePrograms,
+    currentHouseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
     currentOneOffAllowance: platformSubscriptions.oneOffAllowance,
-    currentUnitAmountCents: platformSubscriptions.unitAmountCents,
     revision: platformSubscriptionRevisions.revision,
     revisionCadence: platformSubscriptionRevisions.cadence,
     revisionTalentSessions: platformSubscriptionRevisions.talentProgramSessions,
+    revisionTalentSessionUnitAmountCents: platformSubscriptionRevisions.talentSessionUnitAmountCents,
     revisionHousePrograms: platformSubscriptionRevisions.housePrograms,
+    revisionHouseProgramUnitAmountCents: platformSubscriptionRevisions.houseProgramUnitAmountCents,
     revisionOneOffAllowance: platformSubscriptionRevisions.oneOffAllowance,
-    revisionUnitAmountCents: platformSubscriptionRevisions.unitAmountCents,
   }).from(platformSubscriptionInvoices)
     .innerJoin(platformSubscriptions, eq(platformSubscriptionInvoices.platformSubscriptionId, platformSubscriptions.id))
     .innerJoin(residencies, eq(platformSubscriptionInvoices.residencyId, residencies.id))
@@ -85,9 +87,10 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
       revision: source.revision ?? source.currentRevision,
       cadence: source.revisionCadence ?? source.currentCadence,
       talentSessions: source.revisionTalentSessions ?? source.currentTalentSessions,
+      talentSessionUnitAmountCents: source.revisionTalentSessionUnitAmountCents ?? source.currentTalentSessionUnitAmountCents,
       housePrograms: source.revisionHousePrograms ?? source.currentHousePrograms,
+      houseProgramUnitAmountCents: source.revisionHouseProgramUnitAmountCents ?? source.currentHouseProgramUnitAmountCents,
       oneOffAllowance: source.revisionOneOffAllowance ?? source.currentOneOffAllowance,
-      unitAmountCents: source.revisionUnitAmountCents ?? source.currentUnitAmountCents,
     },
   });
   const pdf = await renderHtmlToPdf(renderPlatformInvoiceHtml(snapshot));

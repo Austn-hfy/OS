@@ -1,7 +1,7 @@
 import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents, type PlatformBillingCadence } from "./platform-billing";
 
 export type PlatformInvoiceDocumentSnapshot = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   invoice: {
     id: string;
     stripeInvoiceId: string;
@@ -30,9 +30,10 @@ export type PlatformInvoiceDocumentSnapshot = {
     revision: number;
     cadence: PlatformBillingCadence;
     talentSessions: number;
+    talentSessionUnitAmountCents: number;
     housePrograms: number;
+    houseProgramUnitAmountCents: number;
     oneOffAllowance: number;
-    unitAmountCents: number;
     monthlyAmountCents: number;
     cadenceAmountCents: number;
   };
@@ -59,10 +60,9 @@ export function createPlatformInvoiceDocumentSnapshot(source: PlatformInvoiceDoc
   const { committedPlan } = source;
   const monthlyAmountCents = calculatePlatformMonthlyAmountCents({
     talentProgramSessions: committedPlan.talentSessions,
+    talentSessionUnitAmountCents: committedPlan.talentSessionUnitAmountCents,
     housePrograms: committedPlan.housePrograms,
-    unitAmountCents: committedPlan.unitAmountCents,
-    talentSessionUnitAmountCents: committedPlan.unitAmountCents,
-    houseProgramUnitAmountCents: committedPlan.unitAmountCents,
+    houseProgramUnitAmountCents: committedPlan.houseProgramUnitAmountCents,
   });
   const cadenceAmountCents = platformCadenceChargeCents(monthlyAmountCents, committedPlan.cadence);
   const cadenceMonths = committedPlan.cadence === "monthly" ? 1 : committedPlan.cadence === "quarterly" ? 3 : 12;
@@ -70,14 +70,14 @@ export function createPlatformInvoiceDocumentSnapshot(source: PlatformInvoiceDoc
     {
       description: "Committed Talent sessions",
       quantity: committedPlan.talentSessions * cadenceMonths,
-      unitAmountCents: committedPlan.unitAmountCents,
-      amountCents: committedPlan.talentSessions * committedPlan.unitAmountCents * cadenceMonths,
+      unitAmountCents: committedPlan.talentSessionUnitAmountCents,
+      amountCents: committedPlan.talentSessions * committedPlan.talentSessionUnitAmountCents * cadenceMonths,
     },
     {
       description: "Committed House programs",
       quantity: committedPlan.housePrograms * cadenceMonths,
-      unitAmountCents: committedPlan.unitAmountCents,
-      amountCents: committedPlan.housePrograms * committedPlan.unitAmountCents * cadenceMonths,
+      unitAmountCents: committedPlan.houseProgramUnitAmountCents,
+      amountCents: committedPlan.housePrograms * committedPlan.houseProgramUnitAmountCents * cadenceMonths,
     },
   ].filter((line) => line.quantity > 0);
 
@@ -86,7 +86,7 @@ export function createPlatformInvoiceDocumentSnapshot(source: PlatformInvoiceDoc
   if (source.invoice.billingPeriodEnd < source.invoice.billingPeriodStart) throw new Error("Platform invoice period is invalid.");
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     invoice: source.invoice,
     issuer: { ...source.issuer, addressLines: splitAddress(source.issuer.address) },
     billTo: { ...source.billTo, addressLines: splitAddress(source.billTo.address) },

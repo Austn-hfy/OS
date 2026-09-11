@@ -41,7 +41,7 @@ export default async function PlatformBillingPage({ searchParams }: { searchPara
         const plan = planByResidency.get(residency.id);
         if (!plan) return <article className="card platform-owner-card" key={residency.id}>
           <header><div><p className="eyebrow">No Committed Plan</p><h2>{residency.name}</h2><p>{residency.cityState || "Location pending"}</p></div><span className="status incomplete">Not connected</span></header>
-          <CommittedPlanForm residencyId={residency.id} residencyName={residency.name} value={{ cadence: "monthly", talentProgramSessions: 0, housePrograms: 0, oneOffAllowance: 0, unitAmountCents: 0, startsOn: defaults.start, renewsOn: defaults.renewal }} />
+          <CommittedPlanForm residencyId={residency.id} residencyName={residency.name} value={{ cadence: "monthly", talentProgramSessions: 0, talentSessionUnitAmountCents: 6_000, housePrograms: 0, houseProgramUnitAmountCents: 6_000, oneOffAllowance: 0, startsOn: defaults.start, renewsOn: defaults.renewal }} />
         </article>;
         const comparison = plan.comparison;
         return <article className="card platform-owner-card" key={residency.id}>
@@ -57,7 +57,7 @@ export default async function PlatformBillingPage({ searchParams }: { searchPara
             {!plan.stripeSubscriptionId ? <form action={startPlatformStripeCheckoutAction}><input type="hidden" name="residencyId" value={residency.id} /><button className="button" type="submit">Add test card & start subscription</button></form> : <span className="platform-stripe-connected">One continuous Stripe subscription connected</span>}
             {plan.latestInvoice ? <Link className="button secondary" href={`/app/platform-billing/invoices/${plan.latestInvoice.id}/pdf`}>Latest Platform invoice</Link> : null}
           </div>
-          <details className="platform-plan-editor"><summary>Edit Committed Plan</summary><CommittedPlanForm residencyId={residency.id} residencyName={residency.name} value={{ cadence: plan.cadence, talentProgramSessions: plan.talentProgramSessions, housePrograms: plan.housePrograms, oneOffAllowance: plan.oneOffAllowance, unitAmountCents: plan.unitAmountCents, startsOn: plan.startsOn, renewsOn: plan.renewsOn }} /></details>
+          <details className="platform-plan-editor"><summary>Edit Committed Plan</summary><CommittedPlanForm residencyId={residency.id} residencyName={residency.name} value={{ cadence: plan.cadence, talentProgramSessions: plan.talentProgramSessions, talentSessionUnitAmountCents: plan.talentSessionUnitAmountCents, housePrograms: plan.housePrograms, houseProgramUnitAmountCents: plan.houseProgramUnitAmountCents, oneOffAllowance: plan.oneOffAllowance, startsOn: plan.startsOn, renewsOn: plan.renewsOn }} /></details>
           {plan.recentRevisions.length ? <details className="platform-plan-history"><summary>Plan history</summary><ol>{plan.recentRevisions.map((revision) => <li key={revision.id}><strong>Revision {revision.revision}</strong><span>{date(revision.createdAt)} · {revision.changeReason}</span><small className={revision.stripeSyncStatus === "failed" ? "error" : "muted"}>{revision.stripeSyncStatus.replaceAll("_", " ")}{revision.stripeSyncError ? ` · ${revision.stripeSyncError}` : ""}</small></li>)}</ol></details> : null}
         </article>;
       })}

@@ -33,9 +33,10 @@ const snapshot = createPlatformInvoiceDocumentSnapshot({
     revision: 2,
     cadence: "monthly",
     talentSessions: 8,
+    talentSessionUnitAmountCents: 2_500,
     housePrograms: 3,
+    houseProgramUnitAmountCents: 2_500,
     oneOffAllowance: 2,
-    unitAmountCents: 2_500,
   },
 });
 

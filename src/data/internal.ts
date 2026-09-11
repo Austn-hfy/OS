@@ -98,7 +98,6 @@ export async function getPlatformRevenueDashboard() {
     housePrograms: platformSubscriptions.housePrograms,
     houseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
     oneOffAllowance: platformSubscriptions.oneOffAllowance,
-    unitAmountCents: platformSubscriptions.unitAmountCents,
     startsOn: platformSubscriptions.startsOn,
     renewsOn: platformSubscriptions.renewsOn,
     stripeCustomerId: platformSubscriptions.stripeCustomerId,
@@ -139,7 +138,7 @@ export async function getPlatformRevenueDashboard() {
   const liveRows = await Promise.all(plans.map((plan) => loadPlatformLiveUsage(plan.residencyId)));
 
   return plans.map((plan, index) => {
-    const monthlyAmountCents = calculatePlatformMonthlyAmountCents({ ...plan, unitAmountCents: plan.unitAmountCents });
+    const monthlyAmountCents = calculatePlatformMonthlyAmountCents(plan);
     return {
       ...plan,
       nextChargeAt: plan.nextChargeAt?.toISOString() ?? null,

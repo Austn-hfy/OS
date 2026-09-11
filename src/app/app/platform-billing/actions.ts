@@ -14,9 +14,10 @@ const planSchema = z.object({
   residencyId: z.uuid(),
   cadence: z.enum(["monthly", "quarterly", "annual"]),
   talentProgramSessions: z.coerce.number().int().min(0).max(10_000),
+  talentSessionUnitAmount: z.coerce.number().min(0).max(1_000_000),
   housePrograms: z.coerce.number().int().min(0).max(10_000),
+  houseProgramUnitAmount: z.coerce.number().min(0).max(1_000_000),
   oneOffAllowance: z.coerce.number().int().min(0).max(10_000),
-  unitAmount: z.coerce.number().min(0).max(1_000_000),
   startsOn: z.iso.date(),
   renewsOn: z.iso.date(),
   changeReason: z.string().trim().min(3).max(500),
@@ -26,10 +27,23 @@ export async function saveCommittedPlanAction(_previous: PlatformPlanActionState
   try {
     const actor = await requireInternalActor();
     const parsed = planSchema.parse(Object.fromEntries(formData));
-    const unitAmountCents = Math.round(parsed.unitAmount * 100);
-    if (!Number.isSafeInteger(unitAmountCents)) throw new Error("Per-unit rate is invalid.");
+    const talentSessionUnitAmountCents = Math.round(parsed.talentSessionUnitAmount * 100);
+    const houseProgramUnitAmountCents = Math.round(parsed.houseProgramUnitAmount * 100);
+    if (!Number.isSafeInteger(talentSessionUnitAmountCents)) throw new Error("Talent Program session rate is invalid.");
+    if (!Number.isSafeInteger(houseProgramUnitAmountCents)) throw new Error("House Program Daypart rate is invalid.");
     if (parsed.renewsOn < parsed.startsOn) throw new Error("Renewal date cannot be before the plan start date.");
-    await updateCommittedPlan(actor, { ...parsed, unitAmountCents });
+    await updateCommittedPlan(actor, {
+      residencyId: parsed.residencyId,
+      cadence: parsed.cadence,
+      talentProgramSessions: parsed.talentProgramSessions,
+      talentSessionUnitAmountCents,
+      housePrograms: parsed.housePrograms,
+      houseProgramUnitAmountCents,
+      oneOffAllowance: parsed.oneOffAllowance,
+      startsOn: parsed.startsOn,
+      renewsOn: parsed.renewsOn,
+      changeReason: parsed.changeReason,
+    });
     await reconcilePlatformUsage(parsed.residencyId);
     revalidatePath("/app/platform-billing");
     revalidatePath("/residency");

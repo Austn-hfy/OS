@@ -10,18 +10,41 @@ import { renderPlatformInvoiceHtml } from "@/services/invoice-pdf/platform-templ
 const readSource = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
 describe("Platform committed billing", () => {
-  it("bills only locked Talent and House quantities at the committed unit rate", () => {
+  it("collects and stores split rates while retaining the blended columns only for compatibility", async () => {
+    const [form, action, stripeService, invoiceService, schema, migration] = await Promise.all([
+      readSource("../src/app/app/platform-billing/committed-plan-form.tsx"),
+      readSource("../src/app/app/platform-billing/actions.ts"),
+      readSource("../src/services/platform-stripe.ts"),
+      readSource("../src/services/platform-invoices.ts"),
+      readSource("../src/db/schema.ts"),
+      readSource("../drizzle/0047_platform_subscription_revision_split_rates.sql"),
+    ]);
+
+    expect(form).toContain('name="talentSessionUnitAmount"');
+    expect(form).toContain('name="houseProgramUnitAmount"');
+    expect(form).not.toContain('name="unitAmount"');
+    expect(action).toContain("talentSessionUnitAmountCents");
+    expect(action).toContain("houseProgramUnitAmountCents");
+    expect(stripeService).not.toContain("unitAmountCents:");
+    expect(invoiceService).toContain("revisionTalentSessionUnitAmountCents");
+    expect(invoiceService).toContain("revisionHouseProgramUnitAmountCents");
+    expect(schema).toContain('talentSessionUnitAmountCents: integer("talent_session_unit_amount_cents").notNull()');
+    expect(schema).toContain('houseProgramUnitAmountCents: integer("house_program_unit_amount_cents").notNull()');
+    expect(migration).toContain('"talent_session_unit_amount_cents" = "unit_amount_cents"');
+    expect(migration).toContain('"house_program_unit_amount_cents" = "unit_amount_cents"');
+  });
+
+  it("bills locked Talent and House quantities at their distinct committed rates", () => {
     const monthly = calculatePlatformMonthlyAmountCents({
       talentProgramSessions: 8,
       housePrograms: 3,
       oneOffAllowance: 99,
-      talentSessionUnitAmountCents: 2_500,
-      houseProgramUnitAmountCents: 2_500,
-      unitAmountCents: 2_500,
+      talentSessionUnitAmountCents: 6_000,
+      houseProgramUnitAmountCents: 5_000,
     } as Parameters<typeof calculatePlatformMonthlyAmountCents>[0] & { oneOffAllowance: number });
-    expect(monthly).toBe(27_500);
-    expect(platformCadenceChargeCents(monthly, "quarterly")).toBe(82_500);
-    expect(platformCadenceChargeCents(monthly, "annual")).toBe(330_000);
+    expect(monthly).toBe(63_000);
+    expect(platformCadenceChargeCents(monthly, "quarterly")).toBe(189_000);
+    expect(platformCadenceChargeCents(monthly, "annual")).toBe(756_000);
     expect(platformCadenceInterval("quarterly")).toEqual({ interval: "month", intervalCount: 3 });
   });
 
@@ -118,10 +141,10 @@ describe("per-Residency live-billing safety", () => {
 describe("Platform Invoice document", () => {
   it("uses a distinct subscription template and escapes client content", () => {
     const snapshot = createPlatformInvoiceDocumentSnapshot({
-      invoice: { id: "invoice", stripeInvoiceId: "in_test", number: "PLAT-1001", invoiceDate: "2026-09-01", billingPeriodStart: "2026-09-01", billingPeriodEnd: "2026-09-30", currency: "USD", amountDueCents: 27_500, amountPaidCents: 27_500, status: "paid" },
+      invoice: { id: "invoice", stripeInvoiceId: "in_test", number: "PLAT-1001", invoiceDate: "2026-09-01", billingPeriodStart: "2026-09-01", billingPeriodEnd: "2026-09-30", currency: "USD", amountDueCents: 63_000, amountPaidCents: 63_000, status: "paid" },
       issuer: { legalName: "HFY LLC", productName: "Platform", email: "billing@example.test", address: "69365 El Canto Rd\nCathedral City, CA 92234" },
       billTo: { residencyName: "Hotel <Test>", contactName: "Billing", contactEmail: "hotel@example.test", address: "1 Test Way" },
-      committedPlan: { revision: 2, cadence: "monthly", talentSessions: 8, housePrograms: 3, oneOffAllowance: 2, unitAmountCents: 2_500 },
+      committedPlan: { revision: 2, cadence: "monthly", talentSessions: 8, talentSessionUnitAmountCents: 6_000, housePrograms: 3, houseProgramUnitAmountCents: 5_000, oneOffAllowance: 2 },
     });
     const html = renderPlatformInvoiceHtml(snapshot);
     expect(html).toContain("Platform Subscription Invoice");
@@ -130,7 +153,13 @@ describe("Platform Invoice document", () => {
     expect(html).toContain("Cathedral City, CA 92234");
     expect(html).toContain("Hotel &lt;Test&gt;");
     expect(html).not.toContain("Hotel <Test>");
-    expect(snapshot.committedPlan.cadenceAmountCents).toBe(27_500);
+    expect(snapshot.committedPlan.cadenceAmountCents).toBe(63_000);
+    expect(snapshot.lines).toEqual([
+      { description: "Committed Talent sessions", quantity: 8, unitAmountCents: 6_000, amountCents: 48_000 },
+      { description: "Committed House programs", quantity: 3, unitAmountCents: 5_000, amountCents: 15_000 },
+    ]);
+    expect(html).toContain("$60.00");
+    expect(html).toContain("$50.00");
   });
 });
 
