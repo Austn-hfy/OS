@@ -8,6 +8,10 @@ import { assertResidencyTalentRateConfigured } from "@/domain/residency-rates";
 import type { AuditActor } from "@/lib/auth";
 import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
 import { findOrCreateResidencyRoom, nextRoomDaypartColor } from "@/services/rooms";
+import {
+  materializeStandingDaypartDateInTransaction,
+  materializeStandingDaypartRollingWindowInTransaction,
+} from "@/services/daypart-materialization";
 
 export type BookingAssignmentInput = {
   talentId?: string | null;
@@ -105,6 +109,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
     const fullProgrammingClient = actor.kind === "residency" && residency.tier === "complete";
 
     const normalizedDayparts: DaypartBookingInput[] = [];
+    const newlyCreatedStandingDaypartIds: string[] = [];
     for (const requested of input.dayparts) {
       if (requested.daypartId || !requested.createDaypart) {
         if (requested.daypartId) {
@@ -161,6 +166,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         active: true,
       }).returning({ id: dayparts.id });
       if (rules.length) await tx.insert(daypartDayRules).values(rules.map((rule) => ({ daypartId: createdDaypart.id, ...rule })));
+      if (scheduleMode === "standing_weekly") newlyCreatedStandingDaypartIds.push(createdDaypart.id);
       await tx.insert(auditLog).values({
         residencyId: residency.id,
         actorUserId: actor.userId,
@@ -191,6 +197,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
       color: dayparts.color,
       type: dayparts.type,
       billingMode: dayparts.billingMode,
+      scheduleMode: dayparts.scheduleMode,
       defaultTalentRateCents: dayparts.defaultTalentRateCents,
       clientDefaultRateCents: dayparts.clientDefaultRateCents,
     }).from(dayparts)
@@ -260,20 +267,24 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
             billingMode: requested.type === "house_activity"
               ? null
               : requested.billingMode ?? (actor.kind === "residency" ? "tracking_only" as const : "billed_by_hfy" as const),
+            scheduleMode: null,
             defaultTalentRateCents: null,
             clientDefaultRateCents: requested.clientTalentDefaultRateCents ?? null,
           };
       if (!rule.name || !rule.room || !/^#[0-9A-Fa-f]{6}$/.test(rule.color)) {
         throw new Error("A one-time slot needs a name, room, and valid calendar color.");
       }
-      const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.startMinute), residency.timezone);
-      const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.endMinute), residency.timezone);
+      let startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.startMinute), residency.timezone);
+      let endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, requested.endMinute), residency.timezone);
       const fullProgrammingAutoRequest = fullProgrammingClient && (rule.type === "dj_artist" || requested.assignments.some((assignment) => Boolean(assignment.talentId)));
       const requestHfy = Boolean(requested.requestHfy || fullProgrammingAutoRequest);
       const effectiveAssignments = fullProgrammingAutoRequest ? [] : requested.assignments;
-      const recordKind = requestHfy || (actor.kind === "residency" && rule.type === "dj_artist")
-        ? "financial_shift" as const
-        : daypartBookingRecordKind(rule.type, rule.billingMode);
+      const standingDaypart = rule.daypartId && rule.scheduleMode === "standing_weekly";
+      const recordKind = standingDaypart
+        ? daypartBookingRecordKind(rule.type, rule.billingMode)
+        : requestHfy || (actor.kind === "residency" && rule.type === "dj_artist")
+          ? "financial_shift" as const
+          : daypartBookingRecordKind(rule.type, rule.billingMode);
       if (requested.requestHfy && !fullProgrammingAutoRequest && (actor.kind !== "residency" || rule.type !== "dj_artist" || requested.assignments.length)) {
         throw new Error("Request HFY must be a client-created DJ slot without a selected artist.");
       }
@@ -321,8 +332,26 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         if (financialConflict.length || trackingConflict.length) throw new Error(`${selectedTalent.stageName} already has an overlapping active booking.`);
       }
 
+      const materializedRecord = standingDaypart ? await materializeStandingDaypartDateInTransaction(tx, {
+        residencyId: residency.id,
+        daypartId: rule.daypartId!,
+        serviceDate: input.serviceDate,
+        actor: { userId: actor.userId, label: actor.email },
+        source: "calendar_click",
+      }) : null;
+      if (standingDaypart && !materializedRecord) {
+        throw new Error("This standing Daypart is skipped, inactive, or already scheduled on this date.");
+      }
+      if (materializedRecord && materializedRecord.recordKind !== recordKind) {
+        throw new Error("The standing Daypart materialized with an unexpected record type.");
+      }
+      if (materializedRecord) {
+        startsAt = materializedRecord.startsAt;
+        endsAt = materializedRecord.endsAt;
+      }
+
       if (recordKind === "tracking_occurrence") {
-        const [occurrence] = await tx.insert(scheduleOccurrences).values({
+        const [occurrence] = materializedRecord ? [{ id: materializedRecord.recordId }] : await tx.insert(scheduleOccurrences).values({
           residencyId: residency.id,
           roomId: rule.roomId,
           daypartId: rule.daypartId,
@@ -338,6 +367,10 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
           endsAt,
           createdByUserId: actor.userId,
         }).returning({ id: scheduleOccurrences.id });
+        if (materializedRecord) {
+          await tx.update(scheduleOccurrences).set({ notes, programDetails, manualHostName, updatedAt: new Date() })
+            .where(eq(scheduleOccurrences.id, occurrence.id));
+        }
         createdOccurrenceIds.push(occurrence.id);
         for (let index = 0; index < effectiveAssignments.length; index += 1) {
           const talentId = effectiveAssignments[index].talentId;
@@ -361,10 +394,10 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         continue;
       }
 
-      const economicsMode = actor.kind === "residency"
+      const economicsMode = materializedRecord ? "hfy" as const : actor.kind === "residency"
         ? requestHfy ? "hfy_request" as const : "client_owned" as const
         : "hfy" as const;
-      const coveringInvoices = economicsMode === "hfy" ? await tx.select({ id: invoices.id, status: invoices.status }).from(invoices).where(and(
+      const coveringInvoices = economicsMode === "hfy" && !materializedRecord ? await tx.select({ id: invoices.id, status: invoices.status }).from(invoices).where(and(
           eq(invoices.residencyId, residency.id),
           lte(invoices.billingPeriodStart, input.serviceDate),
           gte(invoices.billingPeriodEnd, input.serviceDate),
@@ -380,7 +413,7 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
           ? "More than one Invoice covers this Shift."
           : "No Invoice period covers this Shift.";
       const clientRateCents = economicsMode === "hfy" ? resolveRateCents(requested.clientRateOverrideCents, residency.clientHourlyRateCents) : 0;
-      const [shift] = await tx.insert(shifts).values({
+      const [shift] = materializedRecord ? [{ id: materializedRecord.recordId }] : await tx.insert(shifts).values({
         residencyId: residency.id,
         roomId: rule.roomId,
         daypartId: rule.daypartId,
@@ -402,6 +435,10 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         invoiceLinkIssue: economicsMode === "hfy" && !finalizedInvoice && !linkedInvoice,
         invoiceLinkNote: economicsMode === "hfy" ? invoiceLinkNote : "",
       }).returning({ id: shifts.id });
+      if (materializedRecord) {
+        await tx.update(shifts).set({ notes, programDetails, manualHostName, updatedAt: new Date() })
+          .where(eq(shifts.id, shift.id));
+      }
       createdShiftIds.push(shift.id);
 
       if (finalizedInvoice) {
@@ -506,6 +543,14 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
         entityType: "shift",
         entityId: shift.id,
         details: { daypartId: rule.daypartId, serviceDate: input.serviceDate, programDetails, manualHostName, calendarColor: requested.daypartId ? null : rule.color, invoiceLinkIssue: coveringInvoices.length !== 1 },
+      });
+    }
+    if (newlyCreatedStandingDaypartIds.length) {
+      await materializeStandingDaypartRollingWindowInTransaction(tx, {
+        residencyId: residency.id,
+        daypartIds: newlyCreatedStandingDaypartIds,
+        actor: { userId: actor.userId, label: actor.email },
+        source: "daypart_save",
       });
     }
     return { shiftIds: createdShiftIds, occurrenceIds: createdOccurrenceIds };

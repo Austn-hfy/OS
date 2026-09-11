@@ -7,6 +7,7 @@ import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import type { AuditActor } from "@/lib/auth";
 import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
 import { findOrCreateResidencyRoom, nextRoomDaypartColor } from "@/services/rooms";
+import { materializeStandingDaypartRollingWindowInTransaction } from "@/services/daypart-materialization";
 
 export type SaveDaypartInput = {
   id?: string;
@@ -370,6 +371,14 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
       entityId: daypartId,
       details: { name, room: assignedRoom.name, roomId: assignedRoom.id, roomHue: assignedRoom.hue, color, type: input.type, billingMode, scheduleMode: input.scheduleMode, suggestedStartMinute, suggestedEndMinute, defaultTalentRateCents, clientDefaultRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
     });
+    if (input.scheduleMode === "standing_weekly" && input.active) {
+      await materializeStandingDaypartRollingWindowInTransaction(tx, {
+        residencyId: residency.id,
+        daypartIds: [daypartId],
+        actor: { userId: actor.userId, label: actor.email },
+        source: "daypart_save",
+      });
+    }
     return { id: daypartId };
   });
 }
