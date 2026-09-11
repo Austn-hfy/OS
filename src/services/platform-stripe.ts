@@ -18,7 +18,11 @@ import {
   platformCadenceInterval,
   type PlatformBillingCadence,
 } from "@/domain/platform-billing";
-import { assertCompedResidencyConfirmation, enforceCompedPlan } from "@/domain/comped-residency";
+import {
+  assertCompedResidencyConfirmation,
+  COMPED_DEFAULT_STORED_UNIT_AMOUNT_CENTS,
+  effectiveCompedPlan,
+} from "@/domain/comped-residency";
 import {
   applyCommitmentTier,
   assertCommitmentTierSelectionAllowed,
@@ -117,12 +121,13 @@ function stripeId(value: string | { id: string } | null | undefined) {
   return typeof value === "string" ? value : value?.id ?? null;
 }
 
-function planAmount(input: Pick<CommittedPlanInput, "talentProgramSessions" | "talentSessionUnitAmountCents" | "housePrograms" | "houseProgramUnitAmountCents" | "cadence">) {
+export function platformPlanAmount(input: Pick<CommittedPlanInput, "talentProgramSessions" | "talentSessionUnitAmountCents" | "housePrograms" | "houseProgramUnitAmountCents" | "cadence">, comped = false) {
+  const effectivePlan = effectiveCompedPlan(input, comped);
   const monthlyAmountCents = calculatePlatformMonthlyAmountCents({
-    talentProgramSessions: input.talentProgramSessions,
-    talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
-    housePrograms: input.housePrograms,
-    houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
+    talentProgramSessions: effectivePlan.talentProgramSessions,
+    talentSessionUnitAmountCents: effectivePlan.talentSessionUnitAmountCents,
+    housePrograms: effectivePlan.housePrograms,
+    houseProgramUnitAmountCents: effectivePlan.houseProgramUnitAmountCents,
   });
   return {
     monthlyAmountCents,
@@ -198,9 +203,9 @@ async function ensureStripeCustomerAndProduct(plan: CurrentPlan, residency: { na
   return { customerId, productId };
 }
 
-async function createPlanPrice(plan: CurrentPlan, input: CommittedPlanInput, revision: number, productId: string) {
+async function createPlanPrice(plan: CurrentPlan, input: CommittedPlanInput, revision: number, productId: string, comped: boolean) {
   const stripe = getStripe();
-  const amount = planAmount(input).cadenceAmountCents;
+  const amount = platformPlanAmount(input, comped).cadenceAmountCents;
   const recurring = platformCadenceInterval(input.cadence);
   const price = await stripe.prices.create({
     currency: "usd",
@@ -261,14 +266,14 @@ async function scheduleStripePlanAtRenewal(subscription: Stripe.Subscription, pr
   }, { idempotencyKey: `platform-schedule-update/${subscription.id}/r${revision}` });
 }
 
-async function updateStripeSubscriptionPlan(plan: CurrentPlan, input: CommittedPlanInput, revision: number, productId: string) {
+async function updateStripeSubscriptionPlan(plan: CurrentPlan, input: CommittedPlanInput, revision: number, productId: string, comped: boolean) {
   if (!plan.stripeSubscriptionId) throw new Error("Stripe subscription is not connected.");
   const stripe = getStripe();
   const subscription = await stripe.subscriptions.retrieve(plan.stripeSubscriptionId);
   if (subscription.livemode) throw new Error("A live-mode Stripe Subscription cannot be used by staging.");
   const item = subscription.items.data[0];
   if (!item) throw new Error("Stripe subscription has no subscription item to update.");
-  const price = await createPlanPrice(plan, input, revision, productId);
+  const price = await createPlanPrice(plan, input, revision, productId, comped);
 
   if (plan.cadence === input.cadence && !subscription.schedule) {
     await stripe.subscriptions.update(subscription.id, {
@@ -330,14 +335,38 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
   const [current] = await database.select().from(platformSubscriptions)
     .where(eq(platformSubscriptions.residencyId, input.residencyId)).limit(1);
 
+  const preserveExistingPricingAndCommitment = Boolean(current && (
+    effectiveComped
+    || (residency.comped && options.setComped === false)
+  ));
+  // Comp is an effective billing overlay. It must never replace the stored plan
+  // values that become active again when permanent comp status is removed.
   let planInput = effectiveComped
-    ? enforceCompedPlan(input, true)
+    ? {
+        ...input,
+        talentSessionUnitAmountCents: current?.talentSessionUnitAmountCents ?? COMPED_DEFAULT_STORED_UNIT_AMOUNT_CENTS,
+        houseProgramUnitAmountCents: current?.houseProgramUnitAmountCents ?? COMPED_DEFAULT_STORED_UNIT_AMOUNT_CENTS,
+      }
     : enforceFoundingClientPlan(input, foundingWindow, now);
   let commitmentTier: CommitmentTier | null = null;
   let commitmentStartedAt: Date | null = null;
   let commitmentLengthMonths: number | null = null;
   if (effectiveComped) {
     if (input.commitmentTier) throw new Error("A comped Residency does not use commitment tiers.");
+    if (current) {
+      commitmentTier = current.commitmentTier;
+      commitmentStartedAt = current.commitmentStartedAt;
+      commitmentLengthMonths = current.commitmentLengthMonths;
+    }
+  } else if (preserveExistingPricingAndCommitment && current) {
+    planInput = {
+      ...planInput,
+      talentSessionUnitAmountCents: current.talentSessionUnitAmountCents,
+      houseProgramUnitAmountCents: current.houseProgramUnitAmountCents,
+    };
+    commitmentTier = current.commitmentTier;
+    commitmentStartedAt = current.commitmentStartedAt;
+    commitmentLengthMonths = current.commitmentLengthMonths;
   } else if (foundingState.active) {
     if (input.commitmentTier) {
       throw new Error("A Residency inside its Founding Client window cannot select a commitment tier.");
@@ -522,7 +551,7 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
         primaryContactEmail: residencies.primaryContactEmail,
       }).from(residencies).where(eq(residencies.id, current.residencyId)).limit(1);
       const { productId } = await ensureStripeCustomerAndProduct(current, contact);
-      stripeUpdate = await updateStripeSubscriptionPlan(current, planInput, revision, productId);
+      stripeUpdate = await updateStripeSubscriptionPlan(current, planInput, revision, productId, effectiveComped);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Stripe plan update failed.";
@@ -730,21 +759,21 @@ export async function updateResidencyCompedStatus(
 
   const [current] = await database.select().from(platformSubscriptions)
     .where(eq(platformSubscriptions.residencyId, residency.id)).limit(1);
-  if (input.comped && current) {
+  if (current) {
     await updateCommittedPlan(actor, {
       residencyId: residency.id,
       cadence: current.cadence,
       commitmentTier: null,
       talentProgramSessions: current.talentProgramSessions,
-      talentSessionUnitAmountCents: 0,
+      talentSessionUnitAmountCents: current.talentSessionUnitAmountCents,
       housePrograms: current.housePrograms,
-      houseProgramUnitAmountCents: 0,
+      houseProgramUnitAmountCents: current.houseProgramUnitAmountCents,
       oneOffAllowance: current.oneOffAllowance,
       startsOn: current.startsOn,
       renewsOn: current.renewsOn,
-      changeReason: "Permanent comp status enabled",
-    }, { setComped: true });
-    return { comped: true };
+      changeReason: input.comped ? "Permanent comp status enabled" : "Permanent comp status removed",
+    }, { setComped: input.comped });
+    return { comped: input.comped };
   }
 
   const now = new Date();
@@ -791,7 +820,7 @@ export async function createPlatformSubscriptionCheckout(actor: AuditActor, resi
     details: { checkoutMode: "subscription", planRevision: row.plan.revision, includesSubscriptionCreation: true },
   });
   const { customerId, productId } = await ensureStripeCustomerAndProduct(row.plan, row.residency);
-  const amount = planAmount(row.plan).cadenceAmountCents;
+  const amount = platformPlanAmount(row.plan, row.residency.comped).cadenceAmountCents;
   const recurring = platformCadenceInterval(row.plan.cadence);
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.create({
