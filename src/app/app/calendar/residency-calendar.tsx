@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState, type CSSProperties, type RefObject } from "react";
-import { addCalendarAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, createResidencyRoomAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, previewShiftTimeEditAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, submitShiftChangeRequestAction, updateDaypartOccurrenceAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, updateShiftTimeAction, type CreateRoomActionState, type ResidencyActionState, type ShiftTimeEditPreview } from "@/app/app/actions";
+import { addCalendarAssignmentAction, addScheduleOccurrenceTalentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, createResidencyRoomAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, previewShiftTimeEditAction, removeCalendarAssignmentAction, requestHfyForScheduleOccurrenceAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, submitShiftChangeRequestAction, updateDaypartOccurrenceAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, updateShiftTimeAction, type CreateRoomActionState, type ResidencyActionState, type ShiftTimeEditPreview } from "@/app/app/actions";
 import { HfyRequestFulfillment } from "@/app/app/hfy-request-fulfillment";
 import { createClientOwnedArtistAction } from "@/app/residency/actions";
 import { ArtistSearchPicker, type CreateArtistResult } from "@/components/artist-search-picker";
@@ -366,6 +366,9 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     editingEvent.recordType !== "financial_shift"
     || (previewMode ? editingEvent.economicsMode === "client_owned" : editingEvent.economicsMode !== "client_owned" && editingEvent.economicsMode !== "hfy_request")
   ));
+  const materializedTrackingTalentOccurrence = Boolean(previewMode && !fullProgramming && canManage
+    && editingEvent?.recordType === "nonfinancial_occurrence" && editingEvent.daypartId
+    && editingEvent.daypartType === "dj_artist" && editingEvent.billingMode === "tracking_only");
   const pendingHfyRequest = !previewMode && editingEvent?.economicsMode === "hfy_request";
   const managerHfyShiftLocked = Boolean(previewMode && editingEvent?.recordType === "financial_shift" && editingEvent.economicsMode === "hfy");
   const managerCanRequestShiftChange = Boolean(managerHfyShiftLocked && canManage);
@@ -851,7 +854,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     }
   }, [editingEvent, newAssignmentDraft]);
 
-  function startAddingAssignment() {
+  function startAddingAssignment(talentId = "") {
     if (!editingEvent) return;
     if (!previewMode && !residencyTalentRateConfigured) {
       setEditState({ status: "error", message: MISSING_RESIDENCY_TALENT_RATE_MESSAGE });
@@ -866,25 +869,49 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     const suggestedStart = existingEnds.length ? Math.max(...existingEnds) : editingEvent.shiftStartMinute;
     setReplacementDraft(null);
     setEditState(initialActionState);
-    setNewAssignmentDraft(emptySlot("", minuteToClock(suggestedStart < editingEvent.shiftEndMinute ? suggestedStart : editingEvent.shiftStartMinute), minuteToClock(editingEvent.shiftEndMinute)));
+    setNewAssignmentDraft(emptySlot(talentId, minuteToClock(suggestedStart < editingEvent.shiftEndMinute ? suggestedStart : editingEvent.shiftStartMinute), minuteToClock(editingEvent.shiftEndMinute)));
   }
 
   async function saveNewAssignment() {
     if (!editingEvent || !newAssignmentDraft?.talentId || !newAssignmentDraft.start || !newAssignmentDraft.end || newAssignmentWarning) return;
     const window = resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, newAssignmentDraft.start, newAssignmentDraft.end);
     const formData = new FormData();
-    formData.set("shiftId", editingEvent.id);
+    formData.set(materializedTrackingTalentOccurrence ? "occurrenceId" : "shiftId", editingEvent.id);
     formData.set("talentId", newAssignmentDraft.talentId);
     formData.set("startsAtMinute", String(window.startMinute));
     formData.set("endsAtMinute", String(window.endMinute));
-    formData.set("compensationType", newAssignmentDraft.compensationType);
-    formData.set("talentRateOverride", newAssignmentDraft.rateOverride);
-    formData.set("fixedFee", newAssignmentDraft.fixedFee);
+    if (!materializedTrackingTalentOccurrence) {
+      formData.set("compensationType", newAssignmentDraft.compensationType);
+      formData.set("talentRateOverride", newAssignmentDraft.rateOverride);
+      formData.set("fixedFee", newAssignmentDraft.fixedFee);
+    }
     setEditPending(true);
-    const result = await addCalendarAssignmentAction(formData);
+    const result = materializedTrackingTalentOccurrence
+      ? await addScheduleOccurrenceTalentAction(formData)
+      : await addCalendarAssignmentAction(formData);
     setEditPending(false);
     setEditState(result);
-    if (result.status === "success") setNewAssignmentDraft(null);
+    if (result.status === "success") {
+      setNewAssignmentDraft(null);
+      if (materializedTrackingTalentOccurrence) {
+        setModal(null);
+        router.refresh();
+      }
+    }
+  }
+
+  async function requestHfyForExistingOccurrence() {
+    if (!editingEvent || !materializedTrackingTalentOccurrence || editingEvent.assignments.length) return;
+    const formData = new FormData();
+    formData.set("occurrenceId", editingEvent.id);
+    setEditPending(true);
+    const result = await requestHfyForScheduleOccurrenceAction(formData);
+    setEditPending(false);
+    setEditState(result);
+    if (result.status === "success") {
+      setModal(null);
+      router.refresh();
+    }
   }
 
   async function saveReplacement() {
@@ -1281,6 +1308,22 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     <div className="field quick-booking-notes"><label>Notes <span>optional</span></label><textarea value={oneTimeEditDraft.notes} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, notes: event.target.value })} /></div>
     <div className="replacement-actions"><span className="privacy-note">{editingEvent.daypartType === "house_activity" ? "House Activity" : "Talent Activity"} · one-time ownership is locked.</span><button className="button" type="button" disabled={editPending || !oneTimeEditDraft.name.trim() || !editingOneTimeRoomReady} onClick={saveOneTimeRecord}>{editPending ? "Saving…" : "Save session changes"}</button></div>
   </section> : null;
+  const newOccurrenceTalent = newAssignmentDraft ? availableTalent.find((item) => item.id === newAssignmentDraft.talentId) : undefined;
+  const materializedOccurrenceTalentEditor = materializedTrackingTalentOccurrence && editingEvent ? <section className="one-time-record-editor materialized-occurrence-talent-editor">
+    <div className="quick-assignment-heading"><div><strong>{editingEvent.assignments.length ? "Your artists" : "Choose who handles this date"}</strong><small>Add one of your own registered artists, or ask HFY to staff this entire date.</small></div></div>
+    {!editingEvent.assignments.length && !newAssignmentDraft ? <div className="client-assignment-choices equal-options">
+      <ArtistSearchPicker key={`existing-occurrence-${editingEvent.id}-${artistPickerKey}`} artists={artistOptions} excludedIds={[]} label="Add your own artist" initiallyOpen={false} collapsedEyebrow="Client Managed" collapsedDescription="Choose one of your Residency’s artists without creating billing or payout records." onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={(talentId) => startAddingAssignment(talentId)} />
+      <button className="request-hfy-option" type="button" disabled={editPending} onClick={requestHfyForExistingOccurrence}><span>HFY system option</span><strong>Request HFY</strong><small>Send this entire date to HFY without choosing an artist or seeing HFY rates.</small></button>
+    </div> : !newAssignmentDraft ? <ArtistSearchPicker key={`existing-occurrence-additional-${editingEvent.id}-${artistPickerKey}`} artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} label="Add another registered artist" onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={(talentId) => startAddingAssignment(talentId)} /> : null}
+    {newAssignmentDraft ? <section className="replacement-editor new-assignment-editor">
+      <div className="replacement-step"><span>1</span><div><strong>Selected artist</strong><small>This remains a Tracking-only occurrence with no financial records.</small></div></div>
+      <div className="replacement-selected"><div><span>Registered artist</span><strong>{newOccurrenceTalent?.stageName}</strong></div><button type="button" onClick={() => setNewAssignmentDraft(null)}>Choose someone else</button></div>
+      <div className="replacement-step"><span>2</span><div><strong>Set their hours</strong><small>The artist’s time must remain inside this occurrence.</small></div></div>
+      <div className="quick-dj-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel="Occurrence artist start time" value={newAssignmentDraft.start} onChange={(value) => setNewAssignmentDraft({ ...newAssignmentDraft, start: value })} stepMinutes={15} /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel="Occurrence artist end time" value={newAssignmentDraft.end} onChange={(value) => setNewAssignmentDraft({ ...newAssignmentDraft, end: value })} stepMinutes={15} /></div></div>
+      {newAssignmentWarning ? <p className="error" aria-live="polite">{newAssignmentWarning}</p> : null}
+      <div className="replacement-actions"><button className="button secondary" type="button" onClick={() => setNewAssignmentDraft(null)}>Cancel</button><button className="button" type="button" disabled={editPending || !newAssignmentDraft.talentId || !newAssignmentDraft.start || !newAssignmentDraft.end || Boolean(newAssignmentWarning)} onClick={saveNewAssignment}>{editPending ? "Saving…" : "Attach artist"}</button></div>
+    </section> : null}
+  </section> : null;
   const daypartOccurrenceEditor = editingEvent?.recordType === "nonfinancial_occurrence" && editingEvent.daypartId && daypartOccurrenceEditDraft ? <section className="one-time-record-editor daypart-occurrence-editor">
     <div className="daypart-occurrence-edit-heading"><div><span>{editingReusableTemplate ? "Reusable template occurrence" : "Daypart occurrence"}</span><strong>Edit this date</strong><small>These changes apply only to {editingEvent.date}. The {editingReusableTemplate ? "reusable template" : "standing Daypart"} stays unchanged.</small></div></div>
     <div className="quick-inline-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel={`${editingEvent.title} scheduled date start time`} value={daypartOccurrenceEditDraft.start} onChange={(start) => setDaypartOccurrenceEditDraft({ ...daypartOccurrenceEditDraft, start })} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel={`${editingEvent.title} scheduled date end time`} value={daypartOccurrenceEditDraft.end} onChange={(end) => setDaypartOccurrenceEditDraft({ ...daypartOccurrenceEditDraft, end })} stepMinutes={15} required /></div></div>
@@ -1404,8 +1447,9 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
               </form>
             ) : editingEvent ? editingEvent.recordType === "nonfinancial_occurrence" ? <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
-              {editingEvent.daypartId ? <><div className="quick-house-activity"><strong>{editingReusableTemplate ? "Reusable template scheduled" : "Tracking-only Daypart scheduled"}</strong><p>No payout or invoice records were created.</p></div>{daypartOccurrenceEditor}</> : oneTimeRecordEditor}
+              {editingEvent.daypartId ? <><div className="quick-house-activity"><strong>{editingReusableTemplate ? "Reusable template scheduled" : "Tracking-only Daypart scheduled"}</strong><p>No payout or invoice records were created.</p></div>{materializedOccurrenceTalentEditor}{daypartOccurrenceEditor}</> : oneTimeRecordEditor}
               {editingEvent.assignments.length ? <div className="quick-reschedule-list">{editingEvent.assignments.map((assignment, index) => <div className="quick-reschedule-row" key={assignment.id}><div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div></div>)}</div> : null}
+              {editState.status !== "idle" ? <p className={editState.status === "error" ? "error" : "success"} aria-live="polite">{editState.message}</p> : null}
               {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
               <footer className="quick-modal-footer">{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button> : <button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingOccurrence}>Delete activity</button>}<span>{editingEvent.daypartId ? datedRemovalHelp : "One-time activity"}</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
             </> : <>
@@ -1414,7 +1458,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
               {managerShiftRequestControl}
               {!editingEvent.daypartId && editingEvent.economicsMode !== "hfy_request" ? oneTimeRecordEditor : null}
               {editingEvent.programDetails || editingEvent.manualHostName ? <div className="quick-program-fields">{editingEvent.programDetails ? <div><span>Program / activity</span><strong>{editingEvent.programDetails}</strong></div> : null}{editingEvent.manualHostName ? <div><span>Host / guest</span><strong>{editingEvent.manualHostName}</strong></div> : null}</div> : null}
-              {pendingHfyRequest && editingEvent.hfyRequestId ? <section className="replacement-editor new-assignment-editor hfy-request-calendar-editor"><div className="replacement-step"><span>1</span><div><strong>Schedule the requested shift</strong><small>Choose one artist or split the full service window. Residency rates apply automatically.</small></div></div><HfyRequestFulfillment requestId={editingEvent.hfyRequestId} shiftName={editingEvent.title} shiftStartMinute={editingEvent.shiftStartMinute} shiftEndMinute={editingEvent.shiftEndMinute} artists={requestTalent.map((artist) => ({ id: artist.id, stageName: artist.stageName, homeMarket: artist.homeMarket }))} ratesConfigured={residencyTalentRateConfigured && residency.clientHourlyRateCents > 0} onSuccess={() => { setModal(null); router.refresh(); }} /></section> : editingEventCanManageAssignments ? <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours{previewMode ? "." : " because those hours determine pay."}</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft) || (!previewMode && !residencyTalentRateConfigured)} onClick={startAddingAssignment}>+ Add another DJ</button></div> : <div className="request-hfy-selection"><div><span>{editingEvent.economicsMode === "hfy_request" ? "Pending request" : editingEvent.economicsMode === "client_owned" ? "Client-managed slot" : "HFY-managed slot"}</span><strong>{editingEvent.economicsMode === "hfy_request" ? "Request HFY is awaiting fulfillment" : "This slot is read-only here"}</strong><small>{editingEvent.economicsMode === "client_owned" ? "The client controls its artist assignments and private rates." : previewMode ? "HFY controls staffing and both HFY rates. Your Invoice will show the resulting billed total." : "This slot is not editable here."}</small></div></div>}
+              {pendingHfyRequest && editingEvent.hfyRequestId ? <section className="replacement-editor new-assignment-editor hfy-request-calendar-editor"><div className="replacement-step"><span>1</span><div><strong>Schedule the requested shift</strong><small>Choose one artist or split the full service window. Residency rates apply automatically.</small></div></div><HfyRequestFulfillment requestId={editingEvent.hfyRequestId} shiftName={editingEvent.title} shiftStartMinute={editingEvent.shiftStartMinute} shiftEndMinute={editingEvent.shiftEndMinute} artists={requestTalent.map((artist) => ({ id: artist.id, stageName: artist.stageName, homeMarket: artist.homeMarket }))} ratesConfigured={residencyTalentRateConfigured && residency.clientHourlyRateCents > 0} onSuccess={() => { setModal(null); router.refresh(); }} /></section> : editingEventCanManageAssignments ? <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours{previewMode ? "." : " because those hours determine pay."}</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft) || (!previewMode && !residencyTalentRateConfigured)} onClick={() => startAddingAssignment()}>+ Add another DJ</button></div> : <div className="request-hfy-selection"><div><span>{editingEvent.economicsMode === "hfy_request" ? "Pending request" : editingEvent.economicsMode === "client_owned" ? "Client-managed slot" : "HFY-managed slot"}</span><strong>{editingEvent.economicsMode === "hfy_request" ? "Request HFY is awaiting fulfillment" : "This slot is read-only here"}</strong><small>{editingEvent.economicsMode === "client_owned" ? "The client controls its artist assignments and private rates." : previewMode ? "HFY controls staffing and both HFY rates. Your Invoice will show the resulting billed total." : "This slot is not editable here."}</small></div></div>}
               {editingEventCanManageAssignments && !previewMode && !residencyTalentRateConfigured ? <p className="error" aria-live="polite">{MISSING_RESIDENCY_TALENT_RATE_MESSAGE}</p> : null}
               {newAssignmentDraft ? <section className="replacement-editor new-assignment-editor">
                 <div className="replacement-step"><span>1</span><div><strong>Choose the DJ</strong><small>Only artists approved for this Residency appear here.</small></div></div>
