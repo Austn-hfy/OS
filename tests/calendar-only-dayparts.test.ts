@@ -116,9 +116,10 @@ describe("Calendar Only Dayparts", () => {
     expect(calendar).toContain('label="Add your own artist"');
     expect(calendar).toContain("requestHfyForExistingOccurrence");
     expect(calendar).toContain("materializedOccurrenceTalentEditor");
-    expect(actions).toContain("addScheduleOccurrenceTalentAction");
+    expect(actions).toContain("addClientManagedOccurrenceAssignmentAction");
     expect(actions).toContain("requestHfyForScheduleOccurrenceAction");
-    expect(bookings).toContain("tx.insert(scheduleOccurrenceTalent)");
+    expect(bookings).toContain("tracking_occurrence_converted_to_client_shift");
+    expect(bookings).toContain("tx.insert(clientAssignmentTerms)");
     expect(bookings).toContain("explicitHfyRequest");
   });
 

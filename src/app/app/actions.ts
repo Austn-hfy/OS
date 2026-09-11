@@ -16,7 +16,7 @@ import { isResidencyAccessError, requireActorForResidency, requireInternalActor,
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
 import { clearDaypartDateException, removeDaypart, saveDaypart, saveDaypartDateOverride, skipDaypartDate } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
-import { addAssignmentToShift, addTalentToScheduleOccurrence, createResidencyDateBooking, deleteOneTimeOccurrence, requestHfyForScheduleOccurrence, updateDaypartOccurrence, updateOneTimeOccurrence, updateOneTimeShift } from "@/services/residency-bookings";
+import { addAssignmentToShift, addClientManagedAssignmentToScheduleOccurrence, createResidencyDateBooking, deleteOneTimeOccurrence, requestHfyForScheduleOccurrence, updateDaypartOccurrence, updateOneTimeOccurrence, updateOneTimeShift } from "@/services/residency-bookings";
 import { createShift, deleteShift, previewShiftTimeEdit, updateCalendarShiftDetails, updateShiftTime } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -2329,18 +2329,26 @@ export async function updateDaypartOccurrenceAction(formData: FormData): Promise
   }
 }
 
-export async function addScheduleOccurrenceTalentAction(formData: FormData): Promise<ResidencyActionState> {
+export async function addClientManagedOccurrenceAssignmentAction(formData: FormData): Promise<ResidencyActionState> {
   try {
     const parsed = z.object({
       occurrenceId: z.uuid(),
       talentId: z.uuid(),
       startsAtMinute: z.coerce.number().int().min(0).max(2879),
       endsAtMinute: z.coerce.number().int().min(1).max(2879),
+      compensationType: z.enum(["hourly", "fixed", "na"]),
+      talentRateOverride: z.string(),
+      fixedFee: z.string(),
     }).parse(Object.fromEntries(formData));
     const actor = await requireManagerForOccurrence(parsed.occurrenceId);
-    await addTalentToScheduleOccurrence(actor, parsed);
+    await addClientManagedAssignmentToScheduleOccurrence(actor, {
+      ...parsed,
+      compensationType: actor.kind === "residency" ? "na" : parsed.compensationType,
+      talentRateOverrideCents: actor.kind === "residency" ? null : parsed.talentRateOverride.trim() ? centsFromDollars(parsed.talentRateOverride) : null,
+      fixedFeeCents: actor.kind === "residency" ? null : parsed.fixedFee.trim() ? centsFromDollars(parsed.fixedFee) : null,
+    });
     revalidateOneTimeRecordViews();
-    return { status: "success", message: "Artist added to this Client Managed occurrence." };
+    return { status: "success", message: "Artist added as a Client Managed Assignment." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to add this artist." };
   }
