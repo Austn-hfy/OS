@@ -32,7 +32,8 @@ export type StandingDaypartMaterializationSource =
   | "calendar_click"
   | "daypart_save"
   | "date_exception_restored"
-  | "rolling_window";
+  | "rolling_window"
+  | "reviewed_backfill";
 
 export type StandingDaypartMaterializationActor = {
   userId: string | null;

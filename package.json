@@ -28,6 +28,7 @@
     "talent:import-airtable": "tsx scripts/import-airtable-talent.ts",
     "talent:verify-airtable": "tsx scripts/verify-airtable-talent-import.ts",
     "security:verify-ace": "tsx scripts/verify-ace-rls.ts",
+    "backfill:ace-september-2026": "tsx --tsconfig scripts/tsconfig.json scripts/backfill-ace-september-2026.ts",
     "pdf:sample": "tsx scripts/render-sample-invoice.ts",
     "pdf:sample:platform": "tsx scripts/render-sample-platform-invoice.ts",
     "stripe:verify:platform": "tsx --env-file=.env.development.local scripts/verify-platform-stripe-test.ts"

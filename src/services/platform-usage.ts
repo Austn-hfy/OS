@@ -12,7 +12,12 @@ import {
 import { comparePlatformUsage, type PlatformUsageCounts } from "@/domain/platform-billing";
 import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
 
-export type PlatformUsageMetricName = "talent_sessions" | "house_programs" | "one_offs";
+export type PlatformUsageMetricName = "talent_sessions" | "house_programs";
+
+type PlatformUsageCountRow = {
+  talent_sessions: number;
+  house_programs: number;
+};
 
 function localDateParts(date: Date, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -33,6 +38,55 @@ export function platformUsageMonthWindow(date: Date, timezone: string) {
   return { snapshotDate, periodStart, periodEnd };
 }
 
+export function platformUsageCountsQuery(residencyId: string, periodStart: string, periodEnd: string) {
+  return sql`
+    WITH talent_activity AS (
+      SELECT shift.daypart_id, shift.service_date
+      FROM shifts AS shift
+      INNER JOIN dayparts AS daypart ON daypart.id = shift.daypart_id
+      WHERE shift.residency_id = ${residencyId}
+        AND daypart.residency_id = ${residencyId}
+        AND daypart.type = 'dj_artist'
+        AND shift.service_date BETWEEN ${periodStart}::date AND ${periodEnd}::date
+
+      UNION
+
+      SELECT occurrence.daypart_id, occurrence.service_date
+      FROM schedule_occurrences AS occurrence
+      INNER JOIN dayparts AS daypart ON daypart.id = occurrence.daypart_id
+      WHERE occurrence.residency_id = ${residencyId}
+        AND daypart.residency_id = ${residencyId}
+        AND daypart.type = 'dj_artist'
+        AND occurrence.service_date BETWEEN ${periodStart}::date AND ${periodEnd}::date
+    ), qualifying_house_dayparts AS (
+      SELECT daypart.id
+      FROM dayparts AS daypart
+      WHERE daypart.residency_id = ${residencyId}
+        AND daypart.type = 'house_activity'
+        AND daypart.active = true
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM shifts AS shift
+            WHERE shift.residency_id = ${residencyId}
+              AND shift.daypart_id = daypart.id
+              AND shift.service_date BETWEEN ${periodStart}::date AND ${periodEnd}::date
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM schedule_occurrences AS occurrence
+            WHERE occurrence.residency_id = ${residencyId}
+              AND occurrence.daypart_id = daypart.id
+              AND occurrence.service_date BETWEEN ${periodStart}::date AND ${periodEnd}::date
+          )
+        )
+    )
+    SELECT
+      (SELECT count(*)::integer FROM talent_activity) AS talent_sessions,
+      (SELECT count(*)::integer FROM qualifying_house_dayparts) AS house_programs
+  `;
+}
+
 export async function loadPlatformLiveUsage(residencyId: string, at = new Date()) {
   const database = getDb();
   const [plan] = await database.select({
@@ -49,50 +103,16 @@ export async function loadPlatformLiveUsage(residencyId: string, at = new Date()
   if (!plan) return null;
 
   const window = platformUsageMonthWindow(at, plan.timezone);
-  const result = await database.execute<{
-    talent_sessions: number;
-    house_programs: number;
-    one_offs: number;
-  }>(sql`
-    WITH standing_usage AS (
-      SELECT
-        count(rule.id) FILTER (WHERE daypart.type = 'dj_artist')::integer AS talent_sessions,
-        count(DISTINCT daypart.id) FILTER (WHERE daypart.type = 'house_activity')::integer AS house_programs
-      FROM dayparts AS daypart
-      INNER JOIN daypart_day_rules AS rule ON rule.daypart_id = daypart.id
-      WHERE daypart.residency_id = ${residencyId}
-        AND daypart.schedule_mode = 'standing_weekly'
-        AND daypart.active = true
-        AND daypart.created_at::date <= ${window.snapshotDate}::date
-        AND (daypart.active_until IS NULL OR daypart.active_until >= ${window.snapshotDate}::date)
-    ), one_off_usage AS (
-      SELECT count(*)::integer AS one_offs
-      FROM dayparts AS daypart
-      WHERE daypart.residency_id = ${residencyId}
-        AND daypart.schedule_mode = 'calendar_only'
-        AND (
-          EXISTS (
-            SELECT 1 FROM shifts AS shift
-            WHERE shift.daypart_id = daypart.id
-              AND shift.service_date BETWEEN ${window.periodStart}::date AND ${window.periodEnd}::date
-          )
-          OR EXISTS (
-            SELECT 1 FROM schedule_occurrences AS occurrence
-            WHERE occurrence.daypart_id = daypart.id
-              AND occurrence.service_date BETWEEN ${window.periodStart}::date AND ${window.periodEnd}::date
-          )
-        )
-    )
-    SELECT coalesce(standing_usage.talent_sessions, 0)::integer AS talent_sessions,
-      coalesce(standing_usage.house_programs, 0)::integer AS house_programs,
-      coalesce(one_off_usage.one_offs, 0)::integer AS one_offs
-    FROM standing_usage CROSS JOIN one_off_usage
-  `);
+  const result = await database.execute<PlatformUsageCountRow>(
+    platformUsageCountsQuery(residencyId, window.periodStart, window.periodEnd),
+  );
   const row = result.rows[0];
   const usage: PlatformUsageCounts = {
     talentSessions: Number(row?.talent_sessions ?? 0),
     housePrograms: Number(row?.house_programs ?? 0),
-    oneOffs: Number(row?.one_offs ?? 0),
+    // Kept at zero for schema compatibility. One-off activity is classified
+    // by Daypart type as Talent sessions or House programs.
+    oneOffs: 0,
   };
   return {
     plan,
@@ -128,7 +148,6 @@ export async function reconcilePlatformUsage(residencyId: string, at = new Date(
   const metrics: Array<{ metric: PlatformUsageMetricName; committed: number; current: number }> = [
     { metric: "talent_sessions", committed: live.plan.talentProgramSessions, current: live.usage.talentSessions },
     { metric: "house_programs", committed: live.plan.housePrograms, current: live.usage.housePrograms },
-    { metric: "one_offs", committed: live.plan.oneOffAllowance, current: live.usage.oneOffs },
   ];
 
   for (const item of metrics) {
