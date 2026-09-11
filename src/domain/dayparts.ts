@@ -191,6 +191,17 @@ export type DaypartDateException = {
 
 export type SlotSchedulingStatus = "empty" | "partial" | "filled";
 
+export function scheduleOccurrenceScheduling(
+  type: DaypartType,
+  hasLinkedTalent: boolean,
+): { schedulingStatus: "empty" | "filled"; label: "Needs scheduling" | "Scheduled" } {
+  const schedulingStatus = type === "house_activity" || hasLinkedTalent ? "filled" : "empty";
+  return {
+    schedulingStatus,
+    label: schedulingStatus === "filled" ? "Scheduled" : "Needs scheduling",
+  };
+}
+
 export function daypartDateKey(daypartId: string, serviceDate: string): string {
   weekdayForDate(serviceDate);
   return `${daypartId}:${serviceDate}`;

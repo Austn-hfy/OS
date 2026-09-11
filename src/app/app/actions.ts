@@ -16,7 +16,7 @@ import { isResidencyAccessError, requireActorForResidency, requireInternalActor,
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
 import { clearDaypartDateException, removeDaypart, saveDaypart, saveDaypartDateOverride, skipDaypartDate } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
-import { addAssignmentToShift, createResidencyDateBooking, deleteOneTimeOccurrence, updateDaypartOccurrence, updateOneTimeOccurrence, updateOneTimeShift } from "@/services/residency-bookings";
+import { addAssignmentToShift, addTalentToScheduleOccurrence, createResidencyDateBooking, deleteOneTimeOccurrence, requestHfyForScheduleOccurrence, updateDaypartOccurrence, updateOneTimeOccurrence, updateOneTimeShift } from "@/services/residency-bookings";
 import { createShift, deleteShift, previewShiftTimeEdit, updateCalendarShiftDetails, updateShiftTime } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -2326,6 +2326,36 @@ export async function updateDaypartOccurrenceAction(formData: FormData): Promise
     return { status: "success", message: "This scheduled date was updated. The reusable template was not changed." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to update this scheduled date." };
+  }
+}
+
+export async function addScheduleOccurrenceTalentAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const parsed = z.object({
+      occurrenceId: z.uuid(),
+      talentId: z.uuid(),
+      startsAtMinute: z.coerce.number().int().min(0).max(2879),
+      endsAtMinute: z.coerce.number().int().min(1).max(2879),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireManagerForOccurrence(parsed.occurrenceId);
+    await addTalentToScheduleOccurrence(actor, parsed);
+    revalidateOneTimeRecordViews();
+    return { status: "success", message: "Artist added to this Client Managed occurrence." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to add this artist." };
+  }
+}
+
+export async function requestHfyForScheduleOccurrenceAction(formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const occurrenceId = z.uuid().parse(formData.get("occurrenceId"));
+    const actor = await requireManagerForOccurrence(occurrenceId);
+    await requestHfyForScheduleOccurrence(actor, occurrenceId);
+    revalidateResidencyCalendars();
+    revalidatePath("/app");
+    return { status: "success", message: "Request sent to HFY for this date." };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to request HFY for this date." };
   }
 }
 
