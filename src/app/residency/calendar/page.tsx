@@ -36,9 +36,10 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
     const status = slotSchedulingStatus(start, end, coverage);
     const names = activeAssignments.map((assignment) => assignment.talentName || assignment.guestName).filter(Boolean);
     const pendingHfy = shift.economicsMode === "hfy_request";
+    const pendingChange = Boolean(shift.pendingChangeRequest);
     return {
       id: shift.id, date: shift.serviceDate, title: matchedDaypart?.name ?? shift.name,
-      time: `${formatCompactMinuteRange(start, end)} · ${pendingHfy ? "Request HFY pending" : status === "empty" ? "Needs scheduling" : status === "partial" ? "Partially scheduled" : `${activeAssignments.length} talent`}`,
+      time: `${formatCompactMinuteRange(start, end)} · ${pendingChange ? "Request pending" : pendingHfy ? "Request HFY pending" : status === "empty" ? "Needs scheduling" : status === "partial" ? "Partially scheduled" : `${activeAssignments.length} talent`}`,
       residencyName: pendingHfy ? "HFY staffing requested" : names.join(" + ") || shift.name,
       color: calendarColorForEconomics(matchedDaypart?.color ?? shift.daypartColor, shift.shiftCalendarColor, shift.economicsMode),
       bookingState: pendingHfy ? "hfy_pending" : shift.economicsMode === "hfy" ? "hfy_confirmed" : undefined,
@@ -48,6 +49,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
       programDetails: shift.programDetails, manualHostName: shift.manualHostName, schedulingStatus: status,
       economicsMode: shift.economicsMode,
       clientTalentDefaultRateCents: shift.clientTalentDefaultRateCents,
+      pendingChangeRequest: shift.pendingChangeRequest,
       assignments: activeAssignments.map((assignment) => ({
         id: assignment.id, talentId: assignment.talentId, talentName: assignment.talentName, guestName: assignment.guestName,
         startsAt: assignment.startsAt.toISOString(), endsAt: assignment.endsAt.toISOString(),

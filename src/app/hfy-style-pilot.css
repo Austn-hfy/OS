@@ -616,6 +616,12 @@
   line-height: 1;
   animation: hfy-rate-attention-pulse 2.35s ease-in-out infinite;
 }
+.hfy-style-system .residency-nav-attention.residency-nav-count {
+  width: auto;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+}
 
 .hfy-style-system .residency-nav-item.needs-attention .residency-nav-icon {
   border-color: color-mix(in srgb, var(--hfy-coral) 52%, white);
@@ -1987,7 +1993,7 @@
 }
 .hfy-style-system .owner-mode-header > .button { flex: 0 0 auto; }
 
-.hfy-style-system :is(.developer-residencies-section, .hfy-work-queue-section) {
+.hfy-style-system :is(.developer-residencies-section, .hfy-work-queue-section, .shift-change-request-queue) {
   padding: var(--hfy-space-6);
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: var(--hfy-radius-feature);
@@ -1995,6 +2001,40 @@
   box-shadow: var(--hfy-shadow-section), inset 0 1px var(--hfy-inset-highlight);
   backdrop-filter: blur(18px) saturate(112%);
 }
+
+.hfy-style-system .shift-change-request-queue { display: grid; gap: var(--hfy-space-4); scroll-margin-top: 18px; }
+.hfy-style-system .shift-change-request-list { display: grid; gap: var(--hfy-space-4); }
+.hfy-style-system .shift-change-request-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.8fr) minmax(230px, 1fr) minmax(210px, 0.9fr);
+  gap: 16px 20px;
+  align-items: start;
+  padding: 18px;
+  border-left: 5px solid #f9a8d4;
+}
+.hfy-style-system .shift-change-request-card > header { display: grid; gap: 8px; }
+.hfy-style-system .shift-change-request-card > header > div { min-width: 0; }
+.hfy-style-system .shift-change-request-card > header .eyebrow { margin: 0 0 4px; }
+.hfy-style-system .shift-change-request-card > header h3 { margin: 0 0 4px; font-size: 17px; }
+.hfy-style-system .shift-change-request-card > header > div > span { color: var(--hfy-muted); font-size: 9px; }
+.hfy-style-system .shift-change-request-facts { display: grid; gap: 9px; }
+.hfy-style-system .shift-change-request-facts > div,
+.hfy-style-system .shift-change-request-submitter { display: grid; gap: 3px; }
+.hfy-style-system .shift-change-request-facts span,
+.hfy-style-system .shift-change-request-submitter span { color: var(--hfy-muted); font-size: 8px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.hfy-style-system .shift-change-request-facts strong,
+.hfy-style-system .shift-change-request-submitter strong { color: var(--hfy-ink); font-size: 11px; }
+.hfy-style-system .shift-change-request-facts .proposed { padding: 9px; border-radius: 9px; color: #8d275e; background: rgba(249, 168, 212, .2); }
+.hfy-style-system .shift-change-request-card blockquote { margin: 0; padding: 12px; border: 1px solid var(--hfy-line); border-radius: 10px; background: var(--hfy-surface-nested); }
+.hfy-style-system .shift-change-request-card blockquote span { color: var(--hfy-muted); font-size: 8px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.hfy-style-system .shift-change-request-card blockquote p { margin: 6px 0 0; color: var(--hfy-ink-soft); font-size: 10px; line-height: 1.5; white-space: pre-wrap; }
+.hfy-style-system .shift-change-request-submitter { grid-column: 1 / 2; }
+.hfy-style-system .shift-change-request-submitter small { color: var(--hfy-muted); font-size: 8px; overflow-wrap: anywhere; }
+.hfy-style-system .shift-change-request-resolution { grid-column: 2 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: end; }
+.hfy-style-system .shift-change-request-resolution .field { margin: 0; }
+.hfy-style-system .shift-change-request-resolution textarea { min-height: 76px; resize: vertical; }
+.hfy-style-system .shift-change-request-actions { display: flex; gap: 8px; padding-bottom: 1px; }
+.hfy-style-system .shift-change-request-resolution > :is(.error, .success) { grid-column: 1 / -1; margin: 0; }
 
 .hfy-style-system .developer-residency-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--hfy-space-4); }
 .hfy-style-system .developer-residency-card { min-height: 256px; display: grid; align-content: space-between; gap: var(--hfy-space-4); }
@@ -2052,6 +2092,9 @@
 @media (max-width: 1120px) {
   .hfy-style-system .developer-residency-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hfy-style-system .hfy-work-queue-list > article { grid-template-columns: minmax(140px, 0.8fr) minmax(220px, 1.5fr) minmax(145px, 0.8fr); }
+  .hfy-style-system .shift-change-request-card { grid-template-columns: minmax(180px, .8fr) minmax(260px, 1.2fr); }
+  .hfy-style-system .shift-change-request-card blockquote { grid-column: 1 / -1; }
+  .hfy-style-system .shift-change-request-resolution { grid-column: 1 / -1; }
   .hfy-style-system .queue-daypart-rate { display: none; }
 }
 
@@ -2061,6 +2104,11 @@
   .hfy-style-system .hfy-work-queue-list > article { grid-template-columns: 1fr; gap: 10px; padding-left: 24px; }
   .hfy-style-system .queue-daypart-rate { display: grid; }
   .hfy-style-system .hfy-work-queue-group > header { align-items: flex-start; flex-direction: column; }
+  .hfy-style-system .shift-change-request-card { grid-template-columns: 1fr; }
+  .hfy-style-system .shift-change-request-card blockquote,
+  .hfy-style-system .shift-change-request-submitter,
+  .hfy-style-system .shift-change-request-resolution { grid-column: 1; }
+  .hfy-style-system .shift-change-request-resolution { grid-template-columns: 1fr; }
   .hfy-style-system .queue-residency-status { justify-content: flex-start; }
 }
 

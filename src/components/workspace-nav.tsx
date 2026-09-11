@@ -40,6 +40,7 @@ export function WorkspaceNavLink({
   icon,
   active,
   attention = false,
+  badgeCount = 0,
 }: {
   href: string;
   label: string;
@@ -47,10 +48,11 @@ export function WorkspaceNavLink({
   icon: WorkspaceNavIconName;
   active: boolean;
   attention?: boolean;
+  badgeCount?: number;
 }) {
-  return <Link className={`residency-nav-item ${active ? "active" : ""} ${attention ? "needs-attention" : ""}`} href={href}>
+  return <Link className={`residency-nav-item ${active ? "active" : ""} ${attention || badgeCount ? "needs-attention" : ""}`} href={href}>
     <WorkspaceNavIcon name={icon} />
     <span className="residency-nav-copy"><strong>{label}</strong><small>{description}</small></span>
-    <span className="residency-nav-end" aria-hidden="true">{attention ? <span className="residency-nav-attention">!</span> : null}<span className="residency-nav-arrow">›</span></span>
+    <span className="residency-nav-end" aria-hidden="true">{badgeCount ? <span className="residency-nav-attention residency-nav-count">{badgeCount > 99 ? "99+" : badgeCount}</span> : attention ? <span className="residency-nav-attention">!</span> : null}<span className="residency-nav-arrow">›</span></span>
   </Link>;
 }

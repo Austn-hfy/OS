@@ -1,12 +1,10 @@
 import { and, asc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, daypartDateExceptions, daypartDayRules, dayparts, hfyTalentRequests, invoiceLineItems, invoices, residencies, residencyTalent, rooms, scheduleOccurrences, shifts, talent, talentInvoiceAdjustments } from "@/db/schema";
-import { calculateBillableAmountCents } from "@/domain/airtable-parity";
+import { auditLog, daypartDateExceptions, daypartDayRules, dayparts, residencies, residencyTalent, rooms, scheduleOccurrences, shifts, talent } from "@/db/schema";
 import { HFY_BOOKED_COLOR, isRoomHue, roomShadeColors, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType, type RoomHue } from "@/domain/dayparts";
-import { shiftDeletionBlockReason } from "@/domain/shift-deletion";
 import type { AuditActor } from "@/lib/auth";
-import { carryForwardAdjustmentDescription } from "@/domain/talent-invoicing";
-import { findOrCreateResidencyRoom, nextRoomDaypartColor } from "@/services/rooms";
+import { deleteShiftInTransaction } from "@/services/shifts";
+import { findOrCreateResidencyRoom, nextRoomDaypartColor, type DatabaseTransaction } from "@/services/rooms";
 
 export type SaveDaypartInput = {
   id?: string;
@@ -136,97 +134,68 @@ export async function saveDaypartDateOverride(
   });
 }
 
-export async function skipDaypartDate(
+export async function skipDaypartDateInTransaction(
+  tx: DatabaseTransaction,
   actor: AuditActor,
   input: { residencyId: string; daypartId: string; serviceDate: string },
 ) {
   weekdayForDate(input.serviceDate);
-  return getDb().transaction(async (tx) => {
-    const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name, scheduleMode: dayparts.scheduleMode, residencyTier: residencies.tier }).from(dayparts)
-      .innerJoin(residencies, eq(dayparts.residencyId, residencies.id))
-      .where(and(eq(dayparts.id, input.daypartId), eq(dayparts.residencyId, input.residencyId)))
-      .limit(1);
-    if (!daypart) throw new Error("Daypart not found in this Residency.");
-    const [shift] = await tx.select({
-      id: shifts.id,
-      invoiceId: shifts.invoiceId,
-      invoiceStatus: invoices.status,
-      economicsMode: shifts.economicsMode,
-      startsAt: shifts.startsAt,
-      endsAt: shifts.endsAt,
-      clientRateCents: shifts.clientRateCents,
-      name: shifts.name,
-    }).from(shifts)
-      .leftJoin(invoices, eq(shifts.invoiceId, invoices.id))
-      .where(and(eq(shifts.daypartId, input.daypartId), eq(shifts.serviceDate, input.serviceDate)))
-      .limit(1);
-    if (shift) {
-      const finalizedFullProgrammingShift = daypart.residencyTier === "complete" && Boolean(shift.invoiceId && shift.invoiceStatus && shift.invoiceStatus !== "draft");
-      if (actor.kind === "residency" && shift.economicsMode === "hfy" && daypart.residencyTier !== "complete") throw new Error("HFY-managed Shifts cannot be skipped by the client.");
-      if (actor.kind === "internal" && shift.economicsMode !== "hfy") throw new Error("Client-owned and pending-request Shifts are controlled through their own workflow.");
-      const assignmentRows = await tx.select({
-        bookingStatus: assignments.bookingStatus,
-        payoutStatus: assignments.payoutStatus,
-      }).from(assignments).where(eq(assignments.shiftId, shift.id));
-      const blockReason = shiftDeletionBlockReason(finalizedFullProgrammingShift ? null : shift.invoiceStatus, assignmentRows);
-      if (blockReason) throw new Error(blockReason);
-      if (finalizedFullProgrammingShift && shift.invoiceId) {
-        const adjustmentCents = calculateBillableAmountCents(shift.startsAt, shift.endsAt, shift.clientRateCents);
-        if (adjustmentCents <= 0) throw new Error("This invoiced service has no billable amount to credit.");
-        await tx.insert(talentInvoiceAdjustments).values({
-          residencyId: input.residencyId,
-          sourceInvoiceId: shift.invoiceId,
-          sourceShiftId: shift.id,
-          serviceDate: input.serviceDate,
-          reason: "schedule_cancelled_after_invoice",
-          description: carryForwardAdjustmentDescription({ serviceDate: input.serviceDate, shiftName: shift.name, kind: "cancelled" }),
-          amountCents: -adjustmentCents,
-          createdByUserId: actor.userId,
-        });
-      }
-      await tx.delete(hfyTalentRequests).where(eq(hfyTalentRequests.shiftId, shift.id));
-      await tx.delete(assignments).where(eq(assignments.shiftId, shift.id));
-      if (!finalizedFullProgrammingShift) await tx.delete(invoiceLineItems).where(eq(invoiceLineItems.sourceShiftId, shift.id));
-      await tx.delete(shifts).where(eq(shifts.id, shift.id));
-      if (shift.invoiceId && !finalizedFullProgrammingShift) {
-        const [remaining] = await tx.select({ total: sql<number>`coalesce(sum(${invoiceLineItems.totalCents}), 0)` })
-          .from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, shift.invoiceId));
-        await tx.update(invoices).set({ totalCents: Number(remaining?.total ?? 0), updatedAt: new Date() }).where(eq(invoices.id, shift.invoiceId));
-      }
-    }
-    await tx.delete(scheduleOccurrences).where(and(
+  const [daypart] = await tx.select({ id: dayparts.id, name: dayparts.name, scheduleMode: dayparts.scheduleMode, residencyTier: residencies.tier }).from(dayparts)
+    .innerJoin(residencies, eq(dayparts.residencyId, residencies.id))
+    .where(and(eq(dayparts.id, input.daypartId), eq(dayparts.residencyId, input.residencyId)))
+    .limit(1);
+  if (!daypart) throw new Error("Daypart not found in this Residency.");
+  const [shift] = await tx.select({ id: shifts.id }).from(shifts)
+    .where(and(eq(shifts.daypartId, input.daypartId), eq(shifts.serviceDate, input.serviceDate)))
+    .limit(1);
+  let removedShift: Awaited<ReturnType<typeof deleteShiftInTransaction>> | null = null;
+  if (shift) {
+    removedShift = await deleteShiftInTransaction(tx, actor, shift.id, { audit: false });
+  }
+  await tx.delete(scheduleOccurrences).where(and(
       eq(scheduleOccurrences.daypartId, input.daypartId),
       eq(scheduleOccurrences.serviceDate, input.serviceDate),
-    ));
-    if (daypart.scheduleMode === "calendar_only") {
-      await tx.delete(daypartDateExceptions).where(and(
+  ));
+  if (daypart.scheduleMode === "calendar_only") {
+    await tx.delete(daypartDateExceptions).where(and(
         eq(daypartDateExceptions.daypartId, input.daypartId),
         eq(daypartDateExceptions.serviceDate, input.serviceDate),
-      ));
-    } else {
-      await tx.insert(daypartDateExceptions).values({
+    ));
+  } else {
+    await tx.insert(daypartDateExceptions).values({
         daypartId: input.daypartId,
         serviceDate: input.serviceDate,
         kind: "skip",
         startMinute: null,
         endMinute: null,
         createdByUserId: actor.userId,
-      }).onConflictDoUpdate({
+    }).onConflictDoUpdate({
         target: [daypartDateExceptions.daypartId, daypartDateExceptions.serviceDate],
         set: { kind: "skip", startMinute: null, endMinute: null, createdByUserId: actor.userId, updatedAt: new Date() },
-      });
-    }
-    await tx.insert(auditLog).values({
+    });
+  }
+  await tx.insert(auditLog).values({
       residencyId: input.residencyId,
       actorUserId: actor.userId,
       actorLabel: actor.email,
       action: daypart.scheduleMode === "calendar_only" ? "daypart_calendar_date_removed" : "daypart_date_skipped",
       entityType: "daypart",
       entityId: input.daypartId,
-      details: { serviceDate: input.serviceDate, name: daypart.name, removedShiftId: shift?.id ?? null, pendingTalentInvoiceAdjustment: Boolean(shift?.invoiceId && shift.invoiceStatus && shift.invoiceStatus !== "draft" && daypart.residencyTier === "complete") },
-    });
-    return { scheduleMode: daypart.scheduleMode };
+      details: {
+        serviceDate: input.serviceDate,
+        name: daypart.name,
+        removedShiftId: shift?.id ?? null,
+        pendingTalentInvoiceAdjustment: Boolean(removedShift?.invoiceId && removedShift.invoiceStatus && removedShift.invoiceStatus !== "draft" && removedShift.residencyTier === "complete"),
+      },
   });
+  return { scheduleMode: daypart.scheduleMode };
+}
+
+export async function skipDaypartDate(
+  actor: AuditActor,
+  input: { residencyId: string; daypartId: string; serviceDate: string },
+) {
+  return getDb().transaction((tx) => skipDaypartDateInTransaction(tx, actor, input));
 }
 
 export async function clearDaypartDateException(

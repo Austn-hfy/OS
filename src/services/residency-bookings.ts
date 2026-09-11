@@ -546,6 +546,10 @@ export async function updateOneTimeShift(actor: AuditActor, input: UpdateOneTime
 
     const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.startMinute), shift.timezone);
     const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(shift.serviceDate, input.endMinute), shift.timezone);
+    if (actor.kind === "internal"
+      && (startsAt.getTime() !== shift.startsAt.getTime() || endsAt.getTime() !== shift.endsAt.getTime())) {
+      throw new Error("Use Edit Shift Time so Assignment compensation and client billing are recalculated safely.");
+    }
     const outsideAssignments = await tx.select({ id: assignments.id }).from(assignments).where(and(
       eq(assignments.shiftId, shift.id),
       ne(assignments.bookingStatus, "cancelled"),

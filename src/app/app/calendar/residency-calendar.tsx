@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState, type CSSProperties, type RefObject } from "react";
-import { addCalendarAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, createResidencyRoomAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, updateDaypartOccurrenceAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, type CreateRoomActionState, type ResidencyActionState } from "@/app/app/actions";
+import { addCalendarAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, createResidencyRoomAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, previewShiftTimeEditAction, removeCalendarAssignmentAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, submitShiftChangeRequestAction, updateDaypartOccurrenceAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, updateShiftTimeAction, type CreateRoomActionState, type ResidencyActionState, type ShiftTimeEditPreview } from "@/app/app/actions";
 import { HfyRequestFulfillment } from "@/app/app/hfy-request-fulfillment";
 import { createClientOwnedArtistAction } from "@/app/residency/actions";
 import { ArtistSearchPicker, type CreateArtistResult } from "@/components/artist-search-picker";
@@ -13,12 +13,13 @@ import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { DaypartColorPicker } from "@/components/daypart-color-picker";
 import { RoomHuePicker } from "@/components/room-hue-picker";
 import { RoomCombobox, type RoomComboboxOption } from "@/components/room-combobox";
-import { Status } from "@/components/format";
-import { SensitiveInput } from "@/components/privacy-mode";
+import { formatMoney, Status } from "@/components/format";
+import { PrivateValue, SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { WeekCalendar } from "@/components/week-calendar";
-import { HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayForDate, weekdayNames, type DaypartDateException, type DaypartScheduleMode, type RoomHue } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, localDateTimeForMinute, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayForDate, weekdayNames, type DaypartDateException, type DaypartScheduleMode, type RoomHue } from "@/domain/dayparts";
+import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { monthKeyForDate, monthLabel, normalizeWeekStart, shiftDateKey, shiftMonthKey, weekLabel, type CalendarViewMode } from "@/lib/calendar";
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
@@ -26,6 +27,7 @@ import { MISSING_RESIDENCY_TALENT_RATE_MESSAGE } from "@/domain/residency-rates"
 import { replacementDraftFromAssignment } from "@/domain/assignment-editing";
 import { TALENT_GENRES } from "@/domain/talent-genres";
 import type { ResidencyRoom } from "@/services/rooms";
+import type { ShiftChangeRequestType } from "@/domain/shift-change-requests";
 
 export type CalendarAssignment = {
   id: string;
@@ -62,6 +64,7 @@ export type ResidencyEvent = MonthCalendarEvent & {
   clientTalentDefaultRateCents?: number | null;
   clientRateOverrideCents?: number | null;
   hfyRequestId?: string | null;
+  pendingChangeRequest?: { id: string; requestType: ShiftChangeRequestType; createdAt: string } | null;
 };
 
 type ResidencyCalendarProps = {
@@ -107,6 +110,8 @@ type SuggestionDraft = { daypartId: string; sourceDaypartId: string | null; room
 type ReplacementDraft = { assignmentId: string; talentId: string; start: string; end: string };
 type OneTimeEditDraft = { name: string; roomId: string | null; room: string; roomHue: RoomHue; createRoom: boolean; color: string; start: string; end: string; clientTalentDefaultRate: string; notes: string; programDetails: string; manualHostName: string };
 type DaypartOccurrenceEditDraft = { start: string; end: string; notes: string; programDetails: string; manualHostName: string };
+type ShiftTimeEditDraft = { start: string; end: string; preview: ShiftTimeEditPreview | null };
+type ShiftChangeRequestDraft = { requestType: ShiftChangeRequestType; managerNote: string; start: string; end: string };
 type ModalState = { type: "add"; date: string } | { type: "edit"; eventId: string } | null;
 type BatchScheduleState = { daypartId: string; dates: string[]; completedDates: string[]; expandedDate: string | null };
 type StatusFilter = "needs" | "all" | "filled";
@@ -167,6 +172,12 @@ function daypartOccurrenceDraftFromEvent(event: ResidencyEvent): DaypartOccurren
   };
 }
 
+function shiftChangeRequestLabel(requestType: ShiftChangeRequestType) {
+  if (requestType === "change_time") return "Change time";
+  if (requestType === "cancel_occurrence") return "Cancel this occurrence";
+  return "Delete permanently";
+}
+
 function SchedulingActivityDetailsRow({
   name,
   roomId,
@@ -186,6 +197,7 @@ function SchedulingActivityDetailsRow({
   onColorChange,
   onStartChange,
   onEndChange,
+  timeDisabled = false,
 }: {
   name: string;
   roomId: string | null;
@@ -205,12 +217,13 @@ function SchedulingActivityDetailsRow({
   onColorChange: (value: string) => void;
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
+  timeDisabled?: boolean;
 }) {
   return <div className="quick-activity-details-row">
     <div className="field quick-one-time-color-field"><label>Color</label><details className="quick-color-picker" ref={colorPickerRef}><summary aria-label={`Choose ${ariaPrefix} color`} title="Choose calendar color"><span style={{ background: color }} aria-hidden="true" /></summary><div className="quick-color-popover"><DaypartColorPicker ariaLabel={`${ariaPrefix} color presets`} value={color} onChange={onColorChange} /><small>Hue runs left to right; intensity runs dark to light.</small></div></details></div>
     <div className="field"><label>Session name</label><input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder={namePlaceholder} required /></div>
     <div className="field"><label>Room / space</label><RoomCombobox rooms={rooms} value={room} selectedRoomId={roomId} creationConfirmed={createRoom} ariaLabel={`${ariaPrefix} room or space`} onChange={onRoomChange} onSelect={onRoomSelect} onCreate={onRoomCreate} /></div>
-    <div className="field quick-activity-time-field"><label>Slot time</label><div className="quick-activity-time-controls"><TimeSelect ariaLabel={`${ariaPrefix} start time`} value={start} onChange={onStartChange} stepMinutes={15} required /><span aria-hidden="true">to</span><TimeSelect ariaLabel={`${ariaPrefix} end time`} value={end} onChange={onEndChange} stepMinutes={15} required /></div></div>
+    <div className="field quick-activity-time-field"><label>Slot time</label><div className="quick-activity-time-controls"><TimeSelect ariaLabel={`${ariaPrefix} start time`} value={start} onChange={onStartChange} stepMinutes={15} required disabled={timeDisabled} /><span aria-hidden="true">to</span><TimeSelect ariaLabel={`${ariaPrefix} end time`} value={end} onChange={onEndChange} stepMinutes={15} required disabled={timeDisabled} /></div>{timeDisabled ? <small>Use Edit Shift Time below to recalculate pay and billing.</small> : null}</div>
   </div>;
 }
 
@@ -234,6 +247,9 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
   const [newAssignmentDraft, setNewAssignmentDraft] = useState<SlotDraft | null>(null);
   const [oneTimeEditDraft, setOneTimeEditDraft] = useState<OneTimeEditDraft | null>(() => initialEditingEvent && !initialEditingEvent.daypartId ? oneTimeDraftFromEvent(initialEditingEvent, rooms) : null);
   const [daypartOccurrenceEditDraft, setDaypartOccurrenceEditDraft] = useState<DaypartOccurrenceEditDraft | null>(() => initialEditingEvent?.recordType === "nonfinancial_occurrence" && initialEditingEvent.daypartId ? daypartOccurrenceDraftFromEvent(initialEditingEvent) : null);
+  const [shiftTimeEditDraft, setShiftTimeEditDraft] = useState<ShiftTimeEditDraft | null>(null);
+  const [shiftChangeRequestDraft, setShiftChangeRequestDraft] = useState<ShiftChangeRequestDraft | null>(null);
+  const [locallyPendingRequestIds, setLocallyPendingRequestIds] = useState<string[]>([]);
   const [editState, setEditState] = useState<ResidencyActionState>(initialActionState);
   const [editPending, setEditPending] = useState(false);
   const [dateActionState, setDateActionState] = useState<ResidencyActionState>(initialActionState);
@@ -351,6 +367,10 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     || (previewMode ? editingEvent.economicsMode === "client_owned" : editingEvent.economicsMode !== "client_owned" && editingEvent.economicsMode !== "hfy_request")
   ));
   const pendingHfyRequest = !previewMode && editingEvent?.economicsMode === "hfy_request";
+  const managerHfyShiftLocked = Boolean(previewMode && editingEvent?.recordType === "financial_shift" && editingEvent.economicsMode === "hfy");
+  const managerCanRequestShiftChange = Boolean(managerHfyShiftLocked && canManage);
+  const pendingShiftChangeRequest = Boolean(managerCanRequestShiftChange && editingEvent
+    && (editingEvent.pendingChangeRequest || locallyPendingRequestIds.includes(editingEvent.id)));
   const residencyTalentRateConfigured = residency.defaultTalentRateCents > 0;
   const filteredEvents = events.filter((event) => {
     const statusMatches = statusFilter === "all"
@@ -455,6 +475,8 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     setClientArtistFlow(false);
     setReplacementDraft(null);
     setNewAssignmentDraft(null);
+    setShiftTimeEditDraft(null);
+    setShiftChangeRequestDraft(null);
     setEditState(initialActionState);
     setDateActionState(initialActionState);
     setBookingFeedbackDate(null);
@@ -508,6 +530,8 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     }
     setReplacementDraft(null);
     setNewAssignmentDraft(null);
+    setShiftTimeEditDraft(null);
+    setShiftChangeRequestDraft(null);
     setEditState(initialActionState);
     setDateActionState(initialActionState);
     setOneTimeEditDraft(residencyEvent && !residencyEvent.daypartId ? oneTimeDraftFromEvent(residencyEvent, availableRooms) : null);
@@ -520,6 +544,8 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     if (event) {
       setReplacementDraft(null);
       setNewAssignmentDraft(null);
+      setShiftTimeEditDraft(null);
+      setShiftChangeRequestDraft(null);
       setEditState(initialActionState);
       setOneTimeEditDraft(!event.daypartId ? oneTimeDraftFromEvent(event, availableRooms) : null);
       setDaypartOccurrenceEditDraft(event.recordType === "nonfinancial_occurrence" && event.daypartId ? daypartOccurrenceDraftFromEvent(event) : null);
@@ -904,6 +930,88 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     if (result.status === "success") setModal(null);
   }
 
+  async function submitShiftChangeRequest() {
+    if (!editingEvent || !shiftChangeRequestDraft || !managerCanRequestShiftChange || pendingShiftChangeRequest) return;
+    const formData = new FormData();
+    formData.set("shiftId", editingEvent.id);
+    formData.set("requestType", shiftChangeRequestDraft.requestType);
+    formData.set("managerNote", shiftChangeRequestDraft.managerNote);
+    try {
+      if (shiftChangeRequestDraft.requestType === "change_time") {
+        const startMinute = clockToMinute(shiftChangeRequestDraft.start);
+        const endMinute = resolveEndMinute(startMinute, shiftChangeRequestDraft.end);
+        const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(editingEvent.date, startMinute), residency.timezone);
+        const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(editingEvent.date, endMinute), residency.timezone);
+        formData.set("proposedStartAt", startsAt.toISOString());
+        formData.set("proposedEndAt", endsAt.toISOString());
+      }
+    } catch {
+      setEditState({ status: "error", message: "Choose valid proposed start and end times." });
+      return;
+    }
+
+    setEditPending(true);
+    setEditState(initialActionState);
+    try {
+      const result = await submitShiftChangeRequestAction(formData);
+      setEditState(result);
+      if (result.status === "success") {
+        setLocallyPendingRequestIds((current) => current.includes(editingEvent.id) ? current : [...current, editingEvent.id]);
+        setShiftChangeRequestDraft(null);
+        router.refresh();
+      }
+    } catch {
+      setEditState({ status: "error", message: "Unable to submit this request." });
+    } finally {
+      setEditPending(false);
+    }
+  }
+
+  function shiftTimeFormData(event: ResidencyEvent, draft: ShiftTimeEditDraft) {
+    const startMinute = clockToMinute(draft.start);
+    const endMinute = resolveEndMinute(startMinute, draft.end);
+    const startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(event.date, startMinute), residency.timezone);
+    const endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(event.date, endMinute), residency.timezone);
+    const formData = new FormData();
+    formData.set("shiftId", event.id);
+    formData.set("newStartAt", startsAt.toISOString());
+    formData.set("newEndAt", endsAt.toISOString());
+    return formData;
+  }
+
+  async function reviewShiftTimeChange() {
+    if (!editingEvent || !shiftTimeEditDraft) return;
+    setEditPending(true);
+    setEditState(initialActionState);
+    try {
+      const result = await previewShiftTimeEditAction(shiftTimeFormData(editingEvent, shiftTimeEditDraft));
+      setEditState(result);
+      setShiftTimeEditDraft({ ...shiftTimeEditDraft, preview: result.preview ?? null });
+    } catch {
+      setEditState({ status: "error", message: "Choose valid Shift start and end times." });
+    } finally {
+      setEditPending(false);
+    }
+  }
+
+  async function saveShiftTimeChange() {
+    if (!editingEvent || !shiftTimeEditDraft?.preview) return;
+    setEditPending(true);
+    try {
+      const result = await updateShiftTimeAction(shiftTimeFormData(editingEvent, shiftTimeEditDraft));
+      setEditState(result);
+      if (result.status === "success") {
+        setModal(null);
+        setShiftTimeEditDraft(null);
+        router.refresh();
+      }
+    } catch {
+      setEditState({ status: "error", message: "Unable to update this Shift time." });
+    } finally {
+      setEditPending(false);
+    }
+  }
+
   function oneTimeRecordFormData(event: ResidencyEvent, draft: OneTimeEditDraft) {
     const startMinute = clockToMinute(draft.start);
     const endMinute = resolveEndMinute(startMinute, draft.end);
@@ -1111,6 +1219,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
   const bookingSubmitDisabled = Boolean(pending || !activeSuggestion?.type || (activeSuggestion.oneTime && !activeSuggestion.createMode)
     || !activeSuggestion?.name.trim() || !activeSuggestion?.room.trim() || assignmentWarning
     || (previewMode && activeSuggestion?.type === "dj_artist" && !activeSuggestion.requestHfy && !activeSuggestion.slots.length));
+  const canEditOwnerShiftTime = Boolean(!previewMode && editingEvent?.recordType === "financial_shift" && editingEvent.economicsMode === "hfy");
   const canEditOneTimeRecord = Boolean(editingEvent && !editingEvent.daypartId && oneTimeEditDraft
     && (editingEvent.recordType === "nonfinancial_occurrence" || editingEventCanManageAssignments));
   const editingOneTimeRoomReady = Boolean(oneTimeEditDraft?.roomId || oneTimeEditDraft?.createRoom);
@@ -1138,8 +1247,34 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     {!previewMode && activeSuggestion.billingMode === "billed_by_hfy" ? <details className="quick-more"><summary>Pay and billing options</summary><div className="quick-more-fields"><div className="field"><label>Client rate override</label><SensitiveInput type="number" min="0" step="0.01" value={activeSuggestion.clientRateOverride} onChange={(event) => updateSuggestion({ clientRateOverride: event.target.value })} placeholder={`Default $${((residency.clientHourlyRateCents ?? 0) / 100).toFixed(0)}/hr`} /></div>{activeSuggestion.slots.map((slot, slotIndex) => <div className="quick-slot-details" key={slot.id}><strong>Talent {slotIndex + 1}</strong><div className="field"><label>Compensation</label><select value={slot.compensationType} onChange={(event) => updateSlot(slotIndex, { compensationType: event.target.value as SlotDraft["compensationType"] })}><option value="hourly">Hourly</option><option value="fixed">Fixed fee</option><option value="na">N/A</option></select></div><div className="field"><label>{slot.compensationType === "fixed" ? "Fixed fee" : "Talent rate override"}</label><SensitiveInput type="number" min="0" step="0.01" value={slot.compensationType === "fixed" ? slot.fixedFee : slot.rateOverride} onChange={(event) => updateSlot(slotIndex, slot.compensationType === "fixed" ? { fixedFee: event.target.value } : { rateOverride: event.target.value })} placeholder={slot.compensationType === "hourly" ? `${activeSuggestion.defaultTalentRateCents === null ? "Residency" : "Daypart"} default $${((activeSuggestion.defaultTalentRateCents ?? residency.defaultTalentRateCents ?? 0) / 100).toFixed(0)}/hr` : undefined} /></div></div>)}</div></details> : null}
     <div className="field quick-booking-notes"><label>Notes <span>optional</span></label><textarea value={activeSuggestion.notes} onChange={(event) => updateSuggestion({ notes: event.target.value })} placeholder="Anything the team should know about this booking" /></div></> : null}
   </> : null;
+  const managerShiftRequestControl = managerCanRequestShiftChange && editingEvent ? <section className="shift-time-editor manager-shift-request">
+    <div className="shift-time-editor-heading"><div><span>Residency request</span><strong>{pendingShiftChangeRequest ? "Request pending" : "Submit Request"}</strong><small>HFY must review the request before this Shift changes.</small></div>{!pendingShiftChangeRequest && !shiftChangeRequestDraft ? <button className="button secondary" type="button" disabled={editPending} onClick={() => { setShiftChangeRequestDraft({ requestType: "change_time", managerNote: "", start: minuteToClock(editingEvent.shiftStartMinute), end: minuteToClock(editingEvent.shiftEndMinute) }); setEditState(initialActionState); }}>Submit Request</button> : null}</div>
+    {pendingShiftChangeRequest ? <div className="request-hfy-selection"><div><span>Request pending</span><strong>{editingEvent.pendingChangeRequest ? shiftChangeRequestLabel(editingEvent.pendingChangeRequest.requestType) : "HFY review requested"}</strong><small>No schedule or Assignment changes have been made. HFY will review this request.</small></div></div> : shiftChangeRequestDraft ? <>
+      <div className="field"><label>Request type</label><select value={shiftChangeRequestDraft.requestType} onChange={(event) => { setShiftChangeRequestDraft({ ...shiftChangeRequestDraft, requestType: event.target.value as ShiftChangeRequestType }); setEditState(initialActionState); }}><option value="change_time">Change time</option><option value="cancel_occurrence">Cancel this occurrence</option><option value="delete_permanent">Delete permanently</option></select></div>
+      {shiftChangeRequestDraft.requestType === "change_time" ? <div className="quick-inline-time-fields"><div className="field"><label>Proposed start</label><TimeSelect ariaLabel={`${editingEvent.title} proposed start time`} value={shiftChangeRequestDraft.start} onChange={(start) => { setShiftChangeRequestDraft({ ...shiftChangeRequestDraft, start }); setEditState(initialActionState); }} stepMinutes={15} required /></div><div className="field"><label>Proposed end</label><TimeSelect ariaLabel={`${editingEvent.title} proposed end time`} value={shiftChangeRequestDraft.end} onChange={(end) => { setShiftChangeRequestDraft({ ...shiftChangeRequestDraft, end }); setEditState(initialActionState); }} stepMinutes={15} required /></div></div> : null}
+      <div className="field"><label>Why are you requesting this?</label><textarea value={shiftChangeRequestDraft.managerNote} maxLength={2000} onChange={(event) => { setShiftChangeRequestDraft({ ...shiftChangeRequestDraft, managerNote: event.target.value }); setEditState(initialActionState); }} placeholder="Give HFY the context needed to review this request" required /></div>
+      <div className="replacement-actions"><button className="button secondary" type="button" disabled={editPending} onClick={() => { setShiftChangeRequestDraft(null); setEditState(initialActionState); }}>Cancel</button><button className="button" type="button" disabled={editPending || !shiftChangeRequestDraft.managerNote.trim() || (shiftChangeRequestDraft.requestType === "change_time" && (!shiftChangeRequestDraft.start || !shiftChangeRequestDraft.end))} onClick={submitShiftChangeRequest}>{editPending ? "Submitting…" : "Submit Request"}</button></div>
+    </> : null}
+  </section> : null;
+  const shiftTimeEditor = canEditOwnerShiftTime && editingEvent ? <section className="shift-time-editor">
+    <div className="shift-time-editor-heading"><div><span>Owner action</span><strong>Edit Shift Time</strong><small>This changes only {editingEvent.date}; the parent Daypart stays unchanged.</small></div>{shiftTimeEditDraft ? <button type="button" onClick={() => { setShiftTimeEditDraft(null); setEditState(initialActionState); }}>Cancel</button> : <button className="button secondary" type="button" disabled={editPending} onClick={() => { setShiftTimeEditDraft({ start: minuteToClock(editingEvent.shiftStartMinute), end: minuteToClock(editingEvent.shiftEndMinute), preview: null }); setEditState(initialActionState); }}>Edit Shift Time</button>}</div>
+    {shiftTimeEditDraft ? <>
+      <div className="quick-inline-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel={`${editingEvent.title} new Shift start time`} value={shiftTimeEditDraft.start} onChange={(start) => { setShiftTimeEditDraft({ ...shiftTimeEditDraft, start, preview: null }); setEditState(initialActionState); }} stepMinutes={15} required /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel={`${editingEvent.title} new Shift end time`} value={shiftTimeEditDraft.end} onChange={(end) => { setShiftTimeEditDraft({ ...shiftTimeEditDraft, end, preview: null }); setEditState(initialActionState); }} stepMinutes={15} required /></div></div>
+      {shiftTimeEditDraft.preview ? <div className="shift-time-confirmation">
+        <div className="shift-time-confirmation-heading"><span>Confirm recalculation</span><strong>Review totals before saving</strong></div>
+        <div className="shift-time-total-grid"><div><span>Client billed total</span><strong><PrivateValue>{formatMoney(shiftTimeEditDraft.preview.oldClientBilledTotalCents)}</PrivateValue> → <PrivateValue>{formatMoney(shiftTimeEditDraft.preview.newClientBilledTotalCents)}</PrivateValue></strong></div><div><span>Talent compensation</span><strong><PrivateValue>{formatMoney(shiftTimeEditDraft.preview.oldTalentCompensationTotalCents)}</PrivateValue> → <PrivateValue>{formatMoney(shiftTimeEditDraft.preview.newTalentCompensationTotalCents)}</PrivateValue></strong></div></div>
+        <p>{shiftTimeEditDraft.preview.assignmentCount
+          ? shiftTimeEditDraft.preview.adjustedAssignmentCount
+            ? `${shiftTimeEditDraft.preview.adjustedAssignmentCount} of ${shiftTimeEditDraft.preview.assignmentCount} Assignment windows will be clamped to the new Shift window. Stored rates stay unchanged.`
+            : `All ${shiftTimeEditDraft.preview.assignmentCount} Assignment windows already fit. Stored rates stay unchanged.`
+          : "This Shift has no Assignments. The saved client rate will be applied to the new duration."}</p>
+        <div className="replacement-actions"><button className="button secondary" type="button" disabled={editPending} onClick={() => setShiftTimeEditDraft({ ...shiftTimeEditDraft, preview: null })}>Change times</button><button className="button" type="button" disabled={editPending} onClick={saveShiftTimeChange}>{editPending ? "Saving…" : "Confirm & Save"}</button></div>
+      </div> : <div className="replacement-actions"><span className="privacy-note">Assignments that partially overlap will be clamped; non-overlapping Assignments require manual handling.</span><button className="button" type="button" disabled={editPending} onClick={reviewShiftTimeChange}>{editPending ? "Calculating…" : "Review recalculation"}</button></div>}
+      {editState.status === "error" ? <p className="error" aria-live="polite">{editState.message}</p> : null}
+    </> : null}
+  </section> : null;
   const oneTimeRecordEditor = canEditOneTimeRecord && editingEvent && oneTimeEditDraft ? <section className="one-time-record-editor">
-    <SchedulingActivityDetailsRow name={oneTimeEditDraft.name} roomId={oneTimeEditDraft.roomId} room={oneTimeEditDraft.room} createRoom={oneTimeEditDraft.createRoom} rooms={availableRooms} color={oneTimeEditDraft.color} start={oneTimeEditDraft.start} end={oneTimeEditDraft.end} ariaPrefix="scheduled activity" onNameChange={(name) => setOneTimeEditDraft({ ...oneTimeEditDraft, name })} onRoomChange={(roomName) => setOneTimeEditDraft({ ...oneTimeEditDraft, roomId: null, room: roomName, createRoom: false })} onRoomSelect={(room) => setOneTimeEditDraft({ ...oneTimeEditDraft, roomId: room.id, room: room.name, roomHue: room.hue, createRoom: false })} onRoomCreate={(roomName) => setOneTimeEditDraft({ ...oneTimeEditDraft, roomId: null, room: roomName, roomHue: defaultNewRoomHue, createRoom: true })} onColorChange={(color) => setOneTimeEditDraft({ ...oneTimeEditDraft, color })} onStartChange={(start) => setOneTimeEditDraft({ ...oneTimeEditDraft, start })} onEndChange={(end) => setOneTimeEditDraft({ ...oneTimeEditDraft, end })} />
+    <SchedulingActivityDetailsRow name={oneTimeEditDraft.name} roomId={oneTimeEditDraft.roomId} room={oneTimeEditDraft.room} createRoom={oneTimeEditDraft.createRoom} rooms={availableRooms} color={oneTimeEditDraft.color} start={oneTimeEditDraft.start} end={oneTimeEditDraft.end} ariaPrefix="scheduled activity" timeDisabled={editingEvent.recordType === "financial_shift" && !previewMode} onNameChange={(name) => setOneTimeEditDraft({ ...oneTimeEditDraft, name })} onRoomChange={(roomName) => setOneTimeEditDraft({ ...oneTimeEditDraft, roomId: null, room: roomName, createRoom: false })} onRoomSelect={(room) => setOneTimeEditDraft({ ...oneTimeEditDraft, roomId: room.id, room: room.name, roomHue: room.hue, createRoom: false })} onRoomCreate={(roomName) => setOneTimeEditDraft({ ...oneTimeEditDraft, roomId: null, room: roomName, roomHue: defaultNewRoomHue, createRoom: true })} onColorChange={(color) => setOneTimeEditDraft({ ...oneTimeEditDraft, color })} onStartChange={(start) => setOneTimeEditDraft({ ...oneTimeEditDraft, start })} onEndChange={(end) => setOneTimeEditDraft({ ...oneTimeEditDraft, end })} />
     {oneTimeEditDraft.createRoom ? <div className="field one-time-new-room-color"><label>New room color</label><RoomHuePicker value={oneTimeEditDraft.roomHue} onChange={(roomHue) => setOneTimeEditDraft({ ...oneTimeEditDraft, roomHue })} ariaLabel={`Choose the room color for ${oneTimeEditDraft.room}`} /><small>The next automatic color is preselected. Pick another before saving this new room.</small></div> : null}
     {editingEvent.daypartType === "dj_artist" && editingEvent.economicsMode === "client_owned" ? <div className="one-time-session-rate"><div><strong>Session artist rate</strong><small>Optional here. A blank rate stays flagged on the artist’s booking until a manager adds it in Artist Lookup.</small></div><div className="field"><label>Hourly rate ($/hr) <span>Optional now</span></label><input type="number" min="0.01" step="0.01" value={oneTimeEditDraft.clientTalentDefaultRate} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, clientTalentDefaultRate: event.target.value })} placeholder="Add now or later" /></div></div> : null}
     {editingEvent.daypartType === "house_activity" ? <div className="quick-program-fields"><div className="field"><label>Program / activity details <span>optional</span></label><input value={oneTimeEditDraft.programDetails} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, programDetails: event.target.value })} /></div><div className="field"><label>Host / guest name <span>optional</span></label><input value={oneTimeEditDraft.manualHostName} onChange={(event) => setOneTimeEditDraft({ ...oneTimeEditDraft, manualHostName: event.target.value })} /></div></div> : null}
@@ -1275,6 +1410,8 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
               <footer className="quick-modal-footer">{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button> : <button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingOccurrence}>Delete activity</button>}<span>{editingEvent.daypartId ? datedRemovalHelp : "One-time activity"}</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
             </> : <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
+              {shiftTimeEditor}
+              {managerShiftRequestControl}
               {!editingEvent.daypartId && editingEvent.economicsMode !== "hfy_request" ? oneTimeRecordEditor : null}
               {editingEvent.programDetails || editingEvent.manualHostName ? <div className="quick-program-fields">{editingEvent.programDetails ? <div><span>Program / activity</span><strong>{editingEvent.programDetails}</strong></div> : null}{editingEvent.manualHostName ? <div><span>Host / guest</span><strong>{editingEvent.manualHostName}</strong></div> : null}</div> : null}
               {pendingHfyRequest && editingEvent.hfyRequestId ? <section className="replacement-editor new-assignment-editor hfy-request-calendar-editor"><div className="replacement-step"><span>1</span><div><strong>Schedule the requested shift</strong><small>Choose one artist or split the full service window. Residency rates apply automatically.</small></div></div><HfyRequestFulfillment requestId={editingEvent.hfyRequestId} shiftName={editingEvent.title} shiftStartMinute={editingEvent.shiftStartMinute} shiftEndMinute={editingEvent.shiftEndMinute} artists={requestTalent.map((artist) => ({ id: artist.id, stageName: artist.stageName, homeMarket: artist.homeMarket }))} ratesConfigured={residencyTalentRateConfigured && residency.clientHourlyRateCents > 0} onSuccess={() => { setModal(null); router.refresh(); }} /></section> : editingEventCanManageAssignments ? <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours{previewMode ? "." : " because those hours determine pay."}</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft) || (!previewMode && !residencyTalentRateConfigured)} onClick={startAddingAssignment}>+ Add another DJ</button></div> : <div className="request-hfy-selection"><div><span>{editingEvent.economicsMode === "hfy_request" ? "Pending request" : editingEvent.economicsMode === "client_owned" ? "Client-managed slot" : "HFY-managed slot"}</span><strong>{editingEvent.economicsMode === "hfy_request" ? "Request HFY is awaiting fulfillment" : "This slot is read-only here"}</strong><small>{editingEvent.economicsMode === "client_owned" ? "The client controls its artist assignments and private rates." : previewMode ? "HFY controls staffing and both HFY rates. Your Invoice will show the resulting billed total." : "This slot is not editable here."}</small></div></div>}
@@ -1307,7 +1444,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
               {editState.status !== "idle" ? <p className={editState.status === "error" ? "error" : "success"} aria-live="polite">{editState.message}</p> : null}
               {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
               {!editingEvent.assignments.length ? <div className="empty quick-empty">This Shift has no Assignment slots to edit.</div> : null}
-              <footer className="quick-modal-footer">{pendingHfyRequest ? <span>Pending Request HFY for {editingEvent.date}.</span> : editingEventCanManageAssignments ? <><button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingShift}>Delete Shift</button>{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button> : null}<span>{editingEvent.daypartId ? datedRemovalHelp : "Deletion is blocked once financial history is finalized."}</span></> : fullProgramming && previewMode && editingEvent.daypartId ? <><button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button><span>{editingReusableTemplate ? datedRemovalHelp : `HFY will remove staffing for this date; ${datedRemovalHelp}`}</span></> : previewMode && !fullProgramming && editingEvent.economicsMode === "hfy_request" ? <><button className="button danger-button" type="button" disabled={editPending} onClick={cancelSelectedHfyRequest}>{editPending ? "Cancelling…" : "Cancel Request HFY"}</button><span>Only {editingEvent.date} will return to Client Managed.</span></> : <span>{fullProgramming && previewMode ? "HFY manages talent staffing for this activity." : "Ownership controls are enforced for this slot."}</span>}<button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
+              <footer className="quick-modal-footer">{pendingHfyRequest ? <span>Pending Request HFY for {editingEvent.date}.</span> : managerHfyShiftLocked ? <span>{canManage ? pendingShiftChangeRequest ? "HFY review is pending; the Shift remains unchanged." : "Use Submit Request above to ask HFY for a change." : "HFY manages changes to this Shift."}</span> : editingEventCanManageAssignments ? <><button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingShift}>Delete Shift</button>{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button> : null}<span>{editingEvent.daypartId ? datedRemovalHelp : "Deletion is blocked once financial history is finalized."}</span></> : fullProgramming && previewMode && editingEvent.daypartId ? <><button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button><span>{editingReusableTemplate ? datedRemovalHelp : `HFY will remove staffing for this date; ${datedRemovalHelp}`}</span></> : previewMode && !fullProgramming && editingEvent.economicsMode === "hfy_request" ? <><button className="button danger-button" type="button" disabled={editPending} onClick={cancelSelectedHfyRequest}>{editPending ? "Cancelling…" : "Cancel Request HFY"}</button><span>Only {editingEvent.date} will return to Client Managed.</span></> : <span>{fullProgramming && previewMode ? "HFY manages talent staffing for this activity." : "Ownership controls are enforced for this slot."}</span>}<button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
             </> : <div className="empty quick-empty">This slot is no longer available.</div>}
           </div>
         </section>

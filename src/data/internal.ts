@@ -22,6 +22,7 @@ import {
   platformSubscriptions,
   scheduleOccurrences,
   scheduleOccurrenceTalent,
+  shiftChangeRequests,
   users,
 } from "@/db/schema";
 import {
@@ -221,6 +222,63 @@ export async function getPendingHfyTalentRequests() {
   };
 }
 
+export const getPendingShiftChangeRequests = cache(async function getPendingShiftChangeRequests() {
+  const database = getDb();
+  const requests = await database.select({
+    id: shiftChangeRequests.id,
+    shiftId: shifts.id,
+    residencyId: shiftChangeRequests.residencyId,
+    residencyName: residencies.name,
+    residencyTimezone: residencies.timezone,
+    shiftName: shifts.name,
+    serviceDate: shifts.serviceDate,
+    room: shifts.room,
+    startsAt: shifts.startsAt,
+    endsAt: shifts.endsAt,
+    requestType: shiftChangeRequests.requestType,
+    managerNote: shiftChangeRequests.managerNote,
+    proposedStartAt: shiftChangeRequests.proposedStartAt,
+    proposedEndAt: shiftChangeRequests.proposedEndAt,
+    requestedByName: users.displayName,
+    requestedByEmail: users.email,
+    createdAt: shiftChangeRequests.createdAt,
+  }).from(shiftChangeRequests)
+    .innerJoin(shifts, eq(shiftChangeRequests.shiftId, shifts.id))
+    .innerJoin(residencies, eq(shiftChangeRequests.residencyId, residencies.id))
+    .innerJoin(users, eq(shiftChangeRequests.requestedBy, users.id))
+    .where(eq(shiftChangeRequests.status, "pending"))
+    .orderBy(asc(shiftChangeRequests.createdAt));
+  const assignmentRows = requests.length ? await database.select({
+    shiftId: assignments.shiftId,
+    talentName: talent.stageName,
+    guestName: assignments.guestName,
+    bookingStatus: assignments.bookingStatus,
+  }).from(assignments)
+    .leftJoin(talent, eq(assignments.talentId, talent.id))
+    .where(inArray(assignments.shiftId, requests.map((request) => request.shiftId)))
+    .orderBy(asc(assignments.startsAt)) : [];
+
+  return requests.map((request) => ({
+    ...request,
+    startsAt: request.startsAt.toISOString(),
+    endsAt: request.endsAt.toISOString(),
+    proposedStartAt: request.proposedStartAt?.toISOString() ?? null,
+    proposedEndAt: request.proposedEndAt?.toISOString() ?? null,
+    createdAt: request.createdAt.toISOString(),
+    talentNames: assignmentRows
+      .filter((assignment) => assignment.shiftId === request.shiftId && assignment.bookingStatus !== "cancelled")
+      .map((assignment) => assignment.talentName || assignment.guestName)
+      .filter((name): name is string => Boolean(name)),
+  }));
+});
+
+export async function getPendingShiftChangeRequestCount() {
+  const [result] = await getDb().select({
+    pendingCount: sql<number>`count(*)`,
+  }).from(shiftChangeRequests).where(eq(shiftChangeRequests.status, "pending"));
+  return Number(result?.pendingCount ?? 0);
+}
+
 export type ManagedPublicCalendarLink = {
   id: string;
   name: string;
@@ -361,8 +419,8 @@ export async function getCalendarData(residencyId?: string, range?: { from: stri
     .orderBy(asc(shifts.startsAt));
 
   const shiftIds = shiftRows.map((shift) => shift.id);
-  const assignmentRows = shiftIds.length
-    ? await database.select({
+  const [assignmentRows, pendingRequestRows] = shiftIds.length
+    ? await Promise.all([database.select({
       id: assignments.id,
       shiftId: assignments.shiftId,
       talentId: assignments.talentId,
@@ -381,12 +439,34 @@ export async function getCalendarData(residencyId?: string, range?: { from: stri
     }).from(assignments)
       .leftJoin(talent, eq(assignments.talentId, talent.id))
       .where(inArray(assignments.shiftId, shiftIds))
-      .orderBy(asc(assignments.startsAt))
-    : [];
+      .orderBy(asc(assignments.startsAt)), database.select({
+        id: shiftChangeRequests.id,
+        shiftId: shiftChangeRequests.shiftId,
+        requestType: shiftChangeRequests.requestType,
+        createdAt: shiftChangeRequests.createdAt,
+      }).from(shiftChangeRequests)
+        .where(and(
+          inArray(shiftChangeRequests.shiftId, shiftIds),
+          eq(shiftChangeRequests.status, "pending"),
+        ))
+        .orderBy(desc(shiftChangeRequests.createdAt))])
+    : [[], []];
+
+  const pendingRequestByShift = new Map<string, (typeof pendingRequestRows)[number]>();
+  for (const request of pendingRequestRows) {
+    if (request.shiftId && !pendingRequestByShift.has(request.shiftId)) pendingRequestByShift.set(request.shiftId, request);
+  }
 
   return shiftRows.map((shift) => ({
     ...shift,
     assignments: assignmentRows.filter((assignment) => assignment.shiftId === shift.id),
+    pendingChangeRequest: pendingRequestByShift.has(shift.id)
+      ? {
+        id: pendingRequestByShift.get(shift.id)!.id,
+        requestType: pendingRequestByShift.get(shift.id)!.requestType,
+        createdAt: pendingRequestByShift.get(shift.id)!.createdAt.toISOString(),
+      }
+      : null,
   }));
 }
 
