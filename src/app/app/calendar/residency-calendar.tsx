@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState, type CSSProperties, type RefObject } from "react";
-import { addCalendarAssignmentAction, addScheduleOccurrenceTalentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, createResidencyRoomAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, previewShiftTimeEditAction, removeCalendarAssignmentAction, requestHfyForScheduleOccurrenceAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, submitShiftChangeRequestAction, updateDaypartOccurrenceAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, updateShiftTimeAction, type CreateRoomActionState, type ResidencyActionState, type ShiftTimeEditPreview } from "@/app/app/actions";
+import { addCalendarAssignmentAction, addClientManagedOccurrenceAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, createResidencyRoomAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, previewShiftTimeEditAction, removeCalendarAssignmentAction, requestHfyForScheduleOccurrenceAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, submitShiftChangeRequestAction, updateDaypartOccurrenceAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, updateShiftTimeAction, type CreateRoomActionState, type ResidencyActionState, type ShiftTimeEditPreview } from "@/app/app/actions";
 import { HfyRequestFulfillment } from "@/app/app/hfy-request-fulfillment";
 import { createClientOwnedArtistAction } from "@/app/residency/actions";
 import { ArtistSearchPicker, type CreateArtistResult } from "@/components/artist-search-picker";
@@ -880,14 +880,12 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     formData.set("talentId", newAssignmentDraft.talentId);
     formData.set("startsAtMinute", String(window.startMinute));
     formData.set("endsAtMinute", String(window.endMinute));
-    if (!materializedTrackingTalentOccurrence) {
-      formData.set("compensationType", newAssignmentDraft.compensationType);
-      formData.set("talentRateOverride", newAssignmentDraft.rateOverride);
-      formData.set("fixedFee", newAssignmentDraft.fixedFee);
-    }
+    formData.set("compensationType", newAssignmentDraft.compensationType);
+    formData.set("talentRateOverride", newAssignmentDraft.rateOverride);
+    formData.set("fixedFee", newAssignmentDraft.fixedFee);
     setEditPending(true);
     const result = materializedTrackingTalentOccurrence
-      ? await addScheduleOccurrenceTalentAction(formData)
+      ? await addClientManagedOccurrenceAssignmentAction(formData)
       : await addCalendarAssignmentAction(formData);
     setEditPending(false);
     setEditState(result);
@@ -1312,11 +1310,11 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
   const materializedOccurrenceTalentEditor = materializedTrackingTalentOccurrence && editingEvent ? <section className="one-time-record-editor materialized-occurrence-talent-editor">
     <div className="quick-assignment-heading"><div><strong>{editingEvent.assignments.length ? "Your artists" : "Choose who handles this date"}</strong><small>Add one of your own registered artists, or ask HFY to staff this entire date.</small></div></div>
     {!editingEvent.assignments.length && !newAssignmentDraft ? <div className="client-assignment-choices equal-options">
-      <ArtistSearchPicker key={`existing-occurrence-${editingEvent.id}-${artistPickerKey}`} artists={artistOptions} excludedIds={[]} label="Add your own artist" initiallyOpen={false} collapsedEyebrow="Client Managed" collapsedDescription="Choose one of your Residency’s artists without creating billing or payout records." onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={(talentId) => startAddingAssignment(talentId)} />
+      <ArtistSearchPicker key={`existing-occurrence-${editingEvent.id}-${artistPickerKey}`} artists={artistOptions} excludedIds={[]} label="Add your own artist" initiallyOpen={false} collapsedEyebrow="Client Managed" collapsedDescription="Choose one of your Residency’s artists and track the amount owed in Finances." onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={(talentId) => startAddingAssignment(talentId)} />
       <button className="request-hfy-option" type="button" disabled={editPending} onClick={requestHfyForExistingOccurrence}><span>HFY system option</span><strong>Request HFY</strong><small>Send this entire date to HFY without choosing an artist or seeing HFY rates.</small></button>
     </div> : !newAssignmentDraft ? <ArtistSearchPicker key={`existing-occurrence-additional-${editingEvent.id}-${artistPickerKey}`} artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} label="Add another registered artist" onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={(talentId) => startAddingAssignment(talentId)} /> : null}
     {newAssignmentDraft ? <section className="replacement-editor new-assignment-editor">
-      <div className="replacement-step"><span>1</span><div><strong>Selected artist</strong><small>This remains a Tracking-only occurrence with no financial records.</small></div></div>
+      <div className="replacement-step"><span>1</span><div><strong>Selected artist</strong><small>This creates a Client Managed Assignment and tracks the artist rate in Finances.</small></div></div>
       <div className="replacement-selected"><div><span>Registered artist</span><strong>{newOccurrenceTalent?.stageName}</strong></div><button type="button" onClick={() => setNewAssignmentDraft(null)}>Choose someone else</button></div>
       <div className="replacement-step"><span>2</span><div><strong>Set their hours</strong><small>The artist’s time must remain inside this occurrence.</small></div></div>
       <div className="quick-dj-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel="Occurrence artist start time" value={newAssignmentDraft.start} onChange={(value) => setNewAssignmentDraft({ ...newAssignmentDraft, start: value })} stepMinutes={15} /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel="Occurrence artist end time" value={newAssignmentDraft.end} onChange={(value) => setNewAssignmentDraft({ ...newAssignmentDraft, end: value })} stepMinutes={15} /></div></div>
