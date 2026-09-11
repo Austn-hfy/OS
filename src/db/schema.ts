@@ -153,6 +153,7 @@ export const residencies = pgTable("residencies", {
   billingContactEmail: text("billing_contact_email").notNull().default(""),
   billingContactName: text("billing_contact_name").notNull().default(""),
   billingAddress: text("billing_address").notNull().default(""),
+  liveBillingApproved: boolean("live_billing_approved").notNull().default(false),
   invoicePrefix: text("invoice_prefix").notNull(),
   autoSendInvoices: boolean("auto_send_invoices").notNull().default(false),
   autoSendReason: text("auto_send_reason").notNull().default(""),

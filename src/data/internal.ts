@@ -882,6 +882,7 @@ export async function getSetupData() {
       timezone: residencies.timezone,
       tier: residencies.tier,
       active: residencies.active,
+      liveBillingApproved: residencies.liveBillingApproved,
       internalNotes: residencies.internalNotes,
     }).from(residencies).where(eq(residencies.operatingMode, "operations")).orderBy(desc(residencies.active), asc(residencies.name)),
     database.select({

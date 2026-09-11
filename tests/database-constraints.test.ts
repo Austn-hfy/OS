@@ -25,6 +25,7 @@ const ids = {
   hfyRequest: "00000000-0000-4000-8000-000000000074",
   platformSubscription: "00000000-0000-4000-8000-000000000080",
   platformInvoice: "00000000-0000-4000-8000-000000000081",
+  liveBillingDefaultResidency: "00000000-0000-4000-8000-000000000088",
   finalizedMonthlyInvoice: "00000000-0000-4000-8000-000000000082",
   laterMonthlyInvoice: "00000000-0000-4000-8000-000000000083",
   talentAdjustment: "00000000-0000-4000-8000-000000000084",
@@ -77,6 +78,7 @@ beforeAll(async () => {
   const crossEnvironmentAccessLog = await readFile(new URL("../drizzle/0039_cross_environment_access_log.sql", import.meta.url), "utf8");
   const persistentCalendarLinks = await readFile(new URL("../drizzle/0041_cheerful_meteorite.sql", import.meta.url), "utf8");
   const platformBillingSystem = await readFile(new URL("../drizzle/0042_platform_billing_system.sql", import.meta.url), "utf8");
+  const liveBillingSafetySwitch = await readFile(new URL("../drizzle/0043_live_billing_safety_switch.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -163,6 +165,7 @@ beforeAll(async () => {
   await database.exec(crossEnvironmentAccessLog.replaceAll("--> statement-breakpoint", ""));
   await database.exec(persistentCalendarLinks.replaceAll("--> statement-breakpoint", ""));
   await database.exec(platformBillingSystem.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(liveBillingSafetySwitch.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -170,6 +173,20 @@ afterAll(async () => {
 });
 
 describe("database replacements for Airtable audit formulas", () => {
+  it("defaults live billing to off for existing and new Residencies", async () => {
+    const existing = await database.query<{ live_billing_approved: boolean }>(`
+      SELECT live_billing_approved FROM residencies WHERE id = '${ids.residencyA}';
+    `);
+    expect(existing.rows[0].live_billing_approved).toBe(false);
+
+    const inserted = await database.query<{ live_billing_approved: boolean }>(`
+      INSERT INTO residencies (id, client_account_id, slug, name, invoice_prefix)
+      VALUES ('${ids.liveBillingDefaultResidency}', '${ids.clientA}', 'live-billing-default', 'Live Billing Default', 'LBD')
+      RETURNING live_billing_approved;
+    `);
+    expect(inserted.rows[0].live_billing_approved).toBe(false);
+  });
+
   it("backfills persistent rooms, references, and deterministic room shades", async () => {
     const rooms = await database.query<{ name: string; hue: string; sort_order: number }>(`
       SELECT name, hue, sort_order FROM rooms WHERE residency_id = '${ids.residencyA}' ORDER BY sort_order;

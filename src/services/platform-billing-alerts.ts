@@ -6,22 +6,15 @@ import {
   attentionItems,
   platformBillingAlerts,
   platformOverageEvents,
-  platformSettings,
   platformSubscriptions,
   residencies,
 } from "@/db/schema";
 import { requiredEnv } from "@/lib/env";
 import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
-import { sendEmail } from "@/services/outbound-email";
+import { getOwnerBillingEmail, sendPlatformBillingEmail } from "@/services/platform-billing-email";
 
 function escapeHtml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
-}
-
-async function ownerBillingEmail() {
-  if (process.env.PLATFORM_BILLING_OWNER_EMAIL?.trim()) return process.env.PLATFORM_BILLING_OWNER_EMAIL.trim();
-  const [settings] = await getDb().select({ billingEmail: platformSettings.billingEmail }).from(platformSettings).limit(1);
-  return settings?.billingEmail || process.env.INVOICE_REPLY_TO || "billing@hearforyou.group";
 }
 
 export async function queuePlatformPaymentFailedAlerts(input: {
@@ -40,7 +33,7 @@ export async function queuePlatformPaymentFailedAlerts(input: {
     .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
     .where(eq(platformSubscriptions.id, input.platformSubscriptionId)).limit(1);
   if (!record) return [];
-  const ownerEmail = await ownerBillingEmail();
+  const ownerEmail = await getOwnerBillingEmail();
   const hotelEmail = record.billingContactEmail || record.primaryContactEmail;
   const recipients = [
     { audience: "owner" as const, email: ownerEmail },
@@ -110,7 +103,7 @@ export async function queueMonthlyOverageHeadsUps(at = new Date(), force = false
     lte(platformOverageEvents.periodStart, today),
   ));
   if (!events.length) return [];
-  const ownerEmail = await ownerBillingEmail();
+  const ownerEmail = await getOwnerBillingEmail();
   const queued: string[] = [];
   const monthlyByPlan = new Map<string, typeof events>();
   for (const event of events) {
@@ -167,6 +160,7 @@ export async function sendPendingPlatformBillingAlerts(limit = 25, alertIds?: st
     audience: platformBillingAlerts.audience,
     recipientEmail: platformBillingAlerts.recipientEmail,
     idempotencyKey: platformBillingAlerts.idempotencyKey,
+    residencyId: platformBillingAlerts.residencyId,
     residencyName: residencies.name,
   }).from(platformBillingAlerts)
     .innerJoin(residencies, eq(platformBillingAlerts.residencyId, residencies.id))
@@ -180,13 +174,19 @@ export async function sendPendingPlatformBillingAlerts(limit = 25, alertIds?: st
     const attemptedAt = new Date();
     try {
       const content = alertContent(alert);
-      const result = await sendEmail({
-        from: process.env.PLATFORM_BILLING_FROM_EMAIL || requiredEnv("INVOICE_FROM_EMAIL"),
-        to: alert.recipientEmail,
-        replyTo: process.env.PLATFORM_BILLING_REPLY_TO || process.env.INVOICE_REPLY_TO || "billing@hearforyou.group",
-        subject: content.subject,
-        html: content.html,
-      }, { idempotencyKey: alert.idempotencyKey });
+      const result = await sendPlatformBillingEmail({
+        residencyId: alert.residencyId,
+        idempotencyKey: alert.idempotencyKey,
+        emailKind: alert.kind,
+        entityId: alert.id,
+        email: {
+          from: process.env.PLATFORM_BILLING_FROM_EMAIL || requiredEnv("INVOICE_FROM_EMAIL"),
+          to: alert.recipientEmail,
+          replyTo: process.env.PLATFORM_BILLING_REPLY_TO || process.env.INVOICE_REPLY_TO || "billing@hearforyou.group",
+          subject: content.subject,
+          html: content.html,
+        },
+      });
       if (result.error) throw new Error(result.error.message);
       await database.update(platformBillingAlerts).set({
         status: "sent",

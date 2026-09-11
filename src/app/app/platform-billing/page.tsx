@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatMoney } from "@/components/format";
 import { WorkspaceSurface } from "@/components/workspace-surface";
 import { getDeveloperResidencyList, getPlatformRevenueDashboard } from "@/data/internal";
+import { LIVE_BILLING_HOLD_MESSAGE } from "@/domain/live-billing";
 import { requireInternalActor } from "@/lib/auth";
 import { CommittedPlanForm } from "./committed-plan-form";
 import { refreshPlatformUsageAction, startPlatformStripeCheckoutAction } from "./actions";
@@ -24,14 +25,15 @@ function UsageMetric({ label, committed, live }: { label: string; committed: num
   return <div className={overBy ? "platform-usage-metric over" : "platform-usage-metric within"}><span>{label}</span><strong>{live} / {committed}</strong><small>{overBy ? `Over by ${overBy}` : `${committed - live} remaining`}</small></div>;
 }
 
-export default async function PlatformBillingPage({ searchParams }: { searchParams: Promise<{ stripe?: string }> }) {
+export default async function PlatformBillingPage({ searchParams }: { searchParams: Promise<{ stripe?: string; liveBilling?: string }> }) {
   await requireInternalActor();
-  const [{ stripe }, residencies, plans] = await Promise.all([searchParams, getDeveloperResidencyList(), getPlatformRevenueDashboard()]);
+  const [{ stripe, liveBilling }, residencies, plans] = await Promise.all([searchParams, getDeveloperResidencyList(), getPlatformRevenueDashboard()]);
   const planByResidency = new Map(plans.map((plan) => [plan.residencyId, plan]));
   const defaults = defaultDates();
 
   return <WorkspaceSurface className="workspace-surface-platform-console">
     <header className="page-header owner-mode-header developer-mode-header"><div><p className="eyebrow">Developer · owner only</p><h1>Platform billing</h1><p className="subhead">Committed Plans determine Stripe billing. Live Usage is comparison-only and overages are logged without charges or access restrictions.</p></div><span className="platform-test-mode-badge">Stripe test mode only</span></header>
+    {liveBilling === "blocked" ? <p className="error" role="alert">{LIVE_BILLING_HOLD_MESSAGE}</p> : null}
     {stripe === "success" ? <p className="success">Stripe Checkout completed. Webhook reconciliation will update the subscription and invoice history.</p> : null}
     {stripe === "cancelled" ? <p className="muted">Stripe Checkout was cancelled. No subscription was created.</p> : null}
     <div className="platform-billing-residencies">

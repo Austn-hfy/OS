@@ -302,6 +302,13 @@
       "when": 1788699600000,
       "tag": "0042_platform_billing_system",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1789052400000,
+      "tag": "0043_live_billing_safety_switch",
+      "breakpoints": true
     }
   ]
 }
