@@ -79,7 +79,9 @@ beforeAll(async () => {
   const persistentCalendarLinks = await readFile(new URL("../drizzle/0041_cheerful_meteorite.sql", import.meta.url), "utf8");
   const platformBillingSystem = await readFile(new URL("../drizzle/0042_platform_billing_system.sql", import.meta.url), "utf8");
   const liveBillingSafetySwitch = await readFile(new URL("../drizzle/0046_live_billing_safety_switch.sql", import.meta.url), "utf8");
+  const platformSubscriptionRevisionSplitRates = await readFile(new URL("../drizzle/0047_platform_subscription_revision_split_rates.sql", import.meta.url), "utf8");
   const foundingClientTracking = await readFile(new URL("../drizzle/0048_founding_client_tracking.sql", import.meta.url), "utf8");
+  const commitmentLadderClawback = await readFile(new URL("../drizzle/0049_commitment_ladder_clawback.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -167,7 +169,9 @@ beforeAll(async () => {
   await database.exec(persistentCalendarLinks.replaceAll("--> statement-breakpoint", ""));
   await database.exec(platformBillingSystem.replaceAll("--> statement-breakpoint", ""));
   await database.exec(liveBillingSafetySwitch.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(platformSubscriptionRevisionSplitRates.replaceAll("--> statement-breakpoint", ""));
   await database.exec(foundingClientTracking.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(commitmentLadderClawback.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -211,6 +215,45 @@ describe("database replacements for Airtable audit formulas", () => {
       RETURNING live_billing_approved;
     `);
     expect(inserted.rows[0].live_billing_approved).toBe(false);
+  });
+
+  it("stores complete commitment terms and Residency-scoped clawbacks", async () => {
+    await database.exec(`
+      INSERT INTO platform_subscriptions
+        (id, residency_id, status, cadence, talent_program_sessions, talent_session_unit_amount_cents, house_programs, house_program_unit_amount_cents)
+      VALUES ('${ids.platformSubscription}', '${ids.residencyA}', 'active', 'monthly', 8, 7000, 3, 6000);
+      UPDATE platform_subscriptions
+      SET commitment_tier = 'six_month', commitment_started_at = '2027-02-01T00:00:00Z', commitment_length_months = 6
+      WHERE id = '${ids.platformSubscription}';
+      INSERT INTO platform_subscription_clawbacks
+        (platform_subscription_id, residency_id, source_revision, source_commitment_tier, source_commitment_started_at,
+         target_commitment_tier, changed_at, talent_sessions_billed, unit_amount_cents, amount_cents)
+      VALUES
+        ('${ids.platformSubscription}', '${ids.residencyA}', 1, 'six_month', '2027-02-01T00:00:00Z',
+         'month_to_month', '2027-04-01T00:00:00Z', 10, 2000, 20000);
+    `);
+    const stored = await database.query<{ commitment_tier: string; commitment_length_months: number; amount_cents: number }>(`
+      SELECT subscription.commitment_tier, subscription.commitment_length_months, clawback.amount_cents
+      FROM platform_subscriptions subscription
+      INNER JOIN platform_subscription_clawbacks clawback ON clawback.platform_subscription_id = subscription.id
+      WHERE subscription.id = '${ids.platformSubscription}';
+    `);
+    expect(stored.rows[0]).toEqual({ commitment_tier: "six_month", commitment_length_months: 6, amount_cents: 20_000 });
+    await expect(database.exec(`
+      UPDATE platform_subscriptions SET commitment_length_months = 12 WHERE id = '${ids.platformSubscription}';
+    `)).rejects.toThrow(/commitment_length_valid/);
+    await expect(database.exec(`
+      UPDATE platform_subscriptions SET house_program_unit_amount_cents = 5000 WHERE id = '${ids.platformSubscription}';
+    `)).rejects.toThrow(/commitment_pricing_valid/);
+    await expect(database.exec(`
+      INSERT INTO platform_subscription_clawbacks
+        (platform_subscription_id, residency_id, source_revision, source_commitment_tier, source_commitment_started_at,
+         target_commitment_tier, changed_at, talent_sessions_billed, unit_amount_cents, amount_cents)
+      VALUES
+        ('${ids.platformSubscription}', '${ids.residencyB}', 1, 'six_month', '2027-02-01T00:00:00Z',
+         'month_to_month', '2027-04-01T00:00:00Z', 10, 2000, 20000);
+    `)).rejects.toThrow(/must match its subscription Residency/);
+    await database.exec(`DELETE FROM platform_subscriptions WHERE id = '${ids.platformSubscription}';`);
   });
 
   it("backfills persistent rooms, references, and deterministic room shades", async () => {

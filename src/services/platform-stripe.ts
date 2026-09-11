@@ -1,11 +1,13 @@
 import "server-only";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, ne } from "drizzle-orm";
 import type Stripe from "stripe";
 import { getDb } from "@/db/client";
 import {
   attentionItems,
   auditLog,
+  platformSubscriptionClawbacks,
+  platformSubscriptionInvoices,
   platformSubscriptionRevisions,
   platformSubscriptions,
   residencies,
@@ -17,10 +19,18 @@ import {
   type PlatformBillingCadence,
 } from "@/domain/platform-billing";
 import {
+  applyCommitmentTier,
+  assertCommitmentTierSelectionAllowed,
+  calculateCommitmentClawback,
+  commitmentTierTerms,
+  type CommitmentTier,
+} from "@/domain/commitment-tier";
+import {
   FOUNDING_CLIENT_UNIT_AMOUNT_CENTS,
   assertFoundingClientEnrollmentEligible,
   enforceFoundingClientPlan,
   foundingClientEndsAt,
+  getFoundingClientState,
 } from "@/domain/founding-client";
 import type { AuditActor, InternalActor } from "@/lib/auth";
 import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
@@ -30,6 +40,7 @@ import { requireResidencyLiveBillingApproval } from "@/services/live-billing-saf
 export type CommittedPlanInput = {
   residencyId: string;
   cadence: PlatformBillingCadence;
+  commitmentTier: CommitmentTier | null;
   talentProgramSessions: number;
   talentSessionUnitAmountCents: number;
   housePrograms: number;
@@ -46,6 +57,56 @@ type UpdateCommittedPlanOptions = {
 };
 
 type CurrentPlan = typeof platformSubscriptions.$inferSelect;
+
+async function billedTalentSessionsDuringTerm(platformSubscriptionId: string, commitmentStartedAt: Date, changedAt: Date) {
+  const rows = await getDb().select({
+    pdfSnapshot: platformSubscriptionInvoices.pdfSnapshot,
+    talentProgramSessions: platformSubscriptionRevisions.talentProgramSessions,
+    cadence: platformSubscriptionRevisions.cadence,
+  }).from(platformSubscriptionInvoices)
+    .leftJoin(platformSubscriptionRevisions, and(
+      eq(platformSubscriptionRevisions.platformSubscriptionId, platformSubscriptionInvoices.platformSubscriptionId),
+      eq(platformSubscriptionRevisions.revision, platformSubscriptionInvoices.planRevision),
+    ))
+    .where(and(
+      eq(platformSubscriptionInvoices.platformSubscriptionId, platformSubscriptionId),
+      ne(platformSubscriptionInvoices.status, "void"),
+      gte(platformSubscriptionInvoices.invoiceDate, commitmentStartedAt.toISOString().slice(0, 10)),
+      lte(platformSubscriptionInvoices.invoiceDate, changedAt.toISOString().slice(0, 10)),
+    ));
+  return rows.reduce((total, row) => {
+    const snapshottedQuantity = row.pdfSnapshot?.lines.find((line) => line.description === "Committed Talent sessions")?.quantity;
+    if (snapshottedQuantity !== undefined) return total + snapshottedQuantity;
+    const cadenceMonths = row.cadence === "annual" ? 12 : row.cadence === "quarterly" ? 3 : 1;
+    return total + ((row.talentProgramSessions ?? 0) * cadenceMonths);
+  }, 0);
+}
+
+export async function queueCommitmentCancellationClawback(plan: CurrentPlan, changedAt = new Date()) {
+  if (!plan.commitmentTier || plan.commitmentTier === "month_to_month" || !plan.commitmentStartedAt) return null;
+  const talentSessionsBilled = await billedTalentSessionsDuringTerm(plan.id, plan.commitmentStartedAt, changedAt);
+  const calculation = calculateCommitmentClawback({
+    currentTier: plan.commitmentTier,
+    nextTier: null,
+    commitmentStartedAt: plan.commitmentStartedAt,
+    changedAt,
+    talentSessionsBilled,
+  });
+  if (calculation.amountCents <= 0) return null;
+  const [created] = await getDb().insert(platformSubscriptionClawbacks).values({
+    platformSubscriptionId: plan.id,
+    residencyId: plan.residencyId,
+    sourceRevision: plan.revision,
+    sourceCommitmentTier: plan.commitmentTier,
+    sourceCommitmentStartedAt: plan.commitmentStartedAt,
+    targetCommitmentTier: null,
+    changedAt,
+    talentSessionsBilled: calculation.talentSessionsBilled,
+    unitAmountCents: calculation.unitAmountCents,
+    amountCents: calculation.amountCents,
+  }).returning();
+  return created ?? null;
+}
 
 function stripeId(value: string | { id: string } | null | undefined) {
   return typeof value === "string" ? value : value?.id ?? null;
@@ -248,18 +309,85 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
     }
   }
   const enrollmentEndsAt = options.enrollFoundingClient ? foundingClientEndsAt(now) : null;
-  const planInput = enforceFoundingClientPlan(input, options.enrollFoundingClient ? {
+  const foundingWindow = options.enrollFoundingClient ? {
     foundingClientSignedAt: now,
     foundingClientEndsAt: enrollmentEndsAt,
-  } : residency, now);
+  } : residency;
+  const foundingState = getFoundingClientState(foundingWindow, now);
 
   const [current] = await database.select().from(platformSubscriptions)
-    .where(eq(platformSubscriptions.residencyId, planInput.residencyId)).limit(1);
+    .where(eq(platformSubscriptions.residencyId, input.residencyId)).limit(1);
+
+  let planInput = enforceFoundingClientPlan(input, foundingWindow, now);
+  let commitmentTier: CommitmentTier | null = null;
+  let commitmentStartedAt: Date | null = null;
+  let commitmentLengthMonths: number | null = null;
+  if (foundingState.active) {
+    if (input.commitmentTier) {
+      throw new Error("A Residency inside its Founding Client window cannot select a commitment tier.");
+    }
+  } else if (foundingState.needsCommitmentTierSelection) {
+    if (!input.commitmentTier) throw new Error("Select a commitment tier for this Residency.");
+    assertCommitmentTierSelectionAllowed(foundingWindow, now);
+    commitmentTier = input.commitmentTier;
+    const terms = commitmentTierTerms(commitmentTier);
+    const sameTier = current?.commitmentTier === commitmentTier
+      && current.commitmentStartedAt
+      && current.commitmentLengthMonths === terms.lengthMonths;
+    commitmentStartedAt = sameTier ? current.commitmentStartedAt : now;
+    commitmentLengthMonths = terms.lengthMonths;
+    planInput = applyCommitmentTier(planInput, commitmentTier);
+  } else if (input.commitmentTier) {
+    throw new Error("Commitment tiers are only available after this Residency's Founding Client window ends.");
+  }
+
+  let clawback: {
+    sourceRevision: number;
+    sourceCommitmentTier: Exclude<CommitmentTier, "month_to_month">;
+    sourceCommitmentStartedAt: Date;
+    targetCommitmentTier: CommitmentTier | null;
+    changedAt: Date;
+    talentSessionsBilled: number;
+    unitAmountCents: number;
+    amountCents: number;
+  } | null = null;
+  if (
+    current
+    && current.commitmentTier
+    && current.commitmentTier !== "month_to_month"
+    && current.commitmentStartedAt
+    && current.commitmentTier !== commitmentTier
+  ) {
+    const talentSessionsBilled = await billedTalentSessionsDuringTerm(current.id, current.commitmentStartedAt, now);
+    const calculation = calculateCommitmentClawback({
+      currentTier: current.commitmentTier,
+      nextTier: commitmentTier,
+      commitmentStartedAt: current.commitmentStartedAt,
+      changedAt: now,
+      talentSessionsBilled,
+    });
+    if (calculation.amountCents > 0) {
+      clawback = {
+        sourceRevision: current.revision,
+        sourceCommitmentTier: current.commitmentTier,
+        sourceCommitmentStartedAt: current.commitmentStartedAt,
+        targetCommitmentTier: commitmentTier,
+        changedAt: now,
+        talentSessionsBilled: calculation.talentSessionsBilled,
+        unitAmountCents: calculation.unitAmountCents,
+        amountCents: calculation.amountCents,
+      };
+    }
+  }
+
   if (!current) {
     return database.transaction(async (tx) => {
       const [created] = await tx.insert(platformSubscriptions).values({
         residencyId: planInput.residencyId,
         cadence: planInput.cadence,
+        commitmentTier,
+        commitmentStartedAt,
+        commitmentLengthMonths,
         revision: 1,
         talentProgramSessions: planInput.talentProgramSessions,
         talentSessionUnitAmountCents: planInput.talentSessionUnitAmountCents,
@@ -275,6 +403,9 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
         residencyId: created.residencyId,
         revision: 1,
         cadence: planInput.cadence,
+        commitmentTier,
+        commitmentStartedAt,
+        commitmentLengthMonths,
         talentProgramSessions: planInput.talentProgramSessions,
         talentSessionUnitAmountCents: planInput.talentSessionUnitAmountCents,
         housePrograms: planInput.housePrograms,
@@ -333,6 +464,9 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
     residencyId: current.residencyId,
     revision,
     cadence: planInput.cadence,
+    commitmentTier,
+    commitmentStartedAt,
+    commitmentLengthMonths,
     talentProgramSessions: planInput.talentProgramSessions,
     talentSessionUnitAmountCents: planInput.talentSessionUnitAmountCents,
     housePrograms: planInput.housePrograms,
@@ -379,6 +513,9 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
   return database.transaction(async (tx) => {
     const [updated] = await tx.update(platformSubscriptions).set({
       cadence: planInput.cadence,
+      commitmentTier,
+      commitmentStartedAt,
+      commitmentLengthMonths,
       revision,
       talentProgramSessions: planInput.talentProgramSessions,
       talentSessionUnitAmountCents: planInput.talentSessionUnitAmountCents,
@@ -422,6 +559,13 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
     }).where(eq(platformSubscriptionRevisions.id, pendingRevision.id));
     await tx.update(attentionItems).set({ status: "resolved", resolvedAt: now })
       .where(and(eq(attentionItems.entityType, "platform_subscription"), eq(attentionItems.entityId, current.id), eq(attentionItems.code, "platform_plan_sync_failed"), eq(attentionItems.status, "open")));
+    if (clawback) {
+      await tx.insert(platformSubscriptionClawbacks).values({
+        platformSubscriptionId: current.id,
+        residencyId: current.residencyId,
+        ...clawback,
+      });
+    }
     await tx.insert(auditLog).values({
       residencyId: planInput.residencyId,
       actorUserId: actor.userId,
@@ -434,6 +578,11 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
         revision,
         changeReason: planInput.changeReason,
         stripeSubscriptionId: current.stripeSubscriptionId,
+        commitmentTier,
+        commitmentStartedAt: commitmentStartedAt?.toISOString() ?? null,
+        commitmentLengthMonths,
+        clawbackAmountCents: clawback?.amountCents ?? 0,
+        clawbackTalentSessions: clawback?.talentSessionsBilled ?? 0,
         stripeUpdateMode: current.stripeSubscriptionId ? current.cadence === planInput.cadence ? "in_place_no_proration" : "same_subscription_scheduled_at_renewal" : "not_connected",
         billingBehavior: "committed_plan_only_no_usage_autobilling",
       },
@@ -467,6 +616,7 @@ export async function enrollFoundingClient(actor: InternalActor, residencyId: st
     await updateCommittedPlan(actor, {
       residencyId,
       cadence: "monthly",
+      commitmentTier: null,
       talentProgramSessions: current.talentProgramSessions,
       talentSessionUnitAmountCents: FOUNDING_CLIENT_UNIT_AMOUNT_CENTS,
       housePrograms: current.housePrograms,

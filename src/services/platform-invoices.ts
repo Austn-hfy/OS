@@ -6,11 +6,13 @@ import { getDb } from "@/db/client";
 import {
   attentionItems,
   platformSettings,
+  platformSubscriptionClawbacks,
   platformSubscriptionInvoices,
   platformSubscriptionRevisions,
   platformSubscriptions,
   residencies,
 } from "@/db/schema";
+import { commitmentTierTerms } from "@/domain/commitment-tier";
 import { createPlatformInvoiceDocumentSnapshot } from "@/domain/platform-invoice-document";
 import { renderHtmlToPdf } from "@/services/invoice-pdf/runtime";
 import { renderPlatformInvoiceHtml } from "@/services/invoice-pdf/platform-template";
@@ -58,6 +60,13 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
     billingEmail: platformSettings.billingEmail,
     billingAddress: platformSettings.billingAddress,
   }).from(platformSettings).limit(1);
+  const clawbacks = await database.select({
+    sourceCommitmentTier: platformSubscriptionClawbacks.sourceCommitmentTier,
+    talentSessionsBilled: platformSubscriptionClawbacks.talentSessionsBilled,
+    unitAmountCents: platformSubscriptionClawbacks.unitAmountCents,
+    amountCents: platformSubscriptionClawbacks.amountCents,
+  }).from(platformSubscriptionClawbacks)
+    .where(eq(platformSubscriptionClawbacks.appliedInvoiceId, source.invoice.id));
   const snapshot = createPlatformInvoiceDocumentSnapshot({
     invoice: {
       id: source.invoice.id,
@@ -92,6 +101,13 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
       houseProgramUnitAmountCents: source.revisionHouseProgramUnitAmountCents ?? source.currentHouseProgramUnitAmountCents,
       oneOffAllowance: source.revisionOneOffAllowance ?? source.currentOneOffAllowance,
     },
+    adjustments: clawbacks.map((clawback) => ({
+      description: `Early termination clawback — ${commitmentTierTerms(clawback.sourceCommitmentTier).label} commitment`,
+      quantity: clawback.talentSessionsBilled,
+      unitAmountCents: clawback.unitAmountCents,
+      amountCents: clawback.amountCents,
+      detail: "Recovery of the commitment discount on Talent sessions already billed",
+    })),
   });
   const pdf = await renderHtmlToPdf(renderPlatformInvoiceHtml(snapshot));
   if (pdf.length <= 0 || pdf.length > MAX_INVOICE_PDF_BYTES || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") {

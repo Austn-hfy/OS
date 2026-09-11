@@ -1819,6 +1819,7 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-founding-state > div, .platform-founding-enrollment > div { display: grid; flex: 1; gap: 3px; }
 .platform-founding-state span:not(.status), .platform-founding-enrollment span { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .platform-founding-state.needs-tier { border-color: #e3b4a7; background: #fff3ee; }
+.platform-founding-state.commitment { border-color: #bed8cf; background: #eff9f5; }
 .platform-founding-state.closed { border-color: var(--line); background: rgba(255,255,255,.62); }
 .platform-founding-enrollment .button { flex: 0 0 auto; }
 .platform-founding-enrollment > p { margin: 0; font-size: 10px; }
@@ -1840,6 +1841,8 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-plan-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .platform-founding-rate-summary { display: grid; align-content: center; gap: 3px; padding: 10px 12px; border: 1px solid #bed8cf; border-radius: 10px; background: #eff9f5; }
 .platform-founding-rate-summary span, .platform-founding-rate-summary small { color: var(--muted); font-size: 9px; }
+.platform-founding-rate-summary.commitment { border-color: #cbdff4; background: #f2f8ff; }
+.platform-commitment-tier-field small { color: var(--muted); font-size: 9px; line-height: 1.4; }
 .platform-plan-reason { grid-column: span 2; }
 .platform-plan-form .privacy-note, .platform-live-comparison .privacy-note { margin: 0; }
 .platform-plan-editor, .platform-plan-history { padding-top: 13px; border-top: 1px solid var(--line); }

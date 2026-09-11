@@ -56,6 +56,7 @@ Subscribe it to:
 - `customer.subscription.deleted`
 - `customer.subscription.paused`
 - `customer.subscription.resumed`
+- `invoice.created`
 - `invoice.finalized`
 - `invoice.payment_failed`
 - `invoice.payment_succeeded`

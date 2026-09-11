@@ -25,7 +25,7 @@ function addressLines(lines: string[]) {
 export function renderPlatformInvoiceHtml(snapshot: PlatformInvoiceDocumentSnapshot) {
   const cadenceLabel = snapshot.committedPlan.cadence === "annual" ? "Annual" : snapshot.committedPlan.cadence === "quarterly" ? "Quarterly" : "Monthly";
   const rows = snapshot.lines.map((line) => `<tr>
-    <td><strong>${escapeHtml(line.description)}</strong><span>${cadenceLabel} committed plan · revision ${snapshot.committedPlan.revision}</span></td>
+    <td><strong>${escapeHtml(line.description)}</strong><span>${escapeHtml(line.detail ?? `${cadenceLabel} committed plan · revision ${snapshot.committedPlan.revision}`)}</span></td>
     <td class="numeric">${line.quantity}</td>
     <td class="numeric">${money(line.unitAmountCents)}</td>
     <td class="numeric amount">${money(line.amountCents)}</td>
