@@ -1,7 +1,7 @@
 import { formatTimeInput } from "@/components/format";
 import { getCalendarData, getPublicCalendarLinkSettings, getScheduleOccurrenceData } from "@/data/internal";
 import { getResidencyClientSafeRoster } from "@/data/residency-client";
-import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
+import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, scheduleOccurrenceScheduling, slotSchedulingStatus } from "@/domain/dayparts";
 import { requireResidencyActor } from "@/lib/auth";
 import { calendarToneForSlot, monthKeyForDate, monthRange, normalizeCalendarView, normalizeMonthKey, normalizeWeekStart, shiftDateKey, weekRange } from "@/lib/calendar";
 import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
@@ -62,14 +62,15 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
   const savedOccurrences: ResidencyEvent[] = occurrences.map((occurrence) => {
     const start = clockToMinute(formatTimeInput(occurrence.startsAt, actor.residencyTimezone));
     const end = resolveEndMinute(start, formatTimeInput(occurrence.endsAt, actor.residencyTimezone));
+    const scheduling = scheduleOccurrenceScheduling(occurrence.type, occurrence.assignments.length > 0);
     return {
       id: occurrence.id, date: occurrence.serviceDate, title: occurrence.name,
-      time: `${formatCompactMinuteRange(start, end)} · Scheduled`,
+      time: `${formatCompactMinuteRange(start, end)} · ${scheduling.label}`,
       residencyName: occurrence.assignments.map((assignment) => assignment.talentName).join(" + ") || occurrence.manualHostName || occurrence.programDetails || "Scheduled activity",
       color: occurrence.color, daypartId: occurrence.daypartId, shiftStartMinute: start, shiftEndMinute: end,
       projected: false, recordType: "nonfinancial_occurrence", daypartType: occurrence.type, billingMode: occurrence.billingMode,
       room: occurrence.room, notes: occurrence.notes, editableColor: occurrence.color,
-      programDetails: occurrence.programDetails, manualHostName: occurrence.manualHostName, schedulingStatus: "filled",
+      programDetails: occurrence.programDetails, manualHostName: occurrence.manualHostName, schedulingStatus: scheduling.schedulingStatus,
       assignments: occurrence.assignments.map((assignment) => ({
         id: assignment.id, talentId: assignment.talentId, talentName: assignment.talentName, guestName: "",
         startsAt: assignment.startsAt.toISOString(), endsAt: assignment.endsAt.toISOString(),
