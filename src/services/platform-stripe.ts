@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type Stripe from "stripe";
 import { getDb } from "@/db/client";
 import {
@@ -16,6 +16,12 @@ import {
   platformCadenceInterval,
   type PlatformBillingCadence,
 } from "@/domain/platform-billing";
+import {
+  FOUNDING_CLIENT_UNIT_AMOUNT_CENTS,
+  assertFoundingClientEnrollmentEligible,
+  enforceFoundingClientPlan,
+  foundingClientEndsAt,
+} from "@/domain/founding-client";
 import type { AuditActor, InternalActor } from "@/lib/auth";
 import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
 import { getStripe, stagingBillingReturnUrl } from "@/lib/stripe";
@@ -32,6 +38,11 @@ export type CommittedPlanInput = {
   startsOn: string;
   renewsOn: string;
   changeReason: string;
+};
+
+type UpdateCommittedPlanOptions = {
+  now?: Date;
+  enrollFoundingClient?: boolean;
 };
 
 type CurrentPlan = typeof platformSubscriptions.$inferSelect;
@@ -219,55 +230,87 @@ async function updateStripeSubscriptionPlan(plan: CurrentPlan, input: CommittedP
   };
 }
 
-export async function updateCommittedPlan(actor: InternalActor, input: CommittedPlanInput) {
+export async function updateCommittedPlan(actor: InternalActor, input: CommittedPlanInput, options: UpdateCommittedPlanOptions = {}) {
   assertCurrentPlatformBillingStaging();
   const database = getDb();
-  const [residency] = await database.select({ id: residencies.id }).from(residencies)
+  const now = options.now ?? new Date();
+  const [residency] = await database.select({
+    id: residencies.id,
+    foundingClientSignedAt: residencies.foundingClientSignedAt,
+    foundingClientEndsAt: residencies.foundingClientEndsAt,
+  }).from(residencies)
     .where(and(eq(residencies.id, input.residencyId), eq(residencies.operatingMode, "operations"))).limit(1);
   if (!residency) throw new Error("Residency not found.");
+  if (options.enrollFoundingClient) {
+    assertFoundingClientEnrollmentEligible(now);
+    if (residency.foundingClientSignedAt || residency.foundingClientEndsAt) {
+      throw new Error("This Residency is already enrolled in the Founding Client program.");
+    }
+  }
+  const enrollmentEndsAt = options.enrollFoundingClient ? foundingClientEndsAt(now) : null;
+  const planInput = enforceFoundingClientPlan(input, options.enrollFoundingClient ? {
+    foundingClientSignedAt: now,
+    foundingClientEndsAt: enrollmentEndsAt,
+  } : residency, now);
 
   const [current] = await database.select().from(platformSubscriptions)
-    .where(eq(platformSubscriptions.residencyId, input.residencyId)).limit(1);
-  const now = new Date();
+    .where(eq(platformSubscriptions.residencyId, planInput.residencyId)).limit(1);
   if (!current) {
     return database.transaction(async (tx) => {
       const [created] = await tx.insert(platformSubscriptions).values({
-        residencyId: input.residencyId,
-        cadence: input.cadence,
+        residencyId: planInput.residencyId,
+        cadence: planInput.cadence,
         revision: 1,
-        talentProgramSessions: input.talentProgramSessions,
-        talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
-        housePrograms: input.housePrograms,
-        houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
-        oneOffAllowance: input.oneOffAllowance,
-        startsOn: input.startsOn,
-        renewsOn: input.renewsOn,
+        talentProgramSessions: planInput.talentProgramSessions,
+        talentSessionUnitAmountCents: planInput.talentSessionUnitAmountCents,
+        housePrograms: planInput.housePrograms,
+        houseProgramUnitAmountCents: planInput.houseProgramUnitAmountCents,
+        oneOffAllowance: planInput.oneOffAllowance,
+        startsOn: planInput.startsOn,
+        renewsOn: planInput.renewsOn,
         updatedByUserId: actor.userId,
       }).returning();
       await tx.insert(platformSubscriptionRevisions).values({
         platformSubscriptionId: created.id,
         residencyId: created.residencyId,
         revision: 1,
-        cadence: input.cadence,
-        talentProgramSessions: input.talentProgramSessions,
-        talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
-        housePrograms: input.housePrograms,
-        houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
-        oneOffAllowance: input.oneOffAllowance,
-        startsOn: input.startsOn,
-        renewsOn: input.renewsOn,
-        changeReason: input.changeReason,
+        cadence: planInput.cadence,
+        talentProgramSessions: planInput.talentProgramSessions,
+        talentSessionUnitAmountCents: planInput.talentSessionUnitAmountCents,
+        housePrograms: planInput.housePrograms,
+        houseProgramUnitAmountCents: planInput.houseProgramUnitAmountCents,
+        oneOffAllowance: planInput.oneOffAllowance,
+        startsOn: planInput.startsOn,
+        renewsOn: planInput.renewsOn,
+        changeReason: planInput.changeReason,
         changedByUserId: actor.userId,
         stripeSyncStatus: "not_connected",
       });
+      if (options.enrollFoundingClient && enrollmentEndsAt) {
+        const [enrolled] = await tx.update(residencies).set({
+          foundingClientSignedAt: now,
+          foundingClientEndsAt: enrollmentEndsAt,
+          updatedAt: now,
+        }).where(and(eq(residencies.id, residency.id), isNull(residencies.foundingClientSignedAt))).returning({ id: residencies.id });
+        if (!enrolled) throw new Error("This Residency was enrolled in the Founding Client program by another request.");
+        await tx.insert(auditLog).values({
+          residencyId: residency.id,
+          actorUserId: actor.userId,
+          actorLabel: actor.email,
+          action: "residency_founding_client_enrolled",
+          entityType: "residency",
+          entityId: residency.id,
+          details: { signedAt: now.toISOString(), endsAt: enrollmentEndsAt.toISOString() },
+        });
+      }
       await tx.insert(auditLog).values({
-        residencyId: input.residencyId,
+        residencyId: planInput.residencyId,
         actorUserId: actor.userId,
         actorLabel: actor.email,
         action: "platform_committed_plan_created",
         entityType: "platform_subscription",
         entityId: created.id,
-        details: { revision: 1, ...input, billingBehavior: "committed_plan_only_no_usage_autobilling" },
+        details: { revision: 1, ...planInput, billingBehavior: "committed_plan_only_no_usage_autobilling" },
       });
       return created;
     });
@@ -289,15 +332,15 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
     platformSubscriptionId: current.id,
     residencyId: current.residencyId,
     revision,
-    cadence: input.cadence,
-    talentProgramSessions: input.talentProgramSessions,
-    talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
-    housePrograms: input.housePrograms,
-    houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
-    oneOffAllowance: input.oneOffAllowance,
-    startsOn: input.startsOn,
-    renewsOn: input.renewsOn,
-    changeReason: input.changeReason,
+    cadence: planInput.cadence,
+    talentProgramSessions: planInput.talentProgramSessions,
+    talentSessionUnitAmountCents: planInput.talentSessionUnitAmountCents,
+    housePrograms: planInput.housePrograms,
+    houseProgramUnitAmountCents: planInput.houseProgramUnitAmountCents,
+    oneOffAllowance: planInput.oneOffAllowance,
+    startsOn: planInput.startsOn,
+    renewsOn: planInput.renewsOn,
+    changeReason: planInput.changeReason,
     changedByUserId: actor.userId,
     stripeSyncStatus: current.stripeSubscriptionId ? "pending" : "not_connected",
   }).returning({ id: platformSubscriptionRevisions.id });
@@ -311,7 +354,7 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
         primaryContactEmail: residencies.primaryContactEmail,
       }).from(residencies).where(eq(residencies.id, current.residencyId)).limit(1);
       const { productId } = await ensureStripeCustomerAndProduct(current, contact);
-      stripeUpdate = await updateStripeSubscriptionPlan(current, input, revision, productId);
+      stripeUpdate = await updateStripeSubscriptionPlan(current, planInput, revision, productId);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Stripe plan update failed.";
@@ -332,17 +375,17 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
     throw error;
   }
 
-  const effectiveRenewsOn = stripeUpdate?.renewsOn ?? input.renewsOn;
+  const effectiveRenewsOn = stripeUpdate?.renewsOn ?? planInput.renewsOn;
   return database.transaction(async (tx) => {
     const [updated] = await tx.update(platformSubscriptions).set({
-      cadence: input.cadence,
+      cadence: planInput.cadence,
       revision,
-      talentProgramSessions: input.talentProgramSessions,
-      talentSessionUnitAmountCents: input.talentSessionUnitAmountCents,
-      housePrograms: input.housePrograms,
-      houseProgramUnitAmountCents: input.houseProgramUnitAmountCents,
-      oneOffAllowance: input.oneOffAllowance,
-      startsOn: input.startsOn,
+      talentProgramSessions: planInput.talentProgramSessions,
+      talentSessionUnitAmountCents: planInput.talentSessionUnitAmountCents,
+      housePrograms: planInput.housePrograms,
+      houseProgramUnitAmountCents: planInput.houseProgramUnitAmountCents,
+      oneOffAllowance: planInput.oneOffAllowance,
+      startsOn: planInput.startsOn,
       renewsOn: effectiveRenewsOn,
       stripeSubscriptionItemId: stripeUpdate?.stripeSubscriptionItemId ?? current.stripeSubscriptionItemId,
       stripePriceId: stripeUpdate?.stripePriceId ?? current.stripePriceId,
@@ -353,6 +396,23 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
       updatedAt: now,
     }).where(and(eq(platformSubscriptions.id, current.id), eq(platformSubscriptions.revision, current.revision))).returning();
     if (!updated) throw new Error("The Committed Plan changed while this update was in progress. Review it before retrying.");
+    if (options.enrollFoundingClient && enrollmentEndsAt) {
+      const [enrolled] = await tx.update(residencies).set({
+        foundingClientSignedAt: now,
+        foundingClientEndsAt: enrollmentEndsAt,
+        updatedAt: now,
+      }).where(and(eq(residencies.id, residency.id), isNull(residencies.foundingClientSignedAt))).returning({ id: residencies.id });
+      if (!enrolled) throw new Error("This Residency was enrolled in the Founding Client program by another request.");
+      await tx.insert(auditLog).values({
+        residencyId: residency.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_founding_client_enrolled",
+        entityType: "residency",
+        entityId: residency.id,
+        details: { signedAt: now.toISOString(), endsAt: enrollmentEndsAt.toISOString() },
+      });
+    }
     await tx.update(platformSubscriptionRevisions).set({
       renewsOn: effectiveRenewsOn,
       stripeSyncStatus: stripeUpdate ? "synced" : "not_connected",
@@ -363,7 +423,7 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
     await tx.update(attentionItems).set({ status: "resolved", resolvedAt: now })
       .where(and(eq(attentionItems.entityType, "platform_subscription"), eq(attentionItems.entityId, current.id), eq(attentionItems.code, "platform_plan_sync_failed"), eq(attentionItems.status, "open")));
     await tx.insert(auditLog).values({
-      residencyId: input.residencyId,
+      residencyId: planInput.residencyId,
       actorUserId: actor.userId,
       actorLabel: actor.email,
       action: "platform_committed_plan_updated",
@@ -372,14 +432,74 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
       details: {
         previousRevision: current.revision,
         revision,
-        changeReason: input.changeReason,
+        changeReason: planInput.changeReason,
         stripeSubscriptionId: current.stripeSubscriptionId,
-        stripeUpdateMode: current.stripeSubscriptionId ? current.cadence === input.cadence ? "in_place_no_proration" : "same_subscription_scheduled_at_renewal" : "not_connected",
+        stripeUpdateMode: current.stripeSubscriptionId ? current.cadence === planInput.cadence ? "in_place_no_proration" : "same_subscription_scheduled_at_renewal" : "not_connected",
         billingBehavior: "committed_plan_only_no_usage_autobilling",
       },
     });
     return updated;
   });
+}
+
+export async function enrollFoundingClient(actor: InternalActor, residencyId: string, options: { now?: Date } = {}) {
+  assertCurrentPlatformBillingStaging();
+  const now = options.now ?? new Date();
+  assertFoundingClientEnrollmentEligible(now);
+  const database = getDb();
+  const [residency] = await database.select({
+    id: residencies.id,
+    foundingClientSignedAt: residencies.foundingClientSignedAt,
+    foundingClientEndsAt: residencies.foundingClientEndsAt,
+  }).from(residencies).where(and(
+    eq(residencies.id, residencyId),
+    eq(residencies.operatingMode, "operations"),
+  )).limit(1);
+  if (!residency) throw new Error("Residency not found.");
+  if (residency.foundingClientSignedAt || residency.foundingClientEndsAt) {
+    throw new Error("This Residency is already enrolled in the Founding Client program.");
+  }
+
+  const [current] = await database.select().from(platformSubscriptions)
+    .where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
+  const endsAt = foundingClientEndsAt(now);
+  if (current) {
+    await updateCommittedPlan(actor, {
+      residencyId,
+      cadence: "monthly",
+      talentProgramSessions: current.talentProgramSessions,
+      talentSessionUnitAmountCents: FOUNDING_CLIENT_UNIT_AMOUNT_CENTS,
+      housePrograms: current.housePrograms,
+      houseProgramUnitAmountCents: FOUNDING_CLIENT_UNIT_AMOUNT_CENTS,
+      oneOffAllowance: current.oneOffAllowance,
+      startsOn: current.startsOn,
+      renewsOn: current.renewsOn,
+      changeReason: "Founding Client enrollment",
+    }, { now, enrollFoundingClient: true });
+  } else {
+    await database.transaction(async (tx) => {
+      const [enrolled] = await tx.update(residencies).set({
+        foundingClientSignedAt: now,
+        foundingClientEndsAt: endsAt,
+        updatedAt: now,
+      }).where(and(
+        eq(residencies.id, residencyId),
+        isNull(residencies.foundingClientSignedAt),
+        isNull(residencies.foundingClientEndsAt),
+      )).returning({ id: residencies.id });
+      if (!enrolled) throw new Error("This Residency was enrolled in the Founding Client program by another request.");
+      await tx.insert(auditLog).values({
+        residencyId,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_founding_client_enrolled",
+        entityType: "residency",
+        entityId: residencyId,
+        details: { signedAt: now.toISOString(), endsAt: endsAt.toISOString() },
+      });
+    });
+  }
+  return { signedAt: now, endsAt };
 }
 
 export async function createPlatformSubscriptionCheckout(actor: AuditActor, residencyId: string) {

@@ -337,6 +337,13 @@
       "when": 1789092501000,
       "tag": "0047_platform_subscription_revision_split_rates",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789095575000,
+      "tag": "0048_founding_client_tracking",
+      "breakpoints": true
     }
   ]
 }

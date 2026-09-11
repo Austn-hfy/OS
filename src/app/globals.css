@@ -1815,6 +1815,13 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-owner-card h2, .platform-live-comparison h2, .platform-plan-breakdown h2, .platform-invoice-history h2 { font-size: 22px; }
 .platform-owner-card header p:not(.eyebrow), .platform-plan-breakdown p, .platform-live-comparison p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
 .platform-owner-statuses, .platform-owner-actions, .platform-card-actions, .platform-invoice-links { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.platform-founding-state, .platform-founding-enrollment { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid #cbdff4; border-radius: 14px; background: #f2f8ff; }
+.platform-founding-state > div, .platform-founding-enrollment > div { display: grid; flex: 1; gap: 3px; }
+.platform-founding-state span:not(.status), .platform-founding-enrollment span { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.platform-founding-state.needs-tier { border-color: #e3b4a7; background: #fff3ee; }
+.platform-founding-state.closed { border-color: var(--line); background: rgba(255,255,255,.62); }
+.platform-founding-enrollment .button { flex: 0 0 auto; }
+.platform-founding-enrollment > p { margin: 0; font-size: 10px; }
 .platform-owner-plan-summary, .platform-billing-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .platform-billing-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .platform-owner-plan-summary > div, .platform-billing-summary > article { display: grid; gap: 5px; min-width: 0; padding: 15px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.64); }
@@ -1831,6 +1838,8 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-usage-metric.over strong, .platform-usage-over { color: #9e1d2a; }
 .platform-plan-form { display: grid; gap: 14px; padding-top: 8px; }
 .platform-plan-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.platform-founding-rate-summary { display: grid; align-content: center; gap: 3px; padding: 10px 12px; border: 1px solid #bed8cf; border-radius: 10px; background: #eff9f5; }
+.platform-founding-rate-summary span, .platform-founding-rate-summary small { color: var(--muted); font-size: 9px; }
 .platform-plan-reason { grid-column: span 2; }
 .platform-plan-form .privacy-note, .platform-live-comparison .privacy-note { margin: 0; }
 .platform-plan-editor, .platform-plan-history { padding-top: 13px; border-top: 1px solid var(--line); }
@@ -1861,8 +1870,8 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 }
 
 @media (max-width: 700px) {
-  .platform-payment-failure-banner, .platform-payment-failed-inline, .platform-owner-card > header, .platform-owner-card-heading, .platform-comparison-heading { align-items: stretch; flex-direction: column; }
-  .platform-payment-failure-banner a, .platform-payment-failed-inline form, .platform-payment-failed-inline .button { width: 100%; margin-left: 0; text-align: center; }
+  .platform-payment-failure-banner, .platform-payment-failed-inline, .platform-founding-state, .platform-founding-enrollment, .platform-owner-card > header, .platform-owner-card-heading, .platform-comparison-heading { align-items: stretch; flex-direction: column; }
+  .platform-payment-failure-banner a, .platform-payment-failed-inline form, .platform-payment-failed-inline .button, .platform-founding-enrollment .button { width: 100%; margin-left: 0; text-align: center; }
   .platform-owner-plan-summary, .platform-billing-summary, .platform-usage-grid, .platform-plan-form-grid, .platform-plan-breakdown { grid-template-columns: 1fr; }
   .platform-plan-reason { grid-column: auto; }
 }

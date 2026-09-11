@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { auditLog, platformSubscriptionRevisions, platformSubscriptions } from "@/db/schema";
+import { auditLog, platformSubscriptionRevisions, platformSubscriptions, residencies } from "@/db/schema";
 import type { InternalActor } from "@/lib/auth";
 
 const databaseMock = vi.hoisted(() => ({ getDb: vi.fn() }));
@@ -9,7 +9,7 @@ vi.mock("@/lib/platform-billing-stage", () => ({ assertCurrentPlatformBillingSta
 vi.mock("@/lib/stripe", () => ({ getStripe: vi.fn(), stagingBillingReturnUrl: vi.fn() }));
 vi.mock("@/services/live-billing-safety", () => ({ requireResidencyLiveBillingApproval: vi.fn() }));
 
-import { updateCommittedPlan, type CommittedPlanInput } from "./platform-stripe";
+import { enrollFoundingClient, updateCommittedPlan, type CommittedPlanInput } from "./platform-stripe";
 
 const residencyId = "00000000-0000-4000-8000-000000000001";
 const subscriptionId = "00000000-0000-4000-8000-000000000002";
@@ -40,7 +40,7 @@ beforeEach(() => {
 describe("Committed Plan persistence", () => {
   it("persists distinct Talent and House rates in both the plan and its revision without writing the legacy blended rate", async () => {
     const inserted: Array<{ table: unknown; values: Record<string, unknown> }> = [];
-    const selectResults = [[{ id: residencyId }], []];
+    const selectResults = [[{ id: residencyId, foundingClientSignedAt: null, foundingClientEndsAt: null }], []];
     const tx = {
       insert(table: unknown) {
         return {
@@ -93,5 +93,175 @@ describe("Committed Plan persistence", () => {
     });
     expect(revision).not.toHaveProperty("unitAmountCents");
     expect(audit).toBeDefined();
+  });
+
+  it("atomically enrolls an eligible Residency and forces both plan rates to $60", async () => {
+    const now = new Date("2027-07-31T12:00:00.000Z");
+    const inserted: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const updated: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const selectResults = [[{ id: residencyId, foundingClientSignedAt: null, foundingClientEndsAt: null }], []];
+    const tx = {
+      insert(table: unknown) {
+        return {
+          values(values: Record<string, unknown>) {
+            inserted.push({ table, values });
+            return {
+              returning: async () => table === platformSubscriptions
+                ? [{ id: subscriptionId, ...values }]
+                : [],
+            };
+          },
+        };
+      },
+      update(table: unknown) {
+        return {
+          set(values: Record<string, unknown>) {
+            updated.push({ table, values });
+            return { where: () => ({ returning: async () => [{ id: residencyId }] }) };
+          },
+        };
+      },
+    };
+    const database = {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                return { limit: async () => selectResults.shift() ?? [] };
+              },
+            };
+          },
+        };
+      },
+      transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+    };
+    databaseMock.getDb.mockReturnValue(database);
+
+    await updateCommittedPlan(actor, {
+      ...input,
+      cadence: "annual",
+      talentSessionUnitAmountCents: 9_000,
+      houseProgramUnitAmountCents: 5_000,
+    }, { now, enrollFoundingClient: true });
+
+    expect(inserted.find((entry) => entry.table === platformSubscriptions)?.values).toMatchObject({
+      cadence: "monthly",
+      talentSessionUnitAmountCents: 6_000,
+      houseProgramUnitAmountCents: 6_000,
+    });
+    expect(inserted.find((entry) => entry.table === platformSubscriptionRevisions)?.values).toMatchObject({
+      cadence: "monthly",
+      talentSessionUnitAmountCents: 6_000,
+      houseProgramUnitAmountCents: 6_000,
+    });
+    expect(updated.find((entry) => entry.table === residencies)?.values).toMatchObject({
+      foundingClientSignedAt: now,
+      foundingClientEndsAt: new Date("2028-01-31T12:00:00.000Z"),
+    });
+  });
+
+  it("overrides a forged non-$60 Committed Plan save during an active Founding window", async () => {
+    const now = new Date("2027-03-01T12:00:00.000Z");
+    const inserted: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const selectResults = [[{
+      id: residencyId,
+      foundingClientSignedAt: new Date("2027-01-01T12:00:00.000Z"),
+      foundingClientEndsAt: new Date("2027-07-01T12:00:00.000Z"),
+    }], []];
+    const tx = {
+      insert(table: unknown) {
+        return {
+          values(values: Record<string, unknown>) {
+            inserted.push({ table, values });
+            return {
+              returning: async () => table === platformSubscriptions
+                ? [{ id: subscriptionId, ...values }]
+                : [],
+            };
+          },
+        };
+      },
+    };
+    const database = {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                return { limit: async () => selectResults.shift() ?? [] };
+              },
+            };
+          },
+        };
+      },
+      transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+    };
+    databaseMock.getDb.mockReturnValue(database);
+
+    await updateCommittedPlan(actor, {
+      ...input,
+      cadence: "quarterly",
+      talentSessionUnitAmountCents: 1,
+      houseProgramUnitAmountCents: 999_999,
+    }, { now });
+
+    expect(inserted.find((entry) => entry.table === platformSubscriptions)?.values).toMatchObject({
+      cadence: "monthly",
+      talentSessionUnitAmountCents: 6_000,
+      houseProgramUnitAmountCents: 6_000,
+    });
+    expect(inserted.find((entry) => entry.table === platformSubscriptionRevisions)?.values).toMatchObject({
+      cadence: "monthly",
+      talentSessionUnitAmountCents: 6_000,
+      houseProgramUnitAmountCents: 6_000,
+    });
+  });
+
+  it("explicitly enrolls an eligible Residency that does not have a Committed Plan yet", async () => {
+    const now = new Date("2027-04-10T09:15:00.000Z");
+    const updates: Array<Record<string, unknown>> = [];
+    const audits: Array<Record<string, unknown>> = [];
+    const selectResults = [[{ id: residencyId, foundingClientSignedAt: null, foundingClientEndsAt: null }], []];
+    const tx = {
+      update() {
+        return {
+          set(values: Record<string, unknown>) {
+            updates.push(values);
+            return { where: () => ({ returning: async () => [{ id: residencyId }] }) };
+          },
+        };
+      },
+      insert() {
+        return { values: (values: Record<string, unknown>) => { audits.push(values); } };
+      },
+    };
+    const database = {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                return { limit: async () => selectResults.shift() ?? [] };
+              },
+            };
+          },
+        };
+      },
+      transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+    };
+    databaseMock.getDb.mockReturnValue(database);
+
+    const window = await enrollFoundingClient(actor, residencyId, { now });
+
+    expect(window).toEqual({ signedAt: now, endsAt: new Date("2027-10-10T09:15:00.000Z") });
+    expect(updates[0]).toMatchObject({ foundingClientSignedAt: now, foundingClientEndsAt: window.endsAt });
+    expect(audits[0]).toMatchObject({ action: "residency_founding_client_enrolled", entityId: residencyId });
+  });
+
+  it("rejects Founding Client enrollment at the cutoff before reading or changing data", async () => {
+    await expect(enrollFoundingClient(actor, residencyId, { now: new Date("2027-08-01T00:00:00.000Z") }))
+      .rejects.toThrow(/closed/);
+    expect(databaseMock.getDb).not.toHaveBeenCalled();
   });
 });
