@@ -1,5 +1,5 @@
-import { Resend } from "resend";
 import { requiredEnv } from "@/lib/env";
+import { sendEmail } from "@/services/outbound-email";
 
 type ResidencyAccountSetupEmailInput = {
   to: string;
@@ -36,9 +36,8 @@ export function buildResidencyAccountSetupEmail(input: Omit<ResidencyAccountSetu
 }
 
 export async function sendResidencyAccountSetupEmail(input: ResidencyAccountSetupEmailInput) {
-  const resend = new Resend(requiredEnv("RESEND_API_KEY"));
   const content = buildResidencyAccountSetupEmail(input);
-  const result = await resend.emails.send({
+  const result = await sendEmail({
     from: process.env.ACCOUNT_ACCESS_FROM_EMAIL || requiredEnv("INVOICE_FROM_EMAIL"),
     to: input.to,
     replyTo: process.env.ACCOUNT_ACCESS_REPLY_TO || process.env.INVOICE_REPLY_TO || "support@hearforyou.group",
