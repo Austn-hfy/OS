@@ -9,6 +9,7 @@ import {
   platformSubscriptionInvoices,
   platformSubscriptionRevisions,
   platformSubscriptions,
+  residencies,
   stripeWebhookEvents,
 } from "@/db/schema";
 import { commitmentTierTerms } from "@/domain/commitment-tier";
@@ -246,11 +247,21 @@ async function applyCompletedCheckout(session: Stripe.Checkout.Session) {
 async function applyInvoiceEvent(event: Stripe.Event, invoice: Stripe.Invoice) {
   const record = await syncStripeInvoice(invoice);
   if (!record) return;
-  const [plan] = await getDb().select().from(platformSubscriptions)
+  const [row] = await getDb().select({ plan: platformSubscriptions, comped: residencies.comped }).from(platformSubscriptions)
+    .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
     .where(eq(platformSubscriptions.id, record.platformSubscriptionId)).limit(1);
-  if (!plan) return;
+  if (!row) return;
+  const plan = row.plan;
   if (event.type === "invoice.created") {
-    await attachPendingClawbacksToInvoice(plan, record.id, invoice.id);
+    if (row.comped) {
+      await getDb().update(platformSubscriptionClawbacks).set({ status: "void", updatedAt: new Date() })
+        .where(and(
+          eq(platformSubscriptionClawbacks.platformSubscriptionId, plan.id),
+          eq(platformSubscriptionClawbacks.status, "pending"),
+        ));
+    } else {
+      await attachPendingClawbacksToInvoice(plan, record.id, invoice.id);
+    }
   }
   if (event.type === "invoice.payment_failed") {
     const message = invoice.last_finalization_error?.message || "Stripe could not collect the Platform subscription payment.";

@@ -345,6 +345,7 @@ export async function getResidencyClientFinances(residencyId: string) {
 
 export async function getResidencyPlatformBilling(residencyId: string) {
   const [subscription] = await getDb().select({
+    comped: residencies.comped,
     id: platformSubscriptions.id,
     status: platformSubscriptions.status,
     cadence: platformSubscriptions.cadence,
@@ -362,7 +363,9 @@ export async function getResidencyPlatformBilling(residencyId: string) {
     nextChargeAt: platformSubscriptions.nextChargeAt,
     paymentFailedAt: platformSubscriptions.paymentFailedAt,
     paymentFailureMessage: platformSubscriptions.paymentFailureMessage,
-  }).from(platformSubscriptions).where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
+  }).from(platformSubscriptions)
+    .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
+    .where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
   if (!subscription) return { subscription: null, invoices: [] };
 
   const invoiceRows = await getDb().select({

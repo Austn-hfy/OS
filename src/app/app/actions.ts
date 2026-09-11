@@ -27,6 +27,7 @@ import { createResidencyRoom, deleteResidencyRoom, updateResidencyRoom, type Res
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendShiftChangeRequestResolvedEmail, sendShiftChangeRequestSubmittedEmail } from "@/services/shift-change-request-email";
 import { resolveShiftChangeRequest } from "@/services/shift-change-requests";
+import { updateResidencyCompedStatus } from "@/services/platform-stripe";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type CreateRoomActionState = ResidencyActionState & { room?: ResidencyRoom };
@@ -1700,6 +1701,29 @@ export async function updateResidencyLiveBillingApprovalAction(_previous: Reside
     };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to update live-billing approval." };
+  }
+}
+
+export async function updateResidencyCompedAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActorForMutation();
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      comped: z.enum(["true", "false"]).transform((value) => value === "true"),
+      confirmation: z.string().max(500),
+    }).parse(Object.fromEntries(formData));
+    await updateResidencyCompedStatus(actor, parsed);
+    revalidatePath("/app/setup");
+    revalidatePath("/app/platform-billing");
+    revalidatePath("/residency/settings/billing");
+    return {
+      status: "success",
+      message: parsed.comped
+        ? "This Residency is now permanently comped at $0 for Talent and House rates."
+        : "Permanent comp status removed. Review the $0 Committed Plan before enabling billing.",
+    };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update permanent comp status." };
   }
 }
 

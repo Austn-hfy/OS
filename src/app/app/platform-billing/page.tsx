@@ -39,6 +39,10 @@ function FoundingClientPanel({ residencyId, state, enrollmentOpen, commitmentTie
   return <div className="platform-founding-state closed"><div><strong>Founding enrollment closed</strong><span>This Residency was not enrolled before August 1, 2027.</span></div></div>;
 }
 
+function CompedResidencyPanel() {
+  return <div className="platform-founding-state active" role="status"><div><strong>Permanently comped · $0 Platform rates</strong><span>This Residency is outside the Founding Client window and commitment ladder. No commitment tier or payment method is required.</span></div><span className="status active">COMPED</span></div>;
+}
+
 function CommitmentTierPanel({ state }: { state: NonNullable<ReturnType<typeof getCommitmentTierState>> }) {
   const termLabel = state.tier === "month_to_month" ? "Rolling monthly" : `${state.lengthMonths}-month term`;
   const timing = state.tier === "month_to_month"
@@ -70,17 +74,19 @@ export default async function PlatformBillingPage({ searchParams }: { searchPara
       {residencies.map((residency) => {
         const plan = planByResidency.get(residency.id);
         const foundingState = getFoundingClientState(residency, now);
-        const commitmentState = plan ? getCommitmentTierState(plan, now) : null;
-        const foundingPanel = <FoundingClientPanel residencyId={residency.id} state={foundingState} enrollmentOpen={now < FOUNDING_CLIENT_CUTOFF} commitmentTierSelected={Boolean(commitmentState)} />;
+        const commitmentState = plan && !residency.comped ? getCommitmentTierState(plan, now) : null;
+        const billingProgramPanel = residency.comped
+          ? <CompedResidencyPanel />
+          : <FoundingClientPanel residencyId={residency.id} state={foundingState} enrollmentOpen={now < FOUNDING_CLIENT_CUTOFF} commitmentTierSelected={Boolean(commitmentState)} />;
         if (!plan) return <article className="card platform-owner-card" key={residency.id}>
-          <header><div><p className="eyebrow">No Committed Plan</p><h2>{residency.name}</h2><p>{residency.cityState || "Location pending"}</p></div><span className="status incomplete">Not connected</span></header>
-          {foundingPanel}
-          <CommittedPlanForm residencyId={residency.id} residencyName={residency.name} foundingClientActive={foundingState.active} commitmentTierEligible={foundingState.needsCommitmentTierSelection} value={{ cadence: "monthly", commitmentTier: null, talentProgramSessions: 0, talentSessionUnitAmountCents: 6_000, housePrograms: 0, houseProgramUnitAmountCents: 6_000, oneOffAllowance: 0, startsOn: defaults.start, renewsOn: defaults.renewal }} />
+          <header><div><p className="eyebrow">No Committed Plan</p><h2>{residency.name}</h2><p>{residency.cityState || "Location pending"}</p></div><div className="platform-owner-statuses">{residency.comped ? <span className="status active">COMPED · $0</span> : null}<span className="status incomplete">Not connected</span></div></header>
+          {billingProgramPanel}
+          <CommittedPlanForm residencyId={residency.id} residencyName={residency.name} comped={residency.comped} foundingClientActive={foundingState.active} commitmentTierEligible={foundingState.needsCommitmentTierSelection} value={{ cadence: "monthly", commitmentTier: null, talentProgramSessions: 0, talentSessionUnitAmountCents: residency.comped ? 0 : 6_000, housePrograms: 0, houseProgramUnitAmountCents: residency.comped ? 0 : 6_000, oneOffAllowance: 0, startsOn: defaults.start, renewsOn: defaults.renewal }} />
         </article>;
         const comparison = plan.comparison;
         return <article className="card platform-owner-card" key={residency.id}>
-          <header className="platform-owner-card-heading"><div><p className="eyebrow">Committed Plan · revision {plan.revision}</p><h2>{plan.residencyName}</h2><p>{plan.residencyActive ? plan.residencyName : `${plan.residencyName} · inactive`}</p></div><div className="platform-owner-statuses"><span className="platform-test-mode-badge">TEST</span><span className={`status ${plan.status}`}>{plan.status.replaceAll("_", " ")}</span></div></header>
-          {foundingPanel}
+          <header className="platform-owner-card-heading"><div><p className="eyebrow">Committed Plan · revision {plan.revision}</p><h2>{plan.residencyName}</h2><p>{plan.residencyActive ? plan.residencyName : `${plan.residencyName} · inactive`}</p></div><div className="platform-owner-statuses">{plan.comped ? <span className="status active">COMPED · $0</span> : null}<span className="platform-test-mode-badge">TEST</span><span className={`status ${plan.status}`}>{plan.status.replaceAll("_", " ")}</span></div></header>
+          {billingProgramPanel}
           {commitmentState ? <CommitmentTierPanel state={commitmentState} /> : null}
           {plan.paymentFailedAt ? <div className="platform-payment-failed-inline" role="alert"><strong>Payment failed</strong><span>{plan.paymentFailureMessage || "Stripe could not collect the latest payment."} Hotel access remains active.</span></div> : null}
           <section className="platform-owner-plan-summary">
@@ -90,10 +96,10 @@ export default async function PlatformBillingPage({ searchParams }: { searchPara
             {plan.liveUsage && comparison ? <div className="platform-usage-grid"><UsageMetric label="Talent sessions" committed={plan.talentProgramSessions} live={plan.liveUsage.talentSessions} /><UsageMetric label="House programs" committed={plan.housePrograms} live={plan.liveUsage.housePrograms} /><UsageMetric label="One-offs" committed={plan.oneOffAllowance} live={plan.liveUsage.oneOffs} /></div> : <p className="muted">Usage is available after the first plan refresh.</p>}
           </section>
           <div className="platform-owner-actions">
-            {!plan.stripeSubscriptionId ? <PlatformBillingActionForm action={startPlatformStripeCheckoutAction} residencyId={residency.id} label="Add test card & start subscription" pendingLabel="Starting Checkout…" /> : <span className="platform-stripe-connected">One continuous Stripe subscription connected</span>}
+            {plan.comped ? <span className="platform-stripe-connected">No payment method required for a comped Residency</span> : !plan.stripeSubscriptionId ? <PlatformBillingActionForm action={startPlatformStripeCheckoutAction} residencyId={residency.id} label="Add test card & start subscription" pendingLabel="Starting Checkout…" /> : <span className="platform-stripe-connected">One continuous Stripe subscription connected</span>}
             {plan.latestInvoice ? <Link className="button secondary" href={`/app/platform-billing/invoices/${plan.latestInvoice.id}/pdf`}>Latest Platform invoice</Link> : null}
           </div>
-          <details className="platform-plan-editor"><summary>Edit Committed Plan</summary><CommittedPlanForm residencyId={residency.id} residencyName={residency.name} foundingClientActive={foundingState.active} commitmentTierEligible={foundingState.needsCommitmentTierSelection} value={{ cadence: plan.cadence, commitmentTier: plan.commitmentTier, talentProgramSessions: plan.talentProgramSessions, talentSessionUnitAmountCents: plan.talentSessionUnitAmountCents, housePrograms: plan.housePrograms, houseProgramUnitAmountCents: plan.houseProgramUnitAmountCents, oneOffAllowance: plan.oneOffAllowance, startsOn: plan.startsOn, renewsOn: plan.renewsOn }} /></details>
+          <details className="platform-plan-editor"><summary>Edit Committed Plan</summary><CommittedPlanForm residencyId={residency.id} residencyName={residency.name} comped={plan.comped} foundingClientActive={foundingState.active} commitmentTierEligible={foundingState.needsCommitmentTierSelection} value={{ cadence: plan.cadence, commitmentTier: plan.commitmentTier, talentProgramSessions: plan.talentProgramSessions, talentSessionUnitAmountCents: plan.talentSessionUnitAmountCents, housePrograms: plan.housePrograms, houseProgramUnitAmountCents: plan.houseProgramUnitAmountCents, oneOffAllowance: plan.oneOffAllowance, startsOn: plan.startsOn, renewsOn: plan.renewsOn }} /></details>
           {plan.recentRevisions.length ? <details className="platform-plan-history"><summary>Plan history</summary><ol>{plan.recentRevisions.map((revision) => <li key={revision.id}><strong>Revision {revision.revision}</strong><span>{date(revision.createdAt)} · {revision.changeReason}</span><small className={revision.stripeSyncStatus === "failed" ? "error" : "muted"}>{revision.stripeSyncStatus.replaceAll("_", " ")}{revision.stripeSyncError ? ` · ${revision.stripeSyncError}` : ""}</small></li>)}</ol></details> : null}
         </article>;
       })}

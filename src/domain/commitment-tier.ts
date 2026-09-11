@@ -55,6 +55,9 @@ export function commitmentForgivenessStartsAt(startedAt: Date, tier: CommitmentT
 }
 
 export function assertCommitmentTierSelectionAllowed(window: FoundingClientWindow, now = new Date()) {
+  if (window.comped) {
+    throw new Error("A comped Residency does not use commitment tiers.");
+  }
   const foundingState = getFoundingClientState(window, now);
   if (foundingState.active) {
     throw new Error("A Residency inside its Founding Client window cannot select a commitment tier.");

@@ -18,6 +18,7 @@ import {
   platformCadenceInterval,
   type PlatformBillingCadence,
 } from "@/domain/platform-billing";
+import { assertCompedResidencyConfirmation, enforceCompedPlan } from "@/domain/comped-residency";
 import {
   applyCommitmentTier,
   assertCommitmentTierSelectionAllowed,
@@ -54,6 +55,7 @@ export type CommittedPlanInput = {
 type UpdateCommittedPlanOptions = {
   now?: Date;
   enrollFoundingClient?: boolean;
+  setComped?: boolean;
 };
 
 type CurrentPlan = typeof platformSubscriptions.$inferSelect;
@@ -84,6 +86,9 @@ async function billedTalentSessionsDuringTerm(platformSubscriptionId: string, co
 
 export async function queueCommitmentCancellationClawback(plan: CurrentPlan, changedAt = new Date()) {
   if (!plan.commitmentTier || plan.commitmentTier === "month_to_month" || !plan.commitmentStartedAt) return null;
+  const [residency] = await getDb().select({ comped: residencies.comped }).from(residencies)
+    .where(eq(residencies.id, plan.residencyId)).limit(1);
+  if (!residency || residency.comped) return null;
   const talentSessionsBilled = await billedTalentSessionsDuringTerm(plan.id, plan.commitmentStartedAt, changedAt);
   const calculation = calculateCommitmentClawback({
     currentTier: plan.commitmentTier,
@@ -297,12 +302,18 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
   const now = options.now ?? new Date();
   const [residency] = await database.select({
     id: residencies.id,
+    comped: residencies.comped,
     foundingClientSignedAt: residencies.foundingClientSignedAt,
     foundingClientEndsAt: residencies.foundingClientEndsAt,
   }).from(residencies)
     .where(and(eq(residencies.id, input.residencyId), eq(residencies.operatingMode, "operations"))).limit(1);
   if (!residency) throw new Error("Residency not found.");
+  if (options.enrollFoundingClient && options.setComped !== undefined) {
+    throw new Error("Comped status and Founding Client enrollment cannot be changed together.");
+  }
+  const effectiveComped = options.setComped ?? residency.comped;
   if (options.enrollFoundingClient) {
+    if (effectiveComped) throw new Error("A comped Residency cannot enroll in the Founding Client program.");
     assertFoundingClientEnrollmentEligible(now);
     if (residency.foundingClientSignedAt || residency.foundingClientEndsAt) {
       throw new Error("This Residency is already enrolled in the Founding Client program.");
@@ -310,19 +321,24 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
   }
   const enrollmentEndsAt = options.enrollFoundingClient ? foundingClientEndsAt(now) : null;
   const foundingWindow = options.enrollFoundingClient ? {
+    comped: false,
     foundingClientSignedAt: now,
     foundingClientEndsAt: enrollmentEndsAt,
-  } : residency;
+  } : { ...residency, comped: effectiveComped };
   const foundingState = getFoundingClientState(foundingWindow, now);
 
   const [current] = await database.select().from(platformSubscriptions)
     .where(eq(platformSubscriptions.residencyId, input.residencyId)).limit(1);
 
-  let planInput = enforceFoundingClientPlan(input, foundingWindow, now);
+  let planInput = effectiveComped
+    ? enforceCompedPlan(input, true)
+    : enforceFoundingClientPlan(input, foundingWindow, now);
   let commitmentTier: CommitmentTier | null = null;
   let commitmentStartedAt: Date | null = null;
   let commitmentLengthMonths: number | null = null;
-  if (foundingState.active) {
+  if (effectiveComped) {
+    if (input.commitmentTier) throw new Error("A comped Residency does not use commitment tiers.");
+  } else if (foundingState.active) {
     if (input.commitmentTier) {
       throw new Error("A Residency inside its Founding Client window cannot select a commitment tier.");
     }
@@ -353,6 +369,7 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
   } | null = null;
   if (
     current
+    && !effectiveComped
     && current.commitmentTier
     && current.commitmentTier !== "month_to_month"
     && current.commitmentStartedAt
@@ -432,6 +449,23 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
           entityType: "residency",
           entityId: residency.id,
           details: { signedAt: now.toISOString(), endsAt: enrollmentEndsAt.toISOString() },
+        });
+      }
+      if (options.setComped !== undefined && residency.comped !== options.setComped) {
+        const [changed] = await tx.update(residencies).set({
+          comped: options.setComped,
+          ...(options.setComped ? { foundingClientSignedAt: null, foundingClientEndsAt: null } : {}),
+          updatedAt: now,
+        }).where(and(eq(residencies.id, residency.id), eq(residencies.comped, residency.comped))).returning({ id: residencies.id });
+        if (!changed) throw new Error("This Residency's comped status changed while the plan was being saved.");
+        await tx.insert(auditLog).values({
+          residencyId: residency.id,
+          actorUserId: actor.userId,
+          actorLabel: actor.email,
+          action: "residency_comped_status_updated",
+          entityType: "residency",
+          entityId: residency.id,
+          details: { previousComped: residency.comped, comped: options.setComped },
         });
       }
       await tx.insert(auditLog).values({
@@ -550,6 +584,23 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
         details: { signedAt: now.toISOString(), endsAt: enrollmentEndsAt.toISOString() },
       });
     }
+    if (options.setComped !== undefined && residency.comped !== options.setComped) {
+      const [changed] = await tx.update(residencies).set({
+        comped: options.setComped,
+        ...(options.setComped ? { foundingClientSignedAt: null, foundingClientEndsAt: null } : {}),
+        updatedAt: now,
+      }).where(and(eq(residencies.id, residency.id), eq(residencies.comped, residency.comped))).returning({ id: residencies.id });
+      if (!changed) throw new Error("This Residency's comped status changed while the plan was being saved.");
+      await tx.insert(auditLog).values({
+        residencyId: residency.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_comped_status_updated",
+        entityType: "residency",
+        entityId: residency.id,
+        details: { previousComped: residency.comped, comped: options.setComped },
+      });
+    }
     await tx.update(platformSubscriptionRevisions).set({
       renewsOn: effectiveRenewsOn,
       stripeSyncStatus: stripeUpdate ? "synced" : "not_connected",
@@ -598,6 +649,7 @@ export async function enrollFoundingClient(actor: InternalActor, residencyId: st
   const database = getDb();
   const [residency] = await database.select({
     id: residencies.id,
+    comped: residencies.comped,
     foundingClientSignedAt: residencies.foundingClientSignedAt,
     foundingClientEndsAt: residencies.foundingClientEndsAt,
   }).from(residencies).where(and(
@@ -605,6 +657,7 @@ export async function enrollFoundingClient(actor: InternalActor, residencyId: st
     eq(residencies.operatingMode, "operations"),
   )).limit(1);
   if (!residency) throw new Error("Residency not found.");
+  if (residency.comped) throw new Error("A comped Residency cannot enroll in the Founding Client program.");
   if (residency.foundingClientSignedAt || residency.foundingClientEndsAt) {
     throw new Error("This Residency is already enrolled in the Founding Client program.");
   }
@@ -652,17 +705,82 @@ export async function enrollFoundingClient(actor: InternalActor, residencyId: st
   return { signedAt: now, endsAt };
 }
 
+export async function updateResidencyCompedStatus(
+  actor: InternalActor,
+  input: { residencyId: string; comped: boolean; confirmation: string },
+) {
+  assertCurrentPlatformBillingStaging();
+  const database = getDb();
+  const [residency] = await database.select({
+    id: residencies.id,
+    name: residencies.name,
+    comped: residencies.comped,
+  }).from(residencies).where(and(
+    eq(residencies.id, input.residencyId),
+    eq(residencies.operatingMode, "operations"),
+  )).limit(1);
+  if (!residency) throw new Error("Residency not found.");
+  if (residency.comped === input.comped) return { comped: residency.comped };
+
+  assertCompedResidencyConfirmation({
+    residencyName: residency.name,
+    comped: input.comped,
+    confirmation: input.confirmation,
+  });
+
+  const [current] = await database.select().from(platformSubscriptions)
+    .where(eq(platformSubscriptions.residencyId, residency.id)).limit(1);
+  if (input.comped && current) {
+    await updateCommittedPlan(actor, {
+      residencyId: residency.id,
+      cadence: current.cadence,
+      commitmentTier: null,
+      talentProgramSessions: current.talentProgramSessions,
+      talentSessionUnitAmountCents: 0,
+      housePrograms: current.housePrograms,
+      houseProgramUnitAmountCents: 0,
+      oneOffAllowance: current.oneOffAllowance,
+      startsOn: current.startsOn,
+      renewsOn: current.renewsOn,
+      changeReason: "Permanent comp status enabled",
+    }, { setComped: true });
+    return { comped: true };
+  }
+
+  const now = new Date();
+  await database.transaction(async (tx) => {
+    const [changed] = await tx.update(residencies).set({
+      comped: input.comped,
+      ...(input.comped ? { foundingClientSignedAt: null, foundingClientEndsAt: null } : {}),
+      updatedAt: now,
+    }).where(and(eq(residencies.id, residency.id), eq(residencies.comped, residency.comped))).returning({ id: residencies.id });
+    if (!changed) throw new Error("This Residency's comped status changed while the update was in progress.");
+    await tx.insert(auditLog).values({
+      residencyId: residency.id,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "residency_comped_status_updated",
+      entityType: "residency",
+      entityId: residency.id,
+      details: { previousComped: residency.comped, comped: input.comped },
+    });
+  });
+  return { comped: input.comped };
+}
+
 export async function createPlatformSubscriptionCheckout(actor: AuditActor, residencyId: string) {
   assertCurrentPlatformBillingStaging();
   const database = getDb();
   const [row] = await database.select({ plan: platformSubscriptions, residency: {
     name: residencies.name,
+    comped: residencies.comped,
     billingContactEmail: residencies.billingContactEmail,
     primaryContactEmail: residencies.primaryContactEmail,
   } }).from(platformSubscriptions)
     .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
     .where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
   if (!row) throw new Error("Create a Committed Plan before connecting Stripe.");
+  if (row.residency.comped) throw new Error("A comped Residency does not require Stripe Checkout.");
   if (row.plan.stripeSubscriptionId) throw new Error("This Residency already has its continuous Stripe subscription.");
   await requireResidencyLiveBillingApproval({
     residencyId,
@@ -728,8 +846,11 @@ export async function createPlatformSubscriptionCheckout(actor: AuditActor, resi
 
 export async function createPlatformPaymentMethodCheckout(actor: AuditActor, residencyId: string) {
   assertCurrentPlatformBillingStaging();
-  const [plan] = await getDb().select().from(platformSubscriptions)
+  const [row] = await getDb().select({ plan: platformSubscriptions, comped: residencies.comped }).from(platformSubscriptions)
+    .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
     .where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
+  if (row?.comped) throw new Error("A comped Residency does not require a payment method.");
+  const plan = row?.plan;
   if (!plan?.stripeCustomerId || !plan.stripeSubscriptionId) throw new Error("This Platform subscription is not connected to Stripe yet.");
   await requireResidencyLiveBillingApproval({
     residencyId,

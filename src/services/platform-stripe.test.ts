@@ -9,7 +9,7 @@ vi.mock("@/lib/platform-billing-stage", () => ({ assertCurrentPlatformBillingSta
 vi.mock("@/lib/stripe", () => ({ getStripe: vi.fn(), stagingBillingReturnUrl: vi.fn() }));
 vi.mock("@/services/live-billing-safety", () => ({ requireResidencyLiveBillingApproval: vi.fn() }));
 
-import { enrollFoundingClient, updateCommittedPlan, type CommittedPlanInput } from "./platform-stripe";
+import { enrollFoundingClient, updateCommittedPlan, updateResidencyCompedStatus, type CommittedPlanInput } from "./platform-stripe";
 
 const residencyId = "00000000-0000-4000-8000-000000000001";
 const subscriptionId = "00000000-0000-4000-8000-000000000002";
@@ -39,6 +39,29 @@ beforeEach(() => {
 });
 
 describe("Committed Plan persistence", () => {
+  it("requires the exact typed phrase before changing comped status", async () => {
+    const database = {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                return { limit: async () => [{ id: residencyId, name: "Ace Hotel", comped: false }] };
+              },
+            };
+          },
+        };
+      },
+    };
+    databaseMock.getDb.mockReturnValue(database);
+
+    await expect(updateResidencyCompedStatus(actor, {
+      residencyId,
+      comped: true,
+      confirmation: "COMP ACE",
+    })).rejects.toThrow(/SET Ace Hotel AS PERMANENTLY COMPED/);
+  });
+
   it("persists distinct Talent and House rates in both the plan and its revision without writing the legacy blended rate", async () => {
     const inserted: Array<{ table: unknown; values: Record<string, unknown> }> = [];
     const selectResults = [[{ id: residencyId, foundingClientSignedAt: null, foundingClientEndsAt: null }], []];
@@ -280,6 +303,94 @@ describe("Committed Plan persistence", () => {
     });
   });
 
+  it("forces forged submitted rates to $0 without requiring Founding or commitment-tier handling for a comped Residency", async () => {
+    const inserted: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const selectResults = [[{
+      id: residencyId,
+      comped: true,
+      foundingClientSignedAt: new Date("2027-01-01T00:00:00.000Z"),
+      foundingClientEndsAt: new Date("2027-07-01T00:00:00.000Z"),
+    }], []];
+    const tx = {
+      insert(table: unknown) {
+        return {
+          values(values: Record<string, unknown>) {
+            inserted.push({ table, values });
+            return {
+              returning: async () => table === platformSubscriptions
+                ? [{ id: subscriptionId, ...values }]
+                : [],
+            };
+          },
+        };
+      },
+    };
+    const database = {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                return { limit: async () => selectResults.shift() ?? [] };
+              },
+            };
+          },
+        };
+      },
+      transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+    };
+    databaseMock.getDb.mockReturnValue(database);
+
+    await updateCommittedPlan(actor, {
+      ...input,
+      cadence: "annual",
+      talentSessionUnitAmountCents: 999_999,
+      houseProgramUnitAmountCents: 888_888,
+    }, { now: new Date("2028-01-01T00:00:00.000Z") });
+
+    for (const values of [
+      inserted.find((entry) => entry.table === platformSubscriptions)?.values,
+      inserted.find((entry) => entry.table === platformSubscriptionRevisions)?.values,
+    ]) {
+      expect(values).toMatchObject({
+        cadence: "annual",
+        commitmentTier: null,
+        commitmentStartedAt: null,
+        commitmentLengthMonths: null,
+        talentSessionUnitAmountCents: 0,
+        houseProgramUnitAmountCents: 0,
+      });
+    }
+  });
+
+  it("rejects a submitted commitment tier for a comped Residency", async () => {
+    const selectResults = [[{
+      id: residencyId,
+      comped: true,
+      foundingClientSignedAt: null,
+      foundingClientEndsAt: null,
+    }], []];
+    const database = {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                return { limit: async () => selectResults.shift() ?? [] };
+              },
+            };
+          },
+        };
+      },
+    };
+    databaseMock.getDb.mockReturnValue(database);
+
+    await expect(updateCommittedPlan(actor, {
+      ...input,
+      commitmentTier: "twelve_month",
+    })).rejects.toThrow(/does not use commitment tiers/);
+  });
+
   it("rejects commitment-tier selection while the Residency is still inside its Founding window", async () => {
     const selectResults = [[{
       id: residencyId,
@@ -352,5 +463,31 @@ describe("Committed Plan persistence", () => {
     await expect(enrollFoundingClient(actor, residencyId, { now: new Date("2027-08-01T00:00:00.000Z") }))
       .rejects.toThrow(/closed/);
     expect(databaseMock.getDb).not.toHaveBeenCalled();
+  });
+
+  it("rejects Founding Client enrollment for a comped Residency", async () => {
+    const selectResults = [[{
+      id: residencyId,
+      comped: true,
+      foundingClientSignedAt: null,
+      foundingClientEndsAt: null,
+    }]];
+    const database = {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                return { limit: async () => selectResults.shift() ?? [] };
+              },
+            };
+          },
+        };
+      },
+    };
+    databaseMock.getDb.mockReturnValue(database);
+
+    await expect(enrollFoundingClient(actor, residencyId, { now: new Date("2027-04-01T00:00:00.000Z") }))
+      .rejects.toThrow(/cannot enroll/);
   });
 });
