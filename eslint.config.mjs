@@ -17,6 +17,24 @@ export default defineConfig([
       }],
     },
   },
+  {
+    files: ["src/services/platform-billing-*.ts", "src/services/platform-stripe*.ts"],
+    ignores: ["src/services/platform-billing-email.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        paths: [
+          {
+            name: "resend",
+            message: "Use the central outbound-email service so staging recipient routing cannot be bypassed.",
+          },
+          {
+            name: "@/services/outbound-email",
+            message: "Platform billing email must use the per-Residency platform-billing-email safety service.",
+          },
+        ],
+      }],
+    },
+  },
   globalIgnores([
     ".next/**",
     ".vercel/**",

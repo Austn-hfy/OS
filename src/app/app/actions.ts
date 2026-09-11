@@ -9,6 +9,7 @@ import { accountSetupTokens, assignments, auditLog, clientAccounts, dayparts, in
 import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { ROOM_HUE_ORDER } from "@/domain/dayparts";
+import { liveBillingApprovalPhrase } from "@/domain/live-billing";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { prepareShiftChangeRequest, SHIFT_CHANGE_REQUEST_TYPES, type ShiftChangeRequestType } from "@/domain/shift-change-requests";
 import { isResidencyAccessError, requireActorForResidency, requireInternalActor, requireInternalActorForMutation, ResidencyAccessError } from "@/lib/auth";
@@ -26,6 +27,7 @@ import { createResidencyRoom, deleteResidencyRoom, updateResidencyRoom, type Res
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendShiftChangeRequestResolvedEmail, sendShiftChangeRequestSubmittedEmail } from "@/services/shift-change-request-email";
 import { resolveShiftChangeRequest } from "@/services/shift-change-requests";
+import { updateResidencyCompedStatus } from "@/services/platform-stripe";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type CreateRoomActionState = ResidencyActionState & { room?: ResidencyRoom };
@@ -1642,6 +1644,86 @@ export async function updateResidencyProfileAction(_previous: ResidencyActionSta
     return { status: "success", message: "Residency profile saved." };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to save the Residency profile." };
+  }
+}
+
+export async function updateResidencyLiveBillingApprovalAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActor();
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      approved: z.enum(["true", "false"]).transform((value) => value === "true"),
+      confirmation: z.string().max(500).optional().default(""),
+    }).parse(Object.fromEntries(formData));
+    const database = getDb();
+    await database.transaction(async (tx) => {
+      const [residency] = await tx.select({
+        id: residencies.id,
+        name: residencies.name,
+        liveBillingApproved: residencies.liveBillingApproved,
+      }).from(residencies).where(and(
+        eq(residencies.id, parsed.residencyId),
+        eq(residencies.operatingMode, "operations"),
+      )).limit(1);
+      if (!residency) throw new Error("Residency not found.");
+      if (parsed.approved && !residency.liveBillingApproved) {
+        const requiredPhrase = liveBillingApprovalPhrase(residency.name);
+        if (parsed.confirmation !== requiredPhrase) {
+          throw new Error(`Type “${requiredPhrase}” exactly to approve live billing.`);
+        }
+      }
+      if (residency.liveBillingApproved === parsed.approved) return;
+      await tx.update(residencies).set({
+        liveBillingApproved: parsed.approved,
+        updatedAt: new Date(),
+      }).where(eq(residencies.id, residency.id));
+      await tx.insert(auditLog).values({
+        residencyId: residency.id,
+        actorUserId: actor.userId,
+        actorLabel: actor.email,
+        action: "residency_live_billing_approval_updated",
+        entityType: "residency",
+        entityId: residency.id,
+        details: {
+          previousLiveBillingApproved: residency.liveBillingApproved,
+          liveBillingApproved: parsed.approved,
+        },
+      });
+    });
+    revalidatePath("/app/setup");
+    revalidatePath("/app/platform-billing");
+    revalidatePath("/residency/settings/billing");
+    return {
+      status: "success",
+      message: parsed.approved
+        ? "Live billing approved for this Residency. The separate environment gate still applies."
+        : "Live billing turned off for this Residency.",
+    };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update live-billing approval." };
+  }
+}
+
+export async function updateResidencyCompedAction(_previous: ResidencyActionState, formData: FormData): Promise<ResidencyActionState> {
+  try {
+    const actor = await requireInternalActorForMutation();
+    const parsed = z.object({
+      residencyId: z.uuid(),
+      comped: z.enum(["true", "false"]).transform((value) => value === "true"),
+      confirmation: z.string().max(500),
+    }).parse(Object.fromEntries(formData));
+    await updateResidencyCompedStatus(actor, parsed);
+    revalidatePath("/app/setup");
+    revalidatePath("/app/platform-billing");
+    revalidatePath("/residency/settings/billing");
+    return {
+      status: "success",
+      message: parsed.comped
+        ? "This Residency is now permanently comped at $0 for Talent and House rates."
+        : "Permanent comp status removed. Review the $0 Committed Plan before enabling billing.",
+    };
+  } catch (error) {
+    return { status: "error", message: error instanceof Error ? error.message : "Unable to update permanent comp status." };
   }
 }
 

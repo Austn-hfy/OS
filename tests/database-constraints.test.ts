@@ -25,6 +25,7 @@ const ids = {
   hfyRequest: "00000000-0000-4000-8000-000000000074",
   platformSubscription: "00000000-0000-4000-8000-000000000080",
   platformInvoice: "00000000-0000-4000-8000-000000000081",
+  liveBillingDefaultResidency: "00000000-0000-4000-8000-000000000088",
   finalizedMonthlyInvoice: "00000000-0000-4000-8000-000000000082",
   laterMonthlyInvoice: "00000000-0000-4000-8000-000000000083",
   talentAdjustment: "00000000-0000-4000-8000-000000000084",
@@ -76,6 +77,12 @@ beforeAll(async () => {
   const widerRoomShades = await readFile(new URL("../drizzle/0038_wider_room_shades.sql", import.meta.url), "utf8");
   const crossEnvironmentAccessLog = await readFile(new URL("../drizzle/0039_cross_environment_access_log.sql", import.meta.url), "utf8");
   const persistentCalendarLinks = await readFile(new URL("../drizzle/0041_cheerful_meteorite.sql", import.meta.url), "utf8");
+  const platformBillingSystem = await readFile(new URL("../drizzle/0045_platform_billing_system.sql", import.meta.url), "utf8");
+  const liveBillingSafetySwitch = await readFile(new URL("../drizzle/0046_live_billing_safety_switch.sql", import.meta.url), "utf8");
+  const platformSubscriptionRevisionSplitRates = await readFile(new URL("../drizzle/0047_platform_subscription_revision_split_rates.sql", import.meta.url), "utf8");
+  const foundingClientTracking = await readFile(new URL("../drizzle/0048_founding_client_tracking.sql", import.meta.url), "utf8");
+  const commitmentLadderClawback = await readFile(new URL("../drizzle/0049_commitment_ladder_clawback.sql", import.meta.url), "utf8");
+  const compedResidencies = await readFile(new URL("../drizzle/0050_comped_residencies.sql", import.meta.url), "utf8");
   // Supabase provides these PostgREST roles. PGlite starts with neither, so
   // create them before applying migrations that explicitly revoke access.
   await database.exec(`
@@ -161,6 +168,12 @@ beforeAll(async () => {
   await database.exec(widerRoomShades.replaceAll("--> statement-breakpoint", ""));
   await database.exec(crossEnvironmentAccessLog.replaceAll("--> statement-breakpoint", ""));
   await database.exec(persistentCalendarLinks.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(platformBillingSystem.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(liveBillingSafetySwitch.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(platformSubscriptionRevisionSplitRates.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(foundingClientTracking.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(commitmentLadderClawback.replaceAll("--> statement-breakpoint", ""));
+  await database.exec(compedResidencies.replaceAll("--> statement-breakpoint", ""));
 });
 
 afterAll(async () => {
@@ -168,6 +181,98 @@ afterAll(async () => {
 });
 
 describe("database replacements for Airtable audit formulas", () => {
+  it("stores complete eligible Founding Client windows and rejects invalid enrollment timestamps", async () => {
+    await database.exec(`
+      UPDATE residencies
+      SET founding_client_signed_at = '2027-07-31T12:00:00Z', founding_client_ends_at = '2028-01-31T12:00:00Z'
+      WHERE id = '${ids.residencyA}';
+    `);
+    const stored = await database.query<{ signed_at: Date; ends_at: Date }>(`
+      SELECT founding_client_signed_at AS signed_at, founding_client_ends_at AS ends_at
+      FROM residencies WHERE id = '${ids.residencyA}';
+    `);
+    expect(new Date(stored.rows[0].signed_at).toISOString()).toBe("2027-07-31T12:00:00.000Z");
+    expect(new Date(stored.rows[0].ends_at).toISOString()).toBe("2028-01-31T12:00:00.000Z");
+
+    await expect(database.exec(`
+      UPDATE residencies
+      SET founding_client_signed_at = '2027-08-01T00:00:00Z', founding_client_ends_at = '2028-02-01T00:00:00Z'
+      WHERE id = '${ids.residencyB}';
+    `)).rejects.toThrow(/founding_client_eligible/);
+    await expect(database.exec(`
+      UPDATE residencies SET founding_client_signed_at = '2027-07-01T00:00:00Z'
+      WHERE id = '${ids.residencyB}';
+    `)).rejects.toThrow(/founding_client_window_complete/);
+  });
+
+  it("defaults live billing to off for existing and new Residencies", async () => {
+    const existing = await database.query<{ live_billing_approved: boolean }>(`
+      SELECT live_billing_approved FROM residencies WHERE id = '${ids.residencyA}';
+    `);
+    expect(existing.rows[0].live_billing_approved).toBe(false);
+
+    const inserted = await database.query<{ live_billing_approved: boolean }>(`
+      INSERT INTO residencies (id, client_account_id, slug, name, invoice_prefix)
+      VALUES ('${ids.liveBillingDefaultResidency}', '${ids.clientA}', 'live-billing-default', 'Live Billing Default', 'LBD')
+      RETURNING live_billing_approved;
+    `);
+    expect(inserted.rows[0].live_billing_approved).toBe(false);
+  });
+
+  it("defaults permanent comp status to off and keeps comped Residencies outside Founding Client enrollment", async () => {
+    const existing = await database.query<{ comped: boolean }>(`
+      SELECT comped FROM residencies WHERE id = '${ids.residencyB}';
+    `);
+    expect(existing.rows[0].comped).toBe(false);
+
+    await database.exec(`UPDATE residencies SET comped = true WHERE id = '${ids.residencyB}';`);
+    await expect(database.exec(`
+      UPDATE residencies
+      SET founding_client_signed_at = '2027-01-01T00:00:00Z', founding_client_ends_at = '2027-07-01T00:00:00Z'
+      WHERE id = '${ids.residencyB}';
+    `)).rejects.toThrow(/comped_not_founding/);
+    await database.exec(`UPDATE residencies SET comped = false WHERE id = '${ids.residencyB}';`);
+  });
+
+  it("stores complete commitment terms and Residency-scoped clawbacks", async () => {
+    await database.exec(`
+      INSERT INTO platform_subscriptions
+        (id, residency_id, status, cadence, talent_program_sessions, talent_session_unit_amount_cents, house_programs, house_program_unit_amount_cents)
+      VALUES ('${ids.platformSubscription}', '${ids.residencyA}', 'active', 'monthly', 8, 7000, 3, 6000);
+      UPDATE platform_subscriptions
+      SET commitment_tier = 'six_month', commitment_started_at = '2027-02-01T00:00:00Z', commitment_length_months = 6
+      WHERE id = '${ids.platformSubscription}';
+      INSERT INTO platform_subscription_clawbacks
+        (platform_subscription_id, residency_id, source_revision, source_commitment_tier, source_commitment_started_at,
+         target_commitment_tier, changed_at, talent_sessions_billed, unit_amount_cents, amount_cents)
+      VALUES
+        ('${ids.platformSubscription}', '${ids.residencyA}', 1, 'six_month', '2027-02-01T00:00:00Z',
+         'month_to_month', '2027-04-01T00:00:00Z', 10, 2000, 20000);
+    `);
+    const stored = await database.query<{ commitment_tier: string; commitment_length_months: number; amount_cents: number }>(`
+      SELECT subscription.commitment_tier, subscription.commitment_length_months, clawback.amount_cents
+      FROM platform_subscriptions subscription
+      INNER JOIN platform_subscription_clawbacks clawback ON clawback.platform_subscription_id = subscription.id
+      WHERE subscription.id = '${ids.platformSubscription}';
+    `);
+    expect(stored.rows[0]).toEqual({ commitment_tier: "six_month", commitment_length_months: 6, amount_cents: 20_000 });
+    await expect(database.exec(`
+      UPDATE platform_subscriptions SET commitment_length_months = 12 WHERE id = '${ids.platformSubscription}';
+    `)).rejects.toThrow(/commitment_length_valid/);
+    await expect(database.exec(`
+      UPDATE platform_subscriptions SET house_program_unit_amount_cents = 5000 WHERE id = '${ids.platformSubscription}';
+    `)).rejects.toThrow(/commitment_pricing_valid/);
+    await expect(database.exec(`
+      INSERT INTO platform_subscription_clawbacks
+        (platform_subscription_id, residency_id, source_revision, source_commitment_tier, source_commitment_started_at,
+         target_commitment_tier, changed_at, talent_sessions_billed, unit_amount_cents, amount_cents)
+      VALUES
+        ('${ids.platformSubscription}', '${ids.residencyB}', 1, 'six_month', '2027-02-01T00:00:00Z',
+         'month_to_month', '2027-04-01T00:00:00Z', 10, 2000, 20000);
+    `)).rejects.toThrow(/must match its subscription Residency/);
+    await database.exec(`DELETE FROM platform_subscriptions WHERE id = '${ids.platformSubscription}';`);
+  });
+
   it("backfills persistent rooms, references, and deterministic room shades", async () => {
     const rooms = await database.query<{ name: string; hue: string; sort_order: number }>(`
       SELECT name, hue, sort_order FROM rooms WHERE residency_id = '${ids.residencyA}' ORDER BY sort_order;
@@ -234,6 +339,15 @@ describe("database replacements for Airtable audit formulas", () => {
     await expect(database.exec(`
       UPDATE platform_subscription_invoices SET residency_id = '${ids.residencyB}' WHERE id = '${ids.platformInvoice}';
     `)).rejects.toThrow(/must match its subscription Residency/);
+    await expect(database.exec(`
+      INSERT INTO platform_usage_snapshots
+        (residency_id, platform_subscription_id, snapshot_date, period_start, period_end, talent_sessions, house_programs, one_offs)
+      VALUES ('${ids.residencyB}', '${ids.platformSubscription}', '2026-09-04', '2026-09-01', '2026-09-30', 8, 3, 0);
+    `)).rejects.toThrow(/must match its subscription Residency/);
+    await expect(database.exec(`
+      INSERT INTO stripe_webhook_events (id, type, livemode)
+      VALUES ('evt_live_forbidden', 'invoice.paid', true);
+    `)).rejects.toThrow(/stripe_webhook_events_test_only|check constraint/i);
   });
 
   it("locks monthly talent schedules and scopes carry-forward adjustments to their Residency", async () => {
