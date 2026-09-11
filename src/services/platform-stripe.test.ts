@@ -9,7 +9,13 @@ vi.mock("@/lib/platform-billing-stage", () => ({ assertCurrentPlatformBillingSta
 vi.mock("@/lib/stripe", () => ({ getStripe: vi.fn(), stagingBillingReturnUrl: vi.fn() }));
 vi.mock("@/services/live-billing-safety", () => ({ requireResidencyLiveBillingApproval: vi.fn() }));
 
-import { enrollFoundingClient, updateCommittedPlan, updateResidencyCompedStatus, type CommittedPlanInput } from "./platform-stripe";
+import {
+  enrollFoundingClient,
+  platformPlanAmount,
+  updateCommittedPlan,
+  updateResidencyCompedStatus,
+  type CommittedPlanInput,
+} from "./platform-stripe";
 
 const residencyId = "00000000-0000-4000-8000-000000000001";
 const subscriptionId = "00000000-0000-4000-8000-000000000002";
@@ -39,6 +45,17 @@ beforeEach(() => {
 });
 
 describe("Committed Plan persistence", () => {
+  it("calculates a $0 effective Stripe amount for a comped plan without mutating its stored rates", () => {
+    const storedPlan = { ...input, commitmentTier: "six_month" as const };
+
+    expect(platformPlanAmount(storedPlan, true)).toEqual({ monthlyAmountCents: 0, cadenceAmountCents: 0 });
+    expect(storedPlan).toMatchObject({
+      commitmentTier: "six_month",
+      talentSessionUnitAmountCents: 6_000,
+      houseProgramUnitAmountCents: 5_000,
+    });
+  });
+
   it("requires the exact typed phrase before changing comped status", async () => {
     const database = {
       select() {
@@ -303,7 +320,7 @@ describe("Committed Plan persistence", () => {
     });
   });
 
-  it("forces forged submitted rates to $0 without requiring Founding or commitment-tier handling for a comped Residency", async () => {
+  it("does not persist forged rates when a comped Residency creates its first underlying plan", async () => {
     const inserted: Array<{ table: unknown; values: Record<string, unknown> }> = [];
     const selectResults = [[{
       id: residencyId,
@@ -357,10 +374,112 @@ describe("Committed Plan persistence", () => {
         commitmentTier: null,
         commitmentStartedAt: null,
         commitmentLengthMonths: null,
-        talentSessionUnitAmountCents: 0,
-        houseProgramUnitAmountCents: 0,
+        talentSessionUnitAmountCents: 6_000,
+        houseProgramUnitAmountCents: 6_000,
       });
     }
+  });
+
+  it("preserves the exact stored rate, tier, and term when comp is enabled and disabled", async () => {
+    const commitmentStartedAt = new Date("2027-08-15T12:00:00.000Z");
+    const current = {
+      id: subscriptionId,
+      residencyId,
+      cadence: "monthly" as const,
+      commitmentTier: "six_month" as const,
+      commitmentStartedAt,
+      commitmentLengthMonths: 6,
+      revision: 7,
+      talentProgramSessions: 8,
+      talentSessionUnitAmountCents: 7_000,
+      housePrograms: 3,
+      houseProgramUnitAmountCents: 6_000,
+      oneOffAllowance: 2,
+      startsOn: "2027-08-15",
+      renewsOn: "2027-09-15",
+      stripeSubscriptionId: null,
+      stripeSubscriptionItemId: null,
+      stripePriceId: null,
+      status: "active" as const,
+      nextChargeAt: null,
+      lastStripeSyncedAt: null,
+    };
+
+    const runToggle = async (comped: boolean, nextComped: boolean) => {
+      const inserted: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+      const updated: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+      const residency = {
+        id: residencyId,
+        name: "HFY Internal Test Residency",
+        comped,
+        foundingClientSignedAt: null,
+        foundingClientEndsAt: null,
+      };
+      const selectResults = [[residency], [current], [residency], [current]];
+      const database = {
+        select() {
+          return {
+            from() {
+              return {
+                where() {
+                  return { limit: async () => selectResults.shift() ?? [] };
+                },
+              };
+            },
+          };
+        },
+        insert(table: unknown) {
+          return {
+            values(values: Record<string, unknown>) {
+              inserted.push({ table, values });
+              return { returning: async () => [{ id: "00000000-0000-4000-8000-000000000004" }] };
+            },
+          };
+        },
+        update(table: unknown) {
+          return {
+            set(values: Record<string, unknown>) {
+              updated.push({ table, values });
+              return {
+                where() {
+                  return {
+                    returning: async () => table === platformSubscriptions
+                      ? [{ ...current, ...values }]
+                      : [{ id: residencyId }],
+                  };
+                },
+              };
+            },
+          };
+        },
+        transaction(callback: (transaction: unknown) => Promise<unknown>) {
+          return callback(this);
+        },
+      };
+      databaseMock.getDb.mockReturnValue(database);
+
+      await updateResidencyCompedStatus(actor, {
+        residencyId,
+        comped: nextComped,
+        confirmation: nextComped
+          ? "SET HFY Internal Test Residency AS PERMANENTLY COMPED"
+          : "REMOVE PERMANENT COMP FROM HFY Internal Test Residency",
+      });
+
+      const expectedStoredState = {
+        commitmentTier: "six_month",
+        commitmentStartedAt,
+        commitmentLengthMonths: 6,
+        talentSessionUnitAmountCents: 7_000,
+        houseProgramUnitAmountCents: 6_000,
+      };
+      expect(updated.find((entry) => entry.table === platformSubscriptions)?.values).toMatchObject(expectedStoredState);
+      expect(inserted.find((entry) => entry.table === platformSubscriptionRevisions)?.values).toMatchObject(expectedStoredState);
+      expect(updated.find((entry) => entry.table === residencies)?.values).toMatchObject({ comped: nextComped });
+    };
+
+    await runToggle(false, true);
+    await runToggle(true, false);
   });
 
   it("rejects a submitted commitment tier for a comped Residency", async () => {

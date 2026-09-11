@@ -30,6 +30,7 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
     billingContactName: residencies.billingContactName,
     billingContactEmail: residencies.billingContactEmail,
     billingAddress: residencies.billingAddress,
+    comped: residencies.comped,
     currentRevision: platformSubscriptions.revision,
     currentCadence: platformSubscriptions.cadence,
     currentTalentSessions: platformSubscriptions.talentProgramSessions,
@@ -68,6 +69,7 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
   }).from(platformSubscriptionClawbacks)
     .where(eq(platformSubscriptionClawbacks.appliedInvoiceId, source.invoice.id));
   const snapshot = createPlatformInvoiceDocumentSnapshot({
+    comped: source.comped,
     invoice: {
       id: source.invoice.id,
       stripeInvoiceId: source.invoice.stripeInvoiceId,

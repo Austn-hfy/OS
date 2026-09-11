@@ -1,4 +1,5 @@
 import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents, type PlatformBillingCadence } from "./platform-billing";
+import { effectiveCompedPlan } from "./comped-residency";
 
 export type PlatformInvoiceDocumentSnapshot = {
   schemaVersion: 3;
@@ -47,6 +48,7 @@ export type PlatformInvoiceDocumentSnapshot = {
 };
 
 export type PlatformInvoiceDocumentSource = {
+  comped?: boolean;
   invoice: PlatformInvoiceDocumentSnapshot["invoice"];
   issuer: Omit<PlatformInvoiceDocumentSnapshot["issuer"], "addressLines"> & { address: string };
   billTo: Omit<PlatformInvoiceDocumentSnapshot["billTo"], "addressLines"> & { address: string };
@@ -65,7 +67,7 @@ function splitAddress(value: string) {
 }
 
 export function createPlatformInvoiceDocumentSnapshot(source: PlatformInvoiceDocumentSource): PlatformInvoiceDocumentSnapshot {
-  const { committedPlan } = source;
+  const committedPlan = effectiveCompedPlan(source.committedPlan, source.comped ?? false);
   const monthlyAmountCents = calculatePlatformMonthlyAmountCents({
     talentProgramSessions: committedPlan.talentSessions,
     talentSessionUnitAmountCents: committedPlan.talentSessionUnitAmountCents,

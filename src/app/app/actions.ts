@@ -1719,8 +1719,8 @@ export async function updateResidencyCompedAction(_previous: ResidencyActionStat
     return {
       status: "success",
       message: parsed.comped
-        ? "This Residency is now permanently comped at $0 for Talent and House rates."
-        : "Permanent comp status removed. Review the $0 Committed Plan before enabling billing.",
+        ? "This Residency is now permanently comped at $0. Its underlying Committed Plan remains preserved."
+        : "Permanent comp status removed. The preserved Committed Plan is active again.",
     };
   } catch (error) {
     return { status: "error", message: error instanceof Error ? error.message : "Unable to update permanent comp status." };

@@ -7,6 +7,7 @@ import { calculateClientOwedCents, resolveClientHourlyRateCents } from "@/domain
 import { projectClientSafeRoster, projectClientSafeTalent, type ClientSafeManagedTalent } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
 import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents } from "@/domain/platform-billing";
+import { effectiveCompedPlan } from "@/domain/comped-residency";
 import { loadPlatformLiveUsage } from "@/services/platform-usage";
 
 export async function getResidencyClientCalendar(residencyId: string, range: { from: string; to: string }) {
@@ -386,11 +387,12 @@ export async function getResidencyPlatformBilling(residencyId: string) {
       eq(platformSubscriptionInvoices.residencyId, residencyId),
     ))
     .orderBy(desc(platformSubscriptionInvoices.invoiceDate), desc(platformSubscriptionInvoices.createdAt));
-  const monthlyAmountCents = calculatePlatformMonthlyAmountCents(subscription);
+  const effectiveSubscription = effectiveCompedPlan(subscription, subscription.comped);
+  const monthlyAmountCents = calculatePlatformMonthlyAmountCents(effectiveSubscription);
   const liveUsage = await loadPlatformLiveUsage(residencyId);
   return {
     subscription: {
-      ...subscription,
+      ...effectiveSubscription,
       nextChargeAt: subscription.nextChargeAt?.toISOString() ?? null,
       paymentFailedAt: subscription.paymentFailedAt?.toISOString() ?? null,
       monthlyAmountCents,
