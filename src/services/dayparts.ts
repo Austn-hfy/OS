@@ -3,8 +3,9 @@ import { getDb } from "@/db/client";
 import { auditLog, daypartDateExceptions, daypartDayRules, dayparts, residencies, residencyTalent, rooms, scheduleOccurrences, shifts, talent } from "@/db/schema";
 import { HFY_BOOKED_COLOR, isRoomHue, roomShadeColors, validateDaypartRules, weekdayForDate, type DaypartBillingMode, type DaypartRuleInput, type DaypartScheduleMode, type DaypartType, type RoomHue } from "@/domain/dayparts";
 import type { AuditActor } from "@/lib/auth";
-import { deleteShiftInTransaction } from "@/services/shifts";
+import { materializeStandingDaypartRollingWindowInTransaction } from "@/services/daypart-materialization";
 import { findOrCreateResidencyRoom, nextRoomDaypartColor, type DatabaseTransaction } from "@/services/rooms";
+import { deleteShiftInTransaction } from "@/services/shifts";
 
 export type SaveDaypartInput = {
   id?: string;
@@ -339,6 +340,14 @@ export async function saveDaypart(actor: AuditActor, input: SaveDaypartInput) {
       entityId: daypartId,
       details: { name, room: assignedRoom.name, roomId: assignedRoom.id, roomHue: assignedRoom.hue, color, type: input.type, billingMode, scheduleMode: input.scheduleMode, suggestedStartMinute, suggestedEndMinute, defaultTalentRateCents, clientDefaultRateCents, activeUntil, active: input.active, weekdays: rules.map((rule) => rule.weekday) },
     });
+    if (input.scheduleMode === "standing_weekly" && input.active) {
+      await materializeStandingDaypartRollingWindowInTransaction(tx, {
+        residencyId: residency.id,
+        daypartIds: [daypartId],
+        actor: { userId: actor.userId, label: actor.email },
+        source: "daypart_save",
+      });
+    }
     return { id: daypartId };
   });
 }
