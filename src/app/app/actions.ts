@@ -10,22 +10,52 @@ import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-s
 import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { ROOM_HUE_ORDER } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
-import { requireActorForResidency, requireInternalActor } from "@/lib/auth";
+import { prepareShiftChangeRequest, SHIFT_CHANGE_REQUEST_TYPES, type ShiftChangeRequestType } from "@/domain/shift-change-requests";
+import { isResidencyAccessError, requireActorForResidency, requireInternalActor, requireInternalActorForMutation, ResidencyAccessError } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
 import { clearDaypartDateException, removeDaypart, saveDaypart, saveDaypartDateOverride, skipDaypartDate } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
 import { addAssignmentToShift, createResidencyDateBooking, deleteOneTimeOccurrence, updateDaypartOccurrence, updateOneTimeOccurrence, updateOneTimeShift } from "@/services/residency-bookings";
-import { createShift, deleteShift, updateCalendarShiftDetails } from "@/services/shifts";
+import { createShift, deleteShift, previewShiftTimeEdit, updateCalendarShiftDetails, updateShiftTime } from "@/services/shifts";
 import { parseTalentGenres } from "@/domain/talent-genres";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { cancelHfyTalentRequest, fulfillHfyTalentRequest } from "@/services/hfy-talent-requests";
 import { isFullCalendarMonth } from "@/domain/talent-invoicing";
 import { sendResidencyAccountSetupEmail } from "@/services/account-setup-email";
 import { createResidencyRoom, deleteResidencyRoom, updateResidencyRoom, type ResidencyRoom } from "@/services/rooms";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { sendShiftChangeRequestResolvedEmail, sendShiftChangeRequestSubmittedEmail } from "@/services/shift-change-request-email";
+import { resolveShiftChangeRequest } from "@/services/shift-change-requests";
 
 export type ResidencyActionState = { status: "idle" | "success" | "error"; message: string };
 export type CreateRoomActionState = ResidencyActionState & { room?: ResidencyRoom };
 export type CredentialLinkActionState = ResidencyActionState & { setupLink?: string };
+export type ShiftTimeEditPreview = {
+  oldStartsAt: string;
+  oldEndsAt: string;
+  newStartsAt: string;
+  newEndsAt: string;
+  oldClientBilledTotalCents: number;
+  newClientBilledTotalCents: number;
+  oldTalentCompensationTotalCents: number;
+  newTalentCompensationTotalCents: number;
+  assignmentCount: number;
+  adjustedAssignmentCount: number;
+};
+export type ShiftTimeEditActionState = ResidencyActionState & {
+  httpStatus?: 401 | 403;
+  preview?: ShiftTimeEditPreview;
+};
+export type SubmitShiftChangeRequestActionState = ResidencyActionState & {
+  requestId?: string;
+  requestType?: ShiftChangeRequestType;
+  httpStatus?: 401 | 403;
+};
+export type ResolveShiftChangeRequestActionState = ResidencyActionState & {
+  requestId?: string;
+  decision?: "approved" | "denied";
+  httpStatus?: 401 | 403;
+};
 export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_client_roster" | "remove_from_client_roster";
 
 type InternalActor = Awaited<ReturnType<typeof requireInternalActor>>;
@@ -57,6 +87,35 @@ async function requireManagerForShift(shiftId: string) {
     .limit(1);
   if (!row) throw new Error("Shift not found.");
   return requireActorForResidency(row.residencyId, { manager: true });
+}
+
+async function requireManagerForDirectShiftMutation(shiftId: string) {
+  const [row] = await getDb().select({
+    residencyId: shifts.residencyId,
+    economicsMode: shifts.economicsMode,
+  }).from(shifts).where(eq(shifts.id, shiftId)).limit(1);
+  if (!row) throw new Error("Shift not found.");
+  const actor = await requireActorForResidency(row.residencyId, { manager: true });
+  if (actor.kind === "residency" && row.economicsMode === "hfy") {
+    throw new ResidencyAccessError(403, "Submit a request to change or remove an HFY-managed Shift.");
+  }
+  return actor;
+}
+
+async function preventManagerSkipForMaterializedHfyShift(
+  actor: Awaited<ReturnType<typeof requireActorForResidency>>,
+  input: { residencyId: string; daypartId: string; serviceDate: string },
+) {
+  if (actor.kind !== "residency") return;
+  const [lockedShift] = await getDb().select({ id: shifts.id }).from(shifts).where(and(
+    eq(shifts.residencyId, input.residencyId),
+    eq(shifts.daypartId, input.daypartId),
+    eq(shifts.serviceDate, input.serviceDate),
+    eq(shifts.economicsMode, "hfy"),
+  )).limit(1);
+  if (lockedShift) {
+    throw new ResidencyAccessError(403, "Submit a request to cancel or delete an HFY-managed Shift.");
+  }
 }
 
 async function requireManagerForOccurrence(occurrenceId: string) {
@@ -1480,6 +1539,7 @@ export async function skipDaypartDateAction(formData: FormData): Promise<Residen
   try {
     const parsed = daypartDateActionSchema.parse(Object.fromEntries(formData));
     const actor = await requireActorForResidency(parsed.residencyId, { manager: true });
+    await preventManagerSkipForMaterializedHfyShift(actor, parsed);
     const result = await skipDaypartDate(actor, parsed);
     revalidateResidencyCalendars();
     revalidatePath("/residency/finances");
@@ -1857,7 +1917,7 @@ export async function updateCalendarShiftDetailsAction(formData: FormData): Prom
       notes: z.string().trim().max(2_000),
       clientRateOverride: z.string(),
     }).parse(Object.fromEntries(formData));
-    const actor = await requireManagerForShift(parsed.shiftId);
+    const actor = await requireManagerForDirectShiftMutation(parsed.shiftId);
     await updateCalendarShiftDetails(actor, parsed.shiftId, {
       notes: parsed.notes,
       clientRateOverrideCents: actor.kind === "internal"
@@ -1873,10 +1933,240 @@ export async function updateCalendarShiftDetailsAction(formData: FormData): Prom
   }
 }
 
+const shiftTimeEditSchema = z.object({
+  shiftId: z.uuid(),
+  newStartAt: z.iso.datetime(),
+  newEndAt: z.iso.datetime(),
+});
+
+function serializeShiftTimePreview(plan: Awaited<ReturnType<typeof previewShiftTimeEdit>>): ShiftTimeEditPreview {
+  return {
+    oldStartsAt: plan.oldStartsAt.toISOString(),
+    oldEndsAt: plan.oldEndsAt.toISOString(),
+    newStartsAt: plan.newStartsAt.toISOString(),
+    newEndsAt: plan.newEndsAt.toISOString(),
+    oldClientBilledTotalCents: plan.oldClientBilledTotalCents,
+    newClientBilledTotalCents: plan.newClientBilledTotalCents,
+    oldTalentCompensationTotalCents: plan.oldTalentCompensationTotalCents,
+    newTalentCompensationTotalCents: plan.newTalentCompensationTotalCents,
+    assignmentCount: plan.assignments.length,
+    adjustedAssignmentCount: plan.assignments.filter((assignment) => assignment.windowAdjusted).length,
+  };
+}
+
+function shiftTimeActionError(error: unknown, fallback: string): ShiftTimeEditActionState {
+  if (isResidencyAccessError(error)) {
+    return { status: "error", message: error.message, httpStatus: error.status };
+  }
+  const message = error instanceof Error && !error.message.startsWith("Failed query:") ? error.message : fallback;
+  return { status: "error", message };
+}
+
+export async function previewShiftTimeEditAction(formData: FormData): Promise<ShiftTimeEditActionState> {
+  try {
+    const actor = await requireInternalActorForMutation();
+    const parsed = shiftTimeEditSchema.parse(Object.fromEntries(formData));
+    const plan = await previewShiftTimeEdit(actor, {
+      shiftId: parsed.shiftId,
+      startsAt: new Date(parsed.newStartAt),
+      endsAt: new Date(parsed.newEndAt),
+    });
+    return { status: "success", message: "Review the recalculated totals before saving.", preview: serializeShiftTimePreview(plan) };
+  } catch (error) {
+    return shiftTimeActionError(error, "Unable to preview this Shift time change.");
+  }
+}
+
+export async function updateShiftTimeAction(formData: FormData): Promise<ShiftTimeEditActionState> {
+  try {
+    const actor = await requireInternalActorForMutation();
+    const parsed = shiftTimeEditSchema.parse(Object.fromEntries(formData));
+    const plan = await updateShiftTime(actor, {
+      shiftId: parsed.shiftId,
+      startsAt: new Date(parsed.newStartAt),
+      endsAt: new Date(parsed.newEndAt),
+    });
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/payouts");
+    revalidatePath("/app/invoices");
+    revalidatePath("/app");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/finances");
+    return { status: "success", message: "Shift time, Assignment compensation, and client billing were updated.", preview: serializeShiftTimePreview(plan) };
+  } catch (error) {
+    return shiftTimeActionError(error, "Unable to update this Shift time.");
+  }
+}
+
+const submitShiftChangeRequestSchema = z.object({
+  shiftId: z.uuid(),
+  requestType: z.enum(SHIFT_CHANGE_REQUEST_TYPES),
+  managerNote: z.string().trim().min(1).max(2_000),
+  proposedStartAt: z.preprocess((value) => value === "" || value == null ? null : value, z.iso.datetime().nullable()),
+  proposedEndAt: z.preprocess((value) => value === "" || value == null ? null : value, z.iso.datetime().nullable()),
+});
+
+export async function submitShiftChangeRequestAction(formData: FormData): Promise<SubmitShiftChangeRequestActionState> {
+  try {
+    const parsed = submitShiftChangeRequestSchema.parse(Object.fromEntries(formData));
+    const [shift] = await getDb().select({
+      id: shifts.id,
+      residencyId: shifts.residencyId,
+      serviceDate: shifts.serviceDate,
+      economicsMode: shifts.economicsMode,
+      timezone: residencies.timezone,
+      residencyName: residencies.name,
+      shiftName: shifts.name,
+      room: shifts.room,
+    }).from(shifts)
+      .innerJoin(residencies, eq(shifts.residencyId, residencies.id))
+      .where(eq(shifts.id, parsed.shiftId))
+      .limit(1);
+    if (!shift) throw new Error("Shift not found.");
+
+    const actor = await requireActorForResidency(shift.residencyId, { manager: true });
+    if (actor.kind !== "residency" || actor.isViewAs) {
+      throw new ResidencyAccessError(403, "A Residency manager must submit this request.");
+    }
+    if (shift.economicsMode !== "hfy") {
+      throw new Error("Requests are only required for Shifts billed by HFY.");
+    }
+
+    const request = prepareShiftChangeRequest({
+      requestType: parsed.requestType,
+      managerNote: parsed.managerNote,
+      proposedStartAt: parsed.proposedStartAt ? new Date(parsed.proposedStartAt) : null,
+      proposedEndAt: parsed.proposedEndAt ? new Date(parsed.proposedEndAt) : null,
+    }, shift);
+
+    const supabase = await createSupabaseServerClient();
+    const { data: existing, error: selectError } = await supabase
+      .from("shift_change_requests")
+      .select("id")
+      .eq("shift_id", shift.id)
+      .eq("status", "pending")
+      .limit(1);
+    if (selectError) throw new Error("Unable to check this Shift's request status.");
+    if (existing?.length) throw new Error("A request is already pending for this Shift.");
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("shift_change_requests")
+      .insert({
+        shift_id: shift.id,
+        residency_id: shift.residencyId,
+        requested_by: actor.userId,
+        request_type: request.requestType,
+        manager_note: request.managerNote,
+        proposed_start_at: request.proposedStartAt?.toISOString() ?? null,
+        proposed_end_at: request.proposedEndAt?.toISOString() ?? null,
+      })
+      .select("id")
+      .single();
+    if (insertError?.code === "23505") throw new Error("A request is already pending for this Shift.");
+    if (insertError || !inserted) throw new Error("Unable to submit this request. Please try again.");
+
+    let emailWarning = "";
+    try {
+      await sendShiftChangeRequestSubmittedEmail({
+        requestId: inserted.id,
+        requestType: request.requestType,
+        residencyName: shift.residencyName,
+        residencyTimezone: shift.timezone,
+        shiftName: shift.shiftName,
+        room: shift.room,
+        serviceDate: shift.serviceDate,
+        managerNote: request.managerNote,
+        requestedByName: actor.displayName,
+        proposedStartAt: request.proposedStartAt,
+        proposedEndAt: request.proposedEndAt,
+      });
+    } catch (error) {
+      console.error("Shift change request owner email failed", error);
+      emailWarning = " The request is in the queue, but the owner email could not be delivered.";
+    }
+
+    revalidatePath("/residency/calendar");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app");
+    return {
+      status: "success",
+      message: `Request submitted to HFY. No schedule changes have been made yet.${emailWarning}`,
+      requestId: inserted.id,
+      requestType: request.requestType,
+    };
+  } catch (error) {
+    if (isResidencyAccessError(error)) {
+      return { status: "error", message: error.message, httpStatus: error.status };
+    }
+    return {
+      status: "error",
+      message: error instanceof Error && !error.message.startsWith("Failed query:")
+        ? error.message
+        : "Unable to submit this request.",
+    };
+  }
+}
+
+export async function resolveShiftChangeRequestAction(formData: FormData): Promise<ResolveShiftChangeRequestActionState> {
+  try {
+    const parsed = z.object({
+      requestId: z.uuid(),
+      decision: z.enum(["approved", "denied"]),
+      resolutionNote: z.string().trim().max(2_000),
+    }).parse(Object.fromEntries(formData));
+    const actor = await requireInternalActorForMutation();
+    const result = await resolveShiftChangeRequest(actor, parsed);
+
+    let emailWarning = "";
+    try {
+      await sendShiftChangeRequestResolvedEmail({
+        to: result.requestedByEmail,
+        requestId: result.requestId,
+        requestType: result.requestType,
+        residencyName: result.residencyName,
+        shiftName: result.shiftName,
+        room: result.room,
+        serviceDate: result.serviceDate,
+        managerNote: result.managerNote,
+        decision: result.status,
+        resolutionNote: result.resolutionNote,
+      });
+    } catch (error) {
+      console.error("Shift change request resolution email failed", error);
+      emailWarning = " The request was resolved, but the manager email could not be delivered.";
+    }
+
+    revalidatePath("/app");
+    revalidatePath("/app/calendar");
+    revalidatePath("/app/dayparts");
+    revalidatePath("/app/payouts");
+    revalidatePath("/app/invoices");
+    revalidatePath("/residency/calendar");
+    revalidatePath("/residency/dayparts");
+    revalidatePath("/residency/finances");
+    return {
+      status: "success",
+      message: `Request ${result.status}.${emailWarning}`,
+      requestId: result.requestId,
+      decision: result.status,
+    };
+  } catch (error) {
+    if (isResidencyAccessError(error)) {
+      return { status: "error", message: error.message, httpStatus: error.status };
+    }
+    return {
+      status: "error",
+      message: error instanceof Error && !error.message.startsWith("Failed query:")
+        ? error.message
+        : "Unable to resolve this Shift request.",
+    };
+  }
+}
+
 export async function deleteCalendarShiftAction(formData: FormData): Promise<ResidencyActionState> {
   try {
     const shiftId = z.uuid().parse(formData.get("shiftId"));
-    const actor = await requireManagerForShift(shiftId);
+    const actor = await requireManagerForDirectShiftMutation(shiftId);
     await deleteShift(actor, shiftId);
     revalidatePath("/app/calendar");
     revalidatePath("/app/payouts");
@@ -1917,7 +2207,7 @@ function revalidateOneTimeRecordViews() {
 export async function updateOneTimeShiftAction(formData: FormData): Promise<ResidencyActionState> {
   try {
     const parsed = oneTimeRecordSchema.parse(Object.fromEntries(formData));
-    const actor = await requireManagerForShift(parsed.id);
+    const actor = await requireManagerForDirectShiftMutation(parsed.id);
     await updateOneTimeShift(actor, parsed);
     revalidateOneTimeRecordViews();
     return { status: "success", message: "One-time slot updated." };

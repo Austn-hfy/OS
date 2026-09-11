@@ -1,5 +1,5 @@
 import { InternalShell } from "@/components/internal-shell";
-import { getDeveloperResidencyList, getResidencyList } from "@/data/internal";
+import { getDeveloperResidencyList, getPendingShiftChangeRequestCount, getResidencyList } from "@/data/internal";
 import { requireInternalActor } from "@/lib/auth";
 import { PRIVACY_MODE_COOKIE, privacyModeEnabled } from "@/lib/privacy-mode";
 import { cookies } from "next/headers";
@@ -9,14 +9,15 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const [actor, residencies, developerResidencies, cookieStore, requestedViewAsResidencyId] = await Promise.all([
+  const [actor, residencies, developerResidencies, pendingShiftChangeRequestCount, cookieStore, requestedViewAsResidencyId] = await Promise.all([
     requireInternalActor(),
     getResidencyList(),
     getDeveloperResidencyList(),
+    getPendingShiftChangeRequestCount(),
     cookies(),
     viewAsResidencyId(),
   ]);
   const viewAsResidency = developerResidencies.find((residency) => residency.id === requestedViewAsResidencyId) ?? null;
   if (viewAsResidency) redirect("/residency/calendar");
-  return <InternalShell actor={actor} residencies={residencies} developerResidencies={developerResidencies} initialPrivacyMode={privacyModeEnabled(cookieStore.get(PRIVACY_MODE_COOKIE)?.value)}>{children}</InternalShell>;
+  return <InternalShell actor={actor} residencies={residencies} developerResidencies={developerResidencies} pendingShiftChangeRequestCount={pendingShiftChangeRequestCount} initialPrivacyMode={privacyModeEnabled(cookieStore.get(PRIVACY_MODE_COOKIE)?.value)}>{children}</InternalShell>;
 }

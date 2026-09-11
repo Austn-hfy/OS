@@ -60,7 +60,8 @@ describe("Full Programming account controls", () => {
     expect(actions).toContain('status: "applied"');
     expect(schema).toContain('pgTable("talent_schedule_locks"');
     expect(schema).toContain('pgTable("talent_invoice_adjustments"');
-    for (const source of [shifts, dayparts, requests]) expect(source).toContain("talentInvoiceAdjustments");
+    for (const source of [shifts, requests]) expect(source).toContain("talentInvoiceAdjustments");
+    expect(dayparts).toContain("deleteShiftInTransaction");
     expect(template).toContain("HFY Talent Invoice");
   });
 });

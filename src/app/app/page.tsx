@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { formatMoney } from "@/components/format";
 import { PrivateValue } from "@/components/privacy-mode";
-import { getBilledByHfyWorkQueue, getDashboardData, getDeveloperResidencyList, getPendingHfyTalentRequests } from "@/data/internal";
+import { getBilledByHfyWorkQueue, getDashboardData, getDeveloperResidencyList, getPendingHfyTalentRequests, getPendingShiftChangeRequests } from "@/data/internal";
 import { formatLocalMinute } from "@/domain/dayparts";
 import { enterViewAsAction } from "./view-as-actions";
 import { CreateResidencyModal } from "./create-residency-modal";
 import { HfyRequestQueue } from "./hfy-request-queue";
 import { formatServiceTier } from "@/domain/service-tier";
 import { WorkspaceSurface } from "@/components/workspace-surface";
+import { ShiftChangeRequestQueue } from "./shift-change-request-queue";
 
 const weekdayLabels = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -37,7 +38,7 @@ async function DeveloperDashboard() {
 }
 
 async function HfyWorkQueue() {
-  const [queue, hfyRequests] = await Promise.all([getBilledByHfyWorkQueue(), getPendingHfyTalentRequests()]);
+  const [queue, hfyRequests, shiftChangeRequests] = await Promise.all([getBilledByHfyWorkQueue(), getPendingHfyTalentRequests(), getPendingShiftChangeRequests()]);
   const today = new Date().toISOString().slice(0, 10);
   const grouped = new Map<string, typeof queue>();
   for (const daypart of queue) {
@@ -47,7 +48,8 @@ async function HfyWorkQueue() {
   }
 
   return <WorkspaceSurface className="workspace-surface-dashboard workspace-surface-work-queue">
-    <header className="page-header owner-mode-header hfy-mode-header"><div><p className="eyebrow">HFY · Programming</p><h1>Work Queue</h1><p className="subhead">Schedule pending client requests quickly, then scan every Standing HFY Booking across all Residencies.</p></div><Link className="button secondary" href="/app?mode=hfy&view=operations">Open Operations</Link></header>
+    <header className="page-header owner-mode-header hfy-mode-header"><div><p className="eyebrow">HFY · Programming</p><h1>Work Queue</h1><p className="subhead">Review Shift changes, schedule pending client requests, then scan every Standing HFY Booking across all Residencies.</p></div><Link className="button secondary" href="/app?mode=hfy&view=operations">Open Operations</Link></header>
+    <ShiftChangeRequestQueue requests={shiftChangeRequests} />
     <HfyRequestQueue requests={hfyRequests.requests} artists={hfyRequests.artists} />
     <section className="hfy-work-queue-section">
       <div className="section-heading"><div><p className="eyebrow">Revenue source of truth</p><h2>Standing HFY Bookings</h2><p className="subhead">Residency Platform status never removes a matching Daypart from this view. Inactive records stay visible and clearly labeled.</p></div></div>
