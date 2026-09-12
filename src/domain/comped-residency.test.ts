@@ -2,19 +2,25 @@ import { describe, expect, it } from "vitest";
 import {
   assertCompedResidencyConfirmation,
   compedResidencyConfirmationPhrase,
-  enforceCompedPlan,
+  effectiveCompedPlan,
 } from "./comped-residency";
 
 describe("permanently comped Residencies", () => {
-  it("overrides submitted Talent and House rates with zero", () => {
-    expect(enforceCompedPlan({
+  it("projects zero effective rates without mutating the stored plan", () => {
+    const storedPlan = {
       cadence: "quarterly" as const,
       talentSessionUnitAmountCents: 999_999,
       houseProgramUnitAmountCents: 1,
-    }, true)).toEqual({
+    };
+    expect(effectiveCompedPlan(storedPlan, true)).toEqual({
       cadence: "quarterly",
       talentSessionUnitAmountCents: 0,
       houseProgramUnitAmountCents: 0,
+    });
+    expect(storedPlan).toEqual({
+      cadence: "quarterly",
+      talentSessionUnitAmountCents: 999_999,
+      houseProgramUnitAmountCents: 1,
     });
   });
 
@@ -24,7 +30,7 @@ describe("permanently comped Residencies", () => {
       talentSessionUnitAmountCents: 9_000,
       houseProgramUnitAmountCents: 6_000,
     };
-    expect(enforceCompedPlan(plan, false)).toBe(plan);
+    expect(effectiveCompedPlan(plan, false)).toBe(plan);
   });
 
   it("requires the exact owner confirmation phrase for either toggle direction", () => {

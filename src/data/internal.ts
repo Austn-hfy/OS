@@ -37,6 +37,7 @@ import {
 import { getInvoiceBrandingSettings } from "@/services/invoice-branding";
 import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents } from "@/domain/platform-billing";
 import { assignmentNeedsRate } from "@/domain/assignment-rates";
+import { effectiveCompedPlan } from "@/domain/comped-residency";
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
@@ -147,7 +148,7 @@ export async function getPlatformRevenueDashboard() {
   const liveRows = await Promise.all(plans.map((plan) => loadPlatformLiveUsage(plan.residencyId)));
 
   return plans.map((plan, index) => {
-    const monthlyAmountCents = calculatePlatformMonthlyAmountCents(plan);
+    const monthlyAmountCents = calculatePlatformMonthlyAmountCents(effectiveCompedPlan(plan, plan.comped));
     return {
       ...plan,
       nextChargeAt: plan.nextChargeAt?.toISOString() ?? null,

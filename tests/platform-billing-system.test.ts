@@ -132,7 +132,31 @@ describe("permanently comped Residencies", () => {
     expect(ownerPage).toContain("Permanently comped · $0 Platform rates");
     expect(ownerPage).toContain("COMPED · $0");
     expect(planForm).toContain("$0 Talent · $0 House");
-    expect(stripeService).toContain("enforceCompedPlan");
+    expect(stripeService).toContain("effectiveCompedPlan");
+    expect(stripeService).not.toContain("enforceCompedPlan(input");
+  });
+
+  it("renders $0 invoice line items from an unchanged nonzero underlying plan", () => {
+    const storedPlan = { revision: 7, cadence: "monthly" as const, talentSessions: 8, talentSessionUnitAmountCents: 7_000, housePrograms: 3, houseProgramUnitAmountCents: 6_000, oneOffAllowance: 2 };
+    const snapshot = createPlatformInvoiceDocumentSnapshot({
+      comped: true,
+      invoice: { id: "invoice", stripeInvoiceId: "in_test", number: "PLAT-COMP", invoiceDate: "2027-09-01", billingPeriodStart: "2027-09-01", billingPeriodEnd: "2027-09-30", currency: "USD", amountDueCents: 0, amountPaidCents: 0, status: "paid" },
+      issuer: { legalName: "HFY LLC", productName: "Platform", email: "billing@example.test", address: "" },
+      billTo: { residencyName: "Internal Test", contactName: "Billing", contactEmail: "test@example.test", address: "" },
+      committedPlan: storedPlan,
+    });
+
+    expect(snapshot.committedPlan).toMatchObject({
+      talentSessionUnitAmountCents: 0,
+      houseProgramUnitAmountCents: 0,
+      monthlyAmountCents: 0,
+      cadenceAmountCents: 0,
+    });
+    expect(snapshot.lines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ description: "Committed Talent sessions", unitAmountCents: 0, amountCents: 0 }),
+      expect.objectContaining({ description: "Committed House programs", unitAmountCents: 0, amountCents: 0 }),
+    ]));
+    expect(storedPlan).toMatchObject({ talentSessionUnitAmountCents: 7_000, houseProgramUnitAmountCents: 6_000 });
   });
 });
 
