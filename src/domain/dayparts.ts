@@ -189,6 +189,24 @@ export type DaypartDateException = {
   endMinute: number | null;
 };
 
+export function daypartSchedulingWindowForDate(
+  daypart: {
+    scheduleMode: DaypartScheduleMode;
+    suggestedStartMinute: number | null;
+    suggestedEndMinute: number | null;
+    rules: DaypartRuleInput[];
+  },
+  serviceDate: string,
+): DaypartRuleInput | undefined {
+  const weekday = weekdayForDate(serviceDate);
+  if (daypart.scheduleMode === "calendar_only") {
+    return daypart.suggestedStartMinute !== null && daypart.suggestedEndMinute !== null
+      ? { weekday, startMinute: daypart.suggestedStartMinute, endMinute: daypart.suggestedEndMinute, defaultDjCount: null }
+      : daypart.rules[0];
+  }
+  return daypart.rules.find((rule) => rule.weekday === weekday) ?? daypart.rules[0];
+}
+
 export type SlotSchedulingStatus = "empty" | "partial" | "filled";
 
 export function scheduleOccurrenceScheduling(

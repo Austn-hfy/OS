@@ -10,6 +10,7 @@ import {
   contrastTextColor,
   daypartDateKey,
   daypartBookingRecordKind,
+  daypartSchedulingWindowForDate,
   formatLocalMinute,
   formatCompactMinuteRange,
   hasOverlappingAssignmentMinutes,
@@ -88,6 +89,21 @@ describe("Daypart weekly rules", () => {
     expect(localDateTimeForMinute("2026-09-04", start)).toBe("2026-09-04T21:00");
     expect(localDateTimeForMinute("2026-09-04", end)).toBe("2026-09-05T00:00");
     expect(formatLocalMinute(end)).toBe("12:00 AM");
+  });
+
+  it("uses the usual Daypart window when scheduling a non-standard weekday", () => {
+    const daypart = {
+      scheduleMode: "standing_weekly" as const,
+      suggestedStartMinute: null,
+      suggestedEndMinute: null,
+      rules: [
+        { weekday: 5, startMinute: 1260, endMinute: 1440, defaultDjCount: 1 },
+        { weekday: 6, startMinute: 1200, endMinute: 1380, defaultDjCount: 2 },
+      ],
+    };
+
+    expect(daypartSchedulingWindowForDate(daypart, "2026-09-13")).toEqual(daypart.rules[0]);
+    expect(daypartSchedulingWindowForDate(daypart, "2026-09-12")).toEqual(daypart.rules[1]);
   });
 
   it("keeps each DJ's hours inside the full Daypart Shift", () => {
