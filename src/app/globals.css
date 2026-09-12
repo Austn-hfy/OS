@@ -1270,7 +1270,7 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .quick-reschedule-row span, .quick-reschedule-row small { color: var(--muted); font-size: 9px; }
 .quick-reschedule-row strong { font-size: 12px; }
 .quick-reschedule-row .button { padding: 10px 13px; }
-.quick-existing-actions { display: flex !important; grid-auto-flow: column; justify-content: end; align-items: center; gap: 8px !important; }
+.quick-existing-actions { display: flex !important; flex-wrap: wrap; grid-auto-flow: column; justify-content: end; align-items: center; gap: 8px !important; }
 .remove-dj-button { appearance: none; min-height: 38px; padding: 8px 12px; border: 1px solid rgba(183,67,55,.2); border-radius: 999px; color: var(--danger); background: white; font-size: 10px; font-weight: 750; }
 .replacement-editor { grid-column: 1 / -1; display: grid !important; gap: 12px !important; margin-top: 5px; padding: 14px; border-top: 1px solid rgba(2,116,222,.18); border-radius: 12px; background: rgba(255,255,255,.68); }
 .replacement-step { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 9px !important; }
