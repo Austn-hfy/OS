@@ -16,6 +16,21 @@ describe("Residency workspace boundaries", () => {
     expect(source).not.toContain('getItem("hfy-calendar-status-filter")');
   });
 
+  it("edits a Client Managed artist's hours without entering the replacement or HFY request flows", async () => {
+    const source = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
+    const saveHours = source.slice(source.indexOf("async function saveAssignmentHours"), source.indexOf("async function removeExistingAssignment"));
+
+    expect(source).toContain("editingEventCanEditClientManagedHours && assignment.talentId");
+    expect(source).toContain(">Edit hours</button>");
+    expect(source).toContain("The artist stays the same. Finances recalculates the amount owed from these saved hours.");
+    expect(saveHours).toContain('formData.set("talentId", assignmentHoursDraft.talentId)');
+    expect(saveHours).toContain("await rescheduleAssignmentAction(formData)");
+    expect(saveHours).not.toContain("replacementDraftFromAssignment");
+    expect(source).toContain(">Change DJ</button>");
+    expect(source).toContain("replacementDraftFromAssignment(assignment)");
+    expect(source).toContain("submitShiftChangeRequestAction(formData)");
+  });
+
   it("keeps Settings updates tied to the authenticated actor instead of a submitted Residency id", async () => {
     const source = await readFile(new URL("../src/app/residency/actions.ts", import.meta.url), "utf8");
     expect(source).toContain("eq(residencies.id, actor.residencyId)");
