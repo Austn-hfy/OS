@@ -325,11 +325,17 @@ export async function createResidencyDateBooking(actor: AuditActor, input: Creat
             eq(daypartDateExceptions.serviceDate, input.serviceDate),
           )).limit(1),
         ]);
-        if (!standingRule || dateException?.kind === "skip") {
+        if (dateException?.kind === "skip") {
           throw new Error("This standing Daypart is skipped or does not run on this date.");
         }
-        effectiveStartMinute = dateException?.kind === "override" ? dateException.startMinute! : standingRule.startMinute;
-        effectiveEndMinute = dateException?.kind === "override" ? dateException.endMinute! : standingRule.endMinute;
+        if (!standingRule) {
+          if (!clientManagedTalentBooking) {
+            throw new Error("This standing Daypart is skipped or does not run on this date.");
+          }
+        } else {
+          effectiveStartMinute = dateException?.kind === "override" ? dateException.startMinute! : standingRule.startMinute;
+          effectiveEndMinute = dateException?.kind === "override" ? dateException.endMinute! : standingRule.endMinute;
+        }
       }
       let startsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, effectiveStartMinute), residency.timezone);
       let endsAt = zonedLocalDateTimeToUtc(localDateTimeForMinute(input.serviceDate, effectiveEndMinute), residency.timezone);

@@ -92,7 +92,7 @@ describe("Calendar Only Dayparts", () => {
 
   it("appears in the date picker with suggested hours", async () => {
     const calendar = await readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8");
-    expect(calendar).toContain('daypart.scheduleMode === "calendar_only"');
+    expect(calendar).toContain("daypartSchedulingWindowForDate(daypart, date)");
     expect(calendar).toContain("suggestedStartMinute");
     expect(calendar).toContain("This reusable Daypart template will be added only to");
   });

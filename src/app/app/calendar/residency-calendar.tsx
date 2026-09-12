@@ -18,7 +18,7 @@ import { PrivateValue, SensitiveInput } from "@/components/privacy-mode";
 import { TimeSelect } from "@/components/time-select";
 import { MonthCalendar, type MonthCalendarEvent } from "@/components/month-calendar";
 import { WeekCalendar } from "@/components/week-calendar";
-import { HFY_BOOKED_COLOR, clockToMinute, formatLocalMinute, hasOverlappingAssignmentMinutes, localDateTimeForMinute, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayForDate, weekdayNames, type DaypartDateException, type DaypartScheduleMode, type RoomHue } from "@/domain/dayparts";
+import { HFY_BOOKED_COLOR, clockToMinute, daypartSchedulingWindowForDate, formatLocalMinute, hasOverlappingAssignmentMinutes, localDateTimeForMinute, minuteToClock, resolveAssignmentMinutes, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayForDate, weekdayNames, type DaypartDateException, type DaypartScheduleMode, type RoomHue } from "@/domain/dayparts";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { monthKeyForDate, monthLabel, normalizeWeekStart, shiftDateKey, shiftMonthKey, weekLabel, type CalendarViewMode } from "@/lib/calendar";
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
@@ -410,9 +410,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     const nextSuggestions: SuggestionDraft[] = dayparts.flatMap((daypart) => {
       if (!daypart.active || (daypart.activeUntil && date > daypart.activeUntil)) return [];
       const recurringRule = daypart.scheduleMode === "standing_weekly" ? daypart.rules.find((item) => item.weekday === weekday) : undefined;
-      const rule = recurringRule ?? (daypart.scheduleMode === "calendar_only" && daypart.suggestedStartMinute !== null && daypart.suggestedEndMinute !== null
-        ? { weekday, startMinute: daypart.suggestedStartMinute, endMinute: daypart.suggestedEndMinute, defaultDjCount: null }
-        : daypart.rules[0]);
+      const rule = daypartSchedulingWindowForDate(daypart, date);
       if (!rule) return [];
       const dateException = dateExceptions.find((item) => item.daypartId === daypart.id && item.serviceDate === date);
       const startMinute = dateException?.kind === "override" && dateException.startMinute !== null ? dateException.startMinute : rule.startMinute;
@@ -1292,14 +1290,8 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
   const weekViewHref = calendarHref("week", monthKeyForDate(shiftDateKey(activeWeekStart, 3)), activeWeekStart);
   const activeSourceDaypart = activeSuggestion?.sourceDaypartId ? dayparts.find((daypart) => daypart.id === activeSuggestion.sourceDaypartId) : undefined;
   const activeCalendarOnly = activeSourceDaypart?.scheduleMode === "calendar_only";
-  const activeStandingRule = activeSchedulingDate && activeSuggestion?.sourceDaypartId
-    ? (() => {
-      const source = dayparts.find((daypart) => daypart.id === activeSuggestion.sourceDaypartId);
-      if (source?.scheduleMode === "calendar_only") return source.suggestedStartMinute !== null && source.suggestedEndMinute !== null
-        ? { weekday: weekdayForDate(activeSchedulingDate), startMinute: source.suggestedStartMinute, endMinute: source.suggestedEndMinute, defaultDjCount: null }
-        : undefined;
-      return source?.rules.find((rule) => rule.weekday === weekdayForDate(activeSchedulingDate)) ?? source?.rules[0];
-    })()
+  const activeStandingRule = activeSchedulingDate && activeSourceDaypart
+    ? daypartSchedulingWindowForDate(activeSourceDaypart, activeSchedulingDate)
     : undefined;
   const activeStandingWindow = activeStandingRule
     ? `${formatLocalMinute(activeStandingRule.startMinute)}–${formatLocalMinute(activeStandingRule.endMinute)}`
