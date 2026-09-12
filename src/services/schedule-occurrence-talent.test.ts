@@ -8,7 +8,7 @@ const mockedDatabase = vi.hoisted(() => ({ value: undefined as unknown }));
 
 vi.mock("@/db/client", () => ({ getDb: () => mockedDatabase.value }));
 
-import { addTalentToScheduleOccurrence, requestHfyForScheduleOccurrence } from "./residency-bookings";
+import { addClientManagedAssignmentToScheduleOccurrence, requestHfyForScheduleOccurrence } from "./residency-bookings";
 
 const residencyId = "00000000-0000-4000-8000-000000000001";
 const talentDaypartId = "00000000-0000-4000-8000-000000000010";
@@ -48,7 +48,8 @@ beforeAll(async () => {
       id uuid PRIMARY KEY,
       residency_id uuid NOT NULL,
       type text NOT NULL,
-      billing_mode text
+      billing_mode text,
+      client_default_rate_cents integer
     );
     CREATE TABLE talent (
       id uuid PRIMARY KEY,
@@ -122,9 +123,35 @@ beforeAll(async () => {
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       shift_id uuid NOT NULL,
       talent_id uuid,
+      created_by_user_id uuid,
+      source text NOT NULL,
+      set_name text NOT NULL,
+      guest_name text NOT NULL DEFAULT '',
+      role text NOT NULL DEFAULT 'DJ',
       starts_at timestamptz NOT NULL,
       ends_at timestamptz NOT NULL,
-      booking_status text NOT NULL
+      booking_status text NOT NULL,
+      compensation_type text NOT NULL,
+      talent_rate_override_cents integer,
+      talent_rate_cents integer NOT NULL,
+      fixed_fee_cents integer,
+      total_compensation_cents integer NOT NULL,
+      payout_status text NOT NULL,
+      paid_at timestamptz,
+      paid_amount_cents integer,
+      payment_reference text,
+      internal_notes text NOT NULL DEFAULT '',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE TABLE client_assignment_terms (
+      assignment_id uuid PRIMARY KEY,
+      residency_id uuid NOT NULL,
+      default_rate_cents integer,
+      rate_cents integer,
+      updated_by_user_id uuid,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
     );
     CREATE TABLE hfy_talent_requests (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -154,13 +181,13 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await database.exec(`
-    TRUNCATE audit_log, hfy_talent_requests, assignments, shifts, schedule_occurrence_talent,
+    TRUNCATE audit_log, hfy_talent_requests, client_assignment_terms, assignments, shifts, schedule_occurrence_talent,
       schedule_occurrences, residency_talent, talent, dayparts, residencies;
     INSERT INTO residencies (id, timezone, tier, active, operating_mode)
     VALUES ('${residencyId}', 'America/Los_Angeles', 'operations_only', true, 'operations');
-    INSERT INTO dayparts (id, residency_id, type, billing_mode) VALUES
-      ('${talentDaypartId}', '${residencyId}', 'dj_artist', 'tracking_only'),
-      ('${houseDaypartId}', '${residencyId}', 'house_activity', NULL);
+    INSERT INTO dayparts (id, residency_id, type, billing_mode, client_default_rate_cents) VALUES
+      ('${talentDaypartId}', '${residencyId}', 'dj_artist', 'tracking_only', 6000),
+      ('${houseDaypartId}', '${residencyId}', 'house_activity', NULL, NULL);
     INSERT INTO talent (id, stage_name, ownership, owning_residency_id, exclusive_residency_id, talent_status)
     VALUES ('${talentId}', 'Registered Artist', 'residency', '${residencyId}', '${residencyId}', 'active');
     INSERT INTO residency_talent (residency_id, talent_id, active, client_visible)
@@ -179,28 +206,37 @@ afterAll(async () => {
 });
 
 describe("materialized Tracking-only occurrence staffing", () => {
-  it("attaches a registered artist through the occurrence link without financial records", async () => {
-    await addTalentToScheduleOccurrence(actor, {
+  it("converts a Talent occurrence into a client-owned Shift and real Assignment", async () => {
+    await addClientManagedAssignmentToScheduleOccurrence(actor, {
       occurrenceId: talentOccurrenceId,
       talentId,
       startsAtMinute: 720,
       endsAtMinute: 1140,
+      compensationType: "hourly",
+      talentRateOverrideCents: 7500,
+      fixedFeeCents: 50000,
     });
 
-    const links = await database.query<{ occurrence_id: string; talent_id: string }>(`
-      SELECT occurrence_id::text, talent_id::text FROM schedule_occurrence_talent;
-    `);
-    expect(links.rows).toEqual([{ occurrence_id: talentOccurrenceId, talent_id: talentId }]);
-    await expect(database.query("SELECT 1 FROM shifts")).resolves.toMatchObject({ rows: [] });
-    await expect(database.query("SELECT 1 FROM assignments")).resolves.toMatchObject({ rows: [] });
+    await expect(database.query(`SELECT 1 FROM schedule_occurrences WHERE id = '${talentOccurrenceId}'`))
+      .resolves.toMatchObject({ rows: [] });
+    await expect(database.query("SELECT 1 FROM schedule_occurrence_talent")).resolves.toMatchObject({ rows: [] });
+    await expect(database.query("SELECT economics_mode, client_talent_default_rate_cents FROM shifts"))
+      .resolves.toMatchObject({ rows: [{ economics_mode: "client_owned", client_talent_default_rate_cents: 6000 }] });
+    await expect(database.query("SELECT source, compensation_type, talent_rate_cents, total_compensation_cents, payout_status FROM assignments"))
+      .resolves.toMatchObject({ rows: [{ source: "client_owned", compensation_type: "na", talent_rate_cents: 0, total_compensation_cents: 0, payout_status: "na" }] });
+    await expect(database.query("SELECT residency_id::text, default_rate_cents, rate_cents FROM client_assignment_terms"))
+      .resolves.toMatchObject({ rows: [{ residency_id: residencyId, default_rate_cents: 6000, rate_cents: null }] });
   });
 
   it("does not allow House occurrences into the artist-linking path", async () => {
-    await expect(addTalentToScheduleOccurrence(actor, {
+    await expect(addClientManagedAssignmentToScheduleOccurrence(actor, {
       occurrenceId: houseOccurrenceId,
       talentId,
       startsAtMinute: 1200,
       endsAtMinute: 1320,
+      compensationType: "hourly",
+      talentRateOverrideCents: null,
+      fixedFeeCents: null,
     })).rejects.toThrow(/Client Managed Talent occurrence/);
 
     await expect(database.query("SELECT 1 FROM schedule_occurrence_talent")).resolves.toMatchObject({ rows: [] });
