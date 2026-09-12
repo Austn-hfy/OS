@@ -1510,7 +1510,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
               </form>
             ) : editingEvent ? editingEvent.recordType === "nonfinancial_occurrence" ? <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
-              {editingEvent.daypartId ? <><div className="quick-house-activity"><strong>{editingReusableTemplate ? "Reusable template scheduled" : "Tracking-only Daypart scheduled"}</strong><p>No payout or invoice records were created.</p></div>{materializedOccurrenceTalentEditor}{daypartOccurrenceEditor}</> : oneTimeRecordEditor}
+              {editingEvent.daypartId ? <>{materializedOccurrenceTalentEditor}{daypartOccurrenceEditor}</> : oneTimeRecordEditor}
               {editingEvent.assignments.length ? <div className="quick-reschedule-list">{editingEvent.assignments.map((assignment, index) => <div className="quick-reschedule-row" key={assignment.id}><div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div></div>)}</div> : null}
               {editState.status !== "idle" ? <p className={editState.status === "error" ? "error" : "success"} aria-live="polite">{editState.message}</p> : null}
               {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
