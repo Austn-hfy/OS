@@ -209,18 +209,23 @@ afterAll(async () => {
   await database.close();
 });
 
-function bookingFor(serviceDate: string, talentId: string) {
+function bookingFor(
+  serviceDate: string,
+  talentId: string,
+  hours = { startMinute: 1260, endMinute: 1440 },
+  assignmentHours = hours,
+) {
   return createResidencyDateBooking(actor, {
     residencyId,
     serviceDate,
     dayparts: [{
       daypartId,
-      startMinute: 1260,
-      endMinute: 1440,
+      startMinute: hours.startMinute,
+      endMinute: hours.endMinute,
       assignments: [{
         talentId,
-        startsAtMinute: 1260,
-        endsAtMinute: 1440,
+        startsAtMinute: assignmentHours.startMinute,
+        endsAtMinute: assignmentHours.endMinute,
         compensationType: "hourly",
         talentRateOverrideCents: 9999,
         fixedFeeCents: 99999,
@@ -230,6 +235,52 @@ function bookingFor(serviceDate: string, talentId: string) {
 }
 
 describe("Client Managed Talent bookings", () => {
+  it("books a genuine one-off on a non-standard weekday using the entered hours", async () => {
+    const result = await bookingFor("2026-09-13", artistOneId, { startMinute: 1170, endMinute: 1350 });
+
+    expect(result).toMatchObject({ occurrenceIds: [], shiftIds: [expect.any(String)] });
+    await expect(database.query(`
+      SELECT
+        to_char(starts_at AT TIME ZONE 'America/Los_Angeles', 'YYYY-MM-DD HH24:MI') AS starts_local,
+        to_char(ends_at AT TIME ZONE 'America/Los_Angeles', 'YYYY-MM-DD HH24:MI') AS ends_local
+      FROM shifts;
+    `)).resolves.toMatchObject({ rows: [{
+      starts_local: "2026-09-13 19:30",
+      ends_local: "2026-09-13 22:30",
+    }] });
+  });
+
+  it("uses authoritative standing hours instead of tampered submitted Daypart hours", async () => {
+    await bookingFor(
+      "2026-09-11",
+      artistOneId,
+      { startMinute: 600, endMinute: 900 },
+      { startMinute: 1260, endMinute: 1440 },
+    );
+
+    await expect(database.query(`
+      SELECT
+        to_char(starts_at AT TIME ZONE 'America/Los_Angeles', 'YYYY-MM-DD HH24:MI') AS starts_local,
+        to_char(ends_at AT TIME ZONE 'America/Los_Angeles', 'YYYY-MM-DD HH24:MI') AS ends_local
+      FROM shifts;
+    `)).resolves.toMatchObject({ rows: [{
+      starts_local: "2026-09-11 21:00",
+      ends_local: "2026-09-12 00:00",
+    }] });
+  });
+
+  it("still blocks a standing date with an active skip exception", async () => {
+    await database.exec(`
+      INSERT INTO daypart_date_exceptions (daypart_id, service_date, kind)
+      VALUES ('${daypartId}', '2026-09-11', 'skip');
+    `);
+
+    await expect(bookingFor("2026-09-11", artistOneId))
+      .rejects.toThrow("This standing Daypart is skipped or does not run on this date.");
+    await expect(database.query("SELECT COUNT(*)::int AS count FROM shifts"))
+      .resolves.toMatchObject({ rows: [{ count: 0 }] });
+  });
+
   it("creates distinct Finance-visible owed records for projected Friday and Saturday dates", async () => {
     const friday = await bookingFor("2026-09-11", artistOneId);
     const saturday = await bookingFor("2026-09-12", artistTwoId);
