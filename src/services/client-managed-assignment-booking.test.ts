@@ -266,6 +266,7 @@ describe("Client Managed Talent bookings", () => {
     await bookingFor("2026-09-12", artistTwoId);
     const before = await getResidencyClientTalentLedger(residencyId);
     const friday = before.find((row) => row.serviceDate === "2026-09-11")!;
+    const beforeIds = before.map((row) => row.id);
 
     await rescheduleAssignment(actor, friday.id, {
       talentId: artistOneId,
@@ -274,10 +275,28 @@ describe("Client Managed Talent bookings", () => {
     });
 
     const after = await getResidencyClientTalentLedger(residencyId);
+    expect(after.map((row) => row.id)).toEqual(beforeIds);
     expect(after.map((row) => ({ serviceDate: row.serviceDate, artist: row.artist, owedCents: row.owedCents }))).toEqual([
       { serviceDate: "2026-09-11", artist: "Artist 1", owedCents: 12000 },
       { serviceDate: "2026-09-12", artist: "Artist 2", owedCents: 18000 },
     ]);
+    await expect(database.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM shifts) AS shifts,
+        (SELECT COUNT(*)::int FROM assignments) AS assignments,
+        (SELECT COUNT(*)::int FROM client_assignment_terms) AS terms
+    `)).resolves.toMatchObject({ rows: [{ shifts: 2, assignments: 2, terms: 2 }] });
+    await expect(database.query(`
+      SELECT name, type, billing_mode, schedule_mode, client_default_rate_cents
+      FROM dayparts
+      WHERE id = '${daypartId}';
+    `)).resolves.toMatchObject({ rows: [{
+      name: "Late Night DJs",
+      type: "dj_artist",
+      billing_mode: "tracking_only",
+      schedule_mode: "standing_weekly",
+      client_default_rate_cents: 6000,
+    }] });
     await expect(database.query(`
       SELECT weekday, start_minute, end_minute
       FROM daypart_day_rules

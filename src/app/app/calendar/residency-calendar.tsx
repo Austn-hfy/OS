@@ -24,7 +24,7 @@ import { monthKeyForDate, monthLabel, normalizeWeekStart, shiftDateKey, shiftMon
 import type { DaypartBillingMode, DaypartType } from "@/domain/dayparts";
 import type { PublicCalendarLinkSettings } from "@/data/internal";
 import { MISSING_RESIDENCY_TALENT_RATE_MESSAGE } from "@/domain/residency-rates";
-import { replacementDraftFromAssignment } from "@/domain/assignment-editing";
+import { assignmentHoursDraftFromAssignment, canEditClientManagedAssignmentHours, replacementDraftFromAssignment, type AssignmentHoursDraft } from "@/domain/assignment-editing";
 import { TALENT_GENRES } from "@/domain/talent-genres";
 import type { ResidencyRoom } from "@/services/rooms";
 import type { ShiftChangeRequestType } from "@/domain/shift-change-requests";
@@ -244,6 +244,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
   const [clientArtistFlow, setClientArtistFlow] = useState(false);
   const [artistPickerKey, setArtistPickerKey] = useState(0);
   const [replacementDraft, setReplacementDraft] = useState<ReplacementDraft | null>(null);
+  const [assignmentHoursDraft, setAssignmentHoursDraft] = useState<AssignmentHoursDraft | null>(null);
   const [newAssignmentDraft, setNewAssignmentDraft] = useState<SlotDraft | null>(null);
   const [oneTimeEditDraft, setOneTimeEditDraft] = useState<OneTimeEditDraft | null>(() => initialEditingEvent && !initialEditingEvent.daypartId ? oneTimeDraftFromEvent(initialEditingEvent, rooms) : null);
   const [daypartOccurrenceEditDraft, setDaypartOccurrenceEditDraft] = useState<DaypartOccurrenceEditDraft | null>(() => initialEditingEvent?.recordType === "nonfinancial_occurrence" && initialEditingEvent.daypartId ? daypartOccurrenceDraftFromEvent(initialEditingEvent) : null);
@@ -366,6 +367,13 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     editingEvent.recordType !== "financial_shift"
     || (previewMode ? editingEvent.economicsMode === "client_owned" : editingEvent.economicsMode !== "client_owned" && editingEvent.economicsMode !== "hfy_request")
   ));
+  const editingEventCanEditClientManagedHours = Boolean(editingEvent && canEditClientManagedAssignmentHours({
+    canManage,
+    previewMode,
+    recordType: editingEvent.recordType,
+    daypartType: editingEvent.daypartType,
+    economicsMode: editingEvent.economicsMode,
+  }));
   const materializedTrackingTalentOccurrence = Boolean(previewMode && !fullProgramming && canManage
     && editingEvent?.recordType === "nonfinancial_occurrence" && editingEvent.daypartId
     && editingEvent.daypartType === "dj_artist" && editingEvent.billingMode === "tracking_only");
@@ -477,6 +485,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     setRoomCreateState(initialActionState);
     setClientArtistFlow(false);
     setReplacementDraft(null);
+    setAssignmentHoursDraft(null);
     setNewAssignmentDraft(null);
     setShiftTimeEditDraft(null);
     setShiftChangeRequestDraft(null);
@@ -532,6 +541,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
       return;
     }
     setReplacementDraft(null);
+    setAssignmentHoursDraft(null);
     setNewAssignmentDraft(null);
     setShiftTimeEditDraft(null);
     setShiftChangeRequestDraft(null);
@@ -546,6 +556,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     const event = events.find((item) => !item.projected && item.date === date && item.daypartId === daypartId);
     if (event) {
       setReplacementDraft(null);
+      setAssignmentHoursDraft(null);
       setNewAssignmentDraft(null);
       setShiftTimeEditDraft(null);
       setShiftChangeRequestDraft(null);
@@ -834,6 +845,26 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     }
   }, [editingEvent, replacementDraft]);
 
+  const assignmentHoursWarning = useMemo(() => {
+    if (!assignmentHoursDraft || !editingEvent) return "";
+    if (!assignmentHoursDraft.start || !assignmentHoursDraft.end) return "";
+    try {
+      const updated = resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignmentHoursDraft.start, assignmentHoursDraft.end);
+      if (!updated.withinShift) {
+        return `The ${editingEvent.title} slot is only ${formatLocalMinute(editingEvent.shiftStartMinute)}–${formatLocalMinute(editingEvent.shiftEndMinute)}. Please adjust DJ times.`;
+      }
+      const otherWindows = editingEvent.assignments.filter((assignment) => assignment.id !== assignmentHoursDraft.assignmentId).map((assignment) => (
+        resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock)
+      ));
+      if (hasOverlappingAssignmentMinutes([updated, ...otherWindows])) {
+        return `This DJ's time overlaps another DJ in the ${editingEvent.title} slot.`;
+      }
+      return "";
+    } catch {
+      return "Choose valid start and end times for this DJ.";
+    }
+  }, [assignmentHoursDraft, editingEvent]);
+
   const newAssignmentWarning = useMemo(() => {
     if (!newAssignmentDraft || !editingEvent || !newAssignmentDraft.start || !newAssignmentDraft.end) return "";
     try {
@@ -868,6 +899,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     ).endMinute);
     const suggestedStart = existingEnds.length ? Math.max(...existingEnds) : editingEvent.shiftStartMinute;
     setReplacementDraft(null);
+    setAssignmentHoursDraft(null);
     setEditState(initialActionState);
     setNewAssignmentDraft(emptySlot(talentId, minuteToClock(suggestedStart < editingEvent.shiftEndMinute ? suggestedStart : editingEvent.shiftStartMinute), minuteToClock(editingEvent.shiftEndMinute)));
   }
@@ -930,6 +962,38 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     }
   }
 
+  function startEditingAssignmentHours(assignment: CalendarAssignment) {
+    if (!editingEventCanEditClientManagedHours || !assignment.talentId) return;
+    setNewAssignmentDraft(null);
+    setReplacementDraft(null);
+    setEditState(initialActionState);
+    setAssignmentHoursDraft(assignmentHoursDraftFromAssignment({
+      id: assignment.id,
+      talentId: assignment.talentId,
+      startClock: assignment.startClock,
+      endClock: assignment.endClock,
+    }));
+  }
+
+  async function saveAssignmentHours() {
+    if (!editingEvent || !editingEventCanEditClientManagedHours || !assignmentHoursDraft?.talentId
+      || !assignmentHoursDraft.start || !assignmentHoursDraft.end || assignmentHoursWarning) return;
+    const window = resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignmentHoursDraft.start, assignmentHoursDraft.end);
+    const formData = new FormData();
+    formData.set("assignmentId", assignmentHoursDraft.assignmentId);
+    formData.set("talentId", assignmentHoursDraft.talentId);
+    formData.set("startsAtMinute", String(window.startMinute));
+    formData.set("endsAtMinute", String(window.endMinute));
+    setEditPending(true);
+    const result = await rescheduleAssignmentAction(formData);
+    setEditPending(false);
+    setEditState(result);
+    if (result.status === "success") {
+      setAssignmentHoursDraft(null);
+      router.refresh();
+    }
+  }
+
   async function removeExistingAssignment(assignmentId: string) {
     const formData = new FormData();
     formData.set("assignmentId", assignmentId);
@@ -939,6 +1003,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     setEditState(result);
     if (result.status === "success") {
       if (replacementDraft?.assignmentId === assignmentId) setReplacementDraft(null);
+      if (assignmentHoursDraft?.assignmentId === assignmentId) setAssignmentHoursDraft(null);
       router.refresh();
     }
   }
@@ -1469,10 +1534,17 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
               </section> : null}
               <div className="quick-reschedule-list">{editingEvent.assignments.map((assignment, index) => {
                 const changing = replacementDraft?.assignmentId === assignment.id;
+                const editingHours = assignmentHoursDraft?.assignmentId === assignment.id;
                 const replacement = changing ? availableTalent.find((item) => item.id === replacementDraft.talentId) : undefined;
-                return <div className={`quick-reschedule-row ${changing ? "changing" : ""}`} key={assignment.id}>
+                return <div className={`quick-reschedule-row ${changing || editingHours ? "changing" : ""}`} key={assignment.id}>
                   <div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName || assignment.guestName || "Open slot"}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div>
-                  {editingEventCanManageAssignments ? <div className="quick-existing-actions"><button className="button secondary" type="button" disabled={editPending} onClick={() => { setNewAssignmentDraft(null); setEditState(initialActionState); setReplacementDraft(replacementDraftFromAssignment(assignment)); }}>Change DJ</button><button className="remove-dj-button" type="button" disabled={editPending} onClick={() => removeExistingAssignment(assignment.id)}>Remove DJ</button></div> : null}
+                  {editingEventCanManageAssignments ? <div className="quick-existing-actions">{editingEventCanEditClientManagedHours && assignment.talentId ? <button className="button secondary" type="button" disabled={editPending} onClick={() => startEditingAssignmentHours(assignment)}>Edit hours</button> : null}<button className="button secondary" type="button" disabled={editPending} onClick={() => { setNewAssignmentDraft(null); setAssignmentHoursDraft(null); setEditState(initialActionState); setReplacementDraft(replacementDraftFromAssignment(assignment)); }}>Change DJ</button><button className="remove-dj-button" type="button" disabled={editPending} onClick={() => removeExistingAssignment(assignment.id)}>Remove DJ</button></div> : null}
+                  {editingHours && assignmentHoursDraft ? <div className="replacement-editor assignment-hours-editor">
+                    <div className="replacement-step"><span>1</span><div><strong>Edit {assignment.talentName || assignment.guestName || "this DJ"}&apos;s hours</strong><small>The artist stays the same. Finances recalculates the amount owed from these saved hours.</small></div></div>
+                    <div className="quick-dj-time-fields"><div className="field"><label>Starts</label><TimeSelect ariaLabel="Booked DJ start time" value={assignmentHoursDraft.start} onChange={(value) => setAssignmentHoursDraft({ ...assignmentHoursDraft, start: value })} stepMinutes={15} /></div><div className="field"><label>Ends</label><TimeSelect ariaLabel="Booked DJ end time" value={assignmentHoursDraft.end} onChange={(value) => setAssignmentHoursDraft({ ...assignmentHoursDraft, end: value })} stepMinutes={15} /></div></div>
+                    {assignmentHoursWarning ? <p className="error" aria-live="polite">{assignmentHoursWarning}</p> : null}
+                    <div className="replacement-actions"><button className="button secondary" type="button" onClick={() => setAssignmentHoursDraft(null)}>Cancel edit</button><button className="button" type="button" disabled={editPending || !assignmentHoursDraft.start || !assignmentHoursDraft.end || Boolean(assignmentHoursWarning)} onClick={saveAssignmentHours}>{editPending ? "Saving…" : "Save hours"}</button></div>
+                  </div> : null}
                   {changing && replacementDraft ? <div className="replacement-editor">
                     <div className="replacement-step"><span>1</span><div><strong>Choose the replacement DJ</strong><small>The current DJ remains unchanged until you save.</small></div></div>
                     {replacement ? <div className="replacement-selected"><div><span>Replacement</span><strong>{replacement.stageName}</strong></div><button type="button" onClick={() => setReplacementDraft({ ...replacementDraft, talentId: "" })}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose replacement" artists={artistOptions} excludedIds={editingEvent.assignments.map((item) => item.talentId).filter((id): id is string => Boolean(id))} onCreateArtist={canCreateCalendarArtist ? createCalendarArtist : undefined} onSelect={(talentId) => setReplacementDraft({ ...replacementDraft, talentId })} />}
