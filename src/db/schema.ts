@@ -71,13 +71,12 @@ export const shiftEconomicsMode = pgEnum("shift_economics_mode", ["hfy", "client
 export const shiftChangeRequestType = pgEnum("shift_change_request_type", ["change_time", "cancel_occurrence", "delete_permanent"]);
 export const shiftChangeRequestStatus = pgEnum("shift_change_request_status", ["pending", "approved", "denied"]);
 export const hfyTalentRequestStatus = pgEnum("hfy_talent_request_status", ["pending", "fulfilled", "cancelled"]);
-export const platformBillingCadence = pgEnum("platform_billing_cadence", ["monthly", "quarterly", "annual"]);
-export const platformCommitmentTier = pgEnum("platform_commitment_tier", ["month_to_month", "three_month", "six_month", "twelve_month"]);
+export const platformSubscriptionTerm = pgEnum("platform_subscription_term", ["month_to_month", "annual"]);
 export const platformSubscriptionStatus = pgEnum("platform_subscription_status", ["incomplete", "trialing", "active", "past_due", "unpaid", "paused", "cancelled"]);
 export const platformSubscriptionInvoiceStatus = pgEnum("platform_subscription_invoice_status", ["open", "paid", "void", "uncollectible"]);
 export const platformPlanSyncStatus = pgEnum("platform_plan_sync_status", ["pending", "synced", "not_connected", "failed"]);
-export const platformClawbackStatus = pgEnum("platform_clawback_status", ["pending", "queued", "applied", "void"]);
-export const platformUsageMetric = pgEnum("platform_usage_metric", ["talent_sessions", "house_programs", "one_offs"]);
+export const platformRefundStatus = pgEnum("platform_refund_status", ["pending", "processed", "void"]);
+export const platformUsageMetric = pgEnum("platform_usage_metric", ["talent_sessions", "house_programs"]);
 export const platformBillingAlertKind = pgEnum("platform_billing_alert_kind", ["payment_failed", "payment_resolved", "overage_heads_up"]);
 export const platformBillingAudience = pgEnum("platform_billing_audience", ["owner", "hotel"]);
 export const talentInvoiceAdjustmentStatus = pgEnum("talent_invoice_adjustment_status", ["pending", "applied", "void"]);
@@ -159,8 +158,6 @@ export const residencies = pgTable("residencies", {
   billingAddress: text("billing_address").notNull().default(""),
   liveBillingApproved: boolean("live_billing_approved").notNull().default(false),
   comped: boolean("comped").notNull().default(false),
-  foundingClientSignedAt: timestamp("founding_client_signed_at", { withTimezone: true }),
-  foundingClientEndsAt: timestamp("founding_client_ends_at", { withTimezone: true }),
   invoicePrefix: text("invoice_prefix").notNull(),
   autoSendInvoices: boolean("auto_send_invoices").notNull().default(false),
   autoSendReason: text("auto_send_reason").notNull().default(""),
@@ -175,10 +172,6 @@ export const residencies = pgTable("residencies", {
   check("residencies_rates_nonnegative", sql`${table.defaultTalentRateCents} >= 0 AND ${table.clientHourlyRateCents} >= 0`),
   check("residencies_payment_terms_valid", sql`${table.paymentTermsDays} >= 0 AND ${table.paymentTermsDays} <= 365`),
   check("residencies_billing_cycle_valid", sql`${table.billingCycleStartWeekday} >= 0 AND ${table.billingCycleStartWeekday} <= 6 AND ${table.billingCycleLengthDays} >= 1 AND ${table.billingCycleLengthDays} <= 31`),
-  check("residencies_founding_client_window_complete", sql`(${table.foundingClientSignedAt} IS NULL AND ${table.foundingClientEndsAt} IS NULL) OR (${table.foundingClientSignedAt} IS NOT NULL AND ${table.foundingClientEndsAt} IS NOT NULL)`),
-  check("residencies_founding_client_eligible", sql`${table.foundingClientSignedAt} IS NULL OR ${table.foundingClientSignedAt} < '2027-08-01T00:00:00.000Z'::timestamptz`),
-  check("residencies_founding_client_dates_valid", sql`${table.foundingClientSignedAt} IS NULL OR ${table.foundingClientEndsAt} > ${table.foundingClientSignedAt}`),
-  check("residencies_comped_not_founding", sql`NOT ${table.comped} OR (${table.foundingClientSignedAt} IS NULL AND ${table.foundingClientEndsAt} IS NULL)`),
 ]);
 
 export const platformSubscriptions = pgTable("platform_subscriptions", {
@@ -190,17 +183,11 @@ export const platformSubscriptions = pgTable("platform_subscriptions", {
   stripeProductId: text("stripe_product_id"),
   stripePriceId: text("stripe_price_id"),
   status: platformSubscriptionStatus("status").notNull().default("incomplete"),
-  cadence: platformBillingCadence("cadence").notNull().default("monthly"),
-  commitmentTier: platformCommitmentTier("commitment_tier"),
-  commitmentStartedAt: timestamp("commitment_started_at", { withTimezone: true }),
-  commitmentLengthMonths: integer("commitment_length_months"),
+  term: platformSubscriptionTerm("term").notNull().default("month_to_month"),
   revision: integer("revision").notNull().default(1),
-  talentProgramSessions: integer("talent_program_sessions").notNull().default(0),
-  talentSessionUnitAmountCents: integer("talent_session_unit_amount_cents").notNull().default(0),
-  housePrograms: integer("house_programs").notNull().default(0),
-  houseProgramUnitAmountCents: integer("house_program_unit_amount_cents").notNull().default(0),
-  oneOffAllowance: integer("one_off_allowance").notNull().default(0),
-  unitAmountCents: integer("unit_amount_cents").notNull().default(0),
+  talentBucketSize: integer("talent_bucket_size").notNull().default(10),
+  houseBucketSize: integer("house_bucket_size").notNull().default(5),
+  slotUnitAmountCents: integer("slot_unit_amount_cents").notNull().default(3_000),
   startsOn: date("starts_on", { mode: "string" }).notNull().default(sql`CURRENT_DATE`),
   renewsOn: date("renews_on", { mode: "string" }).notNull().default(sql`CURRENT_DATE`),
   currency: text("currency").notNull().default("USD"),
@@ -215,36 +202,11 @@ export const platformSubscriptions = pgTable("platform_subscriptions", {
 }, (table) => [
   uniqueIndex("platform_subscriptions_residency_unique").on(table.residencyId),
   uniqueIndex("platform_subscriptions_stripe_subscription_unique").on(table.stripeSubscriptionId).where(sql`${table.stripeSubscriptionId} IS NOT NULL`),
-  check("platform_subscriptions_program_counts_nonnegative", sql`${table.talentProgramSessions} >= 0 AND ${table.housePrograms} >= 0`),
-  check("platform_subscriptions_unit_amounts_nonnegative", sql`${table.talentSessionUnitAmountCents} >= 0 AND ${table.houseProgramUnitAmountCents} >= 0 AND ${table.unitAmountCents} >= 0`),
-  check("platform_subscriptions_allowance_nonnegative", sql`${table.oneOffAllowance} >= 0`),
+  check("platform_subscriptions_talent_bucket_valid", sql`${table.talentBucketSize} IN (10, 20, 30, 40, 50, 60)`),
+  check("platform_subscriptions_house_bucket_valid", sql`${table.houseBucketSize} IN (5, 10, 15)`),
+  check("platform_subscriptions_slot_rate_fixed", sql`${table.slotUnitAmountCents} = 3000`),
   check("platform_subscriptions_revision_positive", sql`${table.revision} > 0`),
   check("platform_subscriptions_dates_valid", sql`${table.renewsOn} >= ${table.startsOn}`),
-  check("platform_subscriptions_commitment_complete", sql`
-    (${table.commitmentTier} IS NULL AND ${table.commitmentStartedAt} IS NULL AND ${table.commitmentLengthMonths} IS NULL)
-    OR
-    (${table.commitmentTier} IS NOT NULL AND ${table.commitmentStartedAt} IS NOT NULL AND ${table.commitmentLengthMonths} IS NOT NULL)
-  `),
-  check("platform_subscriptions_commitment_length_valid", sql`
-    ${table.commitmentTier} IS NULL
-    OR (${table.commitmentTier} = 'month_to_month' AND ${table.commitmentLengthMonths} = 1)
-    OR (${table.commitmentTier} = 'three_month' AND ${table.commitmentLengthMonths} = 3)
-    OR (${table.commitmentTier} = 'six_month' AND ${table.commitmentLengthMonths} = 6)
-    OR (${table.commitmentTier} = 'twelve_month' AND ${table.commitmentLengthMonths} = 12)
-  `),
-  check("platform_subscriptions_commitment_pricing_valid", sql`
-    ${table.commitmentTier} IS NULL
-    OR (
-      ${table.cadence} = 'monthly'
-      AND ${table.houseProgramUnitAmountCents} = 6000
-      AND (
-        (${table.commitmentTier} = 'month_to_month' AND ${table.talentSessionUnitAmountCents} = 9000)
-        OR (${table.commitmentTier} = 'three_month' AND ${table.talentSessionUnitAmountCents} = 8000)
-        OR (${table.commitmentTier} = 'six_month' AND ${table.talentSessionUnitAmountCents} = 7000)
-        OR (${table.commitmentTier} = 'twelve_month' AND ${table.talentSessionUnitAmountCents} = 6000)
-      )
-    )
-  `),
   check("platform_subscriptions_currency_valid", sql`${table.currency} = 'USD'`),
   check("platform_subscriptions_card_complete", sql`(${table.cardBrand} = '' AND ${table.cardLast4} = '') OR (${table.cardBrand} <> '' AND ${table.cardLast4} ~ '^[0-9]{4}$')`),
 ]);
@@ -286,16 +248,10 @@ export const platformSubscriptionRevisions = pgTable("platform_subscription_revi
   platformSubscriptionId: uuid("platform_subscription_id").notNull().references(() => platformSubscriptions.id, { onDelete: "cascade" }),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
   revision: integer("revision").notNull(),
-  cadence: platformBillingCadence("cadence").notNull(),
-  commitmentTier: platformCommitmentTier("commitment_tier"),
-  commitmentStartedAt: timestamp("commitment_started_at", { withTimezone: true }),
-  commitmentLengthMonths: integer("commitment_length_months"),
-  talentProgramSessions: integer("talent_program_sessions").notNull(),
-  talentSessionUnitAmountCents: integer("talent_session_unit_amount_cents").notNull().default(0),
-  housePrograms: integer("house_programs").notNull(),
-  houseProgramUnitAmountCents: integer("house_program_unit_amount_cents").notNull().default(0),
-  oneOffAllowance: integer("one_off_allowance").notNull(),
-  unitAmountCents: integer("unit_amount_cents").notNull().default(0),
+  term: platformSubscriptionTerm("term").notNull(),
+  talentBucketSize: integer("talent_bucket_size").notNull(),
+  houseBucketSize: integer("house_bucket_size").notNull(),
+  slotUnitAmountCents: integer("slot_unit_amount_cents").notNull().default(3_000),
   startsOn: date("starts_on", { mode: "string" }).notNull(),
   renewsOn: date("renews_on", { mode: "string" }).notNull(),
   changeReason: text("change_reason").notNull(),
@@ -309,68 +265,32 @@ export const platformSubscriptionRevisions = pgTable("platform_subscription_revi
   uniqueIndex("platform_subscription_revisions_subscription_revision_unique").on(table.platformSubscriptionId, table.revision),
   index("platform_subscription_revisions_residency_created_idx").on(table.residencyId, table.createdAt),
   check("platform_subscription_revisions_revision_positive", sql`${table.revision} > 0`),
-  check("platform_subscription_revisions_values_valid", sql`${table.talentProgramSessions} >= 0 AND ${table.talentSessionUnitAmountCents} >= 0 AND ${table.housePrograms} >= 0 AND ${table.houseProgramUnitAmountCents} >= 0 AND ${table.oneOffAllowance} >= 0 AND ${table.unitAmountCents} >= 0`),
+  check("platform_subscription_revisions_talent_bucket_valid", sql`${table.talentBucketSize} IN (10, 20, 30, 40, 50, 60)`),
+  check("platform_subscription_revisions_house_bucket_valid", sql`${table.houseBucketSize} IN (5, 10, 15)`),
+  check("platform_subscription_revisions_slot_rate_fixed", sql`${table.slotUnitAmountCents} = 3000`),
   check("platform_subscription_revisions_dates_valid", sql`${table.renewsOn} >= ${table.startsOn}`),
-  check("platform_subscription_revisions_commitment_complete", sql`
-    (${table.commitmentTier} IS NULL AND ${table.commitmentStartedAt} IS NULL AND ${table.commitmentLengthMonths} IS NULL)
-    OR
-    (${table.commitmentTier} IS NOT NULL AND ${table.commitmentStartedAt} IS NOT NULL AND ${table.commitmentLengthMonths} IS NOT NULL)
-  `),
-  check("platform_subscription_revisions_commitment_length_valid", sql`
-    ${table.commitmentTier} IS NULL
-    OR (${table.commitmentTier} = 'month_to_month' AND ${table.commitmentLengthMonths} = 1)
-    OR (${table.commitmentTier} = 'three_month' AND ${table.commitmentLengthMonths} = 3)
-    OR (${table.commitmentTier} = 'six_month' AND ${table.commitmentLengthMonths} = 6)
-    OR (${table.commitmentTier} = 'twelve_month' AND ${table.commitmentLengthMonths} = 12)
-  `),
-  check("platform_subscription_revisions_commitment_pricing_valid", sql`
-    ${table.commitmentTier} IS NULL
-    OR (
-      ${table.cadence} = 'monthly'
-      AND ${table.houseProgramUnitAmountCents} = 6000
-      AND (
-        (${table.commitmentTier} = 'month_to_month' AND ${table.talentSessionUnitAmountCents} = 9000)
-        OR (${table.commitmentTier} = 'three_month' AND ${table.talentSessionUnitAmountCents} = 8000)
-        OR (${table.commitmentTier} = 'six_month' AND ${table.talentSessionUnitAmountCents} = 7000)
-        OR (${table.commitmentTier} = 'twelve_month' AND ${table.talentSessionUnitAmountCents} = 6000)
-      )
-    )
-  `),
 ]);
 
-export const platformSubscriptionClawbacks = pgTable("platform_subscription_clawbacks", {
+export const platformSubscriptionRefunds = pgTable("platform_subscription_refunds", {
   id: uuid("id").primaryKey().defaultRandom(),
   platformSubscriptionId: uuid("platform_subscription_id").notNull().references(() => platformSubscriptions.id, { onDelete: "cascade" }),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
   sourceRevision: integer("source_revision").notNull(),
-  sourceCommitmentTier: platformCommitmentTier("source_commitment_tier").notNull(),
-  sourceCommitmentStartedAt: timestamp("source_commitment_started_at", { withTimezone: true }).notNull(),
-  targetCommitmentTier: platformCommitmentTier("target_commitment_tier"),
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull(),
-  talentSessionsBilled: integer("talent_sessions_billed").notNull(),
-  unitAmountCents: integer("unit_amount_cents").notNull(),
-  amountCents: integer("amount_cents").notNull(),
-  status: platformClawbackStatus("status").notNull().default("pending"),
-  stripeInvoiceItemId: text("stripe_invoice_item_id"),
-  appliedInvoiceId: uuid("applied_invoice_id").references(() => platformSubscriptionInvoices.id, { onDelete: "set null" }),
+  totalAnnualPaymentCents: integer("total_annual_payment_cents").notNull(),
+  fullMonthlyAmountCents: integer("full_monthly_amount_cents").notNull(),
+  monthsUsed: integer("months_used").notNull(),
+  refundAmountCents: integer("refund_amount_cents").notNull(),
+  status: platformRefundStatus("status").notNull().default("pending"),
+  stripeRefundId: text("stripe_refund_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  index("platform_subscription_clawbacks_pending_idx").on(table.platformSubscriptionId, table.status, table.createdAt),
-  uniqueIndex("platform_subscription_clawbacks_stripe_item_unique").on(table.stripeInvoiceItemId).where(sql`${table.stripeInvoiceItemId} IS NOT NULL`),
-  check("platform_subscription_clawbacks_source_revision_positive", sql`${table.sourceRevision} > 0`),
-  check("platform_subscription_clawbacks_source_committed", sql`${table.sourceCommitmentTier} IN ('three_month', 'six_month', 'twelve_month')`),
-  check("platform_subscription_clawbacks_target_changed", sql`${table.targetCommitmentTier} IS DISTINCT FROM ${table.sourceCommitmentTier}`),
-  check("platform_subscription_clawbacks_unit_amount_valid", sql`
-    (${table.sourceCommitmentTier} = 'three_month' AND ${table.unitAmountCents} = 1000)
-    OR (${table.sourceCommitmentTier} = 'six_month' AND ${table.unitAmountCents} = 2000)
-    OR (${table.sourceCommitmentTier} = 'twelve_month' AND ${table.unitAmountCents} = 3000)
-  `),
-  check("platform_subscription_clawbacks_amount_valid", sql`
-    ${table.talentSessionsBilled} > 0
-    AND ${table.unitAmountCents} > 0
-    AND ${table.amountCents} = ${table.talentSessionsBilled} * ${table.unitAmountCents}
-  `),
+  index("platform_subscription_refunds_pending_idx").on(table.platformSubscriptionId, table.status, table.createdAt),
+  uniqueIndex("platform_subscription_refunds_source_unique").on(table.platformSubscriptionId, table.sourceRevision),
+  uniqueIndex("platform_subscription_refunds_stripe_refund_unique").on(table.stripeRefundId).where(sql`${table.stripeRefundId} IS NOT NULL`),
+  check("platform_subscription_refunds_source_revision_positive", sql`${table.sourceRevision} > 0`),
+  check("platform_subscription_refunds_values_valid", sql`${table.totalAnnualPaymentCents} >= 0 AND ${table.fullMonthlyAmountCents} > 0 AND ${table.monthsUsed} >= 1 AND ${table.monthsUsed} <= 12 AND ${table.refundAmountCents} >= 0 AND ${table.refundAmountCents} = GREATEST(0, ${table.totalAnnualPaymentCents} - (${table.monthsUsed} * ${table.fullMonthlyAmountCents}))`),
 ]);
 
 export const platformUsageSnapshots = pgTable("platform_usage_snapshots", {
@@ -382,13 +302,12 @@ export const platformUsageSnapshots = pgTable("platform_usage_snapshots", {
   periodEnd: date("period_end", { mode: "string" }).notNull(),
   talentSessions: integer("talent_sessions").notNull().default(0),
   housePrograms: integer("house_programs").notNull().default(0),
-  oneOffs: integer("one_offs").notNull().default(0),
   capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("platform_usage_snapshots_residency_date_unique").on(table.residencyId, table.snapshotDate),
   index("platform_usage_snapshots_subscription_period_idx").on(table.platformSubscriptionId, table.periodStart, table.periodEnd),
   check("platform_usage_snapshots_period_valid", sql`${table.periodEnd} >= ${table.periodStart} AND ${table.snapshotDate} >= ${table.periodStart} AND ${table.snapshotDate} <= ${table.periodEnd}`),
-  check("platform_usage_snapshots_counts_nonnegative", sql`${table.talentSessions} >= 0 AND ${table.housePrograms} >= 0 AND ${table.oneOffs} >= 0`),
+  check("platform_usage_snapshots_counts_nonnegative", sql`${table.talentSessions} >= 0 AND ${table.housePrograms} >= 0`),
 ]);
 
 export const platformOverageEvents = pgTable("platform_overage_events", {

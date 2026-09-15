@@ -1,20 +1,17 @@
 import "server-only";
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type Stripe from "stripe";
 import { getDb } from "@/db/client";
 import {
   auditLog,
-  platformSubscriptionClawbacks,
   platformSubscriptionInvoices,
   platformSubscriptionRevisions,
   platformSubscriptions,
-  residencies,
   stripeWebhookEvents,
 } from "@/db/schema";
-import { commitmentTierTerms } from "@/domain/commitment-tier";
 import { queuePlatformPaymentFailedAlerts, resolvePlatformPaymentFailure, sendPendingPlatformBillingAlerts } from "@/services/platform-billing-alerts";
-import { queueCommitmentCancellationClawback } from "@/services/platform-stripe";
+import { queueAnnualCancellationRefund } from "@/services/platform-stripe";
 import { getStripe } from "@/lib/stripe";
 import { requireResidencyLiveBillingApproval } from "@/services/live-billing-safety";
 
@@ -96,7 +93,7 @@ export async function syncStripeSubscription(stripeSubscriptionId: string) {
   const now = new Date();
   const status = mapSubscriptionStatus(subscription.status);
   if (status === "cancelled" && plan.status !== "cancelled") {
-    await queueCommitmentCancellationClawback(plan, now);
+    await queueAnnualCancellationRefund(plan, now);
   }
   const [updated] = await getDb().update(platformSubscriptions).set({
     stripeCustomerId: objectId(subscription.customer),
@@ -162,55 +159,6 @@ export async function syncStripeInvoice(invoice: Stripe.Invoice) {
   return record ?? null;
 }
 
-async function attachPendingClawbacksToInvoice(
-  plan: typeof platformSubscriptions.$inferSelect,
-  platformInvoiceId: string,
-  stripeInvoiceId: string,
-) {
-  const database = getDb();
-  const clawbacks = await database.select().from(platformSubscriptionClawbacks).where(and(
-    eq(platformSubscriptionClawbacks.platformSubscriptionId, plan.id),
-    eq(platformSubscriptionClawbacks.status, "pending"),
-  )).orderBy(asc(platformSubscriptionClawbacks.createdAt));
-  if (!clawbacks.length) return;
-  await requireResidencyLiveBillingApproval({
-    residencyId: plan.residencyId,
-    action: "stripe_invoice_item_create",
-    entityType: "platform_subscription_invoice",
-    entityId: platformInvoiceId,
-    details: { stripeInvoiceId, clawbackCount: clawbacks.length },
-  });
-  const stripe = getStripe();
-  for (const clawback of clawbacks) {
-    const sourceTier = commitmentTierTerms(clawback.sourceCommitmentTier);
-    const item = await stripe.invoiceItems.create({
-      invoice: stripeInvoiceId,
-      amount: clawback.amountCents,
-      currency: "usd",
-      description: `Early termination clawback — ${sourceTier.label} commitment`,
-      discountable: false,
-      metadata: {
-        hfy_residency_id: plan.residencyId,
-        hfy_platform_subscription_id: plan.id,
-        hfy_platform_clawback_id: clawback.id,
-        source_plan_revision: String(clawback.sourceRevision),
-        talent_sessions_billed: String(clawback.talentSessionsBilled),
-        environment: "staging-test",
-      },
-    }, { idempotencyKey: `platform-clawback/${clawback.id}` });
-    if (item.livemode) throw new Error("Stripe returned a live-mode Invoice Item; staging billing stopped.");
-    await database.update(platformSubscriptionClawbacks).set({
-      status: "queued",
-      stripeInvoiceItemId: item.id,
-      appliedInvoiceId: platformInvoiceId,
-      updatedAt: new Date(),
-    }).where(and(
-      eq(platformSubscriptionClawbacks.id, clawback.id),
-      eq(platformSubscriptionClawbacks.status, "pending"),
-    ));
-  }
-}
-
 async function applyCompletedCheckout(session: Stripe.Checkout.Session) {
   if (session.livemode) throw new Error("Live-mode Checkout Sessions are rejected by staging.");
   if (session.mode === "subscription") {
@@ -247,22 +195,6 @@ async function applyCompletedCheckout(session: Stripe.Checkout.Session) {
 async function applyInvoiceEvent(event: Stripe.Event, invoice: Stripe.Invoice) {
   const record = await syncStripeInvoice(invoice);
   if (!record) return;
-  const [row] = await getDb().select({ plan: platformSubscriptions, comped: residencies.comped }).from(platformSubscriptions)
-    .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
-    .where(eq(platformSubscriptions.id, record.platformSubscriptionId)).limit(1);
-  if (!row) return;
-  const plan = row.plan;
-  if (event.type === "invoice.created") {
-    if (row.comped) {
-      await getDb().update(platformSubscriptionClawbacks).set({ status: "void", updatedAt: new Date() })
-        .where(and(
-          eq(platformSubscriptionClawbacks.platformSubscriptionId, plan.id),
-          eq(platformSubscriptionClawbacks.status, "pending"),
-        ));
-    } else {
-      await attachPendingClawbacksToInvoice(plan, record.id, invoice.id);
-    }
-  }
   if (event.type === "invoice.payment_failed") {
     const message = invoice.last_finalization_error?.message || "Stripe could not collect the Platform subscription payment.";
     await getDb().update(platformSubscriptions).set({
@@ -287,11 +219,6 @@ async function applyInvoiceEvent(event: Stripe.Event, invoice: Stripe.Invoice) {
     await resolvePlatformPaymentFailure(record.platformSubscriptionId);
   }
   if (["invoice.finalized", "invoice.payment_succeeded", "invoice.paid"].includes(event.type)) {
-    await getDb().update(platformSubscriptionClawbacks).set({ status: "applied", updatedAt: new Date() })
-      .where(and(
-        eq(platformSubscriptionClawbacks.appliedInvoiceId, record.id),
-        eq(platformSubscriptionClawbacks.status, "queued"),
-      ));
     const { generatePlatformInvoicePdfSafely } = await import("@/services/platform-invoices");
     await generatePlatformInvoicePdfSafely(record.id);
   }

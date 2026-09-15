@@ -11,10 +11,10 @@ const snapshot = createPlatformInvoiceDocumentSnapshot({
     number: "PLATFORM-TEST-1001",
     invoiceDate: "2026-09-01",
     billingPeriodStart: "2026-09-01",
-    billingPeriodEnd: "2026-09-30",
+    billingPeriodEnd: "2027-08-31",
     currency: "USD",
-    amountDueCents: 27_500,
-    amountPaidCents: 27_500,
+    amountDueCents: 810_000,
+    amountPaidCents: 810_000,
     status: "paid",
   },
   issuer: {
@@ -31,12 +31,10 @@ const snapshot = createPlatformInvoiceDocumentSnapshot({
   },
   committedPlan: {
     revision: 2,
-    cadence: "monthly",
-    talentSessions: 8,
-    talentSessionUnitAmountCents: 2_500,
-    housePrograms: 3,
-    houseProgramUnitAmountCents: 2_500,
-    oneOffAllowance: 2,
+    term: "annual",
+    talentBucketSize: 20,
+    houseBucketSize: 10,
+    slotUnitAmountCents: 3_000,
   },
 });
 
