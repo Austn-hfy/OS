@@ -1,3 +1,4 @@
+-- ALLOW-DESTRUCTIVE
 CREATE TABLE "deployment_migration_pipeline_verification" (
 	"id" integer PRIMARY KEY
 );
