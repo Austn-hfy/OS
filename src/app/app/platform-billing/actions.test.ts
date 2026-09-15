@@ -12,7 +12,6 @@ vi.mock("@/lib/auth", () => ({
 }));
 vi.mock("@/services/platform-stripe", () => ({
   createPlatformSubscriptionCheckout: vi.fn(),
-  enrollFoundingClient: vi.fn(),
   updateCommittedPlan: vi.fn(),
 }));
 vi.mock("@/services/platform-usage", () => ({ reconcilePlatformUsage: vi.fn() }));

@@ -6,8 +6,7 @@ import { assignments, auditLog, clientAssignmentTerms, dayparts, invoices, platf
 import { calculateClientOwedCents, resolveClientHourlyRateCents } from "@/domain/client-rates";
 import { projectClientSafeRoster, projectClientSafeTalent, type ClientSafeManagedTalent } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
-import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents } from "@/domain/platform-billing";
-import { effectiveCompedPlan } from "@/domain/comped-residency";
+import { calculatePlatformPlanAmounts } from "@/domain/platform-billing";
 import { loadPlatformLiveUsage } from "@/services/platform-usage";
 
 export async function getResidencyClientCalendar(residencyId: string, range: { from: string; to: string }) {
@@ -349,13 +348,11 @@ export async function getResidencyPlatformBilling(residencyId: string) {
     comped: residencies.comped,
     id: platformSubscriptions.id,
     status: platformSubscriptions.status,
-    cadence: platformSubscriptions.cadence,
+    term: platformSubscriptions.term,
     revision: platformSubscriptions.revision,
-    talentProgramSessions: platformSubscriptions.talentProgramSessions,
-    talentSessionUnitAmountCents: platformSubscriptions.talentSessionUnitAmountCents,
-    housePrograms: platformSubscriptions.housePrograms,
-    houseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
-    oneOffAllowance: platformSubscriptions.oneOffAllowance,
+    talentBucketSize: platformSubscriptions.talentBucketSize,
+    houseBucketSize: platformSubscriptions.houseBucketSize,
+    slotUnitAmountCents: platformSubscriptions.slotUnitAmountCents,
     startsOn: platformSubscriptions.startsOn,
     renewsOn: platformSubscriptions.renewsOn,
     stripeSubscriptionId: platformSubscriptions.stripeSubscriptionId,
@@ -387,16 +384,14 @@ export async function getResidencyPlatformBilling(residencyId: string) {
       eq(platformSubscriptionInvoices.residencyId, residencyId),
     ))
     .orderBy(desc(platformSubscriptionInvoices.invoiceDate), desc(platformSubscriptionInvoices.createdAt));
-  const effectiveSubscription = effectiveCompedPlan(subscription, subscription.comped);
-  const monthlyAmountCents = calculatePlatformMonthlyAmountCents(effectiveSubscription);
+  const amounts = calculatePlatformPlanAmounts(subscription, subscription.comped);
   const liveUsage = await loadPlatformLiveUsage(residencyId);
   return {
     subscription: {
-      ...effectiveSubscription,
+      ...subscription,
       nextChargeAt: subscription.nextChargeAt?.toISOString() ?? null,
       paymentFailedAt: subscription.paymentFailedAt?.toISOString() ?? null,
-      monthlyAmountCents,
-      nextChargeAmountCents: platformCadenceChargeCents(monthlyAmountCents, subscription.cadence),
+      ...amounts,
     },
     invoices: invoiceRows,
     liveUsage: liveUsage?.usage ?? null,

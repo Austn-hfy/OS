@@ -42,11 +42,30 @@ try {
   if (product.livemode) throw new Error("Live-mode Product returned; verification stopped.");
   productId = product.id;
 
-  const firstPrice = await stripe.prices.create({ currency: "usd", product: product.id, unit_amount: 27_500, recurring: { interval: "month" }, metadata: { environment: "staging-test" } });
-  const replacementPrice = await stripe.prices.create({ currency: "usd", product: product.id, unit_amount: 30_000, recurring: { interval: "month" }, metadata: { environment: "staging-test" } });
-  const quarterlyPrice = await stripe.prices.create({ currency: "usd", product: product.id, unit_amount: 90_000, recurring: { interval: "month", interval_count: 3 }, metadata: { environment: "staging-test" } });
-  if (firstPrice.livemode || replacementPrice.livemode || quarterlyPrice.livemode) throw new Error("Live-mode Price returned; verification stopped.");
-  priceIds.push(firstPrice.id, replacementPrice.id, quarterlyPrice.id);
+  const commonPriceMetadata = { environment: "staging-test", slot_unit_amount_cents: "3000" };
+  const firstPrice = await stripe.prices.create({
+    currency: "usd",
+    product: product.id,
+    unit_amount: 45_000,
+    recurring: { interval: "month" },
+    metadata: { ...commonPriceMetadata, talent_bucket_size: "10", house_bucket_size: "5", subscription_term: "month_to_month", annual_discount_percent: "0" },
+  });
+  const replacementPrice = await stripe.prices.create({
+    currency: "usd",
+    product: product.id,
+    unit_amount: 60_000,
+    recurring: { interval: "month" },
+    metadata: { ...commonPriceMetadata, talent_bucket_size: "10", house_bucket_size: "10", subscription_term: "month_to_month", annual_discount_percent: "0" },
+  });
+  const annualPrice = await stripe.prices.create({
+    currency: "usd",
+    product: product.id,
+    unit_amount: 540_000,
+    recurring: { interval: "year" },
+    metadata: { ...commonPriceMetadata, talent_bucket_size: "10", house_bucket_size: "10", subscription_term: "annual", annual_discount_percent: "25" },
+  });
+  if (firstPrice.livemode || replacementPrice.livemode || annualPrice.livemode) throw new Error("Live-mode Price returned; verification stopped.");
+  priceIds.push(firstPrice.id, replacementPrice.id, annualPrice.id);
 
   const subscriptionCheckout = await stripe.checkout.sessions.create({
     mode: "subscription",
@@ -97,12 +116,12 @@ try {
     proration_behavior: "none",
     phases: [
       { start_date: currentStart, end_date: currentEnd, items: [{ price: replacementPrice.id, quantity: 1 }], proration_behavior: "none" },
-      { start_date: currentEnd, duration: { interval: "month", interval_count: 3 }, items: [{ price: quarterlyPrice.id, quantity: 1 }], proration_behavior: "none", metadata: { environment: "staging-test", committed_plan_revision: "3" } },
+      { start_date: currentEnd, duration: { interval: "year", interval_count: 1 }, items: [{ price: annualPrice.id, quantity: 1 }], proration_behavior: "none", metadata: { environment: "staging-test", committed_plan_revision: "3" } },
     ],
   });
   const scheduledSubscriptionId = typeof scheduled.subscription === "string" ? scheduled.subscription : scheduled.subscription?.id;
   if (scheduledSubscriptionId !== subscription.id) throw new Error("Cadence scheduling replaced the existing Stripe Subscription.");
-  if (scheduled.phases[1]?.items[0]?.price !== quarterlyPrice.id) throw new Error("Quarterly cadence was not scheduled on the existing Subscription.");
+  if (scheduled.phases[1]?.items[0]?.price !== annualPrice.id) throw new Error("Annual term was not scheduled on the existing Subscription.");
 
   const setupCheckout = await stripe.checkout.sessions.create({
     mode: "setup",
@@ -141,7 +160,7 @@ try {
   }
   if (!expectedFailureObserved) throw new Error("The Stripe decline-after-attaching test PaymentMethod did not produce the expected failure.");
 
-  console.log(`Stripe test-mode lifecycle verified: hosted subscription/card Checkouts created, paid subscription created, amount updated in place, quarterly cadence scheduled on the same subscription, and attached-card failure simulated. Subscription ID remained ${subscription.id}.`);
+  console.log(`Stripe test-mode lifecycle verified: hosted subscription/card Checkouts created, paid bucket subscription created, amount updated in place, annual term scheduled on the same subscription, and attached-card failure simulated. Subscription ID remained ${subscription.id}.`);
 } finally {
   for (const sessionId of checkoutSessionIds) await stripe.checkout.sessions.expire(sessionId).catch(() => undefined);
   if (scheduleId) await stripe.subscriptionSchedules.release(scheduleId).catch(() => undefined);

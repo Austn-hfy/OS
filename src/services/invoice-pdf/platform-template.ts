@@ -23,14 +23,20 @@ function addressLines(lines: string[]) {
 }
 
 export function renderPlatformInvoiceHtml(snapshot: PlatformInvoiceDocumentSnapshot) {
-  const cadenceLabel = snapshot.committedPlan.cadence === "annual" ? "Annual" : snapshot.committedPlan.cadence === "quarterly" ? "Quarterly" : "Monthly";
+  const legacy = snapshot.schemaVersion === 3;
+  const termLabel = legacy
+    ? snapshot.committedPlan.cadence === "annual" ? "Annual" : snapshot.committedPlan.cadence === "quarterly" ? "Quarterly" : "Monthly"
+    : snapshot.committedPlan.term === "annual" ? "Annual · 25% off" : "Month-to-month";
   const rows = snapshot.lines.map((line) => `<tr>
-    <td><strong>${escapeHtml(line.description)}</strong><span>${escapeHtml(line.detail ?? `${cadenceLabel} committed plan · revision ${snapshot.committedPlan.revision}`)}</span></td>
+    <td><strong>${escapeHtml(line.description)}</strong><span>${escapeHtml(line.detail ?? `${termLabel} committed plan · revision ${snapshot.committedPlan.revision}`)}</span></td>
     <td class="numeric">${line.quantity}</td>
     <td class="numeric">${money(line.unitAmountCents)}</td>
     <td class="numeric amount">${money(line.amountCents)}</td>
   </tr>`).join("");
   const statusLabel = snapshot.invoice.status.replaceAll("_", " ");
+  const planSummary = legacy
+    ? `<section class="plan"><div><h2>Committed plan</h2><strong>${money(snapshot.committedPlan.monthlyAmountCents)} monthly equivalent</strong></div><div><small>Talent</small><strong>${snapshot.committedPlan.talentSessions}</strong></div><div><small>Talent rate</small><strong>${money(snapshot.committedPlan.talentSessionUnitAmountCents)}</strong></div><div><small>House</small><strong>${snapshot.committedPlan.housePrograms}</strong></div><div><small>House rate</small><strong>${money(snapshot.committedPlan.houseProgramUnitAmountCents)}</strong></div><div><small>One-offs included</small><strong>${snapshot.committedPlan.oneOffAllowance}</strong></div></section>`
+    : `<section class="plan"><div><h2>Committed plan</h2><strong>${money(snapshot.committedPlan.effectiveMonthlyAmountCents)} monthly equivalent</strong></div><div><small>Talent bucket</small><strong>${snapshot.committedPlan.talentBucketSize}</strong></div><div><small>House bucket</small><strong>${snapshot.committedPlan.houseBucketSize}</strong></div><div><small>Slot rate</small><strong>${money(snapshot.committedPlan.slotUnitAmountCents)}</strong></div><div><small>Base monthly</small><strong>${money(snapshot.committedPlan.baseMonthlyAmountCents)}</strong></div><div><small>Term total</small><strong>${money(snapshot.committedPlan.termChargeAmountCents)}</strong></div></section>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -85,9 +91,9 @@ export function renderPlatformInvoiceHtml(snapshot: PlatformInvoiceDocumentSnaps
       </header>
       <section class="summary">
         <div><h2>Bill to</h2><p class="client">${escapeHtml(snapshot.billTo.residencyName)}</p>${snapshot.billTo.contactName ? `<p>${escapeHtml(snapshot.billTo.contactName)}</p>` : ""}<p>${escapeHtml(snapshot.billTo.contactEmail)}</p>${addressLines(snapshot.billTo.addressLines)}</div>
-        <dl><dt>Invoice date</dt><dd>${date(snapshot.invoice.invoiceDate)}</dd><dt>Billing period</dt><dd>${date(snapshot.invoice.billingPeriodStart)} – ${date(snapshot.invoice.billingPeriodEnd)}</dd><dt>Cadence</dt><dd>${cadenceLabel}</dd><dt>Status</dt><dd class="status">${escapeHtml(statusLabel)}</dd></dl>
+        <dl><dt>Invoice date</dt><dd>${date(snapshot.invoice.invoiceDate)}</dd><dt>Billing period</dt><dd>${date(snapshot.invoice.billingPeriodStart)} – ${date(snapshot.invoice.billingPeriodEnd)}</dd><dt>${legacy ? "Cadence" : "Term"}</dt><dd>${termLabel}</dd><dt>Status</dt><dd class="status">${escapeHtml(statusLabel)}</dd></dl>
       </section>
-      <section class="plan"><div><h2>Committed plan</h2><strong>${money(snapshot.committedPlan.monthlyAmountCents)} monthly equivalent</strong></div><div><small>Talent</small><strong>${snapshot.committedPlan.talentSessions}</strong></div><div><small>Talent rate</small><strong>${money(snapshot.committedPlan.talentSessionUnitAmountCents)}</strong></div><div><small>House</small><strong>${snapshot.committedPlan.housePrograms}</strong></div><div><small>House rate</small><strong>${money(snapshot.committedPlan.houseProgramUnitAmountCents)}</strong></div><div><small>One-offs included</small><strong>${snapshot.committedPlan.oneOffAllowance}</strong></div></section>
+      ${planSummary}
       <section class="table-shell"><table><thead><tr><th>Subscription item</th><th class="numeric">Quantity</th><th class="numeric">Rate</th><th class="numeric">Amount</th></tr></thead><tbody>${rows || `<tr><td colspan="4">No committed billable units in this period.</td></tr>`}</tbody></table></section>
       <div class="totals"><div><div class="total"><div><span>Total due</span><strong>${money(snapshot.invoice.amountDueCents)}</strong></div></div><div class="paid">Paid ${money(snapshot.invoice.amountPaidCents)}</div></div></div>
       <footer><span>Platform subscription · separate from HFY talent services</span><span>Stripe reference ${escapeHtml(snapshot.invoice.stripeInvoiceId)}</span></footer>

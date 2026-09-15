@@ -92,9 +92,8 @@ export async function loadPlatformLiveUsage(residencyId: string, at = new Date()
   const [plan] = await database.select({
     id: platformSubscriptions.id,
     residencyId: platformSubscriptions.residencyId,
-    talentProgramSessions: platformSubscriptions.talentProgramSessions,
-    housePrograms: platformSubscriptions.housePrograms,
-    oneOffAllowance: platformSubscriptions.oneOffAllowance,
+    talentBucketSize: platformSubscriptions.talentBucketSize,
+    houseBucketSize: platformSubscriptions.houseBucketSize,
     timezone: residencies.timezone,
   }).from(platformSubscriptions)
     .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
@@ -110,9 +109,6 @@ export async function loadPlatformLiveUsage(residencyId: string, at = new Date()
   const usage: PlatformUsageCounts = {
     talentSessions: Number(row?.talent_sessions ?? 0),
     housePrograms: Number(row?.house_programs ?? 0),
-    // Kept at zero for schema compatibility. One-off activity is classified
-    // by Daypart type as Talent sessions or House programs.
-    oneOffs: 0,
   };
   return {
     plan,
@@ -146,8 +142,8 @@ export async function reconcilePlatformUsage(residencyId: string, at = new Date(
   });
 
   const metrics: Array<{ metric: PlatformUsageMetricName; committed: number; current: number }> = [
-    { metric: "talent_sessions", committed: live.plan.talentProgramSessions, current: live.usage.talentSessions },
-    { metric: "house_programs", committed: live.plan.housePrograms, current: live.usage.housePrograms },
+    { metric: "talent_sessions", committed: live.plan.talentBucketSize, current: live.usage.talentSessions },
+    { metric: "house_programs", committed: live.plan.houseBucketSize, current: live.usage.housePrograms },
   ];
 
   for (const item of metrics) {

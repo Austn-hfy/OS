@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import Stripe from "stripe";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { comparePlatformUsage, calculatePlatformMonthlyAmountCents, platformCadenceChargeCents, platformCadenceInterval } from "@/domain/platform-billing";
+import { comparePlatformUsage, calculatePlatformPlanAmounts, platformTermInterval } from "@/domain/platform-billing";
 import { LIVE_BILLING_HOLD_MESSAGE } from "@/domain/live-billing";
 import { createPlatformInvoiceDocumentSnapshot } from "@/domain/platform-invoice-document";
 import { assertPlatformBillingStaging, assertStripeTestConfiguration } from "@/domain/stripe-test-mode";
@@ -17,7 +17,7 @@ describe("Platform billing migration sequence", () => {
     const journal = JSON.parse(await readSource("../drizzle/meta/_journal.json")) as {
       entries: Array<{ idx: number; when: number; tag: string }>;
     };
-    const promotedSequence = journal.entries.slice(-9);
+    const promotedSequence = journal.entries.slice(-10);
 
     expect(promotedSequence.map(({ idx, tag }) => ({ idx, tag }))).toEqual([
       { idx: 42, tag: "0042_shift_change_requests" },
@@ -29,83 +29,69 @@ describe("Platform billing migration sequence", () => {
       { idx: 48, tag: "0048_founding_client_tracking" },
       { idx: 49, tag: "0049_commitment_ladder_clawback" },
       { idx: 50, tag: "0050_comped_residencies" },
+      { idx: 51, tag: "0051_platform_billing_buckets_v14" },
     ]);
     expect(promotedSequence.every((entry, index) => index === 0 || entry.when > promotedSequence[index - 1].when)).toBe(true);
   });
 });
 
 describe("Platform committed billing", () => {
-  it("collects and stores split rates while retaining the blended columns only for compatibility", async () => {
+  it("stores buckets, fixed rate, and two terms throughout the stack", async () => {
     const [form, action, stripeService, invoiceService, schema, migration] = await Promise.all([
       readSource("../src/app/app/platform-billing/committed-plan-form.tsx"),
       readSource("../src/app/app/platform-billing/actions.ts"),
       readSource("../src/services/platform-stripe.ts"),
       readSource("../src/services/platform-invoices.ts"),
       readSource("../src/db/schema.ts"),
-      readSource("../drizzle/0047_platform_subscription_revision_split_rates.sql"),
+      readSource("../drizzle/0051_platform_billing_buckets_v14.sql"),
     ]);
 
-    expect(form).toContain('name="talentSessionUnitAmount"');
-    expect(form).toContain('name="houseProgramUnitAmount"');
-    expect(form).not.toContain('name="unitAmount"');
-    expect(action).toContain("talentSessionUnitAmountCents");
-    expect(action).toContain("houseProgramUnitAmountCents");
-    expect(stripeService).not.toContain("unitAmountCents: planInput.");
-    expect(invoiceService).toContain("revisionTalentSessionUnitAmountCents");
-    expect(invoiceService).toContain("revisionHouseProgramUnitAmountCents");
-    expect(schema).toContain('talentSessionUnitAmountCents: integer("talent_session_unit_amount_cents").notNull()');
-    expect(schema).toContain('houseProgramUnitAmountCents: integer("house_program_unit_amount_cents").notNull()');
-    expect(migration).toContain('"talent_session_unit_amount_cents" = "unit_amount_cents"');
-    expect(migration).toContain('"house_program_unit_amount_cents" = "unit_amount_cents"');
+    expect(form).toContain('name="talentBucketSize"');
+    expect(form).toContain('name="houseBucketSize"');
+    expect(form).toContain('name="term"');
+    expect(action).toContain("talentBucketSize: parsed.talentBucketSize");
+    expect(stripeService).toContain("slot_unit_amount_cents");
+    expect(invoiceService).toContain("revisionTalentBucketSize");
+    expect(schema).toContain('talentBucketSize: integer("talent_bucket_size").notNull()');
+    expect(schema).toContain('houseBucketSize: integer("house_bucket_size").notNull()');
+    expect(schema).toContain('slotUnitAmountCents: integer("slot_unit_amount_cents").notNull().default(3_000)');
+    expect(migration).toContain("HFYOS v14 migration aborted: legacy Talent count");
+    expect(migration).toContain('DROP COLUMN "talent_session_unit_amount_cents"');
   });
 
-  it("bills locked Talent and House quantities at their distinct committed rates", () => {
-    const monthly = calculatePlatformMonthlyAmountCents({
-      talentProgramSessions: 8,
-      housePrograms: 3,
-      oneOffAllowance: 99,
-      talentSessionUnitAmountCents: 6_000,
-      houseProgramUnitAmountCents: 5_000,
-    } as Parameters<typeof calculatePlatformMonthlyAmountCents>[0] & { oneOffAllowance: number });
-    expect(monthly).toBe(63_000);
-    expect(platformCadenceChargeCents(monthly, "quarterly")).toBe(189_000);
-    expect(platformCadenceChargeCents(monthly, "annual")).toBe(756_000);
-    expect(platformCadenceInterval("quarterly")).toEqual({ interval: "month", intervalCount: 3 });
+  it("bills the buckets at $30 and discounts an upfront annual term by 25%", () => {
+    expect(calculatePlatformPlanAmounts({ talentBucketSize: 20, houseBucketSize: 10, term: "month_to_month" }).termChargeAmountCents).toBe(90_000);
+    expect(calculatePlatformPlanAmounts({ talentBucketSize: 20, houseBucketSize: 10, term: "annual" }).termChargeAmountCents).toBe(810_000);
+    expect(platformTermInterval("annual")).toEqual({ interval: "year", intervalCount: 1 });
   });
 
   it("compares Live Usage without mutating plan quantities or producing money", () => {
-    const plan = { talentProgramSessions: 8, housePrograms: 3, oneOffAllowance: 2 };
-    const comparison = comparePlatformUsage(plan, { talentSessions: 10, housePrograms: 2, oneOffs: 4 });
-    expect(plan).toEqual({ talentProgramSessions: 8, housePrograms: 3, oneOffAllowance: 2 });
-    expect(comparison).toMatchObject({ withinPlan: false, totalOverBy: 4 });
+    const plan = { talentBucketSize: 10, houseBucketSize: 5 };
+    const comparison = comparePlatformUsage(plan, { talentSessions: 12, housePrograms: 2 });
+    expect(plan).toEqual({ talentBucketSize: 10, houseBucketSize: 5 });
+    expect(comparison).toMatchObject({ withinPlan: false, totalOverBy: 2 });
     expect(comparison.talentSessions.overBy).toBe(2);
-    expect(comparison.oneOffs.overBy).toBe(2);
     expect(comparison.housePrograms.withinPlan).toBe(true);
   });
 });
 
-describe("Founding Client tracking", () => {
-  it("stores an explicit six-month window and exposes the owner-only enrollment and expired-tier indicator", async () => {
+describe("retired pricing structures", () => {
+  it("removes Founding Client, commitment tiers, raw rates, and one-off billing", async () => {
     const [schema, migration, form, action, page, stripeService] = await Promise.all([
       readSource("../src/db/schema.ts"),
-      readSource("../drizzle/0048_founding_client_tracking.sql"),
+      readSource("../drizzle/0051_platform_billing_buckets_v14.sql"),
       readSource("../src/app/app/platform-billing/committed-plan-form.tsx"),
       readSource("../src/app/app/platform-billing/actions.ts"),
       readSource("../src/app/app/platform-billing/page.tsx"),
       readSource("../src/services/platform-stripe.ts"),
     ]);
 
-    expect(schema).toContain('foundingClientSignedAt: timestamp("founding_client_signed_at", { withTimezone: true })');
-    expect(schema).toContain('foundingClientEndsAt: timestamp("founding_client_ends_at", { withTimezone: true })');
-    expect(migration).toContain('"founding_client_signed_at" timestamp with time zone');
-    expect(migration).toContain('"founding_client_ends_at" timestamp with time zone');
-    expect(form).toContain("foundingClientActive");
-    expect(form).toContain("no term selection");
-    expect(action).toContain("requireInternalActorForMutation");
-    expect(action).toContain("enrollFoundingClient");
-    expect(page).toContain("Commitment-tier selection needed");
-    expect(stripeService).toContain("enforceFoundingClientPlan");
-    expect(stripeService).toContain("FOUNDING_CLIENT_UNIT_AMOUNT_CENTS");
+    for (const source of [schema, form, action, page, stripeService]) {
+      expect(source).not.toMatch(/foundingClient|commitmentTier|oneOffAllowance|talentSessionUnitAmountCents|houseProgramUnitAmountCents/);
+    }
+    expect(migration).toContain('DROP COLUMN "founding_client_signed_at"');
+    expect(migration).toContain('DROP TYPE "public"."platform_commitment_tier"');
+    expect(migration).toContain('DROP TABLE "platform_subscription_clawbacks"');
   });
 });
 
@@ -124,20 +110,18 @@ describe("permanently comped Residencies", () => {
 
     expect(schema).toContain('comped: boolean("comped").notNull().default(false)');
     expect(migration).toContain('"comped" boolean DEFAULT false NOT NULL');
-    expect(migration).toContain("residencies_comped_not_founding");
     expect(setup).toContain("<CompedResidencyControl");
     expect(control).toContain("compedResidencyConfirmationPhrase");
     expect(ownerAction).toContain("requireInternalActorForMutation");
     expect(ownerAction).toContain("updateResidencyCompedStatus");
-    expect(ownerPage).toContain("Permanently comped · $0 Platform rates");
+    expect(ownerPage).toContain("Permanently comped · $0 billed");
     expect(ownerPage).toContain("COMPED · $0");
-    expect(planForm).toContain("$0 Talent · $0 House");
-    expect(stripeService).toContain("effectiveCompedPlan");
-    expect(stripeService).not.toContain("enforceCompedPlan(input");
+    expect(planForm).toContain("$0 billed");
+    expect(stripeService).toContain("effectiveComped");
   });
 
   it("renders $0 invoice line items from an unchanged nonzero underlying plan", () => {
-    const storedPlan = { revision: 7, cadence: "monthly" as const, talentSessions: 8, talentSessionUnitAmountCents: 7_000, housePrograms: 3, houseProgramUnitAmountCents: 6_000, oneOffAllowance: 2 };
+    const storedPlan = { revision: 7, term: "annual" as const, talentBucketSize: 20, houseBucketSize: 10, slotUnitAmountCents: 3_000 };
     const snapshot = createPlatformInvoiceDocumentSnapshot({
       comped: true,
       invoice: { id: "invoice", stripeInvoiceId: "in_test", number: "PLAT-COMP", invoiceDate: "2027-09-01", billingPeriodStart: "2027-09-01", billingPeriodEnd: "2027-09-30", currency: "USD", amountDueCents: 0, amountPaidCents: 0, status: "paid" },
@@ -147,67 +131,33 @@ describe("permanently comped Residencies", () => {
     });
 
     expect(snapshot.committedPlan).toMatchObject({
-      talentSessionUnitAmountCents: 0,
-      houseProgramUnitAmountCents: 0,
-      monthlyAmountCents: 0,
-      cadenceAmountCents: 0,
+      slotUnitAmountCents: 0,
+      baseMonthlyAmountCents: 0,
+      termChargeAmountCents: 0,
     });
     expect(snapshot.lines).toEqual(expect.arrayContaining([
-      expect.objectContaining({ description: "Committed Talent sessions", unitAmountCents: 0, amountCents: 0 }),
-      expect.objectContaining({ description: "Committed House programs", unitAmountCents: 0, amountCents: 0 }),
+      expect.objectContaining({ description: "Talent bucket", unitAmountCents: 0, amountCents: 0 }),
+      expect.objectContaining({ description: "House bucket", unitAmountCents: 0, amountCents: 0 }),
     ]));
-    expect(storedPlan).toMatchObject({ talentSessionUnitAmountCents: 7_000, houseProgramUnitAmountCents: 6_000 });
+    expect(storedPlan).toMatchObject({ talentBucketSize: 20, houseBucketSize: 10, slotUnitAmountCents: 3_000 });
   });
 });
 
-describe("Commitment ladder and clawback", () => {
-  it("persists tier terms and queues a guarded clawback line on the next test invoice", async () => {
-    const [schema, migration, form, action, stripeService, webhookService, page] = await Promise.all([
+describe("annual cancellation refund", () => {
+  it("persists the Section 5.7 formula and queues it only when an annual subscription cancels", async () => {
+    const [schema, migration, stripeService, webhookService] = await Promise.all([
       readSource("../src/db/schema.ts"),
-      readSource("../drizzle/0049_commitment_ladder_clawback.sql"),
-      readSource("../src/app/app/platform-billing/committed-plan-form.tsx"),
-      readSource("../src/app/app/platform-billing/actions.ts"),
+      readSource("../drizzle/0051_platform_billing_buckets_v14.sql"),
       readSource("../src/services/platform-stripe.ts"),
       readSource("../src/services/platform-stripe-webhooks.ts"),
-      readSource("../src/app/app/platform-billing/page.tsx"),
     ]);
 
-    expect(schema).toContain('platformCommitmentTier("commitment_tier")');
-    expect(schema).toContain('platformSubscriptionClawbacks = pgTable("platform_subscription_clawbacks"');
-    expect(migration).toContain('CREATE TYPE "public"."platform_commitment_tier"');
-    expect(migration).toContain('CREATE TABLE "platform_subscription_clawbacks"');
-    expect(form).toContain('name="commitmentTier"');
-    expect(form).toContain("House stays $60 at every tier");
-    expect(action).toContain("commitmentTier: parsed.commitmentTier ?? null");
-    expect(stripeService).toContain("calculateCommitmentClawback");
-    expect(stripeService).toContain("queueCommitmentCancellationClawback");
-    expect(webhookService).toContain('event.type === "invoice.created"');
-    expect(webhookService).toContain('action: "stripe_invoice_item_create"');
-    expect(webhookService).toContain("stripe.invoiceItems.create");
-    expect(page).toContain("pastForgivenessWindow");
-  });
-
-  it("renders a clawback as its own invoice line", () => {
-    const snapshot = createPlatformInvoiceDocumentSnapshot({
-      invoice: { id: "invoice", stripeInvoiceId: "in_test", number: "PLAT-1002", invoiceDate: "2027-04-01", billingPeriodStart: "2027-04-01", billingPeriodEnd: "2027-04-30", currency: "USD", amountDueCents: 82_000, amountPaidCents: 0, status: "open" },
-      issuer: { legalName: "HFY LLC", productName: "Platform", email: "billing@example.test", address: "" },
-      billTo: { residencyName: "Hotel", contactName: "Billing", contactEmail: "hotel@example.test", address: "" },
-      committedPlan: { revision: 3, cadence: "monthly", talentSessions: 8, talentSessionUnitAmountCents: 6_000, housePrograms: 0, houseProgramUnitAmountCents: 6_000, oneOffAllowance: 0 },
-      adjustments: [{
-        description: "Early termination clawback — 6-month commitment",
-        quantity: 17,
-        unitAmountCents: 2_000,
-        amountCents: 34_000,
-        detail: "Recovery of the commitment discount on Talent sessions already billed",
-      }],
-    });
-    expect(snapshot.lines.at(-1)).toMatchObject({
-      description: "Early termination clawback — 6-month commitment",
-      quantity: 17,
-      unitAmountCents: 2_000,
-      amountCents: 34_000,
-    });
-    expect(renderPlatformInvoiceHtml(snapshot)).toContain("Recovery of the commitment discount");
+    expect(schema).toContain('platformSubscriptionRefunds = pgTable("platform_subscription_refunds"');
+    expect(migration).toContain('CREATE TABLE "platform_subscription_refunds"');
+    expect(migration).toContain('"refund_amount_cents" = GREATEST(0, "total_annual_payment_cents" - ("months_used" * "full_monthly_amount_cents"))');
+    expect(stripeService).toContain("calculateAnnualCancellationRefund");
+    expect(stripeService).toContain('if (plan.term !== "annual") return null');
+    expect(webhookService).toContain("queueAnnualCancellationRefund(plan, now)");
   });
 });
 
@@ -333,12 +283,12 @@ describe("production billing visibility hold", () => {
 });
 
 describe("Platform Invoice document", () => {
-  it("uses a distinct subscription template and escapes client content", () => {
+  it("uses a v4 bucket snapshot, explicit annual discount, and escapes client content", () => {
     const snapshot = createPlatformInvoiceDocumentSnapshot({
-      invoice: { id: "invoice", stripeInvoiceId: "in_test", number: "PLAT-1001", invoiceDate: "2026-09-01", billingPeriodStart: "2026-09-01", billingPeriodEnd: "2026-09-30", currency: "USD", amountDueCents: 63_000, amountPaidCents: 63_000, status: "paid" },
+      invoice: { id: "invoice", stripeInvoiceId: "in_test", number: "PLAT-1001", invoiceDate: "2026-09-01", billingPeriodStart: "2026-09-01", billingPeriodEnd: "2027-08-31", currency: "USD", amountDueCents: 810_000, amountPaidCents: 810_000, status: "paid" },
       issuer: { legalName: "HFY LLC", productName: "Platform", email: "billing@example.test", address: "69365 El Canto Rd\nCathedral City, CA 92234" },
       billTo: { residencyName: "Hotel <Test>", contactName: "Billing", contactEmail: "hotel@example.test", address: "1 Test Way" },
-      committedPlan: { revision: 2, cadence: "monthly", talentSessions: 8, talentSessionUnitAmountCents: 6_000, housePrograms: 3, houseProgramUnitAmountCents: 5_000, oneOffAllowance: 2 },
+      committedPlan: { revision: 2, term: "annual", talentBucketSize: 20, houseBucketSize: 10, slotUnitAmountCents: 3_000 },
     });
     const html = renderPlatformInvoiceHtml(snapshot);
     expect(html).toContain("Platform Subscription Invoice");
@@ -347,13 +297,15 @@ describe("Platform Invoice document", () => {
     expect(html).toContain("Cathedral City, CA 92234");
     expect(html).toContain("Hotel &lt;Test&gt;");
     expect(html).not.toContain("Hotel <Test>");
-    expect(snapshot.committedPlan.cadenceAmountCents).toBe(63_000);
+    expect(snapshot.schemaVersion).toBe(4);
+    expect(snapshot.committedPlan.termChargeAmountCents).toBe(810_000);
     expect(snapshot.lines).toEqual([
-      { description: "Committed Talent sessions", quantity: 8, unitAmountCents: 6_000, amountCents: 48_000 },
-      { description: "Committed House programs", quantity: 3, unitAmountCents: 5_000, amountCents: 15_000 },
+      { description: "Talent bucket", quantity: 240, unitAmountCents: 3_000, amountCents: 720_000 },
+      { description: "House bucket", quantity: 120, unitAmountCents: 3_000, amountCents: 360_000 },
+      { description: "Annual prepayment discount (25%)", quantity: 1, unitAmountCents: -270_000, amountCents: -270_000, detail: "25% off the full month-to-month total for paying annually upfront" },
     ]);
-    expect(html).toContain("$60.00");
-    expect(html).toContain("$50.00");
+    expect(html).toContain("Annual prepayment discount (25%)");
+    expect(html).toContain("$30.00");
   });
 });
 
