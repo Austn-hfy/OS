@@ -35,9 +35,8 @@ import {
   marginPercentage,
 } from "@/domain/airtable-parity";
 import { getInvoiceBrandingSettings } from "@/services/invoice-branding";
-import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents } from "@/domain/platform-billing";
+import { calculatePlatformPlanAmounts } from "@/domain/platform-billing";
 import { assignmentNeedsRate } from "@/domain/assignment-rates";
-import { effectiveCompedPlan } from "@/domain/comped-residency";
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
@@ -81,8 +80,6 @@ export const getDeveloperResidencyList = cache(async function getDeveloperReside
     defaultTalentRateCents: residencies.defaultTalentRateCents,
     clientHourlyRateCents: residencies.clientHourlyRateCents,
     comped: residencies.comped,
-    foundingClientSignedAt: residencies.foundingClientSignedAt,
-    foundingClientEndsAt: residencies.foundingClientEndsAt,
   }).from(residencies)
     .where(eq(residencies.operatingMode, "operations"))
     .orderBy(desc(residencies.active), asc(residencies.name));
@@ -95,19 +92,12 @@ export async function getPlatformRevenueDashboard() {
     residencyName: residencies.name,
     residencyActive: residencies.active,
     comped: residencies.comped,
-    foundingClientSignedAt: residencies.foundingClientSignedAt,
-    foundingClientEndsAt: residencies.foundingClientEndsAt,
     status: platformSubscriptions.status,
-    cadence: platformSubscriptions.cadence,
-    commitmentTier: platformSubscriptions.commitmentTier,
-    commitmentStartedAt: platformSubscriptions.commitmentStartedAt,
-    commitmentLengthMonths: platformSubscriptions.commitmentLengthMonths,
+    term: platformSubscriptions.term,
     revision: platformSubscriptions.revision,
-    talentProgramSessions: platformSubscriptions.talentProgramSessions,
-    talentSessionUnitAmountCents: platformSubscriptions.talentSessionUnitAmountCents,
-    housePrograms: platformSubscriptions.housePrograms,
-    houseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
-    oneOffAllowance: platformSubscriptions.oneOffAllowance,
+    talentBucketSize: platformSubscriptions.talentBucketSize,
+    houseBucketSize: platformSubscriptions.houseBucketSize,
+    slotUnitAmountCents: platformSubscriptions.slotUnitAmountCents,
     startsOn: platformSubscriptions.startsOn,
     renewsOn: platformSubscriptions.renewsOn,
     stripeCustomerId: platformSubscriptions.stripeCustomerId,
@@ -148,13 +138,12 @@ export async function getPlatformRevenueDashboard() {
   const liveRows = await Promise.all(plans.map((plan) => loadPlatformLiveUsage(plan.residencyId)));
 
   return plans.map((plan, index) => {
-    const monthlyAmountCents = calculatePlatformMonthlyAmountCents(effectiveCompedPlan(plan, plan.comped));
+    const amounts = calculatePlatformPlanAmounts(plan, plan.comped);
     return {
       ...plan,
       nextChargeAt: plan.nextChargeAt?.toISOString() ?? null,
       paymentFailedAt: plan.paymentFailedAt?.toISOString() ?? null,
-      monthlyAmountCents,
-      cadenceChargeCents: platformCadenceChargeCents(monthlyAmountCents, plan.cadence),
+      ...amounts,
       latestInvoice: latestInvoiceRows.find((invoice) => invoice.platformSubscriptionId === plan.id) ?? null,
       recentRevisions: revisionRows.filter((revision) => revision.platformSubscriptionId === plan.id).slice(0, 5).map((revision) => ({
         ...revision,

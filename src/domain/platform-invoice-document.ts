@@ -1,35 +1,35 @@
-import { calculatePlatformMonthlyAmountCents, platformCadenceChargeCents, type PlatformBillingCadence } from "./platform-billing";
 import { effectiveCompedPlan } from "./comped-residency";
+import {
+  calculatePlatformPlanAmounts,
+  PLATFORM_ANNUAL_BILLING_MONTHS,
+  type PlatformSubscriptionTerm,
+} from "./platform-billing";
 
-export type PlatformInvoiceDocumentSnapshot = {
+type InvoiceIdentity = {
+  id: string;
+  stripeInvoiceId: string;
+  number: string;
+  invoiceDate: string;
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
+  currency: "USD";
+  amountDueCents: number;
+  amountPaidCents: number;
+  status: "open" | "paid" | "void" | "uncollectible";
+};
+
+type InvoiceParty = { legalName: string; productName: string; email: string; addressLines: string[] };
+type BillTo = { residencyName: string; contactName: string; contactEmail: string; addressLines: string[] };
+type InvoiceLine = { description: string; quantity: number; unitAmountCents: number; amountCents: number; detail?: string };
+
+export type LegacyPlatformInvoiceDocumentSnapshot = {
   schemaVersion: 3;
-  invoice: {
-    id: string;
-    stripeInvoiceId: string;
-    number: string;
-    invoiceDate: string;
-    billingPeriodStart: string;
-    billingPeriodEnd: string;
-    currency: "USD";
-    amountDueCents: number;
-    amountPaidCents: number;
-    status: "open" | "paid" | "void" | "uncollectible";
-  };
-  issuer: {
-    legalName: string;
-    productName: string;
-    email: string;
-    addressLines: string[];
-  };
-  billTo: {
-    residencyName: string;
-    contactName: string;
-    contactEmail: string;
-    addressLines: string[];
-  };
+  invoice: InvoiceIdentity;
+  issuer: InvoiceParty;
+  billTo: BillTo;
   committedPlan: {
     revision: number;
-    cadence: PlatformBillingCadence;
+    cadence: "monthly" | "quarterly" | "annual";
     talentSessions: number;
     talentSessionUnitAmountCents: number;
     housePrograms: number;
@@ -38,70 +38,87 @@ export type PlatformInvoiceDocumentSnapshot = {
     monthlyAmountCents: number;
     cadenceAmountCents: number;
   };
-  lines: Array<{
-    description: string;
-    quantity: number;
-    unitAmountCents: number;
-    amountCents: number;
-    detail?: string;
-  }>;
+  lines: InvoiceLine[];
 };
+
+export type PlatformInvoiceDocumentSnapshotV4 = {
+  schemaVersion: 4;
+  invoice: InvoiceIdentity;
+  issuer: InvoiceParty;
+  billTo: BillTo;
+  committedPlan: {
+    revision: number;
+    term: PlatformSubscriptionTerm;
+    talentBucketSize: number;
+    houseBucketSize: number;
+    slotUnitAmountCents: number;
+    baseMonthlyAmountCents: number;
+    effectiveMonthlyAmountCents: number;
+    termChargeAmountCents: number;
+    annualDiscountCents: number;
+  };
+  lines: InvoiceLine[];
+};
+
+export type PlatformInvoiceDocumentSnapshot = LegacyPlatformInvoiceDocumentSnapshot | PlatformInvoiceDocumentSnapshotV4;
 
 export type PlatformInvoiceDocumentSource = {
   comped?: boolean;
-  invoice: PlatformInvoiceDocumentSnapshot["invoice"];
-  issuer: Omit<PlatformInvoiceDocumentSnapshot["issuer"], "addressLines"> & { address: string };
-  billTo: Omit<PlatformInvoiceDocumentSnapshot["billTo"], "addressLines"> & { address: string };
-  committedPlan: Omit<PlatformInvoiceDocumentSnapshot["committedPlan"], "monthlyAmountCents" | "cadenceAmountCents">;
-  adjustments?: Array<{
-    description: string;
-    quantity: number;
-    unitAmountCents: number;
-    amountCents: number;
-    detail: string;
-  }>;
+  invoice: InvoiceIdentity;
+  issuer: Omit<InvoiceParty, "addressLines"> & { address: string };
+  billTo: Omit<BillTo, "addressLines"> & { address: string };
+  committedPlan: {
+    revision: number;
+    term: PlatformSubscriptionTerm;
+    talentBucketSize: number;
+    houseBucketSize: number;
+    slotUnitAmountCents: number;
+  };
 };
 
 function splitAddress(value: string) {
   return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
 
-export function createPlatformInvoiceDocumentSnapshot(source: PlatformInvoiceDocumentSource): PlatformInvoiceDocumentSnapshot {
-  const committedPlan = effectiveCompedPlan(source.committedPlan, source.comped ?? false);
-  const monthlyAmountCents = calculatePlatformMonthlyAmountCents({
-    talentProgramSessions: committedPlan.talentSessions,
-    talentSessionUnitAmountCents: committedPlan.talentSessionUnitAmountCents,
-    housePrograms: committedPlan.housePrograms,
-    houseProgramUnitAmountCents: committedPlan.houseProgramUnitAmountCents,
-  });
-  const cadenceAmountCents = platformCadenceChargeCents(monthlyAmountCents, committedPlan.cadence);
-  const cadenceMonths = committedPlan.cadence === "monthly" ? 1 : committedPlan.cadence === "quarterly" ? 3 : 12;
-  const lines: PlatformInvoiceDocumentSnapshot["lines"] = [
+export function createPlatformInvoiceDocumentSnapshot(source: PlatformInvoiceDocumentSource): PlatformInvoiceDocumentSnapshotV4 {
+  const comped = source.comped ?? false;
+  const amounts = calculatePlatformPlanAmounts(source.committedPlan, comped);
+  const committedPlan = effectiveCompedPlan(source.committedPlan, comped);
+  const termMonths = committedPlan.term === "annual" ? PLATFORM_ANNUAL_BILLING_MONTHS : 1;
+  const lines: InvoiceLine[] = [
     {
-      description: "Committed Talent sessions",
-      quantity: committedPlan.talentSessions * cadenceMonths,
-      unitAmountCents: committedPlan.talentSessionUnitAmountCents,
-      amountCents: committedPlan.talentSessions * committedPlan.talentSessionUnitAmountCents * cadenceMonths,
+      description: "Talent bucket",
+      quantity: committedPlan.talentBucketSize * termMonths,
+      unitAmountCents: committedPlan.slotUnitAmountCents,
+      amountCents: committedPlan.talentBucketSize * committedPlan.slotUnitAmountCents * termMonths,
     },
     {
-      description: "Committed House programs",
-      quantity: committedPlan.housePrograms * cadenceMonths,
-      unitAmountCents: committedPlan.houseProgramUnitAmountCents,
-      amountCents: committedPlan.housePrograms * committedPlan.houseProgramUnitAmountCents * cadenceMonths,
+      description: "House bucket",
+      quantity: committedPlan.houseBucketSize * termMonths,
+      unitAmountCents: committedPlan.slotUnitAmountCents,
+      amountCents: committedPlan.houseBucketSize * committedPlan.slotUnitAmountCents * termMonths,
     },
-  ].filter((line) => line.quantity > 0);
-  lines.push(...(source.adjustments ?? []).filter((line) => line.amountCents > 0));
+  ];
+  if (amounts.annualDiscountCents > 0) {
+    lines.push({
+      description: "Annual prepayment discount (25%)",
+      quantity: 1,
+      unitAmountCents: -amounts.annualDiscountCents,
+      amountCents: -amounts.annualDiscountCents,
+      detail: "25% off the full month-to-month total for paying annually upfront",
+    });
+  }
 
   if (source.invoice.currency !== "USD") throw new Error("Platform subscription invoices must use USD.");
   if (source.invoice.amountDueCents < 0 || source.invoice.amountPaidCents < 0) throw new Error("Platform invoice amounts cannot be negative.");
   if (source.invoice.billingPeriodEnd < source.invoice.billingPeriodStart) throw new Error("Platform invoice period is invalid.");
 
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     invoice: source.invoice,
     issuer: { ...source.issuer, addressLines: splitAddress(source.issuer.address) },
     billTo: { ...source.billTo, addressLines: splitAddress(source.billTo.address) },
-    committedPlan: { ...committedPlan, monthlyAmountCents, cadenceAmountCents },
+    committedPlan: { ...committedPlan, ...amounts },
     lines,
   };
 }
