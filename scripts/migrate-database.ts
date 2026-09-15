@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
-import postgres, { type ReservedSql, type Sql } from "postgres";
+import postgres, { type ReservedSql } from "postgres";
 import {
   assertMigrationIsSafe,
   executeDeploymentMigration,
@@ -107,9 +107,10 @@ async function applyMigrations(candidate: MigrationConnectionCandidate) {
   const client = postgres(candidate.databaseUrl, {
     connect_timeout: 15,
     idle_timeout: 10,
-    max: 1,
+    max: 2,
     prepare: false,
   });
+  const database = drizzle(client);
 
   try {
     await client`select 1`;
@@ -117,7 +118,6 @@ async function applyMigrations(candidate: MigrationConnectionCandidate) {
       client as unknown as AdvisoryLockClient<ReservedSql>,
       async (transaction) => {
         await validatePendingMigrations(transaction);
-        const database = drizzle(transaction as unknown as Sql);
         await migrate(database, { migrationsFolder });
       },
     );
