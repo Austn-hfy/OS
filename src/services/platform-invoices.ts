@@ -6,13 +6,11 @@ import { getDb } from "@/db/client";
 import {
   attentionItems,
   platformSettings,
-  platformSubscriptionClawbacks,
   platformSubscriptionInvoices,
   platformSubscriptionRevisions,
   platformSubscriptions,
   residencies,
 } from "@/db/schema";
-import { commitmentTierTerms } from "@/domain/commitment-tier";
 import { createPlatformInvoiceDocumentSnapshot } from "@/domain/platform-invoice-document";
 import { renderHtmlToPdf } from "@/services/invoice-pdf/runtime";
 import { renderPlatformInvoiceHtml } from "@/services/invoice-pdf/platform-template";
@@ -32,19 +30,15 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
     billingAddress: residencies.billingAddress,
     comped: residencies.comped,
     currentRevision: platformSubscriptions.revision,
-    currentCadence: platformSubscriptions.cadence,
-    currentTalentSessions: platformSubscriptions.talentProgramSessions,
-    currentTalentSessionUnitAmountCents: platformSubscriptions.talentSessionUnitAmountCents,
-    currentHousePrograms: platformSubscriptions.housePrograms,
-    currentHouseProgramUnitAmountCents: platformSubscriptions.houseProgramUnitAmountCents,
-    currentOneOffAllowance: platformSubscriptions.oneOffAllowance,
+    currentTerm: platformSubscriptions.term,
+    currentTalentBucketSize: platformSubscriptions.talentBucketSize,
+    currentHouseBucketSize: platformSubscriptions.houseBucketSize,
+    currentSlotUnitAmountCents: platformSubscriptions.slotUnitAmountCents,
     revision: platformSubscriptionRevisions.revision,
-    revisionCadence: platformSubscriptionRevisions.cadence,
-    revisionTalentSessions: platformSubscriptionRevisions.talentProgramSessions,
-    revisionTalentSessionUnitAmountCents: platformSubscriptionRevisions.talentSessionUnitAmountCents,
-    revisionHousePrograms: platformSubscriptionRevisions.housePrograms,
-    revisionHouseProgramUnitAmountCents: platformSubscriptionRevisions.houseProgramUnitAmountCents,
-    revisionOneOffAllowance: platformSubscriptionRevisions.oneOffAllowance,
+    revisionTerm: platformSubscriptionRevisions.term,
+    revisionTalentBucketSize: platformSubscriptionRevisions.talentBucketSize,
+    revisionHouseBucketSize: platformSubscriptionRevisions.houseBucketSize,
+    revisionSlotUnitAmountCents: platformSubscriptionRevisions.slotUnitAmountCents,
   }).from(platformSubscriptionInvoices)
     .innerJoin(platformSubscriptions, eq(platformSubscriptionInvoices.platformSubscriptionId, platformSubscriptions.id))
     .innerJoin(residencies, eq(platformSubscriptionInvoices.residencyId, residencies.id))
@@ -61,14 +55,7 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
     billingEmail: platformSettings.billingEmail,
     billingAddress: platformSettings.billingAddress,
   }).from(platformSettings).limit(1);
-  const clawbacks = await database.select({
-    sourceCommitmentTier: platformSubscriptionClawbacks.sourceCommitmentTier,
-    talentSessionsBilled: platformSubscriptionClawbacks.talentSessionsBilled,
-    unitAmountCents: platformSubscriptionClawbacks.unitAmountCents,
-    amountCents: platformSubscriptionClawbacks.amountCents,
-  }).from(platformSubscriptionClawbacks)
-    .where(eq(platformSubscriptionClawbacks.appliedInvoiceId, source.invoice.id));
-  const snapshot = createPlatformInvoiceDocumentSnapshot({
+  const snapshot = source.invoice.pdfSnapshot ?? createPlatformInvoiceDocumentSnapshot({
     comped: source.comped,
     invoice: {
       id: source.invoice.id,
@@ -96,20 +83,11 @@ export async function generatePlatformInvoicePdf(platformInvoiceId: string) {
     },
     committedPlan: {
       revision: source.revision ?? source.currentRevision,
-      cadence: source.revisionCadence ?? source.currentCadence,
-      talentSessions: source.revisionTalentSessions ?? source.currentTalentSessions,
-      talentSessionUnitAmountCents: source.revisionTalentSessionUnitAmountCents ?? source.currentTalentSessionUnitAmountCents,
-      housePrograms: source.revisionHousePrograms ?? source.currentHousePrograms,
-      houseProgramUnitAmountCents: source.revisionHouseProgramUnitAmountCents ?? source.currentHouseProgramUnitAmountCents,
-      oneOffAllowance: source.revisionOneOffAllowance ?? source.currentOneOffAllowance,
+      term: source.revisionTerm ?? source.currentTerm,
+      talentBucketSize: source.revisionTalentBucketSize ?? source.currentTalentBucketSize,
+      houseBucketSize: source.revisionHouseBucketSize ?? source.currentHouseBucketSize,
+      slotUnitAmountCents: source.revisionSlotUnitAmountCents ?? source.currentSlotUnitAmountCents,
     },
-    adjustments: clawbacks.map((clawback) => ({
-      description: `Early termination clawback — ${commitmentTierTerms(clawback.sourceCommitmentTier).label} commitment`,
-      quantity: clawback.talentSessionsBilled,
-      unitAmountCents: clawback.unitAmountCents,
-      amountCents: clawback.amountCents,
-      detail: "Recovery of the commitment discount on Talent sessions already billed",
-    })),
   });
   const pdf = await renderHtmlToPdf(renderPlatformInvoiceHtml(snapshot));
   if (pdf.length <= 0 || pdf.length > MAX_INVOICE_PDF_BYTES || pdf.subarray(0, 5).toString("ascii") !== "%PDF-") {
