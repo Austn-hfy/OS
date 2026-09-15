@@ -21,8 +21,8 @@ Secret values live only in the service dashboards. Do not commit them to this re
 4. Push `staging`. Vercel updates the stable staging URL automatically.
 5. Review and approve the change on staging.
 6. Open or update the pull request from `staging` into `main`.
-7. Apply any pending migrations to production as an explicit promotion step.
-8. Merge the pull request. Vercel then deploys `main` to production exactly as it does today.
+7. Merge the pull request. Vercel validates and applies pending production migrations before building the new application deployment.
+8. Confirm the production deployment reached Ready; a migration failure leaves the deployment in Error and keeps the previous deployment live.
 
 Do not merge the staging pull request merely to refresh staging. Pushing `staging` is sufficient.
 
@@ -30,11 +30,23 @@ Do not merge the staging pull request merely to refresh staging. Pushing `stagin
 
 Supabase staging and production are independent projects. A migration recorded in one project has not run in the other.
 
-- Apply new migrations to staging first and verify them there.
+- Push new migrations to `staging`; Vercel validates and applies them to the staging database before `next build` starts.
 - Keep the checked-in migration files identical across branches.
-- Before merging into `main`, apply the same pending migrations to production in order.
+- Merge the reviewed files into `main`; Vercel applies the same pending migrations to production before building the new application deployment.
 - Never point a staging migration command at the production connection string.
 - Storage buckets and Auth callback settings are also project-specific and must be configured separately when those requirements change.
+
+Every deployment runs the migration guard before the application build. Only `main` may migrate the allowlisted production Supabase project, and only `staging` may migrate the allowlisted staging project. Other Preview branches skip migrations without opening a database connection. A missing or mismatched credential, unsafe connection target, lock failure, or migration error fails the deployment visibly.
+
+Vercel stores `MIGRATION_DATABASE_URL` as a Sensitive variable scoped separately to Production and to the `staging` Preview branch; it is deliberately absent from every other Preview branch. The staging `DATABASE_URL` override is Sensitive and branch-scoped as well. Migration URLs should use Supabase's direct Postgres endpoint. The runner may fall back to the validated session-mode pooler when the build network cannot reach the direct endpoint, but it never migrates through transaction pooling on port `6543`.
+
+Pending migration files are scanned for `DROP COLUMN`, `DROP TABLE`, potentially data-losing `ALTER COLUMN ... TYPE`, `RENAME COLUMN`, table renames, and `TRUNCATE`. These operations are blocked by default. A deliberately reviewed destructive migration must contain this exact standalone marker comment:
+
+```sql
+-- ALLOW-DESTRUCTIVE
+```
+
+The marker is an explicit production-safety acknowledgement, not a substitute for a staged expand/contract rollout. Add new structures first, deploy compatible application code, and remove old structures in a later migration whenever possible.
 
 ## Access and data
 
