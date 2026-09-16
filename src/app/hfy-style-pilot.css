@@ -1309,6 +1309,7 @@
 
 @media (max-width: 850px) {
   .hfy-style-system .sidebar { position: static; height: auto; padding: 16px 20px; }
+  .hfy-style-system .view-as-banner { margin-inline: -20px; }
   .hfy-style-system .nav a,
   .hfy-style-system .client-dayparts-button,
   .hfy-style-system .preview-nav button { min-width: max-content; }
@@ -2561,7 +2562,21 @@
 
 @media (max-width: 850px) {
   .hfy-style-system .calendar-command-primary { align-items: stretch; flex-direction: column; }
-  .hfy-style-system .calendar-command-primary .calendar-month-cluster { justify-content: space-between; }
+  .hfy-style-system .calendar-command-primary .calendar-month-cluster {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    justify-content: stretch;
+    justify-items: stretch;
+  }
+  .hfy-style-system .calendar-command-primary .calendar-batch-launcher { justify-self: start; }
+  .hfy-style-system .calendar-command-primary .month-navigation { width: 100%; min-width: 0; }
+  .hfy-style-system .calendar-command-primary .calendar-batch-menu {
+    right: auto;
+    left: 0;
+    width: min(340px, calc(100vw - 68px));
+  }
   .hfy-style-system .client-add-artist-heading,
   .hfy-style-system .client-payment-section-heading { align-items: stretch; flex-direction: column; }
   .hfy-style-system .client-add-artist-heading > p { max-width: none; text-align: left; }
@@ -3210,6 +3225,14 @@
   box-shadow: 0 3px 10px rgba(26, 55, 84, .12), inset 0 -2px var(--owner-accent, #2783dc);
 }
 
+.hfy-style-system .workspace-surface-platform-billing > :not(.client-page-header) {
+  margin-inline: 20px;
+}
+
+.hfy-style-system .workspace-surface-platform-billing > :last-child {
+  margin-bottom: 20px;
+}
+
 .hfy-style-system .finance-accordions,
 .hfy-style-system .platform-invoice-history {
   display: grid;
@@ -3291,6 +3314,10 @@
 .hfy-style-system .full-programming-notice { padding: 14px 16px; border: 1px solid color-mix(in srgb, #2783dc 35%, var(--hfy-line)); border-radius: 12px; background: color-mix(in srgb, #2783dc 7%, white); }
 .hfy-style-system .full-programming-notice p { margin: 5px 0 0; color: var(--hfy-muted); }
 @media (max-width: 850px) {
+  .hfy-style-system .workspace-surface-platform-billing > :not(.client-page-header) {
+    margin-inline: 16px;
+  }
+  .hfy-style-system .workspace-surface-platform-billing > :last-child { margin-bottom: 16px; }
   .hfy-style-system .platform-billing-summary,
   .hfy-style-system .platform-plan-breakdown { grid-template-columns: 1fr; }
   .hfy-style-system .finance-accordion > summary { align-items: flex-start; }
