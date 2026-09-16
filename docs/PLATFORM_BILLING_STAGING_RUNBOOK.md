@@ -1,6 +1,8 @@
-# Platform Billing — Staging Runbook
+# Platform Billing — Safety and Staging Runbook
 
-This integration is staging-only and Stripe test-mode-only. The server validates `sk_test_` and `pk_test_` prefixes before constructing the Stripe client, rejects Stripe objects or events with `livemode: true`, and rejects Vercel production execution.
+The Platform Billing pages and database-only plan workflows are available in Vercel Preview, stable staging, and production deployments. Stripe integration remains test-mode-only: the server validates `sk_test_` and `pk_test_` prefixes before constructing the Stripe client and rejects Stripe objects or events with `livemode: true`. Other Vercel execution environments remain blocked.
+
+Production intentionally has no Stripe test keys. Viewing or creating a Committed Plan that is not connected to Stripe therefore remains database-only and does not need Stripe configuration. Every action that could create or change a Stripe billing object is separately protected by the Residency's default-false `liveBillingApproved` flag before the Stripe client is constructed. Non-approved Platform billing email is redirected to the configured owner address and the blocked or redirected action is written to the audit trail. An approved Stripe action in an environment without valid test keys fails closed during configuration validation before any Stripe request is sent.
 
 ## Billing contract
 
@@ -22,9 +24,9 @@ Apply the migration series through `drizzle/0051_platform_billing_buckets_v14.sq
 
 The migration is verified from migration 0000 through 0051 in the PGlite database constraint suite.
 
-## Staging configuration
+## Stripe test configuration
 
-Set these only in the staging/preview environment:
+Set these only in the stable staging environment. Do not configure them in production unless a deliberate test-mode billing exercise has been approved:
 
 ```text
 NEXT_PUBLIC_APP_URL=https://staging.hfy.app

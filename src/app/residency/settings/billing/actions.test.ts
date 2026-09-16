@@ -11,7 +11,7 @@ vi.mock("@/services/platform-stripe", () => ({
 }));
 
 const initialState = { status: "idle" as const, message: "" };
-const productionHold = new Error("Platform billing is staging-only and is disabled in the production deployment.");
+const environmentHold = new Error("Platform billing can run only in production or the stable staging deployment.");
 
 describe("Residency billing action hold responses", () => {
   beforeEach(() => {
@@ -26,20 +26,20 @@ describe("Residency billing action hold responses", () => {
   });
 
   it("returns a clean message when checkout is held", async () => {
-    vi.mocked(createPlatformSubscriptionCheckout).mockRejectedValue(productionHold);
+    vi.mocked(createPlatformSubscriptionCheckout).mockRejectedValue(environmentHold);
 
     await expect(startResidencyPlatformCheckoutAction(initialState, new FormData())).resolves.toEqual({
       status: "error",
-      message: productionHold.message,
+      message: environmentHold.message,
     });
   });
 
   it("returns a clean message when card updates are held", async () => {
-    vi.mocked(createPlatformPaymentMethodCheckout).mockRejectedValue(productionHold);
+    vi.mocked(createPlatformPaymentMethodCheckout).mockRejectedValue(environmentHold);
 
     await expect(updateResidencyPlatformCardAction(initialState, new FormData())).resolves.toEqual({
       status: "error",
-      message: productionHold.message,
+      message: environmentHold.message,
     });
   });
 });
