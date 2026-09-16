@@ -18,6 +18,17 @@ export function assertPlatformBillingStaging(environment: StripeEnvironment) {
   }
 }
 
+/** Display-only signal. Stripe access remains governed by assertStripeTestConfiguration. */
+export function isStripeLiveConfiguration(environment: StripeEnvironment) {
+  const secretKey = environment.STRIPE_SECRET_KEY?.trim() ?? "";
+  const publishableKey = environment.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ?? "";
+  return secretKey.startsWith("sk_live_") && publishableKey.startsWith("pk_live_");
+}
+
+export function isResidencyLiveStripeMode(liveBillingApproved: boolean, environment: StripeEnvironment) {
+  return liveBillingApproved && isStripeLiveConfiguration(environment);
+}
+
 /** Fail closed before the Stripe SDK is constructed or any Stripe request runs. */
 export function assertStripeTestConfiguration(environment: StripeEnvironment) {
   const secretKey = environment.STRIPE_SECRET_KEY?.trim() ?? "";

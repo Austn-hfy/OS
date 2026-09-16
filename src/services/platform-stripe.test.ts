@@ -21,6 +21,7 @@ vi.mock("@/services/live-billing-safety", () => ({
 }));
 
 import {
+  annualPlanChangeInput,
   createPlatformSubscriptionCheckout,
   platformPlanAmount,
   updateCommittedPlan,
@@ -85,6 +86,26 @@ describe("platform Stripe amount", () => {
       termChargeAmountCents: 0,
     });
     expect(plan).toEqual({ talentBucketSize: 20, houseBucketSize: 10, term: "annual" });
+  });
+});
+
+describe("Residency annual plan switching", () => {
+  it("changes only the term while preserving the existing capacities and dates", () => {
+    expect(annualPlanChangeInput({
+      residencyId,
+      talentBucketSize: 40,
+      houseBucketSize: 15,
+      startsOn: "2026-09-01",
+      renewsOn: "2026-10-01",
+    })).toEqual({
+      residencyId,
+      term: "annual",
+      talentBucketSize: 40,
+      houseBucketSize: 15,
+      startsOn: "2026-09-01",
+      renewsOn: "2026-10-01",
+      changeReason: "Residency manager switched to annual billing",
+    });
   });
 });
 

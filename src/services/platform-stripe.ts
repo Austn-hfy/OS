@@ -26,7 +26,7 @@ import {
   annualMonthsUsed,
   calculateAnnualCancellationRefund,
 } from "@/domain/platform-subscription-refund";
-import type { AuditActor, InternalActor } from "@/lib/auth";
+import type { AuditActor, InternalActor, ResidencyActor } from "@/lib/auth";
 import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
 import { getStripe, stagingBillingReturnUrl } from "@/lib/stripe";
 import { requireResidencyLiveBillingApproval } from "@/services/live-billing-safety";
@@ -47,6 +47,18 @@ type UpdateCommittedPlanOptions = {
 };
 
 type CurrentPlan = typeof platformSubscriptions.$inferSelect;
+
+export function annualPlanChangeInput(current: Pick<CurrentPlan, "residencyId" | "talentBucketSize" | "houseBucketSize" | "startsOn" | "renewsOn">): CommittedPlanInput {
+  return {
+    residencyId: current.residencyId,
+    term: "annual",
+    talentBucketSize: current.talentBucketSize,
+    houseBucketSize: current.houseBucketSize,
+    startsOn: current.startsOn,
+    renewsOn: current.renewsOn,
+    changeReason: "Residency manager switched to annual billing",
+  };
+}
 
 async function annualPaymentDuringTerm(platformSubscriptionId: string, startsOn: string, changedAt: Date) {
   const rows = await getDb().select({
@@ -268,7 +280,7 @@ async function updateStripeSubscriptionPlan(plan: CurrentPlan, input: CommittedP
   };
 }
 
-export async function updateCommittedPlan(actor: InternalActor, input: CommittedPlanInput, options: UpdateCommittedPlanOptions = {}) {
+async function applyCommittedPlanUpdate(actor: AuditActor, input: CommittedPlanInput, options: UpdateCommittedPlanOptions = {}) {
   assertCurrentPlatformBillingStaging();
   const database = getDb();
   const now = options.now ?? new Date();
@@ -469,6 +481,19 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
     });
     return updated;
   });
+}
+
+export async function updateCommittedPlan(actor: InternalActor, input: CommittedPlanInput, options: UpdateCommittedPlanOptions = {}) {
+  return applyCommittedPlanUpdate(actor, input, options);
+}
+
+export async function switchResidencyCommittedPlanToAnnual(actor: ResidencyActor) {
+  if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+  const [current] = await getDb().select().from(platformSubscriptions)
+    .where(eq(platformSubscriptions.residencyId, actor.residencyId)).limit(1);
+  if (!current) throw new Error("Your Platform subscription is not ready yet.");
+  if (current.term === "annual") return current;
+  return applyCommittedPlanUpdate(actor, annualPlanChangeInput(current));
 }
 
 export async function updateResidencyCompedStatus(
