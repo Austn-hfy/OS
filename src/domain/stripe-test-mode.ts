@@ -12,11 +12,9 @@ export type StripeEnvironment = {
 };
 
 export function assertPlatformBillingStaging(environment: StripeEnvironment) {
-  if (environment.VERCEL_ENV?.toLowerCase() === "production") {
-    throw new Error("Platform billing is staging-only and is disabled in the production deployment.");
-  }
+  if (environment.VERCEL_ENV?.toLowerCase() === "production") return;
   if (environment.VERCEL && !isStagingEnvironment(environment)) {
-    throw new Error("Platform billing can run only in the staging deployment.");
+    throw new Error("Platform billing can run only in production or the stable staging deployment.");
   }
 }
 

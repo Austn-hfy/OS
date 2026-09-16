@@ -12,7 +12,7 @@ vi.mock("@/data/residency-client", () => ({ getResidencyPlatformBilling: vi.fn()
 vi.mock("@/lib/auth", () => ({ requireResidencyActor: vi.fn() }));
 vi.mock("@/lib/platform-billing-stage", () => ({ isCurrentPlatformBillingAvailable: vi.fn() }));
 
-describe("Residency billing page production hold", () => {
+describe("Residency billing page availability hold", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(isCurrentPlatformBillingAvailable).mockReturnValue(false);

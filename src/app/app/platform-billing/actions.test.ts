@@ -17,7 +17,7 @@ vi.mock("@/services/platform-stripe", () => ({
 vi.mock("@/services/platform-usage", () => ({ reconcilePlatformUsage: vi.fn() }));
 
 const initialState = { status: "idle" as const, message: "" };
-const productionHold = new Error("Platform billing is staging-only and is disabled in the production deployment.");
+const environmentHold = new Error("Platform billing can run only in production or the stable staging deployment.");
 
 describe("Platform billing action hold responses", () => {
   beforeEach(() => {
@@ -30,24 +30,24 @@ describe("Platform billing action hold responses", () => {
   });
 
   it("returns a clean message when checkout is held", async () => {
-    vi.mocked(createPlatformSubscriptionCheckout).mockRejectedValue(productionHold);
+    vi.mocked(createPlatformSubscriptionCheckout).mockRejectedValue(environmentHold);
     const formData = new FormData();
     formData.set("residencyId", "00000000-0000-4000-8000-000000000002");
 
     await expect(startPlatformStripeCheckoutAction(initialState, formData)).resolves.toEqual({
       status: "error",
-      message: productionHold.message,
+      message: environmentHold.message,
     });
   });
 
   it("returns a clean message when usage refresh is held", async () => {
-    vi.mocked(reconcilePlatformUsage).mockRejectedValue(productionHold);
+    vi.mocked(reconcilePlatformUsage).mockRejectedValue(environmentHold);
     const formData = new FormData();
     formData.set("residencyId", "00000000-0000-4000-8000-000000000002");
 
     await expect(refreshPlatformUsageAction(initialState, formData)).resolves.toEqual({
       status: "error",
-      message: productionHold.message,
+      message: environmentHold.message,
     });
   });
 });
