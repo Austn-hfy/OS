@@ -26,6 +26,7 @@ import {
   annualMonthsUsed,
   calculateAnnualCancellationRefund,
 } from "@/domain/platform-subscription-refund";
+import { annualSwitchPaymentPath } from "@/domain/platform-annual-switch";
 import type { AuditActor, InternalActor, ResidencyActor } from "@/lib/auth";
 import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
 import { getStripe, stagingBillingReturnUrl } from "@/lib/stripe";
@@ -44,9 +45,16 @@ export type CommittedPlanInput = {
 type UpdateCommittedPlanOptions = {
   now?: Date;
   setComped?: boolean;
+  deferActivationUntilRenewal?: boolean;
 };
 
 type CurrentPlan = typeof platformSubscriptions.$inferSelect;
+
+function annualRenewalDate(startsOn: string) {
+  const date = new Date(`${startsOn}T12:00:00Z`);
+  date.setUTCFullYear(date.getUTCFullYear() + 1);
+  return date.toISOString().slice(0, 10);
+}
 
 export function annualPlanChangeInput(current: Pick<CurrentPlan, "residencyId" | "talentBucketSize" | "houseBucketSize" | "startsOn" | "renewsOn">): CommittedPlanInput {
   return {
@@ -54,8 +62,8 @@ export function annualPlanChangeInput(current: Pick<CurrentPlan, "residencyId" |
     term: "annual",
     talentBucketSize: current.talentBucketSize,
     houseBucketSize: current.houseBucketSize,
-    startsOn: current.startsOn,
-    renewsOn: current.renewsOn,
+    startsOn: current.renewsOn,
+    renewsOn: annualRenewalDate(current.renewsOn),
     changeReason: "Residency manager switched to annual billing",
   };
 }
@@ -280,7 +288,7 @@ async function updateStripeSubscriptionPlan(plan: CurrentPlan, input: CommittedP
   };
 }
 
-async function applyCommittedPlanUpdate(actor: AuditActor, input: CommittedPlanInput, options: UpdateCommittedPlanOptions = {}) {
+async function applyCommittedPlanUpdate(actor: Pick<AuditActor, "userId" | "email">, input: CommittedPlanInput, options: UpdateCommittedPlanOptions = {}) {
   assertCurrentPlatformBillingStaging();
   const database = getDb();
   const now = options.now ?? new Date();
@@ -416,8 +424,11 @@ async function applyCommittedPlanUpdate(actor: AuditActor, input: CommittedPlanI
   }
 
   const effectiveRenewsOn = stripeUpdate?.renewsOn ?? planInput.renewsOn;
+  const defersActivation = Boolean(options.deferActivationUntilRenewal && stripeUpdate && current.term !== planInput.term);
+  const scheduledStartsOn = defersActivation ? effectiveRenewsOn : planInput.startsOn;
+  const scheduledRenewsOn = defersActivation ? annualRenewalDate(effectiveRenewsOn) : effectiveRenewsOn;
   return database.transaction(async (tx) => {
-    const [updated] = await tx.update(platformSubscriptions).set({
+    const activatedPlanValues = defersActivation ? {} : {
       term: planInput.term,
       revision,
       talentBucketSize: planInput.talentBucketSize,
@@ -425,8 +436,11 @@ async function applyCommittedPlanUpdate(actor: AuditActor, input: CommittedPlanI
       slotUnitAmountCents: PLATFORM_SLOT_UNIT_AMOUNT_CENTS,
       startsOn: planInput.startsOn,
       renewsOn: effectiveRenewsOn,
-      stripeSubscriptionItemId: stripeUpdate?.stripeSubscriptionItemId ?? current.stripeSubscriptionItemId,
       stripePriceId: stripeUpdate?.stripePriceId ?? current.stripePriceId,
+    };
+    const [updated] = await tx.update(platformSubscriptions).set({
+      ...activatedPlanValues,
+      stripeSubscriptionItemId: stripeUpdate?.stripeSubscriptionItemId ?? current.stripeSubscriptionItemId,
       status: stripeUpdate?.status ?? current.status,
       nextChargeAt: stripeUpdate?.nextChargeAt ?? current.nextChargeAt,
       lastStripeSyncedAt: stripeUpdate ? now : current.lastStripeSyncedAt,
@@ -451,11 +465,12 @@ async function applyCommittedPlanUpdate(actor: AuditActor, input: CommittedPlanI
       });
     }
     await tx.update(platformSubscriptionRevisions).set({
-      renewsOn: effectiveRenewsOn,
-      stripeSyncStatus: stripeUpdate ? "synced" : "not_connected",
+      startsOn: scheduledStartsOn,
+      renewsOn: scheduledRenewsOn,
+      stripeSyncStatus: stripeUpdate && !defersActivation ? "synced" : stripeUpdate ? "pending" : "not_connected",
       stripePriceId: stripeUpdate?.stripePriceId ?? null,
       stripeSyncError: "",
-      syncedAt: stripeUpdate ? now : null,
+      syncedAt: stripeUpdate && !defersActivation ? now : null,
     }).where(eq(platformSubscriptionRevisions.id, pendingRevision.id));
     await tx.update(attentionItems).set({ status: "resolved", resolvedAt: now })
       .where(and(eq(attentionItems.entityType, "platform_subscription"), eq(attentionItems.entityId, current.id), eq(attentionItems.code, "platform_plan_sync_failed"), eq(attentionItems.status, "open")));
@@ -476,6 +491,7 @@ async function applyCommittedPlanUpdate(actor: AuditActor, input: CommittedPlanI
         houseBucketSize: planInput.houseBucketSize,
         slotUnitAmountCents: PLATFORM_SLOT_UNIT_AMOUNT_CENTS,
         stripeUpdateMode: current.stripeSubscriptionId ? current.term === planInput.term ? "in_place_no_proration" : "same_subscription_scheduled_at_renewal" : "not_connected",
+        effectiveAt: defersActivation ? scheduledStartsOn : planInput.startsOn,
         billingBehavior: "committed_plan_only_no_usage_autobilling",
       },
     });
@@ -489,11 +505,41 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
 
 export async function switchResidencyCommittedPlanToAnnual(actor: ResidencyActor) {
   if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+  return scheduleResidencyCommittedPlanToAnnual(actor);
+}
+
+export async function scheduleResidencyCommittedPlanToAnnual(actor: Pick<AuditActor, "userId" | "email"> & { residencyId: string }) {
   const [current] = await getDb().select().from(platformSubscriptions)
     .where(eq(platformSubscriptions.residencyId, actor.residencyId)).limit(1);
   if (!current) throw new Error("Your Platform subscription is not ready yet.");
   if (current.term === "annual") return current;
-  return applyCommittedPlanUpdate(actor, annualPlanChangeInput(current));
+  if (!current.stripeSubscriptionId) throw new Error("Add a card through Checkout to complete the annual switch.");
+  return applyCommittedPlanUpdate(actor, annualPlanChangeInput(current), { deferActivationUntilRenewal: true });
+}
+
+export async function beginResidencyAnnualSwitch(actor: ResidencyActor) {
+  if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+  const [current] = await getDb().select().from(platformSubscriptions)
+    .where(eq(platformSubscriptions.residencyId, actor.residencyId)).limit(1);
+  if (!current) throw new Error("Your Platform subscription is not ready yet.");
+  if (current.term === "annual") return { kind: "already_annual" as const };
+
+  const paymentPath = annualSwitchPaymentPath(current);
+  if (paymentPath === "collect_card_and_start_annual") {
+    const url = await createPlatformSubscriptionCheckout(actor, actor.residencyId, { term: "annual", annualSwitch: true });
+    return { kind: "checkout" as const, url, paymentPath };
+  }
+  if (paymentPath === "collect_card_then_schedule") {
+    const url = await createPlatformPaymentMethodCheckout(actor, actor.residencyId, { annualSwitch: true });
+    return { kind: "checkout" as const, url, paymentPath };
+  }
+
+  await switchResidencyCommittedPlanToAnnual(actor);
+  return {
+    kind: "scheduled" as const,
+    effectiveAt: current.renewsOn,
+    annualUpfrontAmountCents: platformPlanAmount({ ...current, term: "annual" }).termChargeAmountCents,
+  };
 }
 
 export async function updateResidencyCompedStatus(
@@ -554,7 +600,11 @@ export async function updateResidencyCompedStatus(
   return { comped: input.comped };
 }
 
-export async function createPlatformSubscriptionCheckout(actor: AuditActor, residencyId: string) {
+export async function createPlatformSubscriptionCheckout(
+  actor: AuditActor,
+  residencyId: string,
+  options: { term?: PlatformSubscriptionTerm; annualSwitch?: boolean } = {},
+) {
   assertCurrentPlatformBillingStaging();
   const database = getDb();
   const [row] = await database.select({ plan: platformSubscriptions, residency: {
@@ -568,28 +618,34 @@ export async function createPlatformSubscriptionCheckout(actor: AuditActor, resi
   if (!row) throw new Error("Create a Committed Plan before connecting Stripe.");
   if (row.residency.comped) throw new Error("A comped Residency does not require Stripe Checkout.");
   if (row.plan.stripeSubscriptionId) throw new Error("This Residency already has its continuous Stripe subscription.");
+  const checkoutTerm = options.term ?? row.plan.term;
+  const checkoutRevision = checkoutTerm === row.plan.term ? row.plan.revision : row.plan.revision + 1;
+  const checkoutPlan = { ...row.plan, term: checkoutTerm };
   await requireResidencyLiveBillingApproval({
     residencyId,
     action: "stripe_checkout_session_create",
     actor,
     entityType: "platform_subscription",
     entityId: row.plan.id,
-    details: { checkoutMode: "subscription", planRevision: row.plan.revision, includesSubscriptionCreation: true },
+    details: { checkoutMode: "subscription", planRevision: checkoutRevision, includesSubscriptionCreation: true, annualSwitch: Boolean(options.annualSwitch) },
   });
   const { customerId, productId } = await ensureStripeCustomerAndProduct(row.plan, row.residency);
   const priceMetadata = {
     hfy_residency_id: residencyId,
     hfy_platform_subscription_id: row.plan.id,
-    committed_plan_revision: String(row.plan.revision),
+    committed_plan_revision: String(checkoutRevision),
     talent_bucket_size: String(row.plan.talentBucketSize),
     house_bucket_size: String(row.plan.houseBucketSize),
     slot_unit_amount_cents: String(row.plan.slotUnitAmountCents),
-    subscription_term: row.plan.term,
-    annual_discount_percent: row.plan.term === "annual" ? "25" : "0",
+    subscription_term: checkoutTerm,
+    annual_discount_percent: checkoutTerm === "annual" ? "25" : "0",
+    annual_switch: options.annualSwitch ? "true" : "false",
+    changed_by_user_id: actor.userId,
+    changed_by_email: actor.email,
     environment: "staging-test",
   };
   const stripe = getStripe();
-  const price = await createPlanPrice(row.plan, row.plan, row.plan.revision, productId, row.residency.comped);
+  const price = await createPlanPrice(row.plan, checkoutPlan, checkoutRevision, productId, row.residency.comped);
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
@@ -608,13 +664,19 @@ export async function createPlatformSubscriptionCheckout(actor: AuditActor, resi
       metadata: priceMetadata,
       invoice_settings: { issuer: { type: "self" } },
     },
-    success_url: stagingBillingReturnUrl(actor.kind === "internal" ? "/app/platform-billing?mode=developer&stripe=success" : "/residency/settings/billing?stripe=success"),
-    cancel_url: stagingBillingReturnUrl(actor.kind === "internal" ? "/app/platform-billing?mode=developer&stripe=cancelled" : "/residency/settings/billing?stripe=cancelled"),
-  }, { idempotencyKey: `platform-checkout/${row.plan.id}/r${row.plan.revision}` });
+    success_url: stagingBillingReturnUrl(options.annualSwitch
+      ? "/residency/settings/billing?annualSwitch=checkout-complete"
+      : actor.kind === "internal" ? "/app/platform-billing?mode=developer&stripe=success" : "/residency/settings/billing?stripe=success"),
+    cancel_url: stagingBillingReturnUrl(options.annualSwitch
+      ? "/residency/settings/billing?annualSwitch=cancelled"
+      : actor.kind === "internal" ? "/app/platform-billing?mode=developer&stripe=cancelled" : "/residency/settings/billing?stripe=cancelled"),
+  }, { idempotencyKey: `platform-checkout/${row.plan.id}/r${checkoutRevision}` });
   if (session.livemode) throw new Error("Stripe returned a live-mode Checkout Session; staging billing stopped.");
   if (!session.url) throw new Error("Stripe did not return a Checkout URL.");
-  await database.update(platformSubscriptions).set({ stripePriceId: price.id, updatedAt: new Date() })
-    .where(eq(platformSubscriptions.id, row.plan.id));
+  if (checkoutRevision === row.plan.revision) {
+    await database.update(platformSubscriptions).set({ stripePriceId: price.id, updatedAt: new Date() })
+      .where(eq(platformSubscriptions.id, row.plan.id));
+  }
   await database.insert(auditLog).values({
     residencyId,
     actorUserId: actor.userId,
@@ -622,12 +684,16 @@ export async function createPlatformSubscriptionCheckout(actor: AuditActor, resi
     action: "platform_stripe_checkout_created",
     entityType: "platform_subscription",
     entityId: row.plan.id,
-    details: { stripeCheckoutSessionId: session.id, mode: "test", planRevision: row.plan.revision },
+    details: { stripeCheckoutSessionId: session.id, mode: "test", planRevision: checkoutRevision, annualSwitch: Boolean(options.annualSwitch) },
   });
   return session.url;
 }
 
-export async function createPlatformPaymentMethodCheckout(actor: AuditActor, residencyId: string) {
+export async function createPlatformPaymentMethodCheckout(
+  actor: AuditActor,
+  residencyId: string,
+  options: { annualSwitch?: boolean } = {},
+) {
   assertCurrentPlatformBillingStaging();
   const [row] = await getDb().select({ plan: platformSubscriptions, comped: residencies.comped }).from(platformSubscriptions)
     .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
@@ -641,7 +707,7 @@ export async function createPlatformPaymentMethodCheckout(actor: AuditActor, res
     actor,
     entityType: "platform_subscription",
     entityId: plan.id,
-    details: { checkoutMode: "setup", purpose: "update_platform_subscription_card" },
+    details: { checkoutMode: "setup", purpose: options.annualSwitch ? "update_card_and_switch_annual" : "update_platform_subscription_card" },
   });
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.create({
@@ -652,11 +718,13 @@ export async function createPlatformPaymentMethodCheckout(actor: AuditActor, res
       hfy_residency_id: residencyId,
       hfy_platform_subscription_id: plan.id,
       stripe_subscription_id: plan.stripeSubscriptionId,
-      purpose: "update_platform_subscription_card",
+      purpose: options.annualSwitch ? "update_card_and_switch_annual" : "update_platform_subscription_card",
+      changed_by_user_id: actor.userId,
+      changed_by_email: actor.email,
       environment: "staging-test",
     },
-    success_url: stagingBillingReturnUrl("/residency/settings/billing?card=updated"),
-    cancel_url: stagingBillingReturnUrl("/residency/settings/billing?card=cancelled"),
+    success_url: stagingBillingReturnUrl(options.annualSwitch ? "/residency/settings/billing?annualSwitch=card-added" : "/residency/settings/billing?card=updated"),
+    cancel_url: stagingBillingReturnUrl(options.annualSwitch ? "/residency/settings/billing?annualSwitch=cancelled" : "/residency/settings/billing?card=cancelled"),
   }, { idempotencyKey: `platform-payment-method/${plan.id}/${Date.now()}` });
   if (session.livemode) throw new Error("Stripe returned a live-mode Checkout Session; staging billing stopped.");
   if (!session.url) throw new Error("Stripe did not return a card update URL.");
