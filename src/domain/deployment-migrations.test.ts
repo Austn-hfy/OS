@@ -155,13 +155,6 @@ describe("deployment migration environment guard", () => {
       VERCEL_GIT_COMMIT_REF: "staging",
       VERCEL_TARGET_ENV: "preview",
     }],
-    ["different migration session password", {
-      MIGRATION_DATABASE_URL: stagingDirect,
-      MIGRATION_DATABASE_SESSION_URL: stagingSession.replace(":secret@", ":other-secret@"),
-      VERCEL_ENV: "preview",
-      VERCEL_GIT_COMMIT_REF: "staging",
-      VERCEL_TARGET_ENV: "preview",
-    }],
     ["ambiguous environment", {
       MIGRATION_DATABASE_URL: stagingDirect,
       VERCEL_ENV: "",
@@ -225,12 +218,19 @@ describe("migration connection selection", () => {
     expect(candidates[0]!.mode).toBe("direct");
   });
 
+  it("defers session-secret validation to fail-closed database authentication", () => {
+    const independentlyRotatedSession = stagingSession.replace(":secret@", ":rotated-secret@");
+    expect(migrationConnectionCandidates(stagingDirect, independentlyRotatedSession)).toEqual([
+      { databaseUrl: stagingDirect, mode: "direct" },
+      { databaseUrl: independentlyRotatedSession, mode: "session-pooler" },
+    ]);
+  });
+
   it.each([
     ["transaction-mode primary", stagingTransaction, null, /MIGRATION_DATABASE_URL must use the Supabase direct endpoint/],
     ["transaction-mode fallback", stagingDirect, stagingTransaction, /shared session pooler on port 5432/],
     ["cross-project fallback", stagingDirect, productionSession, /same Supabase project/],
     ["different-role fallback", stagingDirect, stagingSession.replace("postgres.", "hfy_app."), /same Postgres role/],
-    ["different-password fallback", stagingDirect, stagingSession.replace(":secret@", ":other@"), /same dedicated migration credential/],
     ["different-database fallback", stagingDirect, stagingSession.replace(/\/postgres$/, "/template1"), /same database/],
   ])("rejects %s", (_name, direct, session, message) => {
     expect(() => migrationConnectionCandidates(direct, session)).toThrow(message);
