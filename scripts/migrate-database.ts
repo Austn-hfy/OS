@@ -90,6 +90,7 @@ async function validatePendingMigrations(transaction: ReservedSql) {
     lastAppliedMigrationTimestamp(transaction),
   ]);
   const pending = journal.entries.filter((entry) => entry.when > lastApplied);
+  console.log(`Migration history read succeeded; latest applied timestamp is ${lastApplied}.`);
 
   for (const entry of pending) {
     const filename = `${entry.tag}.sql`;
@@ -101,6 +102,7 @@ async function validatePendingMigrations(transaction: ReservedSql) {
   }
 
   console.log(`Migration safety scan completed: ${pending.length} pending migration${pending.length === 1 ? "" : "s"}.`);
+  return { lastApplied, pending };
 }
 
 async function applyMigrations(candidate: MigrationConnectionCandidate) {
@@ -114,47 +116,81 @@ async function applyMigrations(candidate: MigrationConnectionCandidate) {
 
   try {
     await client`select 1`;
+    console.log("Acquiring the deployment migration advisory lock.");
     await runWithMigrationAdvisoryLock(
       client as unknown as AdvisoryLockClient<ReservedSql>,
       async (transaction) => {
-        await validatePendingMigrations(transaction);
+        console.log("Deployment migration advisory lock acquired.");
+        const { pending } = await validatePendingMigrations(transaction);
         await migrate(database, { migrationsFolder });
+        const lastApplied = await lastAppliedMigrationTimestamp(transaction);
+        const expectedLastApplied = pending.at(-1)?.when;
+        if (expectedLastApplied && lastApplied < expectedLastApplied) {
+          throw new Error(
+            `Migration history verification failed: expected timestamp ${expectedLastApplied}, found ${lastApplied}.`,
+          );
+        }
+        console.log(`Migration history write verification succeeded; latest applied timestamp is ${lastApplied}.`);
       },
     );
+    console.log("Deployment migration advisory lock released.");
   } finally {
     await client.end({ timeout: 5 });
   }
 }
 
 async function migrateDeployment(plan: Extract<DeploymentMigrationPlan, { action: "run" }>) {
-  const candidates = migrationConnectionCandidates(plan.databaseUrl, plan.fallbackDatabaseUrl);
+  const candidates = migrationConnectionCandidates(plan.databaseUrl, plan.sessionDatabaseUrl);
   console.log(`Validated ${plan.target} migration target: Supabase project ${plan.expectedProjectRef}.`);
 
+  await migrateWithCandidates(candidates, plan.target);
+}
+
+async function migrateWithCandidates(candidates: MigrationConnectionCandidate[], target: string) {
   for (const [index, candidate] of candidates.entries()) {
     try {
       console.log(`Connecting through the ${candidate.mode} migration endpoint.`);
       await applyMigrations(candidate);
-      console.log(`Database migrations completed successfully for ${plan.target}.`);
+      console.log(`Database migrations completed successfully for ${target}.`);
       return;
     } catch (error) {
       const canFallback = index === 0
         && candidate.mode === "direct"
         && candidates[index + 1]?.mode === "session-pooler"
         && isConnectionAvailabilityError(error);
-      if (!canFallback) throw error;
-      console.warn("The direct migration endpoint is unavailable; retrying through the validated session-mode pooler.");
+      if (canFallback) {
+        console.warn(
+          "The direct migration endpoint is unavailable; retrying with the validated same-role MIGRATION_DATABASE_SESSION_URL.",
+        );
+        continue;
+      }
+      if (index === 0 && candidate.mode === "direct" && isConnectionAvailabilityError(error)) {
+        throw new Error(
+          `The direct migration endpoint is unavailable for ${target}, and no valid MIGRATION_DATABASE_SESSION_URL fallback is configured. Migration stopped without using DATABASE_URL.`,
+          { cause: error },
+        );
+      }
+      if (candidate.mode === "session-pooler") {
+        throw new Error(
+          `MIGRATION_DATABASE_SESSION_URL failed for ${target}. Migration stopped without using DATABASE_URL.`,
+          { cause: error },
+        );
+      }
+      throw error;
     }
   }
 
-  throw new Error(`No usable database migration connection was available for ${plan.target}.`);
+  throw new Error(`No usable database migration connection was available for ${target}.`);
 }
 
 async function migrateLocally() {
-  const databaseUrl = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
-  if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL or DATABASE_URL is required to run database migrations locally.");
-  const candidates = migrationConnectionCandidates(databaseUrl, process.env.DATABASE_URL ?? null);
-  await applyMigrations(candidates[0]!);
-  console.log("Database migrations completed successfully for the local target.");
+  const databaseUrl = process.env.MIGRATION_DATABASE_URL;
+  if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL is required to run database migrations locally.");
+  const candidates = migrationConnectionCandidates(
+    databaseUrl,
+    process.env.MIGRATION_DATABASE_SESSION_URL ?? null,
+  );
+  await migrateWithCandidates(candidates, "the local target");
 }
 
 try {
