@@ -17,7 +17,7 @@ describe("Platform billing migration sequence", () => {
     const journal = JSON.parse(await readSource("../drizzle/meta/_journal.json")) as {
       entries: Array<{ idx: number; when: number; tag: string }>;
     };
-    const promotedSequence = journal.entries.slice(-10);
+    const promotedSequence = journal.entries.slice(-11);
 
     expect(promotedSequence.map(({ idx, tag }) => ({ idx, tag }))).toEqual([
       { idx: 42, tag: "0042_shift_change_requests" },
@@ -30,6 +30,7 @@ describe("Platform billing migration sequence", () => {
       { idx: 49, tag: "0049_commitment_ladder_clawback" },
       { idx: 50, tag: "0050_comped_residencies" },
       { idx: 51, tag: "0051_platform_billing_buckets_v14" },
+      { idx: 52, tag: "0052_deployment_migration_pipeline_verification" },
     ]);
     expect(promotedSequence.every((entry, index) => index === 0 || entry.when > promotedSequence[index - 1].when)).toBe(true);
   });
