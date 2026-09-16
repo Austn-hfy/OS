@@ -22,17 +22,22 @@ describe("GET /api/cron/platform-billing", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://hfy.app");
   });
 
-  it("returns 200 on hold before running billing work", async () => {
+  it("runs guarded billing work in production", async () => {
+    vi.mocked(reconcileAllPlatformUsage).mockResolvedValue([{ residencyId: "residency" }] as never);
+    vi.mocked(queueMonthlyOverageHeadsUps).mockResolvedValue(["alert-1"]);
+    vi.mocked(sendPendingPlatformBillingAlerts).mockResolvedValue([{ id: "alert-1", status: "sent" }]);
+
     const response = await GET(new Request("https://hfy.app/api/cron/platform-billing"));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ok: true,
-      onHold: true,
-      message: "Platform billing is staging-only and is disabled in the production deployment.",
+      usageReconciled: 1,
+      headsUpsQueued: 1,
+      alerts: [{ id: "alert-1", status: "sent" }],
     });
-    expect(reconcileAllPlatformUsage).not.toHaveBeenCalled();
-    expect(queueMonthlyOverageHeadsUps).not.toHaveBeenCalled();
-    expect(sendPendingPlatformBillingAlerts).not.toHaveBeenCalled();
+    expect(reconcileAllPlatformUsage).toHaveBeenCalledOnce();
+    expect(queueMonthlyOverageHeadsUps).toHaveBeenCalledOnce();
+    expect(sendPendingPlatformBillingAlerts).toHaveBeenCalledOnce();
   });
 });
