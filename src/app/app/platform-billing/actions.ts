@@ -13,8 +13,8 @@ export type PlatformPlanActionState = { status: "idle" | "success" | "error"; me
 const planSchema = z.object({
   residencyId: z.uuid(),
   term: z.enum(["month_to_month", "annual"]),
-  talentBucketSize: z.coerce.number().int().refine((value) => [10, 20, 30, 40, 50, 60].includes(value), "Select a standard Talent bucket."),
-  houseBucketSize: z.coerce.number().int().refine((value) => [5, 10, 15].includes(value), "Select a House bucket of at least 5 slots."),
+  talentBucketSize: z.coerce.number().int().refine((value) => [10, 20, 30, 40, 50, 60].includes(value), "Select a standard Talent capacity."),
+  houseBucketSize: z.coerce.number().int().refine((value) => [5, 10, 15].includes(value), "Select a House capacity of at least 5 slots."),
   startsOn: z.iso.date(),
   renewsOn: z.iso.date(),
   changeReason: z.string().trim().min(3).max(500),
