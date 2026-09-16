@@ -261,8 +261,6 @@ function assertSameMigrationIdentity(
   migrationSessionDatabaseUrl: string,
   projectRef: string,
 ) {
-  const direct = new URL(migrationDatabaseUrl);
-  const session = new URL(migrationSessionDatabaseUrl);
   const directRole = directDatabaseRole(migrationDatabaseUrl);
   const sessionRole = sessionDatabaseRole(migrationSessionDatabaseUrl, projectRef);
 
@@ -274,11 +272,6 @@ function assertSameMigrationIdentity(
   if (databaseName(migrationDatabaseUrl) !== databaseName(migrationSessionDatabaseUrl)) {
     throw new Error(
       "MIGRATION_DATABASE_SESSION_URL must select the same database as MIGRATION_DATABASE_URL.",
-    );
-  }
-  if (decodedUrlComponent(direct.password) !== decodedUrlComponent(session.password)) {
-    throw new Error(
-      "MIGRATION_DATABASE_SESSION_URL must use the same dedicated migration credential as MIGRATION_DATABASE_URL.",
     );
   }
 }
