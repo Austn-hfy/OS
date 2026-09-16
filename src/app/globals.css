@@ -1810,7 +1810,7 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-payment-failed-inline .button { background: #a71928; }
 .workspace-surface-platform-console, .workspace-surface-platform-billing { display: grid; gap: 18px; }
 .platform-billing-residencies { display: grid; gap: 18px; }
-.platform-owner-card { display: grid; gap: 18px; padding: 22px; }
+.platform-owner-card { display: grid; gap: 18px; padding: 22px; border-color: #d5e0ea; box-shadow: 0 8px 26px rgba(31,55,80,.06); }
 .platform-owner-card > header, .platform-owner-card-heading, .platform-comparison-heading, .residency-overview-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .platform-owner-card h2, .platform-live-comparison h2, .platform-plan-breakdown h2, .platform-invoice-history h2 { font-size: 22px; }
 .platform-owner-card header p:not(.eyebrow), .platform-plan-breakdown p, .platform-live-comparison p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
@@ -1820,10 +1820,12 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-comped-state span:not(.status) { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .platform-owner-plan-summary, .platform-billing-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .platform-billing-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.platform-owner-plan-summary > div, .platform-billing-summary > article { display: grid; gap: 5px; min-width: 0; padding: 15px; border: 1px solid var(--line); border-radius: 15px; background: rgba(255,255,255,.64); }
+.platform-owner-plan-summary > div, .platform-billing-summary > article { display: grid; align-content: start; gap: 5px; min-width: 0; min-height: 126px; padding: 17px; border: 1px solid #d5e0ea; border-radius: 15px; background: #fff; }
 .platform-owner-plan-summary small, .platform-billing-summary small { color: var(--muted); font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .platform-owner-plan-summary strong, .platform-billing-summary strong { overflow-wrap: anywhere; font-family: "Plus Jakarta Sans", sans-serif; font-size: 18px; }
 .platform-billing-summary span { font-size: 9px; }
+.platform-payment-method-card form { align-self: end; margin-top: auto; padding-top: 8px; }
+.platform-payment-method-card form .button { width: 100%; }
 .platform-live-comparison { display: grid; gap: 14px; padding: 17px; border: 1px solid #cbdff4; border-radius: 17px; background: linear-gradient(145deg, #f5faff, #edf5fd); }
 .platform-usage-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
 .platform-usage-metric { display: grid; gap: 4px; padding: 12px; border: 1px solid rgba(25,80,130,.13); border-radius: 13px; background: rgba(255,255,255,.78); }
@@ -1845,7 +1847,11 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-plan-history li strong, .platform-plan-history li span, .platform-plan-history li small { display: block; }
 .platform-plan-history li span, .platform-plan-history li small { margin-top: 2px; font-size: 9px; }
 .platform-stripe-connected { color: #17633f; font-size: 10px; font-weight: 800; }
-.platform-plan-breakdown { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr); gap: 24px; padding: 20px; }
+.platform-plan-breakdown { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .9fr); gap: 24px; padding: 22px; border-color: #d5e0ea; box-shadow: 0 8px 26px rgba(31,55,80,.06); }
+.platform-annual-switch { display: grid; gap: 5px; margin-top: 18px; padding: 15px; border: 1px solid #b9d6ef; border-radius: 14px; background: #f2f8ff; }
+.platform-annual-switch strong { color: #14558d; font-size: 13px; }
+.platform-annual-switch span { color: var(--muted); font-size: 10px; line-height: 1.45; }
+.platform-annual-switch form { display: grid; justify-items: start; gap: 6px; margin-top: 6px; }
 .platform-plan-breakdown dl, .residency-overview-plan-list { display: grid; gap: 9px; margin: 0; }
 .platform-plan-breakdown dl > div, .residency-overview-plan-list > div { display: flex; justify-content: space-between; gap: 14px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
 .platform-plan-breakdown dt, .residency-overview-plan-list dt { color: var(--muted); font-size: 10px; }
@@ -1870,4 +1876,5 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
   .platform-payment-failure-banner a, .platform-payment-failed-inline form, .platform-payment-failed-inline .button { width: 100%; margin-left: 0; text-align: center; }
   .platform-owner-plan-summary, .platform-billing-summary, .platform-usage-grid, .platform-plan-form-grid, .platform-plan-breakdown { grid-template-columns: 1fr; }
   .platform-plan-reason { grid-column: auto; }
+  .platform-billing-summary > article { min-height: 0; }
 }

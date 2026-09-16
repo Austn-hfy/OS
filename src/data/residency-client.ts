@@ -346,6 +346,7 @@ export async function getResidencyClientFinances(residencyId: string) {
 export async function getResidencyPlatformBilling(residencyId: string) {
   const [subscription] = await getDb().select({
     comped: residencies.comped,
+    liveBillingApproved: residencies.liveBillingApproved,
     id: platformSubscriptions.id,
     status: platformSubscriptions.status,
     term: platformSubscriptions.term,

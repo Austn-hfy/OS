@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { comparePlatformUsage, calculatePlatformPlanAmounts, platformTermInterval } from "@/domain/platform-billing";
 import { LIVE_BILLING_HOLD_MESSAGE } from "@/domain/live-billing";
 import { createPlatformInvoiceDocumentSnapshot } from "@/domain/platform-invoice-document";
-import { assertPlatformBillingStaging, assertStripeTestConfiguration } from "@/domain/stripe-test-mode";
+import { assertPlatformBillingStaging, assertStripeTestConfiguration, isResidencyLiveStripeMode, isStripeLiveConfiguration } from "@/domain/stripe-test-mode";
 import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
 import { renderPlatformInvoiceHtml } from "@/services/invoice-pdf/platform-template";
 
@@ -49,6 +49,25 @@ describe("Platform committed billing", () => {
     expect(comparison).toMatchObject({ withinPlan: false, totalOverBy: 2 });
     expect(comparison.talentSessions.overBy).toBe(2);
     expect(comparison.housePrograms.withinPlan).toBe(true);
+  });
+
+  it("presents capacities and a Residency-scoped annual switch without client revision copy", async () => {
+    const [clientPage, clientAction, ownerPage, ownerForm] = await Promise.all([
+      readSource("../src/app/residency/settings/billing/page.tsx"),
+      readSource("../src/app/residency/settings/billing/actions.ts"),
+      readSource("../src/app/app/platform-billing/page.tsx"),
+      readSource("../src/app/app/platform-billing/committed-plan-form.tsx"),
+    ]);
+
+    expect(clientPage).toContain("Save 25% by paying annually");
+    expect(clientPage).toContain("switchResidencyPlatformPlanToAnnualAction");
+    expect(clientAction).toContain("switchResidencyCommittedPlanToAnnual(actor)");
+    expect(clientPage).toContain("Talent capacity");
+    expect(clientPage).toContain("House capacity");
+    expect(clientPage).not.toContain("Current plan · revision");
+    expect(ownerPage).toContain("Committed Plan · revision");
+    expect(ownerForm).toContain("Talent capacity");
+    expect(ownerForm).toContain("House capacity");
   });
 });
 
@@ -155,6 +174,29 @@ describe("Stripe environment safety", () => {
       VERCEL_ENV: "production",
       VERCEL_TARGET_ENV: "production",
     })).toEqual({ secretKey: "sk_test_example", publishableKey: "pk_test_example" });
+  });
+
+  it("identifies live display mode only when both configured Stripe keys are live", () => {
+    expect(isStripeLiveConfiguration({
+      STRIPE_SECRET_KEY: "sk_live_example",
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live_example",
+    })).toBe(true);
+    expect(isStripeLiveConfiguration({
+      STRIPE_SECRET_KEY: "sk_test_example",
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_example",
+    })).toBe(false);
+    expect(isStripeLiveConfiguration({
+      STRIPE_SECRET_KEY: "sk_live_example",
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_example",
+    })).toBe(false);
+    expect(isResidencyLiveStripeMode(false, {
+      STRIPE_SECRET_KEY: "sk_live_example",
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live_example",
+    })).toBe(false);
+    expect(isResidencyLiveStripeMode(true, {
+      STRIPE_SECRET_KEY: "sk_live_example",
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live_example",
+    })).toBe(true);
   });
 
   it("rejects non-test keys and unsupported Vercel execution environments before Stripe can be called", () => {
