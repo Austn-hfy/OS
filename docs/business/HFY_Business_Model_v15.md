@@ -1,8 +1,8 @@
 # Hear For You Programming & HFYOS — Business Model
 
-**Version:** v14
+**Version:** v15
 **Last updated:** September 12, 2026
-**Changed this revision:** Full replacement of Section 5 (HFYOS Pricing Structure) — the flat $60/session model, the four-tier commitment ladder, and the Founding Client program are all retired, replaced by a real bucket-based pricing model built from ten real hotels' actual program data, not a single hypothetical example. Also: Section 5.4's monthly floor is retired (the buckets now have a natural minimum). Section 5.6 (Founding Client Program) is removed entirely — no promotional/introductory pricing is being offered; the real, standing price applies from day one. Section 5.8 (Clawback) is simplified for the two-term model that replaced the old four-term ladder. Section 5.9 (the platform-fee incentive rule) is reworded to work in bucket terms instead of per-session terms; the underlying rule is unchanged. Section 6's worked examples are fully rebuilt with real numbers under the new model, using real data from ten properties, not three. Sections 9–11 updated to match.
+**Changed this revision:** Pure terminology change, no pricing or rule changes. "Bucket" is renamed to "Capacity" throughout the document, matching the same rename made in the actual product UI, to keep the document and the live product using identical language. No numbers, capacity sizes, rates, or rules changed from v14 — this is a naming-consistency pass only.
 
 ---
 
@@ -106,8 +106,8 @@ Selecting "HFY" sends a request to Aus, who sources/assigns/pays a real DJ from 
 
 - **Daypart** — the recurring program *template*. "Main Pool — Friday, 12–7 PM" as a standing definition, independent of any specific date.
 - **Session** — one actual instance of a Talent program running on one specific date. Real, individually tracked bookings — this is what determines how many Talent slots a client actually uses.
-- **Slot** — the billing unit. One Talent session, or one distinct House program (see 5.2 for how House is counted). This is what a bucket is made of.
-- **Bucket** — the capacity a client actually buys: a number of Talent slots and a number of House slots, purchased independently of each other (see 5.5).
+- **Slot** — the billing unit. One Talent session, or one distinct House program (see 5.2 for how House is counted). This is what a capacity level is built from.
+- **Capacity** — the amount a client actually buys: a number of Talent slots and a number of House slots, purchased independently of each other (see 5.5).
 - **Standing** — a Daypart that repeats weekly on a fixed day. A purely descriptive/scheduling label — it does not, by itself, change how anything bills.
 - **One-off** — a Daypart that isn't a permanent weekly fixture. Also purely descriptive; bills the same as a standing session.
 - **Program** — the category label only: **Talent Program** or **House Program**.
@@ -129,17 +129,17 @@ Usage isn't hard-capped. If a client exceeds their purchased Talent or House slo
 
 ### 5.4 No separate monthly floor
 
-There is no standalone monthly minimum. The smallest possible bucket combination (10 Talent slots + 5 House slots, the House floor — see 5.5) already sets the effective floor on its own. A separate minimum on top of that would conflict with the bucket structure rather than protect it.
+There is no standalone monthly minimum. The smallest possible capacity combination (10 Talent slots + 5 House slots, the House floor — see 5.5) already sets the effective floor on its own. A separate minimum on top of that would conflict with the capacity structure rather than protect it.
 
-### 5.5 The rate card — flat per-slot pricing, bought in buckets
+### 5.5 The rate card — flat per-slot pricing, bought in capacity levels
 
-**The core principle: price per slot doesn't change based on how much capacity is bought.** A bigger bucket isn't a cheaper rate — it's the same rate, just more room. This is the same logic as cloud storage tiers or usage-based SaaS pricing generally: buying more capacity doesn't mean paying less per unit, it means having more headroom.
+**The core principle: price per slot doesn't change based on how much capacity is bought.** A bigger capacity isn't a cheaper rate — it's the same rate, just more room. This is the same logic as cloud storage tiers or usage-based SaaS pricing generally: buying more capacity doesn't mean paying less per unit, it means having more headroom.
 
 **Rate: $30 per slot, flat — identical for Talent and House.**
 
-**Talent buckets (clean tens, chosen for simplicity):**
+**Talent capacity levels (clean tens, chosen for simplicity):**
 
-| Bucket | Talent slots included |
+| Capacity | Talent slots included |
 |---|---:|
 | Starter | 10 |
 | | 20 |
@@ -147,19 +147,19 @@ There is no standalone monthly minimum. The smallest possible bucket combination
 | | 40 |
 | | 50 |
 | | 60 |
-| Enterprise | 70+ (custom-quoted, not a standard bucket) |
+| Enterprise | 70+ (custom-quoted, not a standard capacity) |
 
-**House buckets:**
+**House capacity levels:**
 
-| Bucket | House slots included |
+| Capacity | House slots included |
 |---|---:|
 | Floor (minimum, included on every plan) | 5 |
 | | 10 |
 | | 15 |
 
-**A client's total monthly price = (Talent bucket size + House bucket size) × $30.** Two independent dials, one combined bill.
+**A client's total monthly price = (Talent capacity size + House capacity size) × $30.** Two independent dials, one combined bill.
 
-**Discount: 25% off for paying annually, upfront, instead of month-to-month.** This is the only discount that exists anywhere in this pricing model — there is no separate discount for buying a bigger bucket, and no promotional/introductory rate for new clients. The real, standing price applies from day one.
+**Discount: 25% off for paying annually, upfront, instead of month-to-month.** This is the only discount that exists anywhere in this pricing model — there is no separate discount for buying a bigger capacity, and no promotional/introductory rate for new clients. The real, standing price applies from day one.
 
 **Where these numbers came from:** built and stress-tested against ten real properties' actual program data (Ace Hotel, plus nine others including several prospects), not a single hypothetical example. Real resulting prices range from $450/month (smallest real account found) to $1,650/month (largest standard-tier account found), before Enterprise custom pricing. Checked against real market comparables — dedicated scheduling software runs $79–249/month; the closest functional comparable (real hospitality booking/event-coordination software) tops out around $300/month even for its highest-volume customers and is described by its own users as a premium price point at that level. HFYOS's range sits meaningfully above both. This is treated as an acceptable, deliberate premium position — HFYOS does substantially more than either category (real people, real payouts, real reconciliation, not just a shared calendar) and has no direct competitor — with the understanding that real client conversations, not further internal analysis, are the actual test of whether $30/slot holds.
 
@@ -176,19 +176,19 @@ The standing policy for any future rate change, based on standard SaaS practice 
 
 Only relevant for a client who pays annually upfront and cancels before the year is used.
 
-> **Refund = total annual payment paid − (months actually used × the full month-to-month rate for their bucket).** The client does not keep the annual discount for months they didn't use — the months actually served get priced at the real month-to-month rate, and everything else is refunded.
+> **Refund = total annual payment paid − (months actually used × the full month-to-month rate for their capacity).** The client does not keep the annual discount for months they didn't use — the months actually served get priced at the real month-to-month rate, and everything else is refunded.
 
 There is no term commitment shorter than a full year with any discount attached, so there's no multi-tier forgiveness schedule to track — month-to-month has no commitment and nothing to refund; annual has this one rule.
 
 ### 5.8 Platform Fee Waiver for Standing HFY-Managed Dayparts
 
-When a Daypart's own standing setting — not a one-off "Request HFY" on an individual date — is HFY Managed, and has remained the standing setting for at least one full month, that Daypart's sessions no longer count toward the client's Talent bucket usage at all. HFY is instead earning directly from Section 3.1's hourly markup on every session under that Daypart.
+When a Daypart's own standing setting — not a one-off "Request HFY" on an individual date — is HFY Managed, and has remained the standing setting for at least one full month, that Daypart's sessions no longer count toward the client's Talent capacity usage at all. HFY is instead earning directly from Section 3.1's hourly markup on every session under that Daypart.
 
-This can genuinely lower a client's bill — if removing those sessions drops their real usage into a smaller bucket, their bucket (and price) can shrink, not just hold steady.
+This can genuinely lower a client's bill — if removing those sessions drops their real usage into a smaller capacity, their capacity (and price) can shrink, not just hold steady.
 
-This applies at the Daypart level, not the whole account. A hotel can have some Dayparts standing HFY Managed (excluded from their bucket count) while other Dayparts stay Client Managed (counted normally) — for example, Pool split into a Friday-only HFY-Managed Daypart and a separate Saturday/Sunday Client-Managed Daypart. Only the Friday Daypart's sessions are excluded.
+This applies at the Daypart level, not the whole account. A hotel can have some Dayparts standing HFY Managed (excluded from their capacity count) while other Dayparts stay Client Managed (counted normally) — for example, Pool split into a Friday-only HFY-Managed Daypart and a separate Saturday/Sunday Client-Managed Daypart. Only the Friday Daypart's sessions are excluded.
 
-A one-off "Request HFY" on a single date never touches the Daypart's own standing setting — it only affects that specific date's own record. Those sessions still count toward the client's Talent bucket exactly like any other session, since nothing about the Daypart's own status changed to trigger an exclusion.
+A one-off "Request HFY" on a single date never touches the Daypart's own standing setting — it only affects that specific date's own record. Those sessions still count toward the client's Talent capacity exactly like any other session, since nothing about the Daypart's own status changed to trigger an exclusion.
 
 The one-month minimum exists specifically to prevent a Daypart being created and immediately dissolved just to dress up a one-off request as a standing commitment.
 
@@ -198,7 +198,7 @@ This is intentionally not revenue-neutral for HFY — a full standing handover e
 
 ## 6. Worked Examples
 
-**Ten real properties' actual program data went into building and validating Section 5.5's bucket sizes. The three below are the headline examples; the full ten-property dataset lives in supporting pricing records, not duplicated here.**
+**Ten real properties' actual program data went into building and validating Section 5.5's capacity sizes. The three below are the headline examples; the full ten-property dataset lives in supporting pricing records, not duplicated here.**
 
 ### 6.1 Ace Hotel
 
@@ -230,7 +230,7 @@ This is intentionally not revenue-neutral for HFY — a full standing handover e
 | Desert Ink (tattoo pop-up) | One-off, 2 days |
 | **House total** | **3 programs used** |
 
-**Bucket fit: 41 Talent → 50-slot bucket. 3 House → 5-slot bucket (the floor). Total: 55 slots × $30 = $1,650/month, month-to-month.** Annual: 25% off, $1,237.50/month effective, billed upfront.
+**Capacity fit: 41 Talent needs a 50-slot Talent capacity level. 3 House needs a 5-slot House capacity level (the floor). Total: 55 slots × $30 = $1,650/month, month-to-month.** Annual: 25% off, $1,237.50/month effective, billed upfront.
 
 This is separate from whatever Hear For You Programming's hourly Request-HFY billing comes to (currently just Friday's Main Pool session, per Section 3.1) — the two totals are never combined into one number.
 
@@ -263,7 +263,7 @@ Built from Thompson's own September calendar, including items Thompson wants tra
 | Giving Tuesday | One-off |
 | **House total** | **9 programs used** |
 
-**Bucket fit: 13 Talent → 20-slot bucket. 9 House → 10-slot bucket. Total: 30 slots × $30 = $900/month, month-to-month.** This is the one real account in the dataset where House meaningfully outweighs Talent as a share of the bill — direct validation that the two-dial model earns its keep.
+**Capacity fit: 13 Talent needs a 20-slot Talent capacity level. 9 House needs a 10-slot House capacity level. Total: 30 slots × $30 = $900/month, month-to-month.** This is the one real account in the dataset where House meaningfully outweighs Talent as a share of the bill — direct validation that the two-dial model earns its keep.
 
 ### 6.3 The Saguaro *(prospect, not yet a live client)*
 
@@ -281,11 +281,11 @@ Built from Saguaro's live public events page. No House programs identified on th
 | Sun and Sound | Sun | 4 |
 | **Talent total** | | **32 sessions used** |
 
-**Bucket fit: 32 Talent → 40-slot bucket. 0 House → 5-slot bucket (the floor, unused). Total: 45 slots × $30 = $1,350/month, month-to-month.**
+**Capacity fit: 32 Talent needs a 40-slot Talent capacity level. 0 House sits at the 5-slot House capacity floor (unused). Total: 45 slots × $30 = $1,350/month, month-to-month.**
 
 ### 6.4 What the full ten-property dataset shows
 
-| Property | Talent bucket | House bucket | Price/mo |
+| Property | Talent capacity | House capacity | Price/mo |
 |---|---:|---:|---:|
 | W Austin | 10 | 5 | $450 |
 | The Line LA | 10 | 5 | $450 |
@@ -327,8 +327,8 @@ Talent usage spreads widely across real properties (2 to 50 sessions); House usa
 
 - **Full Programming clients pay both.** A Full Programming client owes the HFYOS platform subscription (Section 5) *and* HFY talent invoices (Section 3.1) — two structurally separate invoices, on separate payment rails, no discount for being on both.
 - Billing runs on **Stripe**, card-on-file, recurring subscription — separate rails from Hear For You Programming's talent invoicing.
-- Each Residency has a **Committed Plan** (their chosen Talent and House buckets) and separate **Live Usage** tracking (what they're actually running, in real sessions and real distinct House programs).
-- The invoice **never moves automatically** from Live Usage changes — only a manual Committed Plan update (choosing a new bucket) changes the bill.
+- Each Residency has a **Committed Plan** (their chosen Talent and House capacity levels) and separate **Live Usage** tracking (what they're actually running, in real sessions and real distinct House programs).
+- The invoice **never moves automatically** from Live Usage changes — only a manual Committed Plan update (choosing a new capacity) changes the bill.
 - **Overages:** see Section 5.3 — flagged, addressed manually, resolved with a prorated adjustment next cycle.
 - **Failed payments:** alert both Aus and the hotel contact. Do not restrict portal access. Persistent red banner until resolved.
 - Plan changes update the existing Stripe subscription in place — one continuous billing history.
@@ -340,8 +340,8 @@ Talent usage spreads widely across real properties (2 to 50 sessions); House usa
 - **DJ request/accept/decline automation engine (Telnyx)** — the technical implementation of "Request HFY."
 - **"Request HFY" button on an open calendar slot** — the client-facing trigger.
 - **Real hotel client portal + per-Residency RLS** — the actual product surface an HFYOS client uses day to day.
-- **Committed Plan and usage-tracking logic must reflect Section 5's bucket model** — Talent counted by actual sessions, House counted by distinct program regardless of frequency, then each mapped to the bucket it falls into for pricing. Not yet built as of this revision; today, mapping usage to a bucket and entering the Committed Plan is a manual step, the same way any other number is entered.
-- **Section 5.8's Daypart-level bucket exclusion is not yet automated** — today, applying it means manually excluding the relevant sessions from a Committed Plan's usage count by hand. Teaching the automatic Live Usage tracker to recognize a Daypart's standing-HFY status and the one-month minimum on its own is future work.
+- **Committed Plan and usage-tracking logic must reflect Section 5's capacity model** — Talent counted by actual sessions, House counted by distinct program regardless of frequency, then each mapped to the capacity it falls into for pricing. Not yet built as of this revision; today, mapping usage to a capacity and entering the Committed Plan is a manual step, the same way any other number is entered.
+- **Section 5.8's Daypart-level capacity exclusion is not yet automated** — today, applying it means manually excluding the relevant sessions from a Committed Plan's usage count by hand. Teaching the automatic Live Usage tracker to recognize a Daypart's standing-HFY status and the one-month minimum on its own is future work.
 
 ---
 
