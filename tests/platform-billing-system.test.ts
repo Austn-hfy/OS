@@ -161,7 +161,7 @@ describe("annual cancellation refund", () => {
   });
 });
 
-describe("Stripe staging safety", () => {
+describe("Stripe environment safety", () => {
   const safe = {
     STRIPE_SECRET_KEY: "sk_test_example",
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_example",
@@ -170,26 +170,33 @@ describe("Stripe staging safety", () => {
     VERCEL_ENV: "preview",
   };
 
-  it("accepts test keys only in staging", () => {
+  it("accepts test keys in stable staging and production", () => {
     expect(assertStripeTestConfiguration(safe)).toEqual({ secretKey: "sk_test_example", publishableKey: "pk_test_example" });
+    expect(assertStripeTestConfiguration({
+      ...safe,
+      NEXT_PUBLIC_APP_URL: "https://hfy.app",
+      VERCEL_ENV: "production",
+      VERCEL_TARGET_ENV: "production",
+    })).toEqual({ secretKey: "sk_test_example", publishableKey: "pk_test_example" });
   });
 
-  it("rejects non-test keys and production before Stripe can be called", () => {
+  it("rejects non-test keys and unsupported Vercel execution environments before Stripe can be called", () => {
     expect(() => assertStripeTestConfiguration({ ...safe, STRIPE_SECRET_KEY: "sk_example" })).toThrow(/TEST MODE/);
     expect(() => assertStripeTestConfiguration({ ...safe, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_example" })).toThrow(/TEST MODE/);
-    expect(() => assertStripeTestConfiguration({ ...safe, VERCEL_ENV: "production" })).toThrow(/staging-only/);
+    expect(() => assertStripeTestConfiguration({ ...safe, STRIPE_SECRET_KEY: undefined })).toThrow(/sk_test_/);
+    expect(() => assertStripeTestConfiguration({ ...safe, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: undefined })).toThrow(/pk_test_/);
     expect(() => assertStripeTestConfiguration({ ...safe, VERCEL_ENV: "development", NEXT_PUBLIC_APP_URL: "https://hfy.app" })).toThrow(/staging deployment/);
-    expect(() => assertPlatformBillingStaging({ VERCEL: "1", VERCEL_ENV: "production", NEXT_PUBLIC_APP_URL: "https://hfy.app" })).toThrow(/staging-only/);
+    expect(() => assertPlatformBillingStaging({ VERCEL: "1", VERCEL_ENV: "development", NEXT_PUBLIC_APP_URL: "https://development.example.test" })).toThrow(/production or the stable staging deployment/);
   });
 
-  it("reports the current production deployment as unavailable without changing the throwing lock", () => {
+  it("reports the current production deployment as available", () => {
     vi.stubEnv("VERCEL", "1");
     vi.stubEnv("VERCEL_ENV", "production");
     vi.stubEnv("VERCEL_TARGET_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://hfy.app");
 
-    expect(isCurrentPlatformBillingAvailable()).toBe(false);
-    expect(() => assertPlatformBillingStaging({ VERCEL: "1", VERCEL_ENV: "production" })).toThrow("Platform billing is staging-only and is disabled in the production deployment.");
+    expect(isCurrentPlatformBillingAvailable()).toBe(true);
+    expect(() => assertPlatformBillingStaging({ VERCEL: "1", VERCEL_ENV: "production" })).not.toThrow();
   });
 
   it("verifies raw signed webhooks, rejects live events, and updates the existing subscription", async () => {
@@ -250,8 +257,8 @@ describe("per-Residency live-billing safety", () => {
   });
 });
 
-describe("production billing visibility hold", () => {
-  it("removes billing navigation and gates every billing surface before data loads", async () => {
+describe("billing surface availability", () => {
+  it("keeps one shared availability gate for production, staging, previews, and unsupported environments", async () => {
     const [appLayout, internalShell, ownerPage, residencyLayout, residencyShell, residencyOverview, settingsPage, residencyBillingPage, setupPage, ownerPdf, residencyPdf] = await Promise.all([
       readSource("../src/app/app/layout.tsx"),
       readSource("../src/components/internal-shell.tsx"),

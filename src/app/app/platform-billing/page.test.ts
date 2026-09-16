@@ -14,7 +14,7 @@ vi.mock("@/data/internal", () => ({
 vi.mock("@/lib/auth", () => ({ requireInternalActor: vi.fn() }));
 vi.mock("@/lib/platform-billing-stage", () => ({ isCurrentPlatformBillingAvailable: vi.fn() }));
 
-describe("Platform billing page production hold", () => {
+describe("Platform billing page availability hold", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(isCurrentPlatformBillingAvailable).mockReturnValue(false);
