@@ -140,7 +140,7 @@ async function applyMigrations(candidate: MigrationConnectionCandidate) {
 }
 
 async function migrateDeployment(plan: Extract<DeploymentMigrationPlan, { action: "run" }>) {
-  const candidates = migrationConnectionCandidates(plan.databaseUrl, plan.sessionDatabaseUrl);
+  const candidates = migrationConnectionCandidates(plan.databaseUrl);
   console.log(`Validated ${plan.target} migration target: Supabase project ${plan.expectedProjectRef}.`);
 
   await migrateWithCandidates(candidates, plan.target);
@@ -160,19 +160,19 @@ async function migrateWithCandidates(candidates: MigrationConnectionCandidate[],
         && isConnectionAvailabilityError(error);
       if (canFallback) {
         console.warn(
-          "The direct migration endpoint is unavailable; retrying with the validated same-role MIGRATION_DATABASE_SESSION_URL.",
+          "The direct migration endpoint is unavailable; retrying with the derived same-credential session-pooler connection.",
         );
         continue;
       }
       if (index === 0 && candidate.mode === "direct" && isConnectionAvailabilityError(error)) {
         throw new Error(
-          `The direct migration endpoint is unavailable for ${target}, and no valid MIGRATION_DATABASE_SESSION_URL fallback is configured. Migration stopped without using DATABASE_URL.`,
+          `The direct migration endpoint is unavailable for ${target}, and no valid derived session-pooler fallback is available. Migration stopped without using DATABASE_URL.`,
           { cause: error },
         );
       }
       if (candidate.mode === "session-pooler") {
         throw new Error(
-          `MIGRATION_DATABASE_SESSION_URL failed for ${target}. Migration stopped without using DATABASE_URL.`,
+          `The derived session-pooler migration connection failed for ${target}. Migration stopped without using DATABASE_URL.`,
           { cause: error },
         );
       }
@@ -186,10 +186,7 @@ async function migrateWithCandidates(candidates: MigrationConnectionCandidate[],
 async function migrateLocally() {
   const databaseUrl = process.env.MIGRATION_DATABASE_URL;
   if (!databaseUrl) throw new Error("MIGRATION_DATABASE_URL is required to run database migrations locally.");
-  const candidates = migrationConnectionCandidates(
-    databaseUrl,
-    process.env.MIGRATION_DATABASE_SESSION_URL ?? null,
-  );
+  const candidates = migrationConnectionCandidates(databaseUrl);
   await migrateWithCandidates(candidates, "the local target");
 }
 
