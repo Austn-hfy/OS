@@ -10,7 +10,6 @@ export const DEPLOYMENT_MIGRATION_LOCK_TIMEOUT_MS = 60_000;
 type DeploymentMigrationEnvironment = {
   [key: string]: string | undefined;
   MIGRATION_DATABASE_URL?: string;
-  MIGRATION_DATABASE_SESSION_URL?: string;
   VERCEL_ENV?: string;
   VERCEL_GIT_COMMIT_REF?: string;
   VERCEL_TARGET_ENV?: string;
@@ -27,7 +26,7 @@ export type DeploymentMigrationPlan =
       action: "run";
       databaseUrl: string;
       expectedProjectRef: string;
-      sessionDatabaseUrl: string | null;
+      sessionDatabaseUrl: string;
       target: DeploymentMigrationTarget;
     };
 
@@ -36,6 +35,11 @@ export type MigrationConnectionMode = "direct" | "session-pooler";
 export type MigrationConnectionCandidate = {
   databaseUrl: string;
   mode: MigrationConnectionMode;
+};
+
+const SESSION_POOLER_HOST_BY_PROJECT_REF: Readonly<Record<string, string>> = {
+  [PRODUCTION_SUPABASE_PROJECT_REF]: "aws-0-us-west-2.pooler.supabase.com",
+  [STAGING_SUPABASE_PROJECT_REF]: "aws-0-us-west-2.pooler.supabase.com",
 };
 
 export type DestructiveMigrationFinding = {
@@ -73,7 +77,7 @@ function invalidDeploymentEnvironment(message: string): never {
 
 function assertMigrationProject(
   databaseUrl: string | undefined,
-  variableName: "MIGRATION_DATABASE_URL" | "MIGRATION_DATABASE_SESSION_URL",
+  variableName: "MIGRATION_DATABASE_URL",
   expectedProjectRef: string,
   target: DeploymentMigrationTarget,
   expectedMode: MigrationConnectionMode,
@@ -100,31 +104,6 @@ function assertMigrationProject(
   return databaseUrl;
 }
 
-function optionalMigrationSessionUrl(
-  databaseUrl: string | undefined,
-  expectedProjectRef: string,
-  target: DeploymentMigrationTarget,
-) {
-  if (!databaseUrl) return null;
-  return assertMigrationProject(
-    databaseUrl,
-    "MIGRATION_DATABASE_SESSION_URL",
-    expectedProjectRef,
-    target,
-    "session-pooler",
-  );
-}
-
-function assertDeploymentMigrationPair(databaseUrl: string, sessionDatabaseUrl: string | null) {
-  try {
-    migrationConnectionCandidates(databaseUrl, sessionDatabaseUrl);
-  } catch (error) {
-    return invalidDeploymentEnvironment(
-      error instanceof Error ? error.message : "the migration connection pair is invalid.",
-    );
-  }
-}
-
 export function resolveDeploymentMigrationPlan(
   environment: DeploymentMigrationEnvironment,
 ): DeploymentMigrationPlan {
@@ -147,12 +126,7 @@ export function resolveDeploymentMigrationPlan(
       "production",
       "direct",
     );
-    const sessionDatabaseUrl = optionalMigrationSessionUrl(
-      environment.MIGRATION_DATABASE_SESSION_URL,
-      expectedProjectRef,
-      "production",
-    );
-    assertDeploymentMigrationPair(databaseUrl, sessionDatabaseUrl);
+    const sessionDatabaseUrl = migrationSessionDatabaseUrl(databaseUrl);
     return {
       action: "run",
       databaseUrl,
@@ -181,12 +155,7 @@ export function resolveDeploymentMigrationPlan(
       "staging",
       "direct",
     );
-    const sessionDatabaseUrl = optionalMigrationSessionUrl(
-      environment.MIGRATION_DATABASE_SESSION_URL,
-      expectedProjectRef,
-      "staging",
-    );
-    assertDeploymentMigrationPair(databaseUrl, sessionDatabaseUrl);
+    const sessionDatabaseUrl = migrationSessionDatabaseUrl(databaseUrl);
     return {
       action: "run",
       databaseUrl,
@@ -240,67 +209,39 @@ function decodedUrlComponent(value: string) {
   }
 }
 
-function databaseName(databaseUrl: string) {
-  const parsed = new URL(databaseUrl);
-  return decodedUrlComponent(parsed.pathname.replace(/^\//, ""));
-}
-
 function directDatabaseRole(databaseUrl: string) {
   return decodedUrlComponent(new URL(databaseUrl).username);
 }
 
-function sessionDatabaseRole(databaseUrl: string, projectRef: string) {
-  const username = decodedUrlComponent(new URL(databaseUrl).username);
-  const suffix = `.${projectRef}`;
-  if (!username.toLowerCase().endsWith(suffix.toLowerCase())) return null;
-  return username.slice(0, -suffix.length);
-}
-
-function assertSameMigrationIdentity(
-  migrationDatabaseUrl: string,
-  migrationSessionDatabaseUrl: string,
-  projectRef: string,
-) {
-  const directRole = directDatabaseRole(migrationDatabaseUrl);
-  const sessionRole = sessionDatabaseRole(migrationSessionDatabaseUrl, projectRef);
-
-  if (!directRole || !sessionRole || directRole !== sessionRole) {
-    throw new Error(
-      "MIGRATION_DATABASE_SESSION_URL must authenticate as the same Postgres role as MIGRATION_DATABASE_URL.",
-    );
-  }
-  if (databaseName(migrationDatabaseUrl) !== databaseName(migrationSessionDatabaseUrl)) {
-    throw new Error(
-      "MIGRATION_DATABASE_SESSION_URL must select the same database as MIGRATION_DATABASE_URL.",
-    );
-  }
-}
-
-export function migrationConnectionCandidates(
-  migrationDatabaseUrl: string,
-  migrationSessionDatabaseUrl: string | null,
-): MigrationConnectionCandidate[] {
+export function migrationSessionDatabaseUrl(migrationDatabaseUrl: string): string {
   if (connectionMode(migrationDatabaseUrl) !== "direct") {
     throw new Error("MIGRATION_DATABASE_URL must use the Supabase direct endpoint on port 5432.");
   }
 
-  const candidates: MigrationConnectionCandidate[] = [
+  const projectRef = supabaseProjectRefFromDatabaseUrl(migrationDatabaseUrl);
+  const poolerHost = projectRef ? SESSION_POOLER_HOST_BY_PROJECT_REF[projectRef] : undefined;
+  if (!projectRef || !poolerHost) {
+    throw new Error("MIGRATION_DATABASE_URL does not have an allowlisted session-pooler host.");
+  }
+
+  const sessionUrl = new URL(migrationDatabaseUrl);
+  const role = directDatabaseRole(migrationDatabaseUrl);
+  if (!role) throw new Error("MIGRATION_DATABASE_URL must include a Postgres role.");
+
+  sessionUrl.hostname = poolerHost;
+  sessionUrl.port = "5432";
+  sessionUrl.username = `${role}.${projectRef}`;
+  return sessionUrl.toString();
+}
+
+export function migrationConnectionCandidates(
+  migrationDatabaseUrl: string,
+): MigrationConnectionCandidate[] {
+  const sessionDatabaseUrl = migrationSessionDatabaseUrl(migrationDatabaseUrl);
+  return [
     { databaseUrl: migrationDatabaseUrl, mode: "direct" },
+    { databaseUrl: sessionDatabaseUrl, mode: "session-pooler" },
   ];
-  if (!migrationSessionDatabaseUrl) return candidates;
-
-  if (connectionMode(migrationSessionDatabaseUrl) !== "session-pooler") {
-    throw new Error("MIGRATION_DATABASE_SESSION_URL must use the Supabase shared session pooler on port 5432.");
-  }
-  const directProjectRef = supabaseProjectRefFromDatabaseUrl(migrationDatabaseUrl);
-  const sessionProjectRef = supabaseProjectRefFromDatabaseUrl(migrationSessionDatabaseUrl);
-  if (!directProjectRef || directProjectRef !== sessionProjectRef) {
-    throw new Error("MIGRATION_DATABASE_SESSION_URL must point to the same Supabase project as MIGRATION_DATABASE_URL.");
-  }
-  assertSameMigrationIdentity(migrationDatabaseUrl, migrationSessionDatabaseUrl, directProjectRef);
-  candidates.push({ databaseUrl: migrationSessionDatabaseUrl, mode: "session-pooler" });
-
-  return candidates;
 }
 
 export function isConnectionAvailabilityError(error: unknown): boolean {
