@@ -29,7 +29,7 @@ function UsageMetric({ label, committed, live }: { label: string; committed: num
 }
 
 function CompedResidencyPanel() {
-  return <div className="platform-comped-state active" role="status"><div><strong>Permanently comped · $0 billed</strong><span>The selected Talent and House buckets remain active for usage comparison. No payment method is required.</span></div><span className="status active">COMPED</span></div>;
+  return <div className="platform-comped-state active" role="status"><div><strong>Permanently comped · $0 billed</strong><span>The selected Talent and House capacities remain active for usage comparison. No payment method is required.</span></div><span className="status active">COMPED</span></div>;
 }
 
 export default async function PlatformBillingPage({ searchParams }: { searchParams: Promise<{ stripe?: string; liveBilling?: string }> }) {

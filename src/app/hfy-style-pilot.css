@@ -3184,14 +3184,19 @@
 /* Financial surfaces keep Platform subscription records visually and structurally separate from talent money. */
 .hfy-style-system .settings-tabs {
   display: flex;
-  gap: 8px;
+  width: fit-content;
+  gap: 4px;
   margin-bottom: 18px;
-  border-bottom: 1px solid var(--hfy-line);
+  padding: 4px;
+  border: 1px solid var(--hfy-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--hfy-cloud) 82%, white);
 }
 
 .hfy-style-system .settings-tabs a {
-  padding: 10px 14px;
-  border-bottom: 2px solid transparent;
+  padding: 9px 15px;
+  border: 1px solid transparent;
+  border-radius: 9px;
   color: var(--hfy-muted);
   font-size: 12px;
   font-weight: 750;
@@ -3199,8 +3204,10 @@
 }
 
 .hfy-style-system .settings-tabs a.active {
-  border-bottom-color: var(--owner-accent, #2783dc);
+  border-color: color-mix(in srgb, var(--owner-accent, #2783dc) 42%, var(--hfy-line));
   color: var(--hfy-ink);
+  background: white;
+  box-shadow: 0 3px 10px rgba(26, 55, 84, .12), inset 0 -2px var(--owner-accent, #2783dc);
 }
 
 .hfy-style-system .finance-accordions,
@@ -3256,7 +3263,7 @@
   gap: 14px;
 }
 
-.hfy-style-system .platform-billing-summary article { display: grid; gap: 7px; }
+.hfy-style-system .platform-billing-summary article { display: grid; align-content: start; gap: 7px; min-height: 142px; padding: 20px; border: 1px solid var(--hfy-line); border-radius: 16px; background: white; box-shadow: 0 8px 24px rgba(26, 55, 84, .06); }
 .hfy-style-system .platform-billing-summary article > small { color: var(--hfy-muted); text-transform: uppercase; letter-spacing: .08em; }
 .hfy-style-system .platform-billing-summary article > strong { font-size: clamp(18px, 2vw, 26px); }
 .hfy-style-system .platform-billing-summary article > span:not(.status) { color: var(--hfy-muted); }
@@ -3266,15 +3273,26 @@
   grid-template-columns: minmax(0, 1fr) minmax(260px, .8fr);
   gap: 24px;
   align-items: start;
+  padding: 22px;
+  border: 1px solid var(--hfy-line);
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(26, 55, 84, .06);
 }
 
 .hfy-style-system .platform-plan-breakdown dl { margin: 0; display: grid; gap: 10px; }
 .hfy-style-system .platform-plan-breakdown dl div { display: flex; justify-content: space-between; gap: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--hfy-line); }
 .hfy-style-system .platform-plan-breakdown dd { margin: 0; font-weight: 750; }
+.hfy-style-system .platform-owner-card { border: 1px solid var(--hfy-line); border-radius: 16px; background: white; box-shadow: 0 8px 24px rgba(26, 55, 84, .06); }
+.hfy-style-system .platform-owner-plan-summary > div { min-height: 112px; padding: 18px; border: 1px solid var(--hfy-line); background: color-mix(in srgb, var(--hfy-cloud) 45%, white); }
+.hfy-style-system .platform-payment-method-card form { align-self: end; margin-top: auto; padding-top: 10px; }
+.hfy-style-system .platform-payment-method-card form .button { width: 100%; }
+.hfy-style-system .platform-annual-switch { margin-top: 20px; padding: 16px; border-color: color-mix(in srgb, #2783dc 35%, var(--hfy-line)); background: color-mix(in srgb, #2783dc 7%, white); }
 .hfy-style-system .full-programming-notice { padding: 14px 16px; border: 1px solid color-mix(in srgb, #2783dc 35%, var(--hfy-line)); border-radius: 12px; background: color-mix(in srgb, #2783dc 7%, white); }
 .hfy-style-system .full-programming-notice p { margin: 5px 0 0; color: var(--hfy-muted); }
 @media (max-width: 850px) {
   .hfy-style-system .platform-billing-summary,
   .hfy-style-system .platform-plan-breakdown { grid-template-columns: 1fr; }
   .hfy-style-system .finance-accordion > summary { align-items: flex-start; }
+  .hfy-style-system .platform-billing-summary article { min-height: 0; }
 }
