@@ -6,6 +6,7 @@ import {
   inspectMigrationSafety,
   isConnectionAvailabilityError,
   migrationConnectionCandidates,
+  migrationSessionDatabaseUrl,
   resolveDeploymentMigrationPlan,
   runWithMigrationAdvisoryLock,
 } from "./deployment-migrations";
@@ -15,14 +16,16 @@ import {
 } from "./staging-structure-sync";
 
 const productionDirect = `postgresql://postgres:secret@db.${PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co:5432/postgres`;
-const productionTransaction = `postgresql://postgres.${PRODUCTION_SUPABASE_PROJECT_REF}:secret@aws-0-us-west-2.pooler.supabase.com:6543/postgres`;
+const productionSession = `postgresql://postgres.${PRODUCTION_SUPABASE_PROJECT_REF}:secret@aws-0-us-west-2.pooler.supabase.com:5432/postgres`;
 const stagingDirect = `postgresql://postgres:secret@db.${STAGING_SUPABASE_PROJECT_REF}.supabase.co:5432/postgres`;
+const stagingSession = `postgresql://postgres.${STAGING_SUPABASE_PROJECT_REF}:secret@aws-0-us-west-2.pooler.supabase.com:5432/postgres`;
 const stagingTransaction = `postgresql://postgres.${STAGING_SUPABASE_PROJECT_REF}:secret@aws-0-us-west-2.pooler.supabase.com:6543/postgres`;
+const runtimeDatabaseUrl = `postgresql://hfy_app.${PRODUCTION_SUPABASE_PROJECT_REF}:runtime-secret@aws-0-us-west-2.pooler.supabase.com:6543/postgres`;
 
 describe("deployment migration environment guard", () => {
   it("accepts only the production target, main branch, and production project together", () => {
     expect(resolveDeploymentMigrationPlan({
-      DATABASE_URL: productionTransaction,
+      DATABASE_URL: runtimeDatabaseUrl,
       MIGRATION_DATABASE_URL: productionDirect,
       VERCEL_ENV: "production",
       VERCEL_GIT_COMMIT_REF: "main",
@@ -31,14 +34,14 @@ describe("deployment migration environment guard", () => {
       action: "run",
       databaseUrl: productionDirect,
       expectedProjectRef: PRODUCTION_SUPABASE_PROJECT_REF,
-      fallbackDatabaseUrl: productionTransaction,
+      sessionDatabaseUrl: productionSession,
       target: "production",
     });
   });
 
   it("accepts the preview staging branch only with the staging project", () => {
     expect(resolveDeploymentMigrationPlan({
-      DATABASE_URL: stagingTransaction,
+      DATABASE_URL: runtimeDatabaseUrl,
       MIGRATION_DATABASE_URL: stagingDirect,
       VERCEL_ENV: "preview",
       VERCEL_GIT_COMMIT_REF: "staging",
@@ -46,7 +49,35 @@ describe("deployment migration environment guard", () => {
     })).toMatchObject({
       action: "run",
       expectedProjectRef: STAGING_SUPABASE_PROJECT_REF,
+      sessionDatabaseUrl: stagingSession,
       target: "staging",
+    });
+  });
+
+  it("never reads DATABASE_URL or a legacy session variable while resolving a migration plan", () => {
+    expect(resolveDeploymentMigrationPlan({
+      DATABASE_URL: "not-even-a-url",
+      MIGRATION_DATABASE_URL: stagingDirect,
+      MIGRATION_DATABASE_SESSION_URL: "not-even-a-url",
+      VERCEL_ENV: "preview",
+      VERCEL_GIT_COMMIT_REF: "staging",
+      VERCEL_TARGET_ENV: "preview",
+    })).toMatchObject({
+      databaseUrl: stagingDirect,
+      sessionDatabaseUrl: stagingSession,
+    });
+  });
+
+  it("always derives the allowlisted session fallback from the direct migration credential", () => {
+    expect(resolveDeploymentMigrationPlan({
+      DATABASE_URL: runtimeDatabaseUrl,
+      MIGRATION_DATABASE_URL: stagingDirect,
+      VERCEL_ENV: "preview",
+      VERCEL_GIT_COMMIT_REF: "staging",
+      VERCEL_TARGET_ENV: "preview",
+    })).toMatchObject({
+      databaseUrl: stagingDirect,
+      sessionDatabaseUrl: stagingSession,
     });
   });
 
@@ -80,13 +111,6 @@ describe("deployment migration environment guard", () => {
     }],
     ["staging project mismatch", {
       MIGRATION_DATABASE_URL: productionDirect,
-      VERCEL_ENV: "preview",
-      VERCEL_GIT_COMMIT_REF: "staging",
-      VERCEL_TARGET_ENV: "preview",
-    }],
-    ["cross-project fallback", {
-      DATABASE_URL: productionTransaction,
-      MIGRATION_DATABASE_URL: stagingDirect,
       VERCEL_ENV: "preview",
       VERCEL_GIT_COMMIT_REF: "staging",
       VERCEL_TARGET_ENV: "preview",
@@ -151,17 +175,29 @@ describe("deployment migration environment guard", () => {
 });
 
 describe("migration connection selection", () => {
-  it("prefers direct Postgres and derives a session-pooler fallback", () => {
-    const candidates = migrationConnectionCandidates(stagingDirect, stagingTransaction);
+  it("prefers direct Postgres and derives the same-credential session fallback", () => {
+    const candidates = migrationConnectionCandidates(stagingDirect);
     expect(candidates.map(({ mode }) => mode)).toEqual(["direct", "session-pooler"]);
+    expect(candidates[1]!.databaseUrl).toBe(stagingSession);
     expect(new URL(candidates[1]!.databaseUrl).port).toBe("5432");
   });
 
-  it("never uses a configured transaction-pooler endpoint for migrations", () => {
-    const candidates = migrationConnectionCandidates(stagingTransaction, null);
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]!.mode).toBe("session-pooler");
-    expect(new URL(candidates[0]!.databaseUrl).port).toBe("5432");
+  it("preserves the password, database, and query while adding the required pooler username suffix", () => {
+    const direct = `postgresql://migration_owner:p%40ss!@db.${STAGING_SUPABASE_PROJECT_REF}.supabase.co:5432/hfy?sslmode=require`;
+    const session = new URL(migrationSessionDatabaseUrl(direct));
+    expect(session.hostname).toBe("aws-0-us-west-2.pooler.supabase.com");
+    expect(session.port).toBe("5432");
+    expect(decodeURIComponent(session.username)).toBe(`migration_owner.${STAGING_SUPABASE_PROJECT_REF}`);
+    expect(decodeURIComponent(session.password)).toBe("p@ss!");
+    expect(session.pathname).toBe("/hfy");
+    expect(session.searchParams.get("sslmode")).toBe("require");
+  });
+
+  it.each([
+    ["transaction-mode primary", stagingTransaction, /MIGRATION_DATABASE_URL must use the Supabase direct endpoint/],
+    ["unapproved project", "postgresql://postgres:secret@db.notallowlisted.supabase.co:5432/postgres", /allowlisted session-pooler host/],
+  ])("rejects %s", (_name, direct, message) => {
+    expect(() => migrationConnectionCandidates(direct)).toThrow(message);
   });
 
   it("recognizes only network availability failures as eligible for fallback", () => {
