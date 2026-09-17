@@ -261,7 +261,8 @@ Continuous resizing exposed two intermediate-width failures that were not visibl
 
 Resolution:
 
-- The committed-plan fact grid now responds to its own container. Below the full-width layout it chooses the number of columns that can preserve a practical fact width, removes obsolete column-divider padding, and keeps the existing one-column mobile presentation.
+- `Plan dates` was removed from the committed-plan summary because the separate Live Usage range already communicates the relevant period and the field was not an actionable billing fact. The duplicated annual upfront total was also omitted from this summary because it remains available in the Current plan card, leaving the summary at the four approved facts in every billing-term state.
+- The committed-plan fact grid now responds to its own container with only three permitted arrangements: four columns at full width, an even 2 × 2 grid at intermediate widths, and one fully stacked column at mobile widths. Explicit transitions replace auto-fitting so a 3 + 1 split cannot occur.
 - Invoice periods now use separate semantic start and end dates. They remain inline when the table has room and stack vertically when the invoice card narrows.
 - The compact invoice table removes its fixed minimum width, uses a fixed proportional column layout, and reduces cell padding while preserving the current full-desktop table.
 - Billing was rechecked continuously from 1440px down to the 700px mobile breakpoint. Account and all other routes were intentionally excluded.
@@ -305,7 +306,8 @@ Changed:
 - Promoted Subscription details and Within plan to section-level H2 headings.
 - Increased committed-plan and usage supporting type without competing with the top summary cards.
 - Corrected annual-dialog footer containment.
-- Added container-responsive committed-plan facts and an overflow-free intermediate invoice-table layout.
+- Removed the redundant Plan dates summary fact and locked the remaining four facts to 4-column, 2 × 2, or fully stacked layouts.
+- Added an overflow-free intermediate invoice-table layout.
 
 ### Intentionally left alone
 
@@ -347,7 +349,14 @@ Content sections must not place their headings, labels, fields, tables, or other
 | Major section gap | 24px | General future rule |
 | Control gap | 8–12px | Related controls |
 
-### 4. Typography
+### 4. Responsive field-grid structure — locked sitewide rule
+
+- A four-item responsive field-grid group may use only these arrangements: one full row of four, an even 2 × 2 grid, or a full vertical stack of one item per row.
+- Uneven final rows, including a 3 + 1 split, are never permitted.
+- Use explicit container or viewport transitions for these states. Do not use automatic column fitting when it can produce an uneven split.
+- Billing's Subscription details summary is the confirmed benchmark for this rule; other pages must be checked in their own future scoped passes.
+
+### 5. Typography
 
 | Role | Size | Weight | Notes |
 | --- | ---: | ---: | --- |
@@ -359,7 +368,7 @@ Content sections must not place their headings, labels, fields, tables, or other
 | Label/meta | 10px | 700–800 | Uppercase, tracked |
 | Dense data minimum | 9px | 600–800 | Nonessential wide-desktop metadata only |
 
-### 5. Controls and actions
+### 6. Controls and actions
 
 - Standard control height: 44px.
 - Primary blue: one main action per section or form.
@@ -369,7 +378,7 @@ Content sections must not place their headings, labels, fields, tables, or other
 - Card-specific action: inside the owning card.
 - Full-width buttons: only inside narrow cards or mobile layouts.
 
-### 6. Tabs
+### 7. Tabs
 
 - Sibling tabs use matching markup, dimensions, and one inset.
 - Tab location never changes between sibling routes.
@@ -377,7 +386,7 @@ Content sections must not place their headings, labels, fields, tables, or other
 - Active tab exposes `aria-current="page"`.
 - A shared tabs component is future work and was not introduced in this pass.
 
-### 7. Dialogs, drawers, and popovers
+### 8. Dialogs, drawers, and popovers
 
 - Desktop overlay padding: 32px; compact/mobile overlay padding: 12px.
 - Dialog maximum height: viewport height minus twice the active overlay padding.
@@ -388,7 +397,7 @@ Content sections must not place their headings, labels, fields, tables, or other
 - Do not use negative margins to make a modal footer full bleed.
 - Escape closes a reversible dialog, focus is trapped while open, and focus returns to the trigger.
 
-### 8. Required desktop checks
+### 9. Required desktop checks
 
 Every client page should eventually be verified at:
 
