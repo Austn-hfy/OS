@@ -3343,6 +3343,10 @@
   box-shadow: 0 8px 24px rgba(26, 55, 84, .06);
 }
 .hfy-style-system :is(.platform-committed-plan-section, .platform-live-usage-section) { padding: 20px; }
+.hfy-style-system .workspace-surface-platform-billing .platform-committed-plan-section {
+  container-name: billing-plan-details;
+  container-type: inline-size;
+}
 .hfy-style-system :is(.platform-plan-section-heading, .platform-live-usage-section) h2 {
   margin: 4px 0 0;
   font-size: 22px;
@@ -3358,6 +3362,15 @@
 .hfy-style-system .platform-plan-facts > div { border-left-color: var(--hfy-line); }
 .hfy-style-system .platform-plan-facts dt { font-size: 10px; font-weight: 750; }
 .hfy-style-system .platform-plan-facts dd { font-size: 12px; line-height: 1.4; }
+.hfy-style-system .workspace-surface-platform-billing .platform-invoice-history {
+  container-name: billing-invoice-history;
+  container-type: inline-size;
+}
+.hfy-style-system .platform-invoice-period {
+  display: inline-flex;
+  gap: .24em;
+  white-space: nowrap;
+}
 .hfy-style-system .platform-annual-switch.offer { padding: 13px 15px; }
 .hfy-style-system .platform-annual-switch strong { font-size: 14px; }
 .hfy-style-system .platform-annual-switch span { font-size: 11px; }
@@ -3386,11 +3399,77 @@
 .hfy-style-system .platform-annual-switch { margin-top: 20px; padding: 16px; border-color: color-mix(in srgb, #2783dc 35%, var(--hfy-line)); background: color-mix(in srgb, #2783dc 7%, white); }
 .hfy-style-system .full-programming-notice { padding: 14px 16px; border: 1px solid color-mix(in srgb, #2783dc 35%, var(--hfy-line)); border-radius: 12px; background: color-mix(in srgb, #2783dc 7%, white); }
 .hfy-style-system .full-programming-notice p { margin: 5px 0 0; color: var(--hfy-muted); }
+
+@container billing-plan-details (max-width: 900px) {
+  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 18px;
+  }
+
+  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div,
+  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div:nth-child(4) {
+    padding: 0;
+    border-left: 0;
+  }
+}
+
+@container billing-invoice-history (max-width: 860px) {
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history :is(th, td) {
+    padding: 10px 6px;
+  }
+
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(1) { width: 20%; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(2) { width: 20%; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(3),
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(4) { width: 13%; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(5) { width: 12%; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(6) { width: 22%; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history td:first-child { overflow-wrap: anywhere; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history td:nth-child(3),
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history td:nth-child(4) {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-period {
+    display: grid;
+    gap: 2px;
+    white-space: normal;
+  }
+
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-period-separator { display: none; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-links { gap: 6px; }
+}
+
 @media (max-width: 850px) {
   .hfy-style-system .platform-billing-summary,
   .hfy-style-system .platform-plan-breakdown { grid-template-columns: 1fr; }
   .hfy-style-system .finance-accordion > summary { align-items: flex-start; }
   .hfy-style-system .platform-billing-summary article { min-height: 0; }
+}
+
+@media (max-width: 700px) {
+  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div,
+  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div:nth-child(4) {
+    padding: 0 0 12px;
+    border: 0;
+    border-bottom: 1px solid var(--hfy-line);
+  }
+
+  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
 }
 
 @media (max-width: 650px) {
