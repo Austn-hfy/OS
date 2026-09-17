@@ -61,6 +61,24 @@ describe("Platform committed billing", () => {
     expect(migration).toContain('DROP COLUMN "talent_session_unit_amount_cents"');
   });
 
+  it("keeps Account and Billing on the same Settings desktop geometry", async () => {
+    const [accountPage, billingPage, styles] = await Promise.all([
+      readSource("../src/app/residency/settings/page.tsx"),
+      readSource("../src/app/residency/settings/billing/page.tsx"),
+      readSource("../src/app/hfy-style-pilot.css"),
+    ]);
+
+    for (const page of [accountPage, billingPage]) {
+      expect(page).toContain("workspace-surface-client-settings");
+      expect(page).toContain("settings-page-body");
+      expect(page).toContain('aria-current="page"');
+    }
+    expect(accountPage).toContain('eyebrow="Settings · Account" title="Account settings"');
+    expect(styles).toContain(".workspace-surface-client-settings > .settings-tabs");
+    expect(styles).toContain(".settings-page-body");
+    expect(styles).toContain(".platform-annual-confirmation-actions");
+  });
+
   it("bills the buckets at $30 and discounts an upfront annual term by 25%", () => {
     expect(calculatePlatformPlanAmounts({ talentBucketSize: 20, houseBucketSize: 10, term: "month_to_month" }).termChargeAmountCents).toBe(90_000);
     expect(calculatePlatformPlanAmounts({ talentBucketSize: 20, houseBucketSize: 10, term: "annual" }).termChargeAmountCents).toBe(810_000);
@@ -101,7 +119,8 @@ describe("Platform committed billing", () => {
     expect(annualConfirmation).toContain("Keep month-to-month");
     expect(annualConfirmation).toContain("card in Stripe Checkout");
     expect(clientPage).toContain('className="card platform-plan-and-usage"');
-    expect(clientPage).toContain("Plan &amp; usage");
+    expect(clientPage).not.toContain("Plan &amp; usage");
+    expect(clientPage).toContain("<h2>Subscription details</h2>");
     expect(clientPage).toContain('className="platform-plan-facts"');
     expect(clientPage).toContain('className="platform-client-usage-list"');
     expect(clientPage).toContain('className="platform-annual-switch offer"');
