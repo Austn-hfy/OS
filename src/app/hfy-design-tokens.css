@@ -41,6 +41,16 @@
   --hfy-space-12: 48px;
   --hfy-space-16: 64px;
 
+  --hfy-page-content-inset: 20px;
+  --hfy-page-content-inset-compact: 16px;
+  --hfy-page-section-gap: 18px;
+  --hfy-surface-card-padding: 20px;
+  --hfy-surface-card-background: #fff;
+  --hfy-surface-card-radius: 16px;
+  --hfy-surface-card-shadow: 0 8px 24px rgba(26, 55, 84, 0.06);
+  --hfy-section-title-size: 22px;
+  --hfy-supporting-copy-size: 12px;
+
   --hfy-control-height: 44px;
   --hfy-control-height-large: 52px;
   --hfy-radius-control: 11px;

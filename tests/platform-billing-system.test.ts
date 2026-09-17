@@ -37,20 +37,22 @@ describe("Platform committed billing", () => {
   });
 
   it("keeps Account and Billing on the same Settings desktop geometry", async () => {
-    const [accountPage, billingPage, styles] = await Promise.all([
+    const [accountPage, billingPage, designSystem, styles] = await Promise.all([
       readSource("../src/app/residency/settings/page.tsx"),
       readSource("../src/app/residency/settings/billing/page.tsx"),
+      readSource("../src/components/residency-design-system.tsx"),
       readSource("../src/app/hfy-style-pilot.css"),
     ]);
 
     for (const page of [accountPage, billingPage]) {
       expect(page).toContain("workspace-surface-client-settings");
       expect(page).toContain("settings-page-body");
-      expect(page).toContain('aria-current="page"');
+      expect(page).toContain("<ResidencyTabs");
     }
+    expect(designSystem).toContain('aria-current={item.href === activeHref ? "page" : undefined}');
     expect(accountPage).toContain('eyebrow="Settings · Account" title="Account settings"');
-    expect(styles).toContain(".workspace-surface-client-settings > .settings-tabs");
-    expect(styles).toContain(".settings-page-body");
+    expect(styles).toContain(".workspace-surface-client-settings > .residency-tabs");
+    expect(styles).toContain(".residency-page-body");
     expect(styles).toContain(".platform-annual-confirmation-actions");
   });
 
@@ -93,9 +95,9 @@ describe("Platform committed billing", () => {
     expect(annualConfirmation).toContain('<button className="button secondary" type="button" ref={cancelRef}');
     expect(annualConfirmation).toContain("Keep month-to-month");
     expect(annualConfirmation).toContain("card in Stripe Checkout");
-    expect(clientPage).toContain('className="card platform-plan-and-usage"');
+    expect(clientPage).toContain('className="platform-plan-and-usage"');
     expect(clientPage).not.toContain("Plan &amp; usage");
-    expect(clientPage).toContain("<h2>Subscription details</h2>");
+    expect(clientPage).toContain('title="Subscription details"');
     expect(clientPage).toContain('className="platform-plan-facts"');
     expect(clientPage).toContain('className="platform-client-usage-list"');
     expect(clientPage).toContain('className="platform-annual-switch offer"');
@@ -356,7 +358,7 @@ describe("billing surface availability", () => {
     expect(residencyLayout).toContain("platformBillingAvailable ? await getResidencyPaymentFailure");
     expect(residencyShell).toContain("canManage && platformBillingAvailable");
     expect(residencyOverview.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(residencyOverview.indexOf("getResidencyPlatformBilling(actor.residencyId)"));
-    expect(settingsPage).toContain('platformBillingAvailable ? <Link href="/residency/settings/billing">Billing</Link> : null');
+    expect(settingsPage).toContain('...(platformBillingAvailable ? [{ href: "/residency/settings/billing", label: "Billing" }] : [])');
     expect(residencyBillingPage.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(residencyBillingPage.indexOf("getResidencyPlatformBilling(actor.residencyId)"));
     expect(residencyBillingPage).toContain("notFound()");
     expect(setupPage).toContain("platformBillingAvailable ? <LiveBillingSafetyControl");

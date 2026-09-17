@@ -1,0 +1,33 @@
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+
+const readSource = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
+
+describe("Residency design system V1", () => {
+  it("exports the eight approved Settings primitives and applies them to Overview", async () => {
+    const [system, account, billing, overview, tokens, docs] = await Promise.all([
+      readSource("../src/components/residency-design-system.tsx"),
+      readSource("../src/app/residency/settings/page.tsx"),
+      readSource("../src/app/residency/settings/billing/page.tsx"),
+      readSource("../src/app/residency/page.tsx"),
+      readSource("../src/app/hfy-design-tokens.css"),
+      readSource("../docs/DESIGN_SYSTEM_V1.md"),
+    ]);
+
+    for (const name of ["ResidencyPageSurface", "ResidencyPageHeader", "ResidencyPageBody", "ResidencyTabs", "ResidencySurfaceCard", "ResidencySectionHeader", "ResidencyMetricGrid", "ResidencyFactGrid"]) {
+      expect(system).toContain(name);
+    }
+    for (const page of [account, billing, overview]) {
+      expect(page).toContain("ResidencyPageSurface");
+      expect(page).toContain("ResidencyPageBody");
+    }
+    expect(overview).toContain("ResidencySurfaceCard");
+    expect(overview).toContain("ResidencySectionHeader");
+    expect(overview).toContain("Open calendar");
+    expect(overview).toContain("View plan & invoice history");
+    expect(tokens).toContain("--hfy-page-content-inset: 20px;");
+    expect(tokens).toContain("--hfy-surface-card-radius: 16px;");
+    expect(docs).toContain("Version: 1.0");
+    expect(docs).toContain("Status: Active — Settings benchmark and Overview proof of concept");
+  });
+});
