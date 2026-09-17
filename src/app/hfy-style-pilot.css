@@ -3423,11 +3423,11 @@
     padding: 10px 6px;
   }
 
-  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(1) { width: 20%; }
-  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(2) { width: 20%; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(1) { width: 18%; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(2) { width: 19%; }
   .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(3),
-  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(4) { width: 13%; }
-  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(5) { width: 12%; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(4) { width: 15%; }
+  .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(5) { width: 11%; }
   .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history th:nth-child(6) { width: 22%; }
   .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history td:first-child { overflow-wrap: anywhere; }
   .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history td:nth-child(3),
