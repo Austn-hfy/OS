@@ -1288,7 +1288,7 @@
 
 @media (max-width: 1200px) {
   .hfy-style-system .main { padding-inline: clamp(20px, 3vw, 42px); }
-  .hfy-style-system .client-shell .main:has(> .workspace-surface-client-settings) > .view-as-banner {
+  .hfy-style-system .client-shell .main:has(> .residency-page-surface) > .view-as-banner {
     margin-inline: calc(-1 * clamp(20px, 3vw, 42px));
   }
   .hfy-style-system .calendar-command-bar { align-items: stretch; flex-direction: column; }
