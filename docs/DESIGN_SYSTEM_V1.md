@@ -1,8 +1,8 @@
 # HFY OS Design System V1
 
-Version: 1.2
+Version: 1.3
 Last updated: September 17, 2026
-Changed this revision: Locked the Calendar Operational Surface desktop contract, including content-aware toolbar reflow, readable event typography, compact-desktop Week behavior, and responsive visual regression coverage.
+Changed this revision: Locked the Calendar interaction-state contract for menus, dialogs, batch workspaces, nested pickers, footer containment, and keyboard/focus behavior.
 
 This document turns the approved client Settings benchmark into reusable implementation rules. It complements `docs/BRAND_GUIDELINES.md`: the brand guide defines the visual identity, while this document defines the page-level components and tokens that enforce it in HFY OS.
 
@@ -111,11 +111,23 @@ Calendar is a purpose-built operational surface rather than a stack of standard 
 
 The Month and Week layouts must pass at 1440px, 1200px, and 1024px and while resizing continuously between them. The mobile Calendar presentation is intentionally not defined here; it belongs to the future mobile chapter and must not be produced by compressing the seven-column grid below practical reading and touch sizes.
 
+### Locked Calendar interaction contract
+
+| Interaction | Locked value or rule |
+| --- | --- |
+| Anchored menus | Batch Edit and the status legend stay attached to their trigger, remain inside the viewport, and close on outside interaction or Escape. Escape returns focus to the trigger. |
+| Add/edit dialogs | Use the sitewide overlay padding, fixed header, one scrolling body, and a contained action footer. The footer may remain sticky within that single scroll region, but it must use normal positive insets and must never use negative margins to create a full-bleed edge. |
+| Share dialog | All management views remain inside the same dialog boundary. Form actions use the contained footer treatment and never reach into the rounded dialog edge. |
+| Batch workspaces | A batch workspace has one fixed header and one scrolling list/body. Expanded rows may contain controls, but must not create document-level horizontal scrolling or a second full-height vertical scroller. |
+| Nested pickers | Room, artist, and color choices stay within their owning dialog. Floating pickers are viewport-constrained and close on selection, outside interaction, or Escape where reversible. |
+| Focus | Opening a modal dialog moves focus inside it, Tab and Shift+Tab remain contained, Escape closes reversible states, and closing returns focus to the initiating control. |
+| Desktop coverage | Representative Batch menu, status legend, Share, quick-add, quick-edit, and batch-takeover states require visual and overflow checks at 1440px, 1200px, and 1024px. |
+
 ## Adoption status
 
 - Settings → Account: authoritative benchmark, now rendered through shared primitives.
 - Settings → Billing: authoritative benchmark, now rendered through shared primitives.
 - Residency Overview: first proof of concept. Its existing content, links, data, and behavior are unchanged; only the page composition and styling consume V1 primitives.
 - Residency Talent: adopted. The route uses the shared page surface, header, body, Surface cards, section header, fact grid, and Compact Collection Panel family. `TalentWorkspaceShell` remains the domain-specific master/detail composition; the searchable roster is no longer page-specific.
-- Residency Calendar: desktop operational-surface contract adopted. Its purpose-built structure remains intact while shared tokens now govern readable event type, page rhythm, and responsive command behavior. Mobile remains deferred.
+- Residency Calendar: desktop operational-surface and interaction-state contracts adopted. Its purpose-built structure remains intact while shared tokens govern readable event type, page rhythm, responsive command behavior, contained overlays, and focus handling. Mobile remains deferred.
 - Other Residency pages: not yet migrated and require separate review.

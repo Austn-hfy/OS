@@ -92,6 +92,8 @@ function draftFromEvent(event: ResidencyEvent, previewMode: boolean): BatchDraft
 
 export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, dayparts, artists, canCreateArtist, previewMode, fullProgramming, canManage, initialDaypartId, onRefresh }: CalendarBatchEditorProps) {
   const launcherRef = useRef<HTMLDetailsElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const dialogCloseRef = useRef<HTMLButtonElement>(null);
   const [selectedDaypartId, setSelectedDaypartId] = useState(() => initialDaypartId && dayparts.some((daypart) => daypart.id === initialDaypartId) ? initialDaypartId : "");
   const [expandedEventId, setExpandedEventId] = useState("");
   const [draft, setDraft] = useState<BatchDraft | null>(null);
@@ -171,16 +173,57 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
   useEffect(() => {
     if (!selectedDaypartId) return;
     const previousOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeBatch();
+    const launcher = launcherRef.current;
+    const handleDialogKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeBatch();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], summary, [tabindex]:not([tabindex="-1"])',
+      ) ?? [])].filter((element) => !element.hidden && element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", handleDialogKeys);
+    const focusFrame = window.requestAnimationFrame(() => dialogCloseRef.current?.focus());
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", handleDialogKeys);
+      launcher?.querySelector<HTMLElement>("summary")?.focus();
     };
   }, [selectedDaypartId]);
+
+  useEffect(() => {
+    const closeLauncher = (restoreFocus: boolean) => {
+      if (!launcherRef.current?.open) return;
+      launcherRef.current.removeAttribute("open");
+      if (restoreFocus) launcherRef.current.querySelector<HTMLElement>("summary")?.focus();
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (launcherRef.current && event.target instanceof Node && !launcherRef.current.contains(event.target)) closeLauncher(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && launcherRef.current?.open) closeLauncher(true);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const warning = (() => {
     if (!selectedEvent || !draft || selectedEventReadOnly || draft.requestHfy) return "";
@@ -329,7 +372,7 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
     </details>
 
     {selectedDaypart ? <div className="calendar-batch-takeover calendar-batch-editor-takeover" style={{ "--daypart-color": selectedDaypart.color } as CSSProperties}>
-      <section className="calendar-batch-screen calendar-batch-editor-screen" role="dialog" aria-labelledby="calendar-batch-title">
+      <section className="calendar-batch-screen calendar-batch-editor-screen" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="calendar-batch-title">
         <header className="calendar-batch-header">
           <div className="calendar-batch-heading calendar-batch-editor-heading">
             <p className="eyebrow">{residency.name} · {selectedDaypart.room}</p>
@@ -338,7 +381,7 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
             <div className="calendar-batch-progress-copy"><strong>{completedCount} of {selectedEvents.length} completed</strong><span>{nextIncompleteEvent ? `Next: ${dateLabel(nextIncompleteEvent.date)}` : "All dates complete"}</span></div>
             <div className="calendar-batch-progress" role="progressbar" aria-label="Batch scheduling progress" aria-valuemin={0} aria-valuemax={selectedEvents.length} aria-valuenow={completedCount}><span style={{ width: `${progressPercent}%` }} /></div>
           </div>
-          <button className="quick-modal-close" type="button" aria-label="Close batch edit" onClick={closeBatch}>×</button>
+          <button className="quick-modal-close" ref={dialogCloseRef} type="button" aria-label="Close batch edit" onClick={closeBatch}>×</button>
         </header>
         {done ? <div className="calendar-batch-done"><span aria-hidden="true">✓</span><h3>Done</h3><p>You reached the end of this Daypart’s {rangeKind}.</p><button className="button" type="button" onClick={closeBatch}>Back to Calendar</button></div> : <div className="calendar-batch-list calendar-batch-editor-list">
           {selectedEvents.map((event, index) => {

@@ -632,13 +632,15 @@
 .formActions {
   position: sticky;
   z-index: 2;
-  bottom: -20px;
+  bottom: 0;
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
-  margin: 16px -22px -20px;
-  padding: 13px 22px 17px;
-  border-top: 1px solid rgba(60, 91, 113, .14);
+  margin: 16px 0 0;
+  padding: 13px 14px;
+  border: 1px solid rgba(60, 91, 113, .14);
+  border-radius: 12px;
   background: rgba(244, 248, 250, .94);
   box-shadow: 0 -8px 20px rgba(37, 57, 71, .035);
   backdrop-filter: blur(12px);
@@ -855,10 +857,10 @@
   }
 
   .formActions {
-    bottom: -16px;
+    bottom: 0;
     flex-wrap: wrap;
-    margin: 14px -16px -16px;
-    padding: 12px 16px 14px;
+    margin: 14px 0 0;
+    padding: 12px;
   }
 
   .formActions .replaceTextButton {

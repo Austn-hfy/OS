@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useMemo, useState, type CSSProperties, type RefObject } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { addCalendarAssignmentAction, addClientManagedOccurrenceAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, createResidencyRoomAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, previewShiftTimeEditAction, removeCalendarAssignmentAction, requestHfyForScheduleOccurrenceAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, submitShiftChangeRequestAction, updateDaypartOccurrenceAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, updateShiftTimeAction, type CreateRoomActionState, type ResidencyActionState, type ShiftTimeEditPreview } from "@/app/app/actions";
 import { HfyRequestFulfillment } from "@/app/app/hfy-request-fulfillment";
 import { createClientOwnedArtistAction } from "@/app/residency/actions";
@@ -190,7 +190,6 @@ function SchedulingActivityDetailsRow({
   end,
   namePlaceholder,
   ariaPrefix,
-  colorPickerRef,
   onNameChange,
   onRoomChange,
   onRoomSelect,
@@ -210,7 +209,6 @@ function SchedulingActivityDetailsRow({
   end: string;
   namePlaceholder?: string;
   ariaPrefix: string;
-  colorPickerRef?: RefObject<HTMLDetailsElement | null>;
   onNameChange: (value: string) => void;
   onRoomChange: (value: string) => void;
   onRoomSelect: (room: RoomComboboxOption) => void;
@@ -220,8 +218,30 @@ function SchedulingActivityDetailsRow({
   onEndChange: (value: string) => void;
   timeDisabled?: boolean;
 }) {
+  const colorPickerRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    const closePicker = (restoreFocus: boolean) => {
+      if (!colorPickerRef.current?.open) return;
+      colorPickerRef.current.removeAttribute("open");
+      if (restoreFocus) colorPickerRef.current.querySelector<HTMLElement>("summary")?.focus();
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (colorPickerRef.current && event.target instanceof Node && !colorPickerRef.current.contains(event.target)) closePicker(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closePicker(true);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   return <div className="quick-activity-details-row">
-    <div className="field quick-one-time-color-field"><label>Color</label><details className="quick-color-picker" ref={colorPickerRef}><summary aria-label={`Choose ${ariaPrefix} color`} title="Choose calendar color"><span style={{ background: color }} aria-hidden="true" /></summary><div className="quick-color-popover"><DaypartColorPicker ariaLabel={`${ariaPrefix} color presets`} value={color} onChange={onColorChange} /><small>Hue runs left to right; intensity runs dark to light.</small></div></details></div>
+    <div className="field quick-one-time-color-field"><label>Color</label><details className="quick-color-picker" ref={colorPickerRef}><summary aria-label={`Choose ${ariaPrefix} color`} title="Choose calendar color"><span style={{ background: color }} aria-hidden="true" /></summary><div className="quick-color-popover"><DaypartColorPicker ariaLabel={`${ariaPrefix} color presets`} value={color} onChange={(value) => { onColorChange(value); colorPickerRef.current?.removeAttribute("open"); }} /><small>Hue runs left to right; intensity runs dark to light.</small></div></details></div>
     <div className="field"><label>Session name</label><input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder={namePlaceholder} required /></div>
     <div className="field"><label>Room / space</label><RoomCombobox rooms={rooms} value={room} selectedRoomId={roomId} creationConfirmed={createRoom} ariaLabel={`${ariaPrefix} room or space`} onChange={onRoomChange} onSelect={onRoomSelect} onCreate={onRoomCreate} /></div>
     <div className="field quick-activity-time-field"><label>Slot time</label><div className="quick-activity-time-controls"><TimeSelect ariaLabel={`${ariaPrefix} start time`} value={start} onChange={onStartChange} stepMinutes={15} required disabled={timeDisabled} /><span aria-hidden="true">to</span><TimeSelect ariaLabel={`${ariaPrefix} end time`} value={end} onChange={onEndChange} stepMinutes={15} required disabled={timeDisabled} /></div>{timeDisabled ? <small>Use Edit Shift Time below to recalculate pay and billing.</small> : null}</div>
@@ -230,6 +250,11 @@ function SchedulingActivityDetailsRow({
 
 export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
+  const quickDialogRef = useRef<HTMLElement>(null);
+  const quickDialogCloseRef = useRef<HTMLButtonElement>(null);
+  const batchDialogRef = useRef<HTMLElement>(null);
+  const batchDialogCloseRef = useRef<HTMLButtonElement>(null);
+  const overlayTriggerRef = useRef<HTMLElement | null>(null);
   const initialEditingEvent = initialEventId ? events.find((event) => event.id === initialEventId && !event.projected) : undefined;
   const [modal, setModal] = useState<ModalState>(() => initialEditingEvent ? { type: "edit", eventId: initialEditingEvent.id } : null);
   const [suggestions, setSuggestions] = useState<SuggestionDraft[]>([]);
@@ -290,20 +315,42 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
   useEffect(() => {
     if (!modalOpen && !batchOpen) return;
     const priorOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (batchOpen) {
-        setBatchSchedule(null);
-        router.refresh();
-      } else {
-        setModal(null);
+    const activeDialog = batchOpen ? batchDialogRef.current : quickDialogRef.current;
+    const activeCloseButton = batchOpen ? batchDialogCloseRef.current : quickDialogCloseRef.current;
+    const returnFocusTarget = overlayTriggerRef.current;
+    const handleDialogKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (batchOpen) {
+          setBatchSchedule(null);
+          router.refresh();
+        } else {
+          setModal(null);
+        }
+        return;
+      }
+      if (event.key !== "Tab" || !activeDialog) return;
+      const focusable = [...activeDialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], summary, [tabindex]:not([tabindex="-1"])',
+      )].filter((element) => !element.hidden && element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", handleDialogKeys);
+    const focusFrame = window.requestAnimationFrame(() => activeCloseButton?.focus());
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.body.style.overflow = priorOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", handleDialogKeys);
+      if (returnFocusTarget?.isConnected) returnFocusTarget.focus();
     };
   }, [batchOpen, modalOpen, router]);
 
@@ -495,11 +542,13 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
   }
 
   function openDate(date: string, preferredDaypartId?: string) {
+    overlayTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     prepareDateForScheduling(date, preferredDaypartId);
   }
 
   function openBatchSchedule() {
     if (!selectedFilterDaypart || !selectedDaypartCanBatch || !selectedDaypartPendingDates.length) return;
+    overlayTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setModal(null);
     setSuggestions([]);
     setActiveDaypartId("");
@@ -539,6 +588,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
       openDate(residencyEvent.date, residencyEvent.daypartId);
       return;
     }
+    overlayTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setReplacementDraft(null);
     setAssignmentHoursDraft(null);
     setNewAssignmentDraft(null);
@@ -1389,7 +1439,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
   </section> : null;
 
   if (batchSchedule && batchDaypart) {
-    return <section className="calendar-batch-screen" role="dialog" aria-modal="true" aria-labelledby="calendar-batch-title" style={{ "--daypart-color": batchDaypart.color } as CSSProperties}>
+    return <section className="calendar-batch-screen" ref={batchDialogRef} role="dialog" aria-modal="true" aria-labelledby="calendar-batch-title" style={{ "--daypart-color": batchDaypart.color } as CSSProperties}>
       <header className="calendar-batch-header">
         <div className="calendar-batch-heading">
           <div className="calendar-batch-context"><span>{batchDaypart.room}</span><span>{batchRangeLabel}</span></div>
@@ -1398,7 +1448,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
         </div>
         <div className="calendar-batch-header-actions">
           <strong aria-live="polite">{batchSchedule.completedDates.length} of {batchSchedule.dates.length} scheduled</strong>
-          <button className="quick-modal-close" type="button" aria-label="Close batch scheduling" onClick={closeBatchSchedule}>×</button>
+          <button className="quick-modal-close" ref={batchDialogCloseRef} type="button" aria-label="Close batch scheduling" onClick={closeBatchSchedule}>×</button>
         </div>
       </header>
       <div className="calendar-batch-body">
@@ -1475,11 +1525,11 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
         ? <WeekCalendar weekStart={activeWeekStart} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />
         : <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />}
 
-      {modal ? <div className="quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }}>
-        <section className={`quick-modal ${modal.type === "edit" ? "quick-modal-edit" : ""} ${modal.type === "add" && addMode === "room" ? "quick-modal-room-picker" : ""}`} role="dialog" aria-modal="true" aria-labelledby="quick-modal-title">
+      {modal ? <div className="quick-modal-backdrop calendar-quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }}>
+        <section className={`quick-modal calendar-event-dialog ${modal.type === "edit" ? "quick-modal-edit" : ""} ${modal.type === "add" && addMode === "room" ? "quick-modal-room-picker" : ""}`} ref={quickDialogRef} role="dialog" aria-modal="true" aria-labelledby="quick-modal-title">
           <header className="quick-modal-header">
             <div><p className="eyebrow">{modal.type === "add" ? `${weekdayNames[weekdayForDate(modal.date)]}, ${modal.date}` : editingEvent?.date}</p><h2 id="quick-modal-title">{modal.type === "add" ? addMode === "room" ? "Where is this happening?" : addMode === "activity" ? "What's happening here?" : addMode === "new-type" ? "Create new" : addMode === "new-repeat" ? "Does this repeat?" : addMode === "one-time" ? activeSuggestion?.createMode === "standing_weekly" ? "Create a recurring Daypart" : activeSuggestion?.createMode === "calendar_only" ? "Create a reusable template" : "Create a one-time activity" : "Schedule Daypart" : `Manage · ${editingEvent?.title ?? "Slot"}`}</h2></div>
-            <button className="quick-modal-close" type="button" aria-label="Close popup" onClick={() => setModal(null)}>×</button>
+            <button className="quick-modal-close" ref={quickDialogCloseRef} type="button" aria-label="Close popup" onClick={() => setModal(null)}>×</button>
           </header>
 
           <div className="quick-modal-body">

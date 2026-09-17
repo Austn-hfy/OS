@@ -2652,6 +2652,35 @@
   padding: 12px 20px 14px;
 }
 
+/* Calendar dialogs keep actions inside the rounded boundary without full-bleed negative margins. */
+.hfy-style-system .calendar-event-dialog .quick-modal-body {
+  scrollbar-gutter: stable;
+}
+.hfy-style-system .calendar-event-dialog .quick-modal-footer {
+  bottom: 0;
+  flex-wrap: wrap;
+  margin: var(--hfy-space-2) 0 0;
+  padding: var(--hfy-space-3) var(--hfy-space-4);
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  box-shadow: 0 -8px 20px rgba(48, 65, 78, 0.04);
+}
+.hfy-style-system .calendar-event-dialog .quick-modal-footer > span {
+  min-width: min(220px, 100%);
+  flex: 1 1 220px;
+}
+.hfy-style-system .calendar-batch-menu,
+.hfy-style-system .calendar-status-legend-menu,
+.hfy-style-system .quick-color-popover {
+  max-width: calc(100vw - 64px);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.hfy-style-system .quick-color-popover {
+  max-height: min(520px, calc(100dvh - 96px));
+  overflow-y: auto;
+}
+
 @media (max-width: 1050px) {
   .hfy-style-system .calendar-command-secondary { align-items: stretch; }
 }
@@ -2700,6 +2729,16 @@
   .hfy-style-system .daypart-workspace-heading { min-height: 0; padding: 16px 18px; }
   .hfy-style-system .quick-modal-backdrop { padding: 12px; }
   .hfy-style-system .quick-modal { max-height: calc(100dvh - 24px); }
+  .hfy-style-system .calendar-event-dialog .quick-modal-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .hfy-style-system .calendar-event-dialog .quick-modal-footer > span {
+    min-width: 0;
+    flex-basis: auto;
+    margin: 0;
+  }
+  .hfy-style-system .calendar-event-dialog .quick-modal-footer .button { width: 100%; }
   .hfy-style-system .quick-selected-daypart-editable { grid-template-columns: 1fr; }
   .hfy-style-system .quick-selected-daypart-editable .date-exception-actions { grid-column: auto; }
 }

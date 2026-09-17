@@ -210,6 +210,28 @@ Resolution:
 - The Residency Week grid now divides the available operational surface into seven equal tracks through 1024px instead of enforcing a 1120px minimum.
 - Month and Week visual coverage protects the 1440px, 1200px, and 1024px desktop states. Mobile Calendar behavior remains intentionally deferred.
 
+### CR-006B — Calendar opened states lacked a complete containment and regression pass
+
+Priority: P1
+Applies to: `/residency/calendar` at 1440px, 1200px, and 1024px
+Status: **resolved for Residency Calendar desktop**
+
+The first Calendar pass covered the closed Month and Week canvases, but it did not visually protect Batch Edit, Schedule All, Share Calendar, the status legend, quick add/edit dialogs, or their nested pickers. The quick add/edit and Share form actions also retained negative-margin sticky footers, repeating the same containment risk previously fixed in Billing. The main Calendar and batch dialogs closed on Escape but did not consistently trap focus or return it to the initiating control.
+
+Resolution:
+
+- Calendar quick-add and event-edit footers now stay inside the dialog with positive spacing, a complete boundary, and no negative-margin bleed.
+- Share Calendar form actions use the same contained treatment.
+- Quick add/edit, Schedule All, and Batch Edit takeovers now move focus inside, trap Tab/Shift+Tab, close on Escape, and restore focus to their trigger.
+- Batch Edit and the status legend close on outside interaction or Escape; the color picker follows the same reversible-popover behavior and closes after a selection.
+- Batch, legend, and color popovers are constrained to the viewport and contain their own overscroll.
+- Visual and geometry regression coverage now protects representative Batch menu, status legend, Share, quick-add, quick-edit, and batch-takeover states at 1440px, 1200px, and 1024px, in addition to the existing Month/Week coverage.
+
+Intentionally unchanged:
+
+- Calendar data, scheduling behavior, Share-link behavior, copy, and Month/Week content were not redesigned.
+- The mobile Calendar presentation remains deferred to the mobile chapter.
+
 ### CR-007 — Header actions use different placement and emphasis rules
 
 Priority: P1
