@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, type FormEvent } from "react";
+import { ResidencyFactGrid } from "@/components/residency-design-system";
 import {
   archiveClientOwnedArtistAction,
   permanentlyDeleteClientOwnedArtistAction,
@@ -33,7 +34,7 @@ export function ClientOwnedArtistCard({ artist, canManage, residencyName, outsta
     if (!window.confirm(`Archive ${artist.stageName}? They will leave future scheduling choices, while existing bookings stay intact.`)) event.preventDefault();
   }
 
-  return <article className="card client-safe-talent-card">
+  return <article className="client-safe-talent-card">
     <header className="client-owned-artist-header"><div><span className="status client-owned">Residency artist</span><h2>{artist.stageName}</h2></div>{canManage && !editing ? <button className="button secondary" type="button" onClick={() => setEditing(true)}>Edit</button> : null}</header>
     <p className="client-artist-creation-source">{creationLabel(artist, residencyName)}</p>
     {editing ? <form className="client-owned-artist-form" action={updateAction}>
@@ -45,7 +46,7 @@ export function ClientOwnedArtistCard({ artist, canManage, residencyName, outsta
       <div className="field"><label htmlFor={`artist-genre-${artist.id}`}>Genre</label><select id={`artist-genre-${artist.id}`} name="genre" value={genre} onChange={(event) => setGenre(event.target.value)}>{TALENT_GENRES.map((preset) => <option value={preset} key={preset}>{preset}</option>)}<option value="custom">Custom</option></select>{genre === "custom" ? <input aria-label="Custom genre" name="customGenre" required maxLength={80} defaultValue={artist.genres[0]} /> : <input name="customGenre" type="hidden" value="" />}</div>
       <div className="client-owned-artist-actions"><button className="button" type="submit" disabled={updating}>{updating ? "Saving…" : "Save changes"}</button><button className="button secondary" type="button" onClick={() => setEditing(false)} disabled={updating}>{updateState.status === "success" ? "Done" : "Cancel"}</button></div>
       {updateState.status !== "idle" ? <p className={updateState.status === "error" ? "error" : "success"} aria-live="polite">{updateState.message}</p> : null}
-    </form> : <div className="client-artist-profile-row"><dl className="client-artist-facts"><div><dt>Genre</dt><dd>{artist.genres.length ? artist.genres.join(", ") : "Not listed"}</dd></div><div><dt>Home market</dt><dd>{artist.homeMarket || "Not listed"}</dd></div><div><dt>Instagram</dt><dd>{artist.instagramHandle || "Not listed"}</dd></div><div><dt>Contact</dt><dd>{artist.clientContact || "Not listed"}</dd></div></dl><aside className="client-artist-owed-summary"><span>Outstanding owed</span><strong>{money(outstandingOwedCents)}</strong><small>{outstandingAssignmentCount} Assignment{outstandingAssignmentCount === 1 ? "" : "s"}</small></aside></div>}
+    </form> : <div className="client-artist-profile-row"><div className="client-artist-facts"><div className="residency-fact-grid-container"><ResidencyFactGrid facts={[{ key: "genre", label: "Genre", value: artist.genres.length ? artist.genres.join(", ") : "Not listed" }, { key: "market", label: "Home market", value: artist.homeMarket || "Not listed" }, { key: "instagram", label: "Instagram", value: artist.instagramHandle || "Not listed" }, { key: "contact", label: "Contact", value: artist.clientContact || "Not listed" }]} /></div></div><aside className="client-artist-owed-summary"><span>Outstanding owed</span><strong>{money(outstandingOwedCents)}</strong><small>{outstandingAssignmentCount} Assignment{outstandingAssignmentCount === 1 ? "" : "s"}</small></aside></div>}
     {canManage && !editing ? <form className="client-owned-artist-delete" action={archiveAction} onSubmit={confirmArchive}>
       <input type="hidden" name="artistId" value={artist.id} />
       <button className="button secondary danger-button" type="submit" disabled={archiving}>{archiving ? "Archiving…" : "Archive Artist"}</button>
@@ -63,10 +64,10 @@ export function ArchivedClientOwnedArtistCard({ artist, canManage, residencyName
     if (!window.confirm(`Permanently delete ${artist.stageName}? This cannot be undone.`)) event.preventDefault();
   }
 
-  return <article className="card client-safe-talent-card archived-client-artist-card">
+  return <article className="client-safe-talent-card archived-client-artist-card">
     <header className="client-owned-artist-header"><div><span className="status inactive">Archived</span><h2>{artist.stageName}</h2></div></header>
     <p className="client-artist-creation-source">{creationLabel(artist, residencyName)}</p>
-    <dl><div><dt>Genre</dt><dd>{artist.genres.length ? artist.genres.join(", ") : "Not listed"}</dd></div><div><dt>Home market</dt><dd>{artist.homeMarket || "Not listed"}</dd></div><div><dt>Instagram</dt><dd>{artist.instagramHandle || "Not listed"}</dd></div><div><dt>Archived</dt><dd>{artist.archivedAt ? new Date(artist.archivedAt).toLocaleDateString() : "Not listed"}</dd></div></dl>
+    <div className="residency-fact-grid-container"><ResidencyFactGrid facts={[{ key: "genre", label: "Genre", value: artist.genres.length ? artist.genres.join(", ") : "Not listed" }, { key: "market", label: "Home market", value: artist.homeMarket || "Not listed" }, { key: "instagram", label: "Instagram", value: artist.instagramHandle || "Not listed" }, { key: "archived", label: "Archived", value: artist.archivedAt ? new Date(artist.archivedAt).toLocaleDateString() : "Not listed" }]} /></div>
     {canManage ? <div className="archived-client-artist-actions">
       <form action={restoreAction}><input type="hidden" name="artistId" value={artist.id} /><button className="button secondary" type="submit" disabled={restoring}>{restoring ? "Restoring…" : "Restore Artist"}</button></form>
       {artist.hasBookingHistory ? <p className="warning">This artist has booking history, so the record must remain archived and cannot be permanently deleted.</p> : <form action={deleteAction} onSubmit={confirmPermanentDelete}><input type="hidden" name="artistId" value={artist.id} /><button className="button secondary danger-button" type="submit" disabled={deleting}>{deleting ? "Deleting…" : "Permanently Delete"}</button></form>}

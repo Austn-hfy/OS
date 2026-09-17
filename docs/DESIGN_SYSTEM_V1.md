@@ -60,4 +60,5 @@ Use these tokens through the shared classes and components. Route-specific CSS m
 - Settings → Account: authoritative benchmark, now rendered through shared primitives.
 - Settings → Billing: authoritative benchmark, now rendered through shared primitives.
 - Residency Overview: first proof of concept. Its existing content, links, data, and behavior are unchanged; only the page composition and styling consume V1 primitives.
-- Other Residency pages: not migrated by this task and require separate review.
+- Residency Talent: adopted. The route uses the shared page surface, header, body, Surface cards, section header, fact grid, spacing, and type tokens. Its interactive filter tabs remain page-specific because `ResidencyTabs` is for route navigation, and its existing `TalentWorkspaceShell` remains a domain-specific master/detail composition.
+- Other Residency pages: not yet migrated and require separate review.

@@ -24,10 +24,12 @@ describe("site-wide workspace surface consistency", () => {
     ]);
 
     expect(component).toContain("workspace-surface");
-    for (const source of [dashboard, pipeline, payouts, invoices, invoiceManager, setup, talent, clientTalent, clientFinances]) {
+    for (const source of [dashboard, pipeline, payouts, invoices, invoiceManager, setup, talent, clientFinances]) {
       expect(source).toContain("<WorkspaceSurface");
     }
-    expect(clientSettings).toContain("<ResidencyPageSurface");
+    for (const source of [clientTalent, clientSettings]) {
+      expect(source).toContain("<ResidencyPageSurface");
+    }
     expect(clientPayouts).toContain('redirect("/residency/finances")');
     expect(clientInvoices).toContain('redirect("/residency/finances")');
     expect(roster).toContain('redirect("/app/talent?mode=hfy")');

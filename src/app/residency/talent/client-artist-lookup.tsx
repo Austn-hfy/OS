@@ -2,6 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArtistBookingCalendar } from "@/components/artist-booking-calendar";
+import {
+  ResidencyPageBody,
+  ResidencyPageHeader,
+  ResidencySectionHeader,
+  ResidencySurfaceCard,
+} from "@/components/residency-design-system";
 import { TalentWorkspaceShell } from "@/components/talent-workspace-shell";
 import { RateNeededWarning } from "@/components/rate-needed-warning";
 import type { getResidencyClientTalentWorkspace } from "@/data/residency-client";
@@ -69,10 +75,14 @@ export function ClientArtistLookup({ artists, residencyName, timeZone, canManage
     { id: "archived", label: "Archived" },
   ];
 
-  return <TalentWorkspaceShell
-    sidebar={<>
+  return <>
+    <ResidencyPageHeader eyebrow={`${residencyName} talent`} title="Artist Lookup">
+      {canManage ? <div className="artist-roster-toolbar-heading"><button className="button secondary" type="button" onClick={() => setCreating(true)}>+ New Artist</button></div> : null}
+    </ResidencyPageHeader>
+    <ResidencyPageBody className="residency-talent-body">
+      <TalentWorkspaceShell
+    sidebar={<ResidencySurfaceCard className="residency-talent-roster-card">
       <div className="artist-roster-toolbar">
-        {canManage ? <div className="artist-roster-toolbar-heading"><button className="button secondary" type="button" onClick={() => setCreating(true)}>+ New Artist</button></div> : null}
         <div className="artist-search-field"><label htmlFor="client-artist-lookup-search">Search artists</label><div><span aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg></span><input id="client-artist-lookup-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by artist name" /></div></div>
         <div className="artist-roster-tabs" role="tablist" aria-label="Artist status"><div>{tabs.map((tab) => <button className={view === tab.id ? "active" : ""} type="button" role="tab" aria-selected={view === tab.id} onClick={() => { setView(tab.id); setSort(tab.id === "owed" ? "owed_desc" : "name_asc"); setSelectedId(null); setSelectedAssignmentId(null); }} key={tab.id}><span>{tab.label}</span><strong>{counts[tab.id]}</strong></button>)}</div></div>
         <div className="artist-roster-sort"><span><strong>{filteredArtists.length}</strong> {filteredArtists.length === 1 ? "artist" : "artists"}</span><label>Sort<select value={sort} onChange={(event) => setSort(event.target.value as TalentSort)}><option value="name_asc">Name A–Z</option><option value="name_desc">Name Z–A</option>{!fullProgramming ? <option value="owed_desc">Amount owed</option> : null}<option value="booking_asc">Next booking</option></select></label></div>
@@ -83,15 +93,17 @@ export function ClientArtistLookup({ artists, residencyName, timeZone, canManage
           <span className="artist-roster-meta">{artist.ownership === "residency" ? "Residency artist" : "HFY roster artist"}{artist.homeMarket ? ` · ${artist.homeMarket}` : ""}</span>
         </button>
       </div>)}{!filteredArtists.length ? <div className="empty artist-list-empty"><p>{!artists.length ? "No artists have been added to this Residency yet." : query ? `No artists match “${query}”.` : `No ${view} artists to show.`}</p></div> : null}</div>
-    </>}
-    detail={!selected ? <div className="artist-detail-empty"><span>HFY</span><h2>{artists.length ? "Select an artist" : fullProgramming ? "HFY-managed roster" : "Build your roster"}</h2><p>{artists.length ? `Choose someone from the roster to see this Residency’s bookings${fullProgramming ? " and client-safe artist details" : ", amount owed, and client-safe artist details"}.` : fullProgramming ? "HFY manages and staffs all Talent Activities for this Residency." : "Use New Artist to add the first person to Artist Lookup."}</p></div> : <>
-      {selected.ownership === "residency" ? selected.archivedAt ? <ArchivedClientOwnedArtistCard artist={selected} canManage={canManage} residencyName={residencyName} /> : <ClientOwnedArtistCard artist={selected} canManage={canManage} residencyName={residencyName} outstandingOwedCents={selected.outstandingOwedCents} outstandingAssignmentCount={selected.outstandingAssignments.length} /> : <header className="artist-detail-header"><div><p className="eyebrow">HFY roster artist</p><h2>{selected.stageName}</h2><p>Explicitly assigned to {residencyName}</p></div><span className="status active">Active</span></header>}
+    </ResidencySurfaceCard>}
+    detail={<ResidencySurfaceCard className="residency-talent-detail-card">{!selected ? <div className="artist-detail-empty"><span>HFY</span><h2>{artists.length ? "Select an artist" : fullProgramming ? "HFY-managed roster" : "Build your roster"}</h2><p>{artists.length ? `Choose someone from the roster to see this Residency’s bookings${fullProgramming ? " and client-safe artist details" : ", amount owed, and client-safe artist details"}.` : fullProgramming ? "HFY manages and staffs all Talent Activities for this Residency." : "Use New Artist to add the first person to Artist Lookup."}</p></div> : <>
+      {selected.ownership === "residency" ? selected.archivedAt ? <ArchivedClientOwnedArtistCard artist={selected} canManage={canManage} residencyName={residencyName} /> : <ClientOwnedArtistCard artist={selected} canManage={canManage} residencyName={residencyName} outstandingOwedCents={selected.outstandingOwedCents} outstandingAssignmentCount={selected.outstandingAssignments.length} /> : <ResidencySectionHeader className="artist-detail-header" eyebrow="HFY roster artist" title={selected.stageName} description={`Explicitly assigned to ${residencyName}`} aside={<span className="status active">Active</span>} split />}
       {!selected.archivedAt ? <>
         {!fullProgramming && selected.ownership === "residency" ? <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Owed from</p><h3>Client-managed Assignments</h3></div></div>{selected.outstandingAssignments.length ? <div className="artist-owed-list">{selected.outstandingAssignments.map((assignment) => <button className={assignment.amountCents === null ? "artist-rate-needed-row" : undefined} type="button" onClick={() => setSelectedAssignmentId(assignment.id)} key={assignment.id}><div><strong>{assignment.shiftName}</strong><span>{serviceDateLabel(assignment.serviceDate)} · {timeLabel(assignment.startsAt, timeZone)}–{timeLabel(assignment.endsAt, timeZone)}</span></div><strong>{assignment.amountCents === null ? <RateNeededWarning /> : <span>{money(assignment.amountCents)}</span>}<small>Review →</small></strong></button>)}</div> : <p className="artist-section-empty">Nothing is currently owed to this artist by {residencyName}.</p>}</section> : null}
         <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Upcoming bookings</p><h3>{selected.upcomingBookings.length} scheduled</h3></div></div><div className="artist-booking-layout"><div className="artist-booking-list">{selected.upcomingBookings.map((booking) => <article key={booking.id}><time dateTime={booking.serviceDate}>{serviceDateLabel(booking.serviceDate)}</time><strong>{booking.shiftName}</strong><span>{booking.room}</span><small>{timeLabel(booking.startsAt, timeZone)}–{timeLabel(booking.endsAt, timeZone)}</small></article>)}{!selected.upcomingBookings.length ? <p className="artist-section-empty">No upcoming bookings.</p> : null}</div><ArtistBookingCalendar artistId={selected.id} bookings={selected.upcomingBookings} /></div></section>
         {selected.ownership === "hfy" ? <section className="artist-detail-section"><div className="artist-section-heading"><div><p className="eyebrow">Artist details</p><h3>Client-safe profile</h3></div></div><dl className="artist-definition-list"><div><dt>Genres</dt><dd>{selected.genres.join(", ") || "Not provided"}</dd></div><div><dt>Home market</dt><dd>{selected.homeMarket || "Not provided"}</dd></div><div><dt>Instagram</dt><dd>{selected.instagramHandle || "Not provided"}</dd></div></dl></section> : null}
       </> : null}
-    </>}
+    </>}</ResidencySurfaceCard>}
     overlays={<>{!fullProgramming && creating ? <div className="artist-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setCreating(false); }}><aside className="artist-editor-drawer artist-create-drawer" role="dialog" aria-modal="true" aria-labelledby="client-artist-create-title"><div className="artist-editor-form"><header className="artist-editor-heading"><div><p className="eyebrow">Residency roster</p><h2 id="client-artist-create-title">New Artist</h2><p>This creates a {residencyName}-owned artist and adds them to this roster.</p></div><button className="quick-modal-close" type="button" aria-label="Close new artist form" onClick={() => setCreating(false)}>×</button></header><div className="artist-editor-scroll"><AddClientArtistForm onSuccess={() => setCreating(false)} /></div></div></aside></div> : null}{selectedAssignment && selected ? <ClientAssignmentRateDialog key={selectedAssignment.id} assignment={selectedAssignment} artistName={selected.stageName} timeZone={timeZone} canManage={canManage} onClose={() => setSelectedAssignmentId(null)} /> : null}</>}
-  />;
+      />
+    </ResidencyPageBody>
+  </>;
 }
