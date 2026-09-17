@@ -232,6 +232,22 @@ Status: **resolved**
 
 Account's descriptive copy rendered at 16px while Billing's information-dense supporting copy rendered at 9–10px. The section titles already matched the 22px benchmark, so the final pass changed only the descriptions to 13px and retained the form fields, labels, and Save action.
 
+### CR-015 — Account sections omit the required white Surface-card layer
+
+Priority: P1 Settings consistency
+Applies to: `/residency/settings`
+Status: **resolved**
+
+Account was the first confirmed violation of the locked three-layer rule. `Residency details` and `Primary contact` previously placed their headings, labels, and fields directly on the frosted haze instead of inside opaque white Surface cards.
+
+Resolution:
+
+- Each Account section is now its own layer-3 white Surface card.
+- The cards match Billing's summary-card background, border, 16px radius, 20px padding, and soft shadow.
+- Inputs, labels, copy, and form behavior are unchanged.
+- The form-level status message, permissions note, and `Save Settings` action remain outside the cards because they apply to the form as a whole rather than to one section.
+- Every other page must be checked against the same three-layer rule in a future scoped pass; no other route was reviewed or changed here.
+
 ## Settings benchmark decisions
 
 ### Account
@@ -241,7 +257,7 @@ Retained:
 - Residency details and Primary contact section structure.
 - Two-column label/field relationship at desktop widths.
 - Input size and field spacing.
-- Save action at the bottom-right.
+- Save action and permissions note as page-level form-footer content outside the section cards.
 - Existing success and error messaging behavior.
 
 Changed:
@@ -250,6 +266,7 @@ Changed:
 - Tab and body origin.
 - Supporting-copy size.
 - Active-tab accessibility metadata.
+- Residency details and Primary contact now each sit in a Billing-matched white Surface card above the haze layer.
 
 ### Billing
 
@@ -287,7 +304,17 @@ These rules are validated for Settings and remain proposals for the later site-w
 
 `App shell → optional preview banner → page surface → page header → optional tabs/toolbar → page body → optional form footer`
 
-### 2. Layout tokens
+### 2. Layer structure — locked sitewide rule
+
+Every page must preserve three visually distinct layers in this order:
+
+1. **Base background:** the page-level colored foundation.
+2. **Frosted haze:** the translucent layer above the base that establishes depth and groups the page workspace.
+3. **White Surface cards:** opaque white cards placed above the haze. Each card contains one distinct content section and owns its padding, border radius, low-contrast border, and soft shadow.
+
+Content sections must not place their headings, labels, fields, tables, or other primary content directly on the haze when the section is intended to read as a Surface card. Account was the first confirmed violation and was corrected by placing `Residency details` and `Primary contact` in separate layer-3 cards. Every other page remains subject to a future layer-structure check; this pass did not audit or change those pages.
+
+### 3. Layout tokens
 
 | Token | Value | Rule |
 | --- | ---: | --- |
@@ -301,7 +328,7 @@ These rules are validated for Settings and remain proposals for the later site-w
 | Major section gap | 24px | General future rule |
 | Control gap | 8–12px | Related controls |
 
-### 3. Typography
+### 4. Typography
 
 | Role | Size | Weight | Notes |
 | --- | ---: | ---: | --- |
@@ -313,7 +340,7 @@ These rules are validated for Settings and remain proposals for the later site-w
 | Label/meta | 10px | 700–800 | Uppercase, tracked |
 | Dense data minimum | 9px | 600–800 | Nonessential wide-desktop metadata only |
 
-### 4. Controls and actions
+### 5. Controls and actions
 
 - Standard control height: 44px.
 - Primary blue: one main action per section or form.
@@ -323,7 +350,7 @@ These rules are validated for Settings and remain proposals for the later site-w
 - Card-specific action: inside the owning card.
 - Full-width buttons: only inside narrow cards or mobile layouts.
 
-### 5. Tabs
+### 6. Tabs
 
 - Sibling tabs use matching markup, dimensions, and one inset.
 - Tab location never changes between sibling routes.
@@ -331,7 +358,7 @@ These rules are validated for Settings and remain proposals for the later site-w
 - Active tab exposes `aria-current="page"`.
 - A shared tabs component is future work and was not introduced in this pass.
 
-### 6. Dialogs, drawers, and popovers
+### 7. Dialogs, drawers, and popovers
 
 - Desktop overlay padding: 32px; compact/mobile overlay padding: 12px.
 - Dialog maximum height: viewport height minus twice the active overlay padding.
@@ -342,7 +369,7 @@ These rules are validated for Settings and remain proposals for the later site-w
 - Do not use negative margins to make a modal footer full bleed.
 - Escape closes a reversible dialog, focus is trapped while open, and focus returns to the trigger.
 
-### 7. Required desktop checks
+### 8. Required desktop checks
 
 Every client page should eventually be verified at:
 
