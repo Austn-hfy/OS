@@ -1,8 +1,8 @@
 # HFY OS Design System V1
 
-Version: 1.3
+Version: 1.4
 Last updated: September 17, 2026
-Changed this revision: Locked the Calendar interaction-state contract for menus, dialogs, batch workspaces, nested pickers, footer containment, and keyboard/focus behavior.
+Changed this revision: Closed the Calendar compact-width gap with container-aware primary-header reflow, contained Week scrolling below the readable seven-column floor, and long-event overflow protection.
 
 This document turns the approved client Settings benchmark into reusable implementation rules. It complements `docs/BRAND_GUIDELINES.md`: the brand guide defines the visual identity, while this document defines the page-level components and tokens that enforce it in HFY OS.
 
@@ -104,12 +104,14 @@ Calendar is a purpose-built operational surface rather than a stack of standard 
 | Header grammar | Residency Calendar uses `{Residency name} · Calendar` above the `Calendar` H1. | Page-family copy contract |
 | Wide command bar | When the command-bar container is wider than `920px`, filters, view switcher, and actions occupy one proportional row. | Named `calendar-command-secondary` container |
 | Intermediate command bar | At `920px` or narrower, filters occupy one complete row; the view switcher and actions occupy a second row. Controls must never overlap or form an uneven intermediate state. | Named `calendar-command-secondary` container |
+| Compact primary header | When the Calendar surface itself is `700px` or narrower, the title and month/week cluster use separate rows. At `520px` or narrower, Batch Edit and date navigation stack inside that cluster. These decisions use Calendar container width, not browser width. | Named `client-calendar-page` container |
 | Month event type | Event title and supporting time/status text are both at least `10px`. | `--hfy-calendar-event-title-size`, `--hfy-calendar-event-meta-size` |
 | Week type | Weekday labels and event metadata are at least `10px`; event titles remain `12px`. | `--hfy-calendar-weekday-size`, `--hfy-calendar-week-event-title-size`, `--hfy-calendar-week-event-meta-size` |
 | Week grid | From 1440px through 1024px, all seven days fit the available Calendar surface without a forced `1120px` minimum width or horizontal scrolling. | Calendar operational layout |
+| Week readable-width floor | Below `640px` of actual Calendar surface width, the Week grid becomes one contained horizontal scroller with seven `110px` minimum day tracks. Event content must never escape its own card. | Named `client-calendar-page` container |
 | View-as banner | At compact desktop widths, the banner uses the active Calendar page gutter and must not widen the document. | Residency shell gutter contract |
 
-The Month and Week layouts must pass at 1440px, 1200px, and 1024px and while resizing continuously between them. The mobile Calendar presentation is intentionally not defined here; it belongs to the future mobile chapter and must not be produced by compressing the seven-column grid below practical reading and touch sizes.
+The Month and Week layouts must pass at 1440px, 1200px, and 1024px and while resizing continuously between them. The compact bridge must additionally pass with long real-world event copy at 900px, 700px, and 600px. The final mobile Calendar presentation is intentionally not defined here; until that chapter is approved, Week preserves the seven-day model in a contained horizontal surface rather than compressing its columns below practical reading and touch sizes.
 
 ### Locked Calendar interaction contract
 

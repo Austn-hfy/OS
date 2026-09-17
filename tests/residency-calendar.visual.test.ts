@@ -31,6 +31,19 @@ const events: MonthCalendarEvent[] = [
   { id: "twelve", date: "2026-09-18", title: "Poolside", time: "2:00–5:00 PM · Scheduled", residencyName: "Verify Artist 2", room: "Pool", color: "#9ed9c2", schedulingStatus: "filled" },
 ];
 
+const compactWeekEvents: MonthCalendarEvent[] = [
+  { id: "compact-one", date: "2026-09-13", title: "DJ - Main Pool", time: "12:00–7:00 PM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Pool", color: "#cce4f6", schedulingStatus: "empty" },
+  { id: "compact-two", date: "2026-09-13", title: "Deep Dives: Poolside Movie", time: "7:00–9:00 PM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Pool", color: "#124a80", schedulingStatus: "empty" },
+  { id: "compact-three", date: "2026-09-14", title: "Karaoke Night", time: "8:00–11:00 PM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Amigo Room", color: "#ef8128", schedulingStatus: "empty" },
+  { id: "compact-four", date: "2026-09-15", title: "Sunset Yoga", time: "6:00–7:00 PM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Pool", color: "#2f84d6", schedulingStatus: "empty" },
+  { id: "compact-five", date: "2026-09-15", title: "Line Dance With Scuff", time: "6:30–8:00 PM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Amigo Room", color: "#f2a155", schedulingStatus: "empty" },
+  { id: "compact-six", date: "2026-09-17", title: "DJ - Vintage Vinyl Night", time: "8:00–11:00 PM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Amigo Room", color: "#f6dcc3", schedulingStatus: "empty" },
+  { id: "compact-seven", date: "2026-09-18", title: "DJ - Main Pool", time: "12:00–7:00 PM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Pool", color: "#cce4f6", schedulingStatus: "empty" },
+  { id: "compact-eight", date: "2026-09-18", title: "DJ - Amigo Room", time: "9:00 PM–12:00 AM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Amigo Room", color: "#8d3509", schedulingStatus: "empty" },
+  { id: "compact-nine", date: "2026-09-19", title: "DJ - Main Pool", time: "12:00–7:00 PM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Pool", color: "#cce4f6", schedulingStatus: "empty" },
+  { id: "compact-ten", date: "2026-09-19", title: "DJ - Amigo Room", time: "9:00 PM–12:00 AM · Needs scheduling", residencyName: "Projected from Day Parts", room: "Amigo Room", color: "#8d3509", schedulingStatus: "empty" },
+];
+
 async function browserExecutable() {
   const explicitPath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
   if (explicitPath) return { executablePath: explicitPath, args: [] as string[] };
@@ -50,7 +63,7 @@ async function browserExecutable() {
   };
 }
 
-function calendarHeader(view: "month" | "week") {
+function calendarHeader(view: "month" | "week", compactHeader = false) {
   return createElement(
     "header",
     { className: "page-header calendar-page-header calendar-command-bar" },
@@ -62,7 +75,15 @@ function calendarHeader(view: "month" | "week") {
         createElement("h1", null, "Calendar"),
       ),
       createElement("div", { className: "calendar-month-cluster" },
-        createElement("button", { className: "calendar-batch-launcher", type: "button" }, "Schedule all (4)"),
+        compactHeader
+          ? createElement("details", { className: "calendar-batch-launcher" },
+              createElement("summary", { className: "calendar-needs-summary calendar-batch-summary attention" },
+                createElement("span", { className: "calendar-batch-status" }, createElement("strong", null, "10"), createElement("span", null, "need scheduling")),
+                createElement("span", { className: "calendar-batch-divider", "aria-hidden": "true" }),
+                createElement("span", { className: "calendar-batch-label" }, "batch edit"),
+              ),
+            )
+          : createElement("button", { className: "calendar-batch-launcher", type: "button" }, "Schedule all (4)"),
         createElement("div", { className: "month-navigation" },
           createElement("button", { className: "calendar-arrow", type: "button", "aria-label": `Previous ${view}` }, "←"),
           createElement("h2", null, view === "month" ? "September 2026" : "Sep 13–19, 2026"),
@@ -91,10 +112,10 @@ function calendarHeader(view: "month" | "week") {
   );
 }
 
-function calendarFixture(view: "month" | "week") {
+function calendarFixture(view: "month" | "week", fixtureEvents = events, compactHeader = false) {
   const calendar = view === "month"
-    ? createElement(MonthCalendar, { compact: true, monthKey: "2026-09", events })
-    : createElement(WeekCalendar, { weekStart: "2026-09-13", events });
+    ? createElement(MonthCalendar, { compact: true, monthKey: "2026-09", events: fixtureEvents })
+    : createElement(WeekCalendar, { weekStart: "2026-09-13", events: fixtureEvents });
 
   return renderToStaticMarkup(createElement(
     "div",
@@ -113,13 +134,13 @@ function calendarFixture(view: "month" | "week") {
       ),
       createElement("main", { className: "main calendar-main" },
         createElement("div", { className: "view-as-banner", role: "status" }, createElement("strong", null, "Viewing as: Ace Hotel"), createElement("span", null, "Changes made here are live for this Residency."), createElement("button", { type: "button" }, "Exit preview")),
-        createElement("div", { className: "calendar-page client-calendar-page" }, calendarHeader(view), calendar),
+        createElement("div", { className: "calendar-page client-calendar-page" }, calendarHeader(view, compactHeader), calendar),
       ),
     ),
   ));
 }
 
-async function fixtureDocument(view: "month" | "week") {
+async function fixtureDocument(view: "month" | "week", fixtureEvents = events, compactHeader = false) {
   const [tokens, globals, pilot, font] = await Promise.all([
     readFile(new URL("../src/app/hfy-design-tokens.css", import.meta.url), "utf8"),
     readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
@@ -138,7 +159,7 @@ async function fixtureDocument(view: "month" | "week") {
     .visual-calendar-shell .calendar-batch-launcher { --calendar-toolbar-height: 40px; --daypart-color: #f1b27e; }
   `;
 
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${tokens}\n${localGlobals}\n${pilot}\n${fixtureStyles}</style></head><body>${calendarFixture(view)}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${tokens}\n${localGlobals}\n${pilot}\n${fixtureStyles}</style></head><body>${calendarFixture(view, fixtureEvents, compactHeader)}</body></html>`;
 }
 
 async function visualDifference(page: Page, actual: Buffer, expected: Buffer) {
@@ -244,6 +265,90 @@ describe("Residency Calendar desktop visual regression", () => {
         expect(difference.meanDifference).toBeLessThan(6);
         expect(difference.changedPixelRatio).toBeLessThan(0.12);
       }
+    }
+  }, 120_000);
+
+  it("keeps long Week content contained through the compact desktop transition", async () => {
+    const html = await fixtureDocument("week", compactWeekEvents, true);
+    for (const viewport of [
+      { width: 900, height: 800 },
+      { width: 700, height: 800 },
+      { width: 600, height: 800 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.setContent(html, { waitUntil: "load" });
+      await page.evaluate(() => document.fonts.ready);
+
+      const metrics = await page.evaluate(() => {
+        const events = [...document.querySelectorAll<HTMLElement>(".week-calendar-event")];
+        const days = [...document.querySelectorAll<HTMLElement>(".week-calendar-day")];
+        const pageSurface = document.querySelector<HTMLElement>(".client-calendar-page");
+        const commandPrimary = document.querySelector<HTMLElement>(".calendar-command-primary");
+        const calendarTitle = document.querySelector<HTMLElement>(".calendar-title");
+        const monthCluster = document.querySelector<HTMLElement>(".calendar-month-cluster");
+        if (!pageSurface || !commandPrimary || !calendarTitle || !monthCluster || !events.length || !days.length) throw new Error("Missing compact Calendar fixture content");
+        const pageBounds = pageSurface.getBoundingClientRect();
+        const clusterBounds = monthCluster.getBoundingClientRect();
+        return {
+          noDocumentOverflow: document.documentElement.scrollWidth === document.documentElement.clientWidth,
+          primaryIsStacked: Math.abs(calendarTitle.getBoundingClientRect().left - clusterBounds.left) < 1 && clusterBounds.top >= calendarTitle.getBoundingClientRect().bottom,
+          clusterContained: clusterBounds.left >= pageBounds.left && clusterBounds.right <= pageBounds.right + 0.5,
+          eventContentContained: events.every((event) => event.scrollWidth <= event.clientWidth + 1),
+          minimumDayWidth: Math.min(...days.map((day) => day.getBoundingClientRect().width)),
+        };
+      });
+
+      expect(metrics.noDocumentOverflow).toBe(true);
+      expect(metrics.primaryIsStacked).toBe(true);
+      expect(metrics.clusterContained).toBe(true);
+      expect(metrics.eventContentContained).toBe(true);
+      expect(metrics.minimumDayWidth).toBeGreaterThanOrEqual(90);
+
+      const screenshot = await page.screenshot({ fullPage: true, animations: "disabled" });
+      const baselineUrl = new URL(`residency-calendar-week-compact-${viewport.width}.png`, baselineDirectory);
+      if (process.env.UPDATE_CALENDAR_VISUALS === "1") {
+        await mkdir(baselineDirectory, { recursive: true });
+        await writeFile(baselineUrl, screenshot);
+      }
+      const baseline = await readFile(baselineUrl);
+      const difference = await visualDifference(page, screenshot, baseline);
+      expect(difference.meanDifference).toBeLessThan(6);
+      expect(difference.changedPixelRatio).toBeLessThan(0.12);
+    }
+  }, 120_000);
+
+  it("has no collision or escaped event content at intermediate drag widths", async () => {
+    const html = await fixtureDocument("week", compactWeekEvents, true);
+    for (let width = 1200; width >= 560; width -= 20) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.setContent(html, { waitUntil: "load" });
+      const metrics = await page.evaluate(() => {
+        const element = (selector: string) => {
+          const match = document.querySelector<HTMLElement>(selector);
+          if (!match) throw new Error(`Missing drag-width Calendar selector: ${selector}`);
+          return match;
+        };
+        const title = element(".calendar-title").getBoundingClientRect();
+        const cluster = element(".calendar-month-cluster").getBoundingClientRect();
+        const pageSurface = element(".client-calendar-page").getBoundingClientRect();
+        const rangeHeading = element(".month-navigation h2");
+        const eventCards = [...document.querySelectorAll<HTMLElement>(".week-calendar-event")];
+        const sameRow = Math.abs(title.top - cluster.top) < 1;
+        return {
+          noDocumentOverflow: document.documentElement.scrollWidth === document.documentElement.clientWidth,
+          primaryClear: !sameRow || title.right <= cluster.left,
+          clusterContained: cluster.left >= pageSurface.left && cluster.right <= pageSurface.right + 0.5,
+          fullRangeVisible: rangeHeading.scrollWidth <= rangeHeading.clientWidth + 1,
+          eventContentContained: eventCards.every((event) => event.scrollWidth <= event.clientWidth + 1),
+        };
+      });
+      expect(metrics, `Calendar geometry failed at ${width}px`).toEqual({
+        noDocumentOverflow: true,
+        primaryClear: true,
+        clusterContained: true,
+        fullRangeVisible: true,
+        eventContentContained: true,
+      });
     }
   }, 120_000);
 });

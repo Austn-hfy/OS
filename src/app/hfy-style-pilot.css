@@ -2234,6 +2234,11 @@
 }
 
 /* The calendar command bar uses the real content width after the sidebar. */
+.hfy-style-system .client-shell .client-calendar-page {
+  container-name: client-calendar-page;
+  container-type: inline-size;
+}
+
 .hfy-style-system .calendar-command-bar {
   width: 100%;
   min-width: 0;
@@ -2355,9 +2360,15 @@
 }
 
 .hfy-style-system .client-shell .calendar-main .week-calendar-event {
+  overflow: hidden;
   gap: var(--hfy-space-1);
   padding: var(--hfy-space-2);
   border-left-width: 3px;
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-event > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .hfy-style-system .client-shell .calendar-main .week-calendar-event strong {
@@ -2366,6 +2377,63 @@
 
 .hfy-style-system .client-shell .calendar-main .week-calendar-event :is(span, b) {
   font-size: var(--hfy-calendar-week-event-meta-size);
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-event b {
+  overflow-wrap: anywhere;
+}
+
+@container client-calendar-page (max-width: 700px) {
+  .hfy-style-system .client-shell .calendar-command-primary {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--hfy-space-3);
+  }
+
+  .hfy-style-system .client-shell .calendar-command-primary .calendar-month-cluster {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-content: stretch;
+    gap: var(--hfy-space-3);
+  }
+
+  .hfy-style-system .client-shell .calendar-command-primary .calendar-batch-launcher {
+    justify-self: start;
+  }
+
+  .hfy-style-system .client-shell .calendar-command-primary .month-navigation {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hfy-style-system .client-shell .calendar-command-primary .month-navigation h2 {
+    min-width: 0;
+    overflow: hidden;
+    font-size: clamp(16px, 3.2cqi, 18px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@container client-calendar-page (max-width: 640px) {
+  .hfy-style-system .client-shell .calendar-main .week-calendar-wrap {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .hfy-style-system .client-shell .calendar-main .week-calendar {
+    min-width: 770px;
+    grid-template-columns: repeat(7, minmax(110px, 1fr));
+  }
+}
+
+@container client-calendar-page (max-width: 520px) {
+  .hfy-style-system .client-shell .calendar-command-primary .calendar-month-cluster {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @container calendar-command-secondary (max-width: 920px) {

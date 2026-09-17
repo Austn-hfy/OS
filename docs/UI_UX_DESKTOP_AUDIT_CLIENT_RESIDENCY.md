@@ -232,6 +232,27 @@ Intentionally unchanged:
 - Calendar data, scheduling behavior, Share-link behavior, copy, and Month/Week content were not redesigned.
 - The mobile Calendar presentation remains deferred to the mobile chapter.
 
+### CR-006C — Week view compresses long event content below the desktop checkpoints
+
+Priority: P0
+Applies to: `/residency/calendar` between the approved desktop range and the future mobile layout
+Status: **resolved with a compact bridge; final mobile layout remains deferred**
+
+The 1024px regression fixture used short event names, so it did not expose the failure visible with production-like content at smaller intermediate widths. Once the Calendar’s actual content area narrowed, the primary header still followed browser-width media queries, the date range extended past the right edge, and long status/title words escaped their Week event cards.
+
+Resolution:
+
+- The Calendar page itself is now the responsive container for the primary header and Week grid.
+- At `700px` of Calendar surface width, the title and scheduling/date controls move to separate rows; at `520px`, Batch Edit and date navigation stack again.
+- Long Week event children are width-contained and the status line may wrap long words when necessary.
+- Below a `640px` Calendar surface, Week stops compressing its seven columns and becomes a contained horizontal scroller with a `110px` minimum day width.
+- Added long-content visual and geometry coverage at 900px, 700px, and 600px in addition to the existing 1440px, 1200px, and 1024px checks.
+
+Intentionally unchanged:
+
+- Month and Week retain the approved desktop appearance at 1440px, 1200px, and 1024px.
+- This is a safe compact-width bridge, not the final mobile Calendar redesign.
+
 ### CR-007 — Header actions use different placement and emphasis rules
 
 Priority: P1
