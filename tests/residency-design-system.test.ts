@@ -52,7 +52,7 @@ describe("Residency design system V1", () => {
     expect(tokens).toContain("--hfy-page-content-inset: 20px;");
     expect(tokens).toContain("--hfy-surface-card-radius: 16px;");
     expect(tokens).toContain("--hfy-collection-panel-scroll-ceiling: 680px;");
-    expect(docs).toContain("Version: 1.1");
+    expect(docs).toContain("Version: 1.2");
     expect(docs).toContain("## Compact Collection Panel");
     expect(docs).toContain("Changed this revision:");
   });

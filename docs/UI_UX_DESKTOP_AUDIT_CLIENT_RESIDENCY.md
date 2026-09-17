@@ -1,7 +1,7 @@
 # HFY OS desktop UI/UX audit — Client Residency
 
-Status: Settings desktop benchmark complete; Overview and Talent adopted; broader client audit remains active
-Date: September 16, 2026
+Status: Settings desktop benchmark complete; Overview, Talent, and Calendar desktop adopted; broader client audit remains active
+Date: September 17, 2026
 Scope: the client-facing Residency workspace reached through **View as Residency**
 Reference screen: **Settings → Billing**
 
@@ -53,7 +53,7 @@ The final Settings pass deliberately did not begin the future shared-component o
 
 Priority: P0
 Applies to: every Residency page while viewed from Developer mode
-Reviewed-route status: **resolved for Account, Billing, Overview, and Talent**
+Reviewed-route status: **resolved for Account, Billing, Overview, Talent, and Calendar**
 Broader status: open for the other Residency routes
 
 At viewport widths at or below 1200px, `.main` switches to a smaller horizontal gutter while `.view-as-banner` retained the negative margin calculated from the wider gutter.
@@ -100,6 +100,11 @@ Resolution:
 - The outer page, roster, and detail now use `ResidencyPageSurface`, `ResidencyPageBody`, and white `ResidencySurfaceCard` layers with the locked spacing tokens.
 - The existing `TalentWorkspaceShell` remains the domain-specific master/detail composition. It is already shared by HFY and Residency Talent, so no new generic design-system component is proposed until a non-Talent page demonstrates the same need.
 
+Resolution for Calendar:
+
+- The View-as banner now uses Calendar's active compact-desktop gutter at and below 1200px.
+- Calendar remains a purpose-built operational surface; the fix does not force it into the shared content-card component hierarchy.
+
 ### CR-002A — Talent post-adoption control alignment
 
 Priority: P1
@@ -145,24 +150,36 @@ Resolution:
 
 Priority: P1
 Applies to: month view at desktop and compact desktop widths
-Status: open; intentionally untouched because this pass is Settings-only
+Status: **resolved for Residency Calendar desktop**
 
 At 1024px, the rendered event title is 8px and the time/status line is 7px.
+
+Resolution:
+
+- Month event titles and time/status text now use semantic Calendar tokens with a 10px minimum.
+- Compact event rows gained the minimum height and padding required by the readable type scale without changing event content or behavior.
+- Week metadata and weekday labels now follow the same 10px floor; Week event titles remain 12px.
 
 ### CR-005 — Calendar begins on a different vertical rhythm
 
 Priority: P1
 Applies to: `/residency/calendar`
-Status: open; intentionally untouched because this pass is Settings-only
+Status: **resolved for Residency Calendar desktop**
 
 Calendar begins roughly 18px higher than the standard Residency workspace after the View-as banner.
+
+Resolution:
+
+- Calendar now uses the standard 38px desktop page inset instead of its former 20px exception.
+- The existing compact-layout page inset remains in effect below the desktop range.
 
 ### CR-006 — Page eyebrow language has no stable meaning
 
 Priority: P1
 Applies to: all Residency pages
 Settings status: **resolved for Account and Billing**
-Broader status: open for the other Residency routes
+Calendar status: **resolved**
+Broader status: open for the remaining Residency routes
 
 Resolution for Settings:
 
@@ -174,6 +191,24 @@ Resolution for Settings:
 The differing H1 text is intentional: the eyebrow communicates the shared family while each title names the current task.
 
 Talent remains open under this copy-specific item. Its existing eyebrow text was intentionally preserved because the Talent task prohibits content changes; only its header component, spacing, and action placement were standardized.
+
+Calendar now uses `{Residency name} · Calendar` as its route-family eyebrow while retaining `Calendar` as the task-level H1. The shared owner/programming Calendar keeps its existing wording because this pass is Residency-only.
+
+### CR-006A — Calendar command bar and Week view break at compact desktop widths
+
+Priority: P0
+Applies to: `/residency/calendar` from 1200px through 1024px
+Status: **resolved for Residency Calendar desktop**
+
+The original command bar kept three symmetric columns until the viewport reached 700px even though its filter cluster was wider than the available first track by 1200px. Status and Daypart controls consequently overlapped the Month/Week switcher throughout the required compact-desktop range. Week view separately forced a 1120px internal grid and horizontal scrolling.
+
+Resolution:
+
+- The command-bar wrapper is now a named inline-size container.
+- Above 920px of available command-bar width, filters, the view switcher, and actions remain in one row.
+- At 920px or below, both filters occupy an even full-width row and the view switcher/actions occupy a second row. There is no 3-column compressed state between those layouts.
+- The Residency Week grid now divides the available operational surface into seven equal tracks through 1024px instead of enforcing a 1120px minimum.
+- Month and Week visual coverage protects the 1440px, 1200px, and 1024px desktop states. Mobile Calendar behavior remains intentionally deferred.
 
 ### CR-007 — Header actions use different placement and emphasis rules
 
@@ -460,7 +495,7 @@ Required assertions:
 3. **Completed for Settings:** finalize the Account/Billing header and type hierarchy.
 4. **Completed for Billing:** repair the annual-switch dialog footer.
 5. **Completed for Talent:** fix compact-desktop collapse and adopt the shared V1 page/card hierarchy.
-6. Correct Calendar top rhythm, command-bar wrapping, and event type size in its own scoped pass.
+6. **Completed for Calendar desktop:** correct top rhythm, command-bar wrapping, event type size, Week sizing, and compact View-as gutter behavior.
 7. Normalize other page eyebrows, button emphasis, and sidebar attention behavior.
 8. Consolidate repeated workspace CSS and introduce shared components only after the visual benchmark is approved.
 9. Add desktop overflow and visual-regression coverage.

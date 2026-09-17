@@ -1,8 +1,8 @@
 # HFY OS Design System V1
 
-Version: 1.1
+Version: 1.2
 Last updated: September 17, 2026
-Changed this revision: Promoted the approved Talent searchable roster into the reusable Compact Collection Panel pattern, with semantic density tokens, shared Residency components, and browser-rendered visual regression coverage.
+Changed this revision: Locked the Calendar Operational Surface desktop contract, including content-aware toolbar reflow, readable event typography, compact-desktop Week behavior, and responsive visual regression coverage.
 
 This document turns the approved client Settings benchmark into reusable implementation rules. It complements `docs/BRAND_GUIDELINES.md`: the brand guide defines the visual identity, while this document defines the page-level components and tokens that enforce it in HFY OS.
 
@@ -92,10 +92,30 @@ The panel must remain visually stable at 1440px, 1200px, and 1024px. At every wi
 - Standard content begins at the same inset as sibling tabs and page-level controls.
 - Desktop verification remains required at 1440px, 1200px, and 1024px, plus continuous resizing through intermediate widths.
 
+## Calendar Operational Surface
+
+Calendar is a purpose-built operational surface rather than a stack of standard content cards. It still follows the sitewide layer model: the application canvas sits below one frosted Calendar surface, and the opaque Month or Week grid is the working surface above it. Individual days and events are records inside that working surface and must not be wrapped in additional `ResidencySurfaceCard` layers.
+
+### Locked desktop contract
+
+| Role | Locked value or rule | Authority |
+| --- | --- | --- |
+| Page rhythm | Calendar uses the same desktop top inset as the Residency page family. | `--hfy-space-*` page composition |
+| Header grammar | Residency Calendar uses `{Residency name} · Calendar` above the `Calendar` H1. | Page-family copy contract |
+| Wide command bar | When the command-bar container is wider than `920px`, filters, view switcher, and actions occupy one proportional row. | Named `calendar-command-secondary` container |
+| Intermediate command bar | At `920px` or narrower, filters occupy one complete row; the view switcher and actions occupy a second row. Controls must never overlap or form an uneven intermediate state. | Named `calendar-command-secondary` container |
+| Month event type | Event title and supporting time/status text are both at least `10px`. | `--hfy-calendar-event-title-size`, `--hfy-calendar-event-meta-size` |
+| Week type | Weekday labels and event metadata are at least `10px`; event titles remain `12px`. | `--hfy-calendar-weekday-size`, `--hfy-calendar-week-event-title-size`, `--hfy-calendar-week-event-meta-size` |
+| Week grid | From 1440px through 1024px, all seven days fit the available Calendar surface without a forced `1120px` minimum width or horizontal scrolling. | Calendar operational layout |
+| View-as banner | At compact desktop widths, the banner uses the active Calendar page gutter and must not widen the document. | Residency shell gutter contract |
+
+The Month and Week layouts must pass at 1440px, 1200px, and 1024px and while resizing continuously between them. The mobile Calendar presentation is intentionally not defined here; it belongs to the future mobile chapter and must not be produced by compressing the seven-column grid below practical reading and touch sizes.
+
 ## Adoption status
 
 - Settings → Account: authoritative benchmark, now rendered through shared primitives.
 - Settings → Billing: authoritative benchmark, now rendered through shared primitives.
 - Residency Overview: first proof of concept. Its existing content, links, data, and behavior are unchanged; only the page composition and styling consume V1 primitives.
 - Residency Talent: adopted. The route uses the shared page surface, header, body, Surface cards, section header, fact grid, and Compact Collection Panel family. `TalentWorkspaceShell` remains the domain-specific master/detail composition; the searchable roster is no longer page-specific.
+- Residency Calendar: desktop operational-surface contract adopted. Its purpose-built structure remains intact while shared tokens now govern readable event type, page rhythm, and responsive command behavior. Mobile remains deferred.
 - Other Residency pages: not yet migrated and require separate review.

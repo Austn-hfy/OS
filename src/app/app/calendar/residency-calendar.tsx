@@ -69,6 +69,7 @@ export type ResidencyEvent = MonthCalendarEvent & {
 
 type ResidencyCalendarProps = {
   residency: { id: string; name: string; timezone: string; defaultTalentRateCents: number; clientHourlyRateCents: number; calendarLinkSettings: PublicCalendarLinkSettings };
+  headerEyebrow?: string;
   monthKey: string;
   calendarView?: CalendarViewMode;
   weekStart?: string;
@@ -227,7 +228,7 @@ function SchedulingActivityDetailsRow({
   </div>;
 }
 
-export function ResidencyCalendar({ residency, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
   const initialEditingEvent = initialEventId ? events.find((event) => event.id === initialEventId && !event.projected) : undefined;
   const [modal, setModal] = useState<ModalState>(() => initialEditingEvent ? { type: "edit", eventId: initialEditingEvent.id } : null);
@@ -1433,7 +1434,7 @@ export function ResidencyCalendar({ residency, monthKey, calendarView = "month",
     <>
       <header className="page-header calendar-page-header calendar-command-bar">
         <div className="calendar-command-primary">
-          <div className="calendar-title"><p className="eyebrow">{residency.name}</p><h1>Calendar</h1></div>
+          <div className="calendar-title"><p className="eyebrow">{headerEyebrow ?? residency.name}</p><h1>Calendar</h1></div>
           <div className="calendar-month-cluster">
             <CalendarBatchEditor
               residency={residency}

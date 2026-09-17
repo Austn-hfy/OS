@@ -70,6 +70,13 @@
   --hfy-collection-row-padding-block: var(--hfy-space-3);
   --hfy-collection-row-padding-inline: 14px;
 
+  /* Calendar operational surface */
+  --hfy-calendar-weekday-size: 10px;
+  --hfy-calendar-event-title-size: 10px;
+  --hfy-calendar-event-meta-size: 10px;
+  --hfy-calendar-week-event-title-size: 12px;
+  --hfy-calendar-week-event-meta-size: 10px;
+
   --hfy-control-height: 44px;
   --hfy-control-height-large: 52px;
   --hfy-radius-control: 11px;
