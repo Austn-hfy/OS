@@ -24,6 +24,7 @@ import {
   annualPlanChangeInput,
   createPlatformSubscriptionCheckout,
   platformPlanAmount,
+  scheduleResidencyCommittedPlanToAnnual,
   updateCommittedPlan,
   type CommittedPlanInput,
 } from "./platform-stripe";
@@ -90,7 +91,7 @@ describe("platform Stripe amount", () => {
 });
 
 describe("Residency annual plan switching", () => {
-  it("changes only the term while preserving the existing capacities and dates", () => {
+  it("preserves capacities and starts the annual term at the monthly renewal", () => {
     expect(annualPlanChangeInput({
       residencyId,
       talentBucketSize: 40,
@@ -102,9 +103,101 @@ describe("Residency annual plan switching", () => {
       term: "annual",
       talentBucketSize: 40,
       houseBucketSize: 15,
+      startsOn: "2026-10-01",
+      renewsOn: "2027-10-01",
+      changeReason: "Residency manager switched to annual billing",
+    });
+  });
+
+  it("keeps month-to-month active locally while Stripe schedules annual billing at renewal", async () => {
+    const current = {
+      id: subscriptionId,
+      residencyId,
+      revision: 3,
+      term: "month_to_month" as const,
+      talentBucketSize: 20,
+      houseBucketSize: 10,
+      slotUnitAmountCents: 3_000,
       startsOn: "2026-09-01",
       renewsOn: "2026-10-01",
-      changeReason: "Residency manager switched to annual billing",
+      stripeCustomerId: "cus_test",
+      stripeProductId: "prod_test",
+      stripeSubscriptionId: "sub_test",
+      stripeSubscriptionItemId: "si_test",
+      stripePriceId: "price_monthly",
+      status: "active" as const,
+      nextChargeAt: new Date("2026-10-01T00:00:00Z"),
+      lastStripeSyncedAt: new Date("2026-09-01T00:00:00Z"),
+    };
+    const database = databaseWithSelectResults([
+      [current],
+      [{ id: residencyId, comped: false }],
+      [current],
+      [{ name: "Test Hotel", billingContactEmail: "billing@example.test", primaryContactEmail: "manager@example.test" }],
+    ]);
+    const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const tx = {
+      update(table: unknown) {
+        return {
+          set(values: Record<string, unknown>) {
+            updates.push({ table, values });
+            const query = {
+              where: vi.fn(() => query),
+              returning: vi.fn(async () => table === platformSubscriptions ? [{ ...current, ...values }] : []),
+              then(resolve: (value: unknown[]) => unknown) { return Promise.resolve([]).then(resolve); },
+            };
+            return query;
+          },
+        };
+      },
+      insert(table: unknown) {
+        return { values: async (values: Record<string, unknown>) => { inserts.push({ table, values }); return []; } };
+      },
+    };
+    Object.assign(database, {
+      insert(table: unknown) {
+        return {
+          values(values: Record<string, unknown>) {
+            inserts.push({ table, values });
+            return { returning: async () => [{ id: "00000000-0000-4000-8000-000000000004" }] };
+          },
+        };
+      },
+      transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+    });
+    const renewal = Date.UTC(2026, 9, 1) / 1_000;
+    mocks.getDb.mockReturnValue(database);
+    mocks.requireResidencyLiveBillingApproval.mockResolvedValue({ id: residencyId, name: "Test Hotel", liveBillingApproved: true });
+    mocks.getStripe.mockReturnValue({
+      subscriptions: { retrieve: vi.fn().mockResolvedValue({
+        id: "sub_test",
+        livemode: false,
+        status: "active",
+        schedule: null,
+        metadata: { committed_plan_revision: "3" },
+        items: { data: [{ id: "si_test", price: { id: "price_monthly" }, quantity: 1, current_period_start: Date.UTC(2026, 8, 1) / 1_000, current_period_end: renewal }] },
+      }) },
+      prices: { create: vi.fn().mockResolvedValue({ id: "price_annual", livemode: false, recurring: { interval: "year", interval_count: 1 } }) },
+      subscriptionSchedules: {
+        create: vi.fn().mockResolvedValue({ id: "sched_test", livemode: false, current_phase: { start_date: Date.UTC(2026, 8, 1) / 1_000, end_date: renewal } }),
+        update: vi.fn().mockResolvedValue({ id: "sched_test" }),
+      },
+    });
+
+    await scheduleResidencyCommittedPlanToAnnual({ residencyId, userId: actor.userId, email: actor.email });
+
+    const activePlanUpdate = updates.find((entry) => entry.table === platformSubscriptions)?.values;
+    expect(activePlanUpdate).not.toHaveProperty("term");
+    expect(activePlanUpdate).not.toHaveProperty("revision");
+    expect(activePlanUpdate).not.toHaveProperty("stripePriceId");
+    const pendingRevisionUpdate = updates.find((entry) => entry.table === platformSubscriptionRevisions)?.values;
+    expect(pendingRevisionUpdate).toMatchObject({
+      startsOn: "2026-10-01",
+      renewsOn: "2027-10-01",
+      stripeSyncStatus: "pending",
+      stripePriceId: "price_annual",
+      syncedAt: null,
     });
   });
 });
@@ -258,5 +351,76 @@ describe("production Committed Plan safety", () => {
       action: "platform_stripe_checkout_created",
       residencyId,
     });
+  });
+
+  it("uses the existing subscription Checkout for a cardless annual switch without changing the active plan first", async () => {
+    const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const database = databaseWithSelectResults([[{
+      plan: {
+        id: subscriptionId,
+        residencyId,
+        revision: 1,
+        term: "month_to_month",
+        talentBucketSize: 20,
+        houseBucketSize: 10,
+        slotUnitAmountCents: 3_000,
+        stripeCustomerId: "cus_test",
+        stripeProductId: "prod_test",
+        stripeSubscriptionId: null,
+      },
+      residency: {
+        name: "Test Hotel",
+        comped: false,
+        billingContactEmail: "billing@example.test",
+        primaryContactEmail: "manager@example.test",
+      },
+    }]]);
+    Object.assign(database, {
+      update(table: unknown) {
+        return {
+          set(values: Record<string, unknown>) {
+            updates.push({ table, values });
+            return { where: async () => [] };
+          },
+        };
+      },
+      insert(table: unknown) {
+        return {
+          values(values: Record<string, unknown>) {
+            inserts.push({ table, values });
+            if (table === platformSubscriptionRevisions) return { onConflictDoUpdate: async () => [] };
+            return Promise.resolve([]);
+          },
+        };
+      },
+    });
+    const priceCreate = vi.fn().mockResolvedValue({ id: "price_annual", livemode: false });
+    const checkoutCreate = vi.fn().mockResolvedValue({
+      id: "cs_annual",
+      livemode: false,
+      url: "https://checkout.stripe.com/test/annual",
+    });
+    mocks.getDb.mockReturnValue(database);
+    mocks.requireResidencyLiveBillingApproval.mockResolvedValue({ id: residencyId, name: "Test Hotel", liveBillingApproved: true });
+    mocks.getStripe.mockReturnValue({
+      prices: { create: priceCreate },
+      checkout: { sessions: { create: checkoutCreate } },
+    });
+
+    await expect(createPlatformSubscriptionCheckout(actor, residencyId, { term: "annual", annualSwitch: true }))
+      .resolves.toBe("https://checkout.stripe.com/test/annual");
+
+    expect(priceCreate).toHaveBeenCalledWith(expect.objectContaining({
+      unit_amount: 810_000,
+      recurring: { interval: "year", interval_count: 1 },
+    }), expect.anything());
+    expect(checkoutCreate).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ subscription_term: "annual", committed_plan_revision: "2", annual_switch: "true" }),
+      success_url: "https://hfy.app/residency/settings/billing?annualSwitch=checkout-complete",
+      cancel_url: "https://hfy.app/residency/settings/billing?annualSwitch=cancelled",
+    }), expect.anything());
+    expect(inserts.some((entry) => entry.table === platformSubscriptionRevisions)).toBe(false);
+    expect(updates.filter((entry) => entry.table === platformSubscriptions)).toHaveLength(0);
   });
 });

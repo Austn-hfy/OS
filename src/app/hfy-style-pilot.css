@@ -3283,6 +3283,17 @@
 .hfy-style-system .platform-plan-breakdown dl { margin: 0; display: grid; gap: 10px; }
 .hfy-style-system .platform-plan-breakdown dl div { display: flex; justify-content: space-between; gap: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--hfy-line); }
 .hfy-style-system .platform-plan-breakdown dd { margin: 0; font-weight: 750; }
+.hfy-style-system .platform-plan-and-usage {
+  border: 1px solid var(--hfy-line);
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(26, 55, 84, .06);
+}
+.hfy-style-system .platform-plan-and-usage-title { padding: 22px 22px 0; }
+.hfy-style-system .platform-live-usage-section { border-top-color: var(--hfy-line); background: color-mix(in srgb, var(--hfy-cloud) 22%, white); }
+.hfy-style-system .platform-plan-facts { border-top-color: var(--hfy-line); }
+.hfy-style-system .platform-plan-facts > div { border-left-color: var(--hfy-line); }
+.hfy-style-system .platform-annual-switch.offer { padding: 13px 15px; }
 .hfy-style-system .platform-owner-card { border: 1px solid var(--hfy-line); border-radius: 16px; background: white; box-shadow: 0 8px 24px rgba(26, 55, 84, .06); }
 .hfy-style-system .platform-owner-plan-summary > div { min-height: 112px; padding: 18px; border: 1px solid var(--hfy-line); background: color-mix(in srgb, var(--hfy-cloud) 45%, white); }
 .hfy-style-system .platform-payment-method-card form { align-self: end; margin-top: auto; padding-top: 10px; }
