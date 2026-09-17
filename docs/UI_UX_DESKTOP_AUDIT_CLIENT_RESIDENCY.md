@@ -248,6 +248,24 @@ Resolution:
 - The form-level status message, permissions note, and `Save Settings` action remain outside the cards because they apply to the form as a whole rather than to one section.
 - Every other page must be checked against the same three-layer rule in a future scoped pass; no other route was reviewed or changed here.
 
+### CR-016 — Billing breaks down between full desktop and mobile layouts
+
+Priority: P1 Billing responsiveness
+Applies to: `/residency/settings/billing`
+Status: **resolved**
+
+Continuous resizing exposed two intermediate-width failures that were not visible at the earlier fixed checkpoints:
+
+- The committed-plan facts retained five or four padded columns until they were too narrow. `Plan dates` wrapped by itself while neighboring values stayed on one line, row heights became uneven, and the grid then jumped to three columns at the viewport breakpoint.
+- The invoice table enforced an 860px minimum width. Its internal horizontal overflow measured 23px at a 1300px viewport, 78px at 1200px, 243px at 1024px, and 398px immediately before the shell's compact-layout transition at 860px.
+
+Resolution:
+
+- The committed-plan fact grid now responds to its own container. Below the full-width layout it chooses the number of columns that can preserve a practical fact width, removes obsolete column-divider padding, and keeps the existing one-column mobile presentation.
+- Invoice periods now use separate semantic start and end dates. They remain inline when the table has room and stack vertically when the invoice card narrows.
+- The compact invoice table removes its fixed minimum width, uses a fixed proportional column layout, and reduces cell padding while preserving the current full-desktop table.
+- Billing was rechecked continuously from 1440px down to the 700px mobile breakpoint. Account and all other routes were intentionally excluded.
+
 ## Settings benchmark decisions
 
 ### Account
@@ -287,6 +305,7 @@ Changed:
 - Promoted Subscription details and Within plan to section-level H2 headings.
 - Increased committed-plan and usage supporting type without competing with the top summary cards.
 - Corrected annual-dialog footer containment.
+- Added container-responsive committed-plan facts and an overflow-free intermediate invoice-table layout.
 
 ### Intentionally left alone
 
