@@ -3344,6 +3344,7 @@
 }
 .hfy-style-system .platform-live-usage-section { border-top-color: var(--hfy-line); background: color-mix(in srgb, var(--hfy-cloud) 22%, white); }
 .hfy-style-system .platform-plan-facts { border-top-color: var(--hfy-line); }
+.hfy-style-system .workspace-surface-platform-billing .platform-plan-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .hfy-style-system .platform-plan-facts > div { border-left-color: var(--hfy-line); }
 .hfy-style-system .platform-plan-facts dt { font-size: 10px; font-weight: 750; }
 .hfy-style-system .platform-plan-facts dd { font-size: 12px; line-height: 1.4; }
@@ -3385,9 +3386,9 @@
 .hfy-style-system .full-programming-notice { padding: 14px 16px; border: 1px solid color-mix(in srgb, #2783dc 35%, var(--hfy-line)); border-radius: 12px; background: color-mix(in srgb, #2783dc 7%, white); }
 .hfy-style-system .full-programming-notice p { margin: 5px 0 0; color: var(--hfy-muted); }
 
-@container billing-plan-details (max-width: 900px) {
+@container billing-plan-details (max-width: 680px) {
   .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts {
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px;
   }
 
