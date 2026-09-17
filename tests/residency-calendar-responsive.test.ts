@@ -43,7 +43,7 @@ describe("Residency Calendar desktop contract", () => {
     expect(styles).toMatch(/\.calendar-main \.week-calendar \{[\s\S]*?min-width: 0;[\s\S]*?repeat\(7, minmax\(0, 1fr\)\);/);
     expect(styles).toContain(".hfy-style-system .client-shell .main.calendar-main { padding-top: 38px;");
     expect(styles).toContain(".main:has(> .calendar-page) > .view-as-banner");
-    expect(designSystem).toContain("## Calendar Operational Surface");
+    expect(designSystem).toContain("## Calendar Implementation Profile");
     expect(designSystem).toContain("At `920px` or narrower");
     expect(audit).toContain("CR-006A — Calendar command bar and Week view break at compact desktop widths");
     expect(audit).toContain("Status: **resolved for Residency Calendar desktop**");
