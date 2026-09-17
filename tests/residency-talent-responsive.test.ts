@@ -26,6 +26,7 @@ describe("Residency Talent responsive layout", () => {
 
     expect(talentStyles).toContain("container-name: residency-talent-workspace");
     expect(talentStyles).toContain("grid-template-columns: minmax(280px, .68fr) minmax(520px, 1.32fr)");
+    expect(talentStyles).toMatch(/\.residency-talent-roster-card \{[\s\S]*?min-height: 0;[\s\S]*?max-height: 680px;[\s\S]*?align-self: start;/);
     expect(talentStyles).toContain("@container residency-talent-workspace (max-width: 940px)");
     expect(talentStyles).toMatch(/@container residency-talent-workspace \(max-width: 940px\)[\s\S]*?grid-template-columns: 1fr;/);
   });
@@ -42,6 +43,9 @@ describe("Residency Talent responsive layout", () => {
     expect(workspace).toContain("data-tab-count={tabs.length}");
     expect(talentStyles).toMatch(/\.residency-talent-roster-card \.artist-roster-toolbar \{[\s\S]*?padding: var\(--hfy-surface-card-padding\) 0;/);
     expect(talentStyles).toMatch(/\.residency-talent-filter-tabs \{[\s\S]*?width: 100%;[\s\S]*?margin-inline: 0;/);
+    expect(talentStyles).toMatch(/\.residency-talent-roster-card \.artist-search-field input \{[\s\S]*?font-size: 14px;/);
+    expect(talentStyles).toMatch(/\.residency-talent-roster-card \.artist-roster-sort label \{[\s\S]*?display: flex;[\s\S]*?align-items: center;/);
+    expect(talentStyles).toMatch(/\.residency-talent-roster-card \.artist-roster-row-heading > strong \{[\s\S]*?font-size: 12px;/);
     expect(talentStyles).toMatch(/\.residency-talent-filter-tabs > div \{[\s\S]*?display: grid;[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
     expect(talentStyles).toMatch(/\.residency-talent-filter-tabs\[data-tab-count="1"\] > div \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/);
     expect(workspace).toContain("!selected.archivedAt && !selectedIsEditing");
