@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArtistBookingCalendar } from "@/components/artist-booking-calendar";
 import {
+  ResidencyCollectionFilters,
+  ResidencyCollectionList,
+  ResidencyCollectionPanel,
+  ResidencyCollectionRow,
+  ResidencyCollectionSearch,
+  ResidencyCollectionToolbar,
+  ResidencyCollectionUtility,
   ResidencyPageBody,
   ResidencyPageHeader,
   ResidencySectionHeader,
@@ -80,6 +87,12 @@ export function ClientArtistLookup({ artists, residencyName, timeZone, canManage
     { id: "owed", label: "Owed" },
     { id: "archived", label: "Archived" },
   ];
+  const sortOptions: Array<{ value: TalentSort; label: string }> = [
+    { value: "name_asc", label: "Name A–Z" },
+    { value: "name_desc", label: "Name Z–A" },
+    ...(!fullProgramming ? [{ value: "owed_desc" as const, label: "Amount owed" }] : []),
+    { value: "booking_asc", label: "Next booking" },
+  ];
 
   return <>
     <ResidencyPageHeader eyebrow={`${residencyName} talent`} title="Artist Lookup">
@@ -87,19 +100,21 @@ export function ClientArtistLookup({ artists, residencyName, timeZone, canManage
     </ResidencyPageHeader>
     <ResidencyPageBody className="residency-talent-body">
       <TalentWorkspaceShell
-    sidebar={<ResidencySurfaceCard className="residency-talent-roster-card">
-      <div className="artist-roster-toolbar">
-        <div className="artist-search-field"><label htmlFor="client-artist-lookup-search">Search artists</label><div><span aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg></span><input id="client-artist-lookup-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by artist name" /></div></div>
-        <div className="artist-roster-tabs residency-talent-filter-tabs" data-tab-count={tabs.length} role="tablist" aria-label="Artist status"><div>{tabs.map((tab) => <button className={view === tab.id ? "active" : ""} type="button" role="tab" aria-selected={view === tab.id} onClick={() => { setView(tab.id); setSort(tab.id === "owed" ? "owed_desc" : "name_asc"); setSelectedId(null); setEditingArtistId(null); setSelectedAssignmentId(null); }} key={tab.id}><span>{tab.label}</span><strong>{counts[tab.id]}</strong></button>)}</div></div>
-        <div className="artist-roster-sort"><span><strong>{filteredArtists.length}</strong> {filteredArtists.length === 1 ? "artist" : "artists"}</span><label>Sort<select value={sort} onChange={(event) => setSort(event.target.value as TalentSort)}><option value="name_asc">Name A–Z</option><option value="name_desc">Name Z–A</option>{!fullProgramming ? <option value="owed_desc">Amount owed</option> : null}<option value="booking_asc">Next booking</option></select></label></div>
-      </div>
-      <div className="artist-roster-list client-artist-roster-list">{filteredArtists.map((artist) => <div className={`artist-roster-row-wrap ${selectedId === artist.id ? "selected" : ""}`} key={artist.id}>
-        <button className="artist-roster-row" type="button" onClick={() => { setSelectedId(artist.id); setEditingArtistId(null); setSelectedAssignmentId(null); }}>
-          <span className="artist-roster-row-heading"><strong>{artist.stageName}</strong><span className="artist-roster-signals">{!fullProgramming && artist.outstandingAssignments.some((assignment) => assignment.amountCents === null) ? <RateNeededWarning compact /> : null}{!fullProgramming && artist.outstandingOwedCents > 0 ? <small className="artist-owed-chip">Owed {money(artist.outstandingOwedCents)}</small> : null}</span></span>
-          <span className="artist-roster-meta">{artist.ownership === "residency" ? "Residency artist" : "HFY roster artist"}{artist.homeMarket ? ` · ${artist.homeMarket}` : ""}</span>
-        </button>
-      </div>)}{!filteredArtists.length ? <div className="empty artist-list-empty"><p>{!artists.length ? "No artists have been added to this Residency yet." : query ? `No artists match “${query}”.` : `No ${view} artists to show.`}</p></div> : null}</div>
-    </ResidencySurfaceCard>}
+    sidebar={<ResidencyCollectionPanel>
+      <ResidencyCollectionToolbar>
+        <ResidencyCollectionSearch id="client-artist-lookup-search" label="Search artists" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by artist name" />
+        <ResidencyCollectionFilters value={view} items={tabs.map((tab) => ({ ...tab, count: counts[tab.id] }))} ariaLabel="Artist status" onChange={(nextView) => { setView(nextView); setSort(nextView === "owed" ? "owed_desc" : "name_asc"); setSelectedId(null); setEditingArtistId(null); setSelectedAssignmentId(null); }} />
+        <ResidencyCollectionUtility count={filteredArtists.length} countLabel={filteredArtists.length === 1 ? "artist" : "artists"} sortLabel="Sort" sortValue={sort} sortOptions={sortOptions} onSortChange={setSort} />
+      </ResidencyCollectionToolbar>
+      <ResidencyCollectionList>{filteredArtists.map((artist) => <ResidencyCollectionRow
+        key={artist.id}
+        title={artist.stageName}
+        meta={<>{artist.ownership === "residency" ? "Residency artist" : "HFY roster artist"}{artist.homeMarket ? ` · ${artist.homeMarket}` : ""}</>}
+        trailing={<>{!fullProgramming && artist.outstandingAssignments.some((assignment) => assignment.amountCents === null) ? <RateNeededWarning compact /> : null}{!fullProgramming && artist.outstandingOwedCents > 0 ? <small className="artist-owed-chip">Owed {money(artist.outstandingOwedCents)}</small> : null}</>}
+        selected={selectedId === artist.id}
+        onSelect={() => { setSelectedId(artist.id); setEditingArtistId(null); setSelectedAssignmentId(null); }}
+      />)}{!filteredArtists.length ? <div className="empty artist-list-empty"><p>{!artists.length ? "No artists have been added to this Residency yet." : query ? `No artists match “${query}”.` : `No ${view} artists to show.`}</p></div> : null}</ResidencyCollectionList>
+    </ResidencyCollectionPanel>}
     detail={<ResidencySurfaceCard className="residency-talent-detail-card">{!selected ? <div className="artist-detail-empty"><span>HFY</span><h2>{artists.length ? "Select an artist" : fullProgramming ? "HFY-managed roster" : "Build your roster"}</h2><p>{artists.length ? `Choose someone from the roster to see this Residency’s bookings${fullProgramming ? " and client-safe artist details" : ", amount owed, and client-safe artist details"}.` : fullProgramming ? "HFY manages and staffs all Talent Activities for this Residency." : "Use New Artist to add the first person to Artist Lookup."}</p></div> : <>
       {selected.ownership === "residency" ? selected.archivedAt ? <ArchivedClientOwnedArtistCard artist={selected} canManage={canManage} residencyName={residencyName} /> : <ClientOwnedArtistCard key={`${selected.id}:${selectedIsEditing ? "editing" : "view"}`} artist={selected} canManage={canManage} residencyName={residencyName} outstandingOwedCents={selected.outstandingOwedCents} outstandingAssignmentCount={selected.outstandingAssignments.length} editing={selectedIsEditing} onEditingChange={handleArtistEditingChange} /> : <ResidencySectionHeader className="artist-detail-header" eyebrow="HFY roster artist" title={selected.stageName} description={`Explicitly assigned to ${residencyName}`} aside={<span className="status active">Active</span>} split />}
       {!selected.archivedAt && !selectedIsEditing ? <>

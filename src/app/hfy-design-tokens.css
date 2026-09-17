@@ -51,6 +51,25 @@
   --hfy-section-title-size: 22px;
   --hfy-supporting-copy-size: 12px;
 
+  /* Compact Collection Panel */
+  --hfy-collection-panel-scroll-ceiling: 680px;
+  --hfy-collection-panel-scroll-ceiling-compact: 440px;
+  --hfy-collection-label-size: 10px;
+  --hfy-collection-search-size: 14px;
+  --hfy-collection-filter-size: 10px;
+  --hfy-collection-filter-count-size: 9px;
+  --hfy-collection-count-size: 10px;
+  --hfy-collection-count-emphasis-size: 12px;
+  --hfy-collection-sort-label-size: 10px;
+  --hfy-collection-sort-value-size: 11px;
+  --hfy-collection-sort-control-width: 118px;
+  --hfy-collection-sort-control-height: 36px;
+  --hfy-collection-row-title-size: 12px;
+  --hfy-collection-row-meta-size: 10px;
+  --hfy-collection-chip-size: 9px;
+  --hfy-collection-row-padding-block: var(--hfy-space-3);
+  --hfy-collection-row-padding-inline: 14px;
+
   --hfy-control-height: 44px;
   --hfy-control-height-large: 52px;
   --hfy-radius-control: 11px;

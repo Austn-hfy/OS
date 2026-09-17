@@ -2963,6 +2963,105 @@
 .hfy-style-system .residency-overview-body > .residency-overview-grid { margin: 0; }
 .hfy-style-system .residency-overview-grid > .residency-surface-card { padding: var(--hfy-surface-card-padding); }
 
+/* Compact Collection Panel keeps searchable, filterable lists on one locked density scale. */
+.hfy-style-system .residency-collection-panel {
+  min-height: 0;
+  max-height: var(--hfy-collection-panel-scroll-ceiling);
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hfy-style-system .residency-collection-toolbar {
+  padding: var(--hfy-surface-card-padding) 0;
+}
+
+.hfy-style-system .residency-collection-filters {
+  width: 100%;
+  min-width: 0;
+  margin-inline: 0;
+  overflow: visible;
+}
+
+.hfy-style-system .residency-collection-filters > div {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hfy-style-system .residency-collection-filters[data-tab-count="1"] > div {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hfy-style-system .residency-collection-filters button {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  font-size: var(--hfy-collection-filter-size);
+}
+
+.hfy-style-system .residency-collection-search > label {
+  font-size: var(--hfy-collection-label-size);
+}
+
+.hfy-style-system .residency-collection-search input {
+  font-size: var(--hfy-collection-search-size);
+}
+
+.hfy-style-system .residency-collection-filters button strong {
+  font-size: var(--hfy-collection-filter-count-size);
+}
+
+.hfy-style-system .residency-collection-utility {
+  align-items: center;
+}
+
+.hfy-style-system .residency-collection-utility > span {
+  padding-bottom: 0;
+  font-size: var(--hfy-collection-count-size);
+}
+
+.hfy-style-system .residency-collection-utility > span strong {
+  font-size: var(--hfy-collection-count-emphasis-size);
+}
+
+.hfy-style-system .residency-collection-utility label {
+  display: flex;
+  align-items: center;
+  gap: var(--hfy-space-2);
+  font-size: var(--hfy-collection-sort-label-size);
+}
+
+.hfy-style-system .residency-collection-utility select {
+  width: var(--hfy-collection-sort-control-width);
+  min-width: var(--hfy-collection-sort-control-width);
+  min-height: var(--hfy-collection-sort-control-height);
+  height: var(--hfy-collection-sort-control-height);
+  font-size: var(--hfy-collection-sort-value-size);
+}
+
+.hfy-style-system .residency-collection-list .residency-collection-row-wrap {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hfy-style-system .residency-collection-row {
+  padding: var(--hfy-collection-row-padding-block) var(--hfy-collection-row-padding-inline);
+}
+
+.hfy-style-system .residency-collection-row-heading > strong {
+  font-size: var(--hfy-collection-row-title-size);
+}
+
+.hfy-style-system .residency-collection-row-meta {
+  font-size: var(--hfy-collection-row-meta-size);
+}
+
+.hfy-style-system .residency-collection-row .artist-owed-chip {
+  font-size: var(--hfy-collection-chip-size);
+}
+
 /* Residency Talent uses the V1 surface hierarchy around its domain-specific master/detail shell. */
 .hfy-style-system .residency-talent-surface { gap: 0; }
 
@@ -3006,100 +3105,9 @@
   max-height: none;
 }
 
-.hfy-style-system .residency-talent-roster-card {
-  min-height: 0;
-  max-height: 680px;
-  align-self: start;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .hfy-style-system .residency-talent-detail-card {
   min-height: 680px;
   padding: var(--hfy-surface-card-padding);
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-toolbar {
-  padding: var(--hfy-surface-card-padding) 0;
-}
-
-.hfy-style-system .residency-talent-filter-tabs {
-  width: 100%;
-  min-width: 0;
-  margin-inline: 0;
-  overflow: visible;
-}
-
-.hfy-style-system .residency-talent-filter-tabs > div {
-  width: 100%;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.hfy-style-system .residency-talent-filter-tabs[data-tab-count="1"] > div {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.hfy-style-system .residency-talent-filter-tabs button {
-  width: 100%;
-  min-width: 0;
-  justify-content: center;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-search-field > label,
-.hfy-style-system .residency-talent-roster-card .artist-roster-tabs button,
-.hfy-style-system .residency-talent-roster-card .artist-roster-sort label {
-  font-size: 10px;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-search-field input {
-  font-size: 14px;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-tabs button strong,
-.hfy-style-system .residency-talent-roster-card .artist-owed-chip {
-  font-size: 9px;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-sort {
-  align-items: center;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-sort > span {
-  padding-bottom: 0;
-  font-size: 10px;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-sort > span strong {
-  font-size: 12px;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-sort label {
-  display: flex;
-  align-items: center;
-  gap: var(--hfy-space-2);
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-sort select {
-  width: 118px;
-  min-width: 118px;
-  min-height: 36px;
-  height: 36px;
-  font-size: 11px;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-row {
-  padding: var(--hfy-space-3) 14px;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-row-heading > strong {
-  font-size: 12px;
-}
-
-.hfy-style-system .residency-talent-roster-card .artist-roster-meta {
-  font-size: 10px;
 }
 
 .hfy-style-system .residency-talent-detail-card .artist-detail-empty {
@@ -3201,9 +3209,9 @@
     grid-template-columns: 1fr;
   }
 
-  .hfy-style-system .residency-talent-roster-card {
+  .hfy-style-system .residency-collection-panel {
     min-height: 0;
-    max-height: 440px;
+    max-height: var(--hfy-collection-panel-scroll-ceiling-compact);
   }
 
   .hfy-style-system .residency-talent-detail-card {

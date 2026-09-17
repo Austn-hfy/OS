@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 const readSource = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
 describe("Residency design system V1", () => {
-  it("exports the eight approved Settings primitives and applies them to adopted Residency routes", async () => {
+  it("exports the approved primitives and applies them to adopted Residency routes", async () => {
     const [system, account, billing, overview, talent, talentWorkspace, talentCard, tokens, docs] = await Promise.all([
       readSource("../src/components/residency-design-system.tsx"),
       readSource("../src/app/residency/settings/page.tsx"),
@@ -17,7 +17,23 @@ describe("Residency design system V1", () => {
       readSource("../docs/DESIGN_SYSTEM_V1.md"),
     ]);
 
-    for (const name of ["ResidencyPageSurface", "ResidencyPageHeader", "ResidencyPageBody", "ResidencyTabs", "ResidencySurfaceCard", "ResidencySectionHeader", "ResidencyMetricGrid", "ResidencyFactGrid"]) {
+    for (const name of [
+      "ResidencyPageSurface",
+      "ResidencyPageHeader",
+      "ResidencyPageBody",
+      "ResidencyTabs",
+      "ResidencySurfaceCard",
+      "ResidencySectionHeader",
+      "ResidencyMetricGrid",
+      "ResidencyFactGrid",
+      "ResidencyCollectionPanel",
+      "ResidencyCollectionToolbar",
+      "ResidencyCollectionSearch",
+      "ResidencyCollectionFilters",
+      "ResidencyCollectionUtility",
+      "ResidencyCollectionList",
+      "ResidencyCollectionRow",
+    ]) {
       expect(system).toContain(name);
     }
     for (const page of [account, billing, overview]) {
@@ -29,13 +45,15 @@ describe("Residency design system V1", () => {
     expect(overview).toContain("Open calendar");
     expect(overview).toContain("View plan & invoice history");
     expect(talent).toContain("ResidencyPageSurface");
-    for (const name of ["ResidencyPageHeader", "ResidencyPageBody", "ResidencySurfaceCard", "ResidencySectionHeader"]) {
+    for (const name of ["ResidencyPageHeader", "ResidencyPageBody", "ResidencySurfaceCard", "ResidencySectionHeader", "ResidencyCollectionPanel", "ResidencyCollectionRow"]) {
       expect(talentWorkspace).toContain(name);
     }
     expect(talentCard).toContain("ResidencyFactGrid");
     expect(tokens).toContain("--hfy-page-content-inset: 20px;");
     expect(tokens).toContain("--hfy-surface-card-radius: 16px;");
-    expect(docs).toContain("Version: 1.0");
-    expect(docs).toContain("Status: Active — Settings benchmark and Overview proof of concept");
+    expect(tokens).toContain("--hfy-collection-panel-scroll-ceiling: 680px;");
+    expect(docs).toContain("Version: 1.1");
+    expect(docs).toContain("## Compact Collection Panel");
+    expect(docs).toContain("Changed this revision:");
   });
 });
