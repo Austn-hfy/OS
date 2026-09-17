@@ -29,4 +29,20 @@ describe("Residency Talent responsive layout", () => {
     expect(talentStyles).toContain("@container residency-talent-workspace (max-width: 940px)");
     expect(talentStyles).toMatch(/@container residency-talent-workspace \(max-width: 940px\)[\s\S]*?grid-template-columns: 1fr;/);
   });
+
+  it("keeps roster filters proportional and active-artist actions aligned", async () => {
+    const [artistCard, styles] = await Promise.all([
+      readSource("../src/app/residency/talent/client-owned-artist-card.tsx"),
+      readSource("../src/app/hfy-style-pilot.css"),
+    ]);
+    const talentStyles = styles.slice(styles.indexOf("/* Residency Talent uses the V1 surface hierarchy"));
+
+    expect(talentStyles).toMatch(/\.residency-talent-roster-card \.artist-roster-tabs button \{[\s\S]*?flex: 1 1 0;[\s\S]*?justify-content: center;/);
+    expect(artistCard).toContain('className="client-owned-artist-header-actions"');
+    expect(artistCard).toContain('className="client-owned-artist-archive-action"');
+    expect(artistCard).toContain('className="client-owned-artist-archive-help"');
+    expect(artistCard).not.toContain('className="client-owned-artist-delete"');
+    expect(talentStyles).toMatch(/\.client-owned-artist-actions \{[\s\S]*?justify-content: flex-end;/);
+    expect(talentStyles).toMatch(/\.client-safe-talent-card--editing \{[\s\S]*?padding-bottom: var\(--hfy-space-6\);/);
+  });
 });

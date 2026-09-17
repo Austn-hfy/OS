@@ -100,6 +100,21 @@ Resolution:
 - The outer page, roster, and detail now use `ResidencyPageSurface`, `ResidencyPageBody`, and white `ResidencySurfaceCard` layers with the locked spacing tokens.
 - The existing `TalentWorkspaceShell` remains the domain-specific master/detail composition. It is already shared by HFY and Residency Talent, so no new generic design-system component is proposed until a non-Talent page demonstrates the same need.
 
+### CR-002A — Talent post-adoption control alignment
+
+Priority: P1
+Applies to: populated `/residency/talent`
+Status: **resolved**
+
+The first shared-system pass left three route-level alignment regressions: the Active/Owed/Archived filter group retained a content-sized minimum width, Archive Artist remained isolated in a full-width section, and the edit action row sat at the wrong alignment immediately above the next section divider.
+
+Resolution:
+
+- The three roster filters now share the available filter-track width proportionally while retaining the existing tab treatment.
+- Edit and Archive Artist now form one contextual action group in the artist header. The archive explanation remains attached as supporting copy instead of creating another section.
+- Save changes and Cancel now align to the form's trailing edge, and shared spacing tokens provide separation before the following section divider.
+- No artist content, data, permissions, or action behavior changed.
+
 ### CR-003 — Settings tabs shift when switching Account ↔ Billing
 
 Priority: P1

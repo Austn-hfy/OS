@@ -3022,6 +3022,23 @@
   padding: var(--hfy-surface-card-padding);
 }
 
+.hfy-style-system .residency-talent-roster-card .artist-roster-tabs {
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
+.hfy-style-system .residency-talent-roster-card .artist-roster-tabs > div {
+  width: 100%;
+  min-width: 0;
+}
+
+.hfy-style-system .residency-talent-roster-card .artist-roster-tabs button {
+  min-width: 0;
+  flex: 1 1 0;
+  justify-content: center;
+}
+
 .hfy-style-system .residency-talent-roster-card .artist-search-field > label,
 .hfy-style-system .residency-talent-roster-card .artist-roster-tabs button,
 .hfy-style-system .residency-talent-roster-card .artist-roster-sort label {
@@ -3067,6 +3084,56 @@
 
 .hfy-style-system .residency-talent-detail-card .client-safe-talent-card {
   gap: var(--hfy-space-4);
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-header > div:first-child {
+  min-width: 0;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-header h2 {
+  overflow-wrap: anywhere;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-header-controls {
+  min-width: 0;
+  display: grid;
+  justify-items: end;
+  gap: var(--hfy-space-2);
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--hfy-space-2);
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-action {
+  margin: 0;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-help {
+  max-width: 260px;
+  color: var(--hfy-muted);
+  font-size: 10px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-header-controls > .error {
+  max-width: 260px;
+  margin: 0;
+  text-align: right;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-actions {
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: var(--hfy-space-1);
+}
+
+.hfy-style-system .residency-talent-detail-card .client-safe-talent-card--editing {
+  padding-bottom: var(--hfy-space-6);
 }
 
 .hfy-style-system .residency-talent-detail-card .client-artist-profile-row {

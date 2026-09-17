@@ -34,8 +34,18 @@ export function ClientOwnedArtistCard({ artist, canManage, residencyName, outsta
     if (!window.confirm(`Archive ${artist.stageName}? They will leave future scheduling choices, while existing bookings stay intact.`)) event.preventDefault();
   }
 
-  return <article className="client-safe-talent-card">
-    <header className="client-owned-artist-header"><div><span className="status client-owned">Residency artist</span><h2>{artist.stageName}</h2></div>{canManage && !editing ? <button className="button secondary" type="button" onClick={() => setEditing(true)}>Edit</button> : null}</header>
+  return <article className={`client-safe-talent-card${editing ? " client-safe-talent-card--editing" : ""}`}>
+    <header className="client-owned-artist-header"><div><span className="status client-owned">Residency artist</span><h2>{artist.stageName}</h2></div>{canManage && !editing ? <div className="client-owned-artist-header-controls">
+      <div className="client-owned-artist-header-actions">
+        <button className="button secondary" type="button" onClick={() => setEditing(true)}>Edit</button>
+        <form className="client-owned-artist-archive-action" action={archiveAction} onSubmit={confirmArchive}>
+          <input type="hidden" name="artistId" value={artist.id} />
+          <button className="button secondary danger-button" type="submit" disabled={archiving} aria-describedby={`artist-archive-help-${artist.id}`}>{archiving ? "Archiving…" : "Archive Artist"}</button>
+        </form>
+      </div>
+      <small className="client-owned-artist-archive-help" id={`artist-archive-help-${artist.id}`}>Removes this artist from future scheduling without erasing their record or booking history.</small>
+      {archiveState.status === "error" ? <p className="error" aria-live="polite">{archiveState.message}</p> : null}
+    </div> : null}</header>
     <p className="client-artist-creation-source">{creationLabel(artist, residencyName)}</p>
     {editing ? <form className="client-owned-artist-form" action={updateAction}>
       <input type="hidden" name="artistId" value={artist.id} />
@@ -47,12 +57,6 @@ export function ClientOwnedArtistCard({ artist, canManage, residencyName, outsta
       <div className="client-owned-artist-actions"><button className="button" type="submit" disabled={updating}>{updating ? "Saving…" : "Save changes"}</button><button className="button secondary" type="button" onClick={() => setEditing(false)} disabled={updating}>{updateState.status === "success" ? "Done" : "Cancel"}</button></div>
       {updateState.status !== "idle" ? <p className={updateState.status === "error" ? "error" : "success"} aria-live="polite">{updateState.message}</p> : null}
     </form> : <div className="client-artist-profile-row"><div className="client-artist-facts"><div className="residency-fact-grid-container"><ResidencyFactGrid facts={[{ key: "genre", label: "Genre", value: artist.genres.length ? artist.genres.join(", ") : "Not listed" }, { key: "market", label: "Home market", value: artist.homeMarket || "Not listed" }, { key: "instagram", label: "Instagram", value: artist.instagramHandle || "Not listed" }, { key: "contact", label: "Contact", value: artist.clientContact || "Not listed" }]} /></div></div><aside className="client-artist-owed-summary"><span>Outstanding owed</span><strong>{money(outstandingOwedCents)}</strong><small>{outstandingAssignmentCount} Assignment{outstandingAssignmentCount === 1 ? "" : "s"}</small></aside></div>}
-    {canManage && !editing ? <form className="client-owned-artist-delete" action={archiveAction} onSubmit={confirmArchive}>
-      <input type="hidden" name="artistId" value={artist.id} />
-      <button className="button secondary danger-button" type="submit" disabled={archiving}>{archiving ? "Archiving…" : "Archive Artist"}</button>
-      <small>Removes this artist from future scheduling without erasing their record or booking history.</small>
-      {archiveState.status === "error" ? <p className="error" aria-live="polite">{archiveState.message}</p> : null}
-    </form> : null}
   </article>;
 }
 
