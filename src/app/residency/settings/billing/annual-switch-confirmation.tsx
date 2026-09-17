@@ -90,6 +90,13 @@ export function AnnualSwitchConfirmation({
     : paymentPath === "collect_card_then_schedule"
       ? `Stripe Checkout will collect a card now. That card will be charged ${money(comparison.annualUpfrontAmountCents)} on ${date(effectiveDate)}, when the annual term begins.`
       : `${money(comparison.annualUpfrontAmountCents)} will be charged to ${cardLabel ?? "your card on file"} on ${date(effectiveDate)}, when the annual term begins.`;
+  const effectiveTitle = startsImmediately ? "Starts after successful payment" : `Starts ${date(effectiveDate)}`;
+  const effectiveMessage = startsImmediately
+    ? "Your month-to-month plan stays unchanged if Checkout is cancelled or payment does not succeed."
+    : "Your current month-to-month plan remains active until this renewal date.";
+  const paymentTitle = paymentPath === "charge_card_at_renewal"
+    ? `Charge ${cardLabel ?? "card on file"}`
+    : `Add a${isLiveBilling ? "" : " test"} card in Stripe Checkout`;
 
   return <>
     <button className="button" type="button" ref={triggerRef} onClick={() => setOpen(true)}>Switch to annual</button>
@@ -107,8 +114,11 @@ export function AnnualSwitchConfirmation({
               <article className="new"><small>New plan</small><strong>{money(comparison.annualEffectiveMonthlyAmountCents)} / month</strong><span>{money(comparison.annualUpfrontAmountCents)} paid upfront each year</span></article>
             </div>
             <div className="platform-annual-savings"><strong>Save {money(comparison.annualSavingsAmountCents)} each year</strong><span>{comparison.annualSavingsPercent}% less than paying month-to-month for 12 months.</span></div>
-            <div className="platform-annual-effective-date"><strong>{startsImmediately ? "Effective after payment" : `Effective ${date(effectiveDate)}`}</strong><span>{startsImmediately ? "Your month-to-month plan stays unchanged if Checkout is cancelled or payment does not succeed." : "Your current month-to-month plan remains active until this renewal date."}</span></div>
-            <div className="platform-annual-payment-step"><p className="eyebrow">Payment step</p><strong>{paymentPath === "charge_card_at_renewal" ? "Use card on file" : `Add a${isLiveBilling ? "" : " test"} card in Stripe Checkout`}</strong><span>{paymentMessage}</span></div>
+            <ol className="platform-annual-timeline" aria-label="What happens after confirming">
+              <li><span className="platform-annual-step-number" aria-hidden="true">1</span><div><strong>Review savings</strong><span>Switch to {money(comparison.annualEffectiveMonthlyAmountCents)} per month effective and save {money(comparison.annualSavingsAmountCents)} each year.</span></div></li>
+              <li><span className="platform-annual-step-number" aria-hidden="true">2</span><div><strong>{effectiveTitle}</strong><span>{effectiveMessage}</span></div></li>
+              <li><span className="platform-annual-step-number" aria-hidden="true">3</span><div><strong>{paymentTitle}</strong><span>{paymentMessage}</span></div></li>
+            </ol>
             {state.status !== "idle" ? <p className={state.status} role={state.status === "error" ? "alert" : "status"}>{state.message}</p> : null}
           </div>
           <footer className="quick-modal-footer platform-annual-confirmation-actions">
