@@ -1,6 +1,6 @@
 # HFY OS desktop UI/UX audit — Client Residency
 
-Status: Settings desktop benchmark complete; broader client audit remains active
+Status: Settings desktop benchmark complete; Overview and Talent adopted; broader client audit remains active
 Date: September 16, 2026
 Scope: the client-facing Residency workspace reached through **View as Residency**
 Reference screen: **Settings → Billing**
@@ -53,7 +53,7 @@ The final Settings pass deliberately did not begin the future shared-component o
 
 Priority: P0
 Applies to: every Residency page while viewed from Developer mode
-Settings status: **resolved for Account and Billing**
+Reviewed-route status: **resolved for Account, Billing, Overview, and Talent**
 Broader status: open for the other Residency routes
 
 At viewport widths at or below 1200px, `.main` switches to a smaller horizontal gutter while `.view-as-banner` retained the negative margin calculated from the wider gutter.
@@ -68,11 +68,16 @@ Previously measured at 1200px:
 
 - the document extended 18px beyond the layout viewport
 
-Resolution for this pass:
+Resolution for Settings:
 
 - Account and Billing now identify the same Settings surface family.
 - At the compact-desktop breakpoint, the View-as banner uses the active Settings main gutter.
-- The fix is intentionally scoped to Settings so no other Residency route changes as part of this standalone task.
+- The original fix was intentionally scoped to Settings.
+
+Resolution for Talent:
+
+- Talent now identifies itself as a `ResidencyPageSurface`, so the same compact-desktop active-gutter rule applies without route-local banner geometry.
+- The Talent page body and both workspace cards enforce `min-width: 0`; the route-specific split/stack transition prevents internal content from widening the document.
 
 Remaining acceptance criteria for the later site-wide pass:
 
@@ -83,15 +88,37 @@ Remaining acceptance criteria for the later site-wide pass:
 
 Priority: P0
 Applies to: populated `/residency/talent`
-Status: open; intentionally untouched because this pass is Settings-only
+Status: **resolved**
 
 At 1024px, the Talent workspace keeps a fixed 440px roster column while the full workspace surface is only 710.6px wide. This leaves an unusable detail pane.
 
-Acceptance criteria for the later Talent pass:
+Resolution:
 
-- The detail pane never renders below 520px in a split layout.
-- Stack roster and detail when the workspace surface is narrower than roughly 940px.
-- No internal or document-level horizontal overflow.
+- The split layout now reserves at least 520px for the detail pane and uses a flexible 280px-or-wider roster instead of the fixed 440px column.
+- A named container query stacks the two cards when the Talent body is 940px or narrower, so the route has one explicit split-to-stack transition and no compressed in-between state.
+- The artist fact area now uses the shared `ResidencyFactGrid`, which moves from four columns to an even 2 × 2 layout before it can collapse.
+- The outer page, roster, and detail now use `ResidencyPageSurface`, `ResidencyPageBody`, and white `ResidencySurfaceCard` layers with the locked spacing tokens.
+- The existing `TalentWorkspaceShell` remains the domain-specific master/detail composition. It is already shared by HFY and Residency Talent, so no new generic design-system component is proposed until a non-Talent page demonstrates the same need.
+
+### CR-002A — Talent post-adoption control alignment
+
+Priority: P1
+Applies to: populated `/residency/talent`
+Status: **resolved**
+
+The first shared-system pass left three route-level state and alignment regressions: the Active/Owed/Archived filter group retained a content-sized minimum width, Archive Artist appeared in the default-view header, and entering edit mode left the read-only details and Upcoming Bookings visible below the form.
+
+Resolution:
+
+- `546b7f2` made the three flex buttons grow equally, and `e62fa0e` replaced that behavior with an explicit three-column route-level grid. Both changes affected the filter, but neither widened its containing track: live staging measurement still showed a 264.6px track inside a 354.6px card because the card padding and toolbar padding were cumulative. The earlier statement that the route had been visually confirmed was incorrect.
+- Follow-up review showed the real proportional defect affected the complete roster toolbar, not only the filter. The card had 24px outer padding plus a second 20px horizontal toolbar inset, making Search and Sort 264.6px wide while the roster rows were 304.6px wide. Widening only the filter exposed rather than resolved that mismatch.
+- The toolbar now retains its vertical spacing without adding another horizontal inset. Search Artists, the search field, the three equal filter tracks, artist count, Sort, and every roster row share the same 304.6px content edges inside the card. A staging computed-style and screenshot check confirms the single proportional column.
+- An approved visual-density follow-up makes the roster card content-height with a 680px scrolling ceiling rather than forcing 680px of empty height. Search text is 14px; artist names are 12px; metadata and count copy are 10px; Sort is one compact inline control; and artist rows retain 12px vertical padding. These sizes preserve the 10px normal-text floor while matching the narrower column's scale.
+- Archive Artist is absent from the default detail header and appears only inside edit mode as a standalone destructive action with its original warning copy directly below it.
+- Edit state is coordinated by the Talent workspace so all default-view material below the profile card—including read-only facts, owed assignments, Upcoming Bookings, and the calendar—is removed while editing. Save or Cancel exits edit mode and restores that material.
+- Save changes and Cancel remain aligned to the form's trailing edge; the Archive Artist area begins after shared-token spacing and its own separated boundary, without a divider touching the form actions.
+- The read-only detail summary now uses the shared 24px spacing step between fact rows, between the facts and owed summary, below the profile summary, and inside the following content sections. This removes the zero-gap transition that previously placed the Owed From divider directly against the profile row.
+- No artist content, data, permissions, or action behavior changed.
 
 ### CR-003 — Settings tabs shift when switching Account ↔ Billing
 
@@ -146,12 +173,15 @@ Resolution for Settings:
 
 The differing H1 text is intentional: the eyebrow communicates the shared family while each title names the current task.
 
+Talent remains open under this copy-specific item. Its existing eyebrow text was intentionally preserved because the Talent task prohibits content changes; only its header component, spacing, and action placement were standardized.
+
 ### CR-007 — Header actions use different placement and emphasis rules
 
 Priority: P1
 Applies to: Day Parts, Talent, Settings, and Billing
 Settings status: **resolved / intentionally unchanged**
-Broader status: open
+Talent status: **resolved**
+Broader status: open for Day Parts
 
 Settings already follows the preferred action model:
 
@@ -160,6 +190,8 @@ Settings already follows the preferred action model:
 - The Stripe test-mode badge remains in the Billing header.
 
 No action was moved because the current Billing benchmark already follows the intended hierarchy.
+
+Talent now places `+ New Artist` in the shared page header action slot instead of absolutely positioning it from inside the roster toolbar.
 
 ### CR-008 — View-as mode duplicates the Exit action
 
@@ -175,6 +207,7 @@ Status: open; intentionally untouched because it is navigation-wide and outside 
 
 Priority: P2 site-wide
 Settings status: **resolved for the reviewed Account and Billing content**
+Talent status: **resolved for the reviewed roster and detail content**
 Broader status: open
 
 Resolution for Settings:
@@ -185,6 +218,12 @@ Resolution for Settings:
 - Annual-offer supporting copy is 11px.
 - Usage labels and nonessential meta are 11px and 10px respectively.
 - The invoice-history section was left unchanged because it is the benchmark.
+
+Resolution for Talent:
+
+- Roster controls and metadata now use the shared supporting scales rather than route-local 8px labels.
+- Detail facts use the shared 10px label / 12px value hierarchy.
+- Page and section headings now come from the shared header primitives.
 
 ### CR-011 — Universal surface clipping hides layout mistakes
 
@@ -420,7 +459,7 @@ Required assertions:
 2. **Completed for Settings:** align Account/Billing tabs and body geometry.
 3. **Completed for Settings:** finalize the Account/Billing header and type hierarchy.
 4. **Completed for Billing:** repair the annual-switch dialog footer.
-5. Fix Talent compact-desktop collapse in its own scoped pass.
+5. **Completed for Talent:** fix compact-desktop collapse and adopt the shared V1 page/card hierarchy.
 6. Correct Calendar top rhythm, command-bar wrapping, and event type size in its own scoped pass.
 7. Normalize other page eyebrows, button emphasis, and sidebar attention behavior.
 8. Consolidate repeated workspace CSS and introduce shared components only after the visual benchmark is approved.

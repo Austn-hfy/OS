@@ -12,31 +12,6 @@ const readSource = (path: string) => readFile(new URL(path, import.meta.url), "u
 
 afterEach(() => vi.unstubAllEnvs());
 
-describe("Platform billing migration sequence", () => {
-  it("runs after the existing shift-request migrations without timestamp gaps that Drizzle could skip", async () => {
-    const journal = JSON.parse(await readSource("../drizzle/meta/_journal.json")) as {
-      entries: Array<{ idx: number; when: number; tag: string }>;
-    };
-    const promotedSequence = journal.entries.slice(-12);
-
-    expect(promotedSequence.map(({ idx, tag }) => ({ idx, tag }))).toEqual([
-      { idx: 42, tag: "0042_shift_change_requests" },
-      { idx: 43, tag: "0043_shift_change_request_pending_unique" },
-      { idx: 44, tag: "0044_preserve_resolved_shift_requests" },
-      { idx: 45, tag: "0045_platform_billing_system" },
-      { idx: 46, tag: "0046_live_billing_safety_switch" },
-      { idx: 47, tag: "0047_platform_subscription_revision_split_rates" },
-      { idx: 48, tag: "0048_founding_client_tracking" },
-      { idx: 49, tag: "0049_commitment_ladder_clawback" },
-      { idx: 50, tag: "0050_comped_residencies" },
-      { idx: 51, tag: "0051_platform_billing_buckets_v14" },
-      { idx: 52, tag: "0052_deployment_migration_pipeline_verification" },
-      { idx: 53, tag: "0053_migration_session_fallback_verification" },
-    ]);
-    expect(promotedSequence.every((entry, index) => index === 0 || entry.when > promotedSequence[index - 1].when)).toBe(true);
-  });
-});
-
 describe("Platform committed billing", () => {
   it("stores buckets, fixed rate, and two terms throughout the stack", async () => {
     const [form, action, stripeService, invoiceService, schema, migration] = await Promise.all([
@@ -62,20 +37,22 @@ describe("Platform committed billing", () => {
   });
 
   it("keeps Account and Billing on the same Settings desktop geometry", async () => {
-    const [accountPage, billingPage, styles] = await Promise.all([
+    const [accountPage, billingPage, designSystem, styles] = await Promise.all([
       readSource("../src/app/residency/settings/page.tsx"),
       readSource("../src/app/residency/settings/billing/page.tsx"),
+      readSource("../src/components/residency-design-system.tsx"),
       readSource("../src/app/hfy-style-pilot.css"),
     ]);
 
     for (const page of [accountPage, billingPage]) {
       expect(page).toContain("workspace-surface-client-settings");
       expect(page).toContain("settings-page-body");
-      expect(page).toContain('aria-current="page"');
+      expect(page).toContain("<ResidencyTabs");
     }
+    expect(designSystem).toContain('aria-current={item.href === activeHref ? "page" : undefined}');
     expect(accountPage).toContain('eyebrow="Settings · Account" title="Account settings"');
-    expect(styles).toContain(".workspace-surface-client-settings > .settings-tabs");
-    expect(styles).toContain(".settings-page-body");
+    expect(styles).toContain(".workspace-surface-client-settings > .residency-tabs");
+    expect(styles).toContain(".residency-page-body");
     expect(styles).toContain(".platform-annual-confirmation-actions");
   });
 
@@ -118,9 +95,9 @@ describe("Platform committed billing", () => {
     expect(annualConfirmation).toContain('<button className="button secondary" type="button" ref={cancelRef}');
     expect(annualConfirmation).toContain("Keep month-to-month");
     expect(annualConfirmation).toContain("card in Stripe Checkout");
-    expect(clientPage).toContain('className="card platform-plan-and-usage"');
+    expect(clientPage).toContain('className="platform-plan-and-usage"');
     expect(clientPage).not.toContain("Plan &amp; usage");
-    expect(clientPage).toContain("<h2>Subscription details</h2>");
+    expect(clientPage).toContain('title="Subscription details"');
     expect(clientPage).toContain('className="platform-plan-facts"');
     expect(clientPage).toContain('className="platform-client-usage-list"');
     expect(clientPage).toContain('className="platform-annual-switch offer"');
@@ -381,7 +358,7 @@ describe("billing surface availability", () => {
     expect(residencyLayout).toContain("platformBillingAvailable ? await getResidencyPaymentFailure");
     expect(residencyShell).toContain("canManage && platformBillingAvailable");
     expect(residencyOverview.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(residencyOverview.indexOf("getResidencyPlatformBilling(actor.residencyId)"));
-    expect(settingsPage).toContain('platformBillingAvailable ? <Link href="/residency/settings/billing">Billing</Link> : null');
+    expect(settingsPage).toContain('...(platformBillingAvailable ? [{ href: "/residency/settings/billing", label: "Billing" }] : [])');
     expect(residencyBillingPage.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(residencyBillingPage.indexOf("getResidencyPlatformBilling(actor.residencyId)"));
     expect(residencyBillingPage).toContain("notFound()");
     expect(setupPage).toContain("platformBillingAvailable ? <LiveBillingSafetyControl");

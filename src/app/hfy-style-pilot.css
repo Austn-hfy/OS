@@ -1288,7 +1288,7 @@
 
 @media (max-width: 1200px) {
   .hfy-style-system .main { padding-inline: clamp(20px, 3vw, 42px); }
-  .hfy-style-system .client-shell .main:has(> .workspace-surface-client-settings) > .view-as-banner {
+  .hfy-style-system .client-shell .main:has(> .residency-page-surface) > .view-as-banner {
     margin-inline: calc(-1 * clamp(20px, 3vw, 42px));
   }
   .hfy-style-system .calendar-command-bar { align-items: stretch; flex-direction: column; }
@@ -1312,6 +1312,7 @@
 
 @media (max-width: 850px) {
   .hfy-style-system .sidebar { position: static; height: auto; padding: 16px 20px; }
+  .hfy-style-system .view-as-banner { margin-inline: -20px; }
   .hfy-style-system .nav a,
   .hfy-style-system .client-dayparts-button,
   .hfy-style-system .preview-nav button { min-width: max-content; }
@@ -2564,7 +2565,21 @@
 
 @media (max-width: 850px) {
   .hfy-style-system .calendar-command-primary { align-items: stretch; flex-direction: column; }
-  .hfy-style-system .calendar-command-primary .calendar-month-cluster { justify-content: space-between; }
+  .hfy-style-system .calendar-command-primary .calendar-month-cluster {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    justify-content: stretch;
+    justify-items: stretch;
+  }
+  .hfy-style-system .calendar-command-primary .calendar-batch-launcher { justify-self: start; }
+  .hfy-style-system .calendar-command-primary .month-navigation { width: 100%; min-width: 0; }
+  .hfy-style-system .calendar-command-primary .calendar-batch-menu {
+    right: auto;
+    left: 0;
+    width: min(340px, calc(100vw - 68px));
+  }
   .hfy-style-system .client-add-artist-heading,
   .hfy-style-system .client-payment-section-heading { align-items: stretch; flex-direction: column; }
   .hfy-style-system .client-add-artist-heading > p { max-width: none; text-align: left; }
@@ -2854,15 +2869,43 @@
   gap: 0;
 }
 
-.hfy-style-system .workspace-surface-client-settings > .settings-tabs {
-  margin: 18px 20px 0;
+.hfy-style-system .workspace-surface-client-settings > .residency-tabs {
+  margin: var(--hfy-page-section-gap) var(--hfy-page-content-inset) 0;
 }
 
-.hfy-style-system .settings-page-body {
+.hfy-style-system .residency-page-body {
   min-width: 0;
   display: grid;
-  gap: 18px;
-  padding: 18px 20px 20px;
+  gap: var(--hfy-page-section-gap);
+  padding: var(--hfy-page-section-gap) var(--hfy-page-content-inset) var(--hfy-page-content-inset);
+}
+
+.hfy-style-system .residency-surface-card--white {
+  min-width: 0;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-surface-card-radius);
+  background: var(--hfy-surface-card-background);
+  box-shadow: var(--hfy-surface-card-shadow);
+}
+
+.hfy-style-system .residency-surface-card--frosted {
+  min-width: 0;
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-card);
+  background: var(--hfy-surface-strong);
+  box-shadow: var(--hfy-shadow-section), inset 0 1px var(--hfy-inset-highlight);
+}
+
+.hfy-style-system .residency-section-header h2 {
+  font-size: var(--hfy-section-title-size);
+  line-height: 1.12;
+}
+
+.hfy-style-system .residency-section-header--split {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--hfy-page-section-gap);
 }
 
 .hfy-style-system .settings-account-body > .residency-client-settings-form {
@@ -2877,12 +2920,7 @@
 }
 
 .hfy-style-system .settings-account-body .residency-client-settings-form > .settings-account-section {
-  min-width: 0;
-  padding: 20px;
-  border: 1px solid var(--hfy-line);
-  border-radius: 16px;
-  background: white;
-  box-shadow: 0 8px 24px rgba(26, 55, 84, .06);
+  padding: var(--hfy-surface-card-padding);
 }
 
 .hfy-style-system .settings-account-body .residency-client-settings-form > section > div:first-child p:last-child {
@@ -2920,6 +2958,267 @@
   border-bottom: 1px solid var(--hfy-line);
 }
 
+/* The Residency Overview is the first proof that the Settings primitives travel unchanged. */
+.hfy-style-system .residency-overview-surface { gap: 0; }
+.hfy-style-system .residency-overview-body > .residency-overview-grid { margin: 0; }
+.hfy-style-system .residency-overview-grid > .residency-surface-card { padding: var(--hfy-surface-card-padding); }
+
+/* Compact Collection Panel keeps searchable, filterable lists on one locked density scale. */
+.hfy-style-system .residency-collection-panel {
+  min-height: 0;
+  max-height: var(--hfy-collection-panel-scroll-ceiling);
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hfy-style-system .residency-collection-toolbar {
+  padding: var(--hfy-surface-card-padding) 0;
+}
+
+.hfy-style-system .residency-collection-filters {
+  width: 100%;
+  min-width: 0;
+  margin-inline: 0;
+  overflow: visible;
+}
+
+.hfy-style-system .residency-collection-filters > div {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hfy-style-system .residency-collection-filters[data-tab-count="1"] > div {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hfy-style-system .residency-collection-filters button {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  font-size: var(--hfy-collection-filter-size);
+}
+
+.hfy-style-system .residency-collection-search > label {
+  font-size: var(--hfy-collection-label-size);
+}
+
+.hfy-style-system .residency-collection-search input {
+  font-size: var(--hfy-collection-search-size);
+}
+
+.hfy-style-system .residency-collection-filters button strong {
+  font-size: var(--hfy-collection-filter-count-size);
+}
+
+.hfy-style-system .residency-collection-utility {
+  align-items: center;
+}
+
+.hfy-style-system .residency-collection-utility > span {
+  padding-bottom: 0;
+  font-size: var(--hfy-collection-count-size);
+}
+
+.hfy-style-system .residency-collection-utility > span strong {
+  font-size: var(--hfy-collection-count-emphasis-size);
+}
+
+.hfy-style-system .residency-collection-utility label {
+  display: flex;
+  align-items: center;
+  gap: var(--hfy-space-2);
+  font-size: var(--hfy-collection-sort-label-size);
+}
+
+.hfy-style-system .residency-collection-utility select {
+  width: var(--hfy-collection-sort-control-width);
+  min-width: var(--hfy-collection-sort-control-width);
+  min-height: var(--hfy-collection-sort-control-height);
+  height: var(--hfy-collection-sort-control-height);
+  font-size: var(--hfy-collection-sort-value-size);
+}
+
+.hfy-style-system .residency-collection-list .residency-collection-row-wrap {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hfy-style-system .residency-collection-row {
+  padding: var(--hfy-collection-row-padding-block) var(--hfy-collection-row-padding-inline);
+}
+
+.hfy-style-system .residency-collection-row-heading > strong {
+  font-size: var(--hfy-collection-row-title-size);
+}
+
+.hfy-style-system .residency-collection-row-meta {
+  font-size: var(--hfy-collection-row-meta-size);
+}
+
+.hfy-style-system .residency-collection-row .artist-owed-chip {
+  font-size: var(--hfy-collection-chip-size);
+}
+
+/* Residency Talent uses the V1 surface hierarchy around its domain-specific master/detail shell. */
+.hfy-style-system .residency-talent-surface { gap: 0; }
+
+.hfy-style-system .residency-talent-surface > .residency-page-header .artist-roster-toolbar-heading {
+  position: static;
+  z-index: auto;
+  margin-left: auto;
+}
+
+.hfy-style-system .residency-talent-surface > .residency-page-header .artist-roster-toolbar-heading .button {
+  min-height: var(--hfy-control-height);
+  padding: 9px 14px;
+  font-size: 10px;
+}
+
+.hfy-style-system .residency-talent-body {
+  container-name: residency-talent-workspace;
+  container-type: inline-size;
+}
+
+.hfy-style-system .residency-talent-body .artist-lookup-shell {
+  min-height: 0;
+  grid-template-columns: minmax(280px, .68fr) minmax(520px, 1.32fr);
+  align-items: start;
+  gap: var(--hfy-page-section-gap);
+}
+
+.hfy-style-system .residency-talent-body :is(.artist-roster-panel, .artist-detail-panel) {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hfy-style-system .residency-talent-body .artist-roster-panel {
+  position: static;
+  display: block;
+  max-height: none;
+}
+
+.hfy-style-system .residency-talent-detail-card {
+  min-height: 680px;
+  padding: var(--hfy-surface-card-padding);
+}
+
+.hfy-style-system .residency-talent-detail-card .artist-detail-empty {
+  min-height: 638px;
+  padding: var(--hfy-space-8);
+}
+
+.hfy-style-system .residency-talent-detail-card .artist-detail-header {
+  padding-bottom: var(--hfy-space-4);
+}
+
+.hfy-style-system .residency-talent-detail-card .artist-detail-header > div > p:last-child {
+  margin: 6px 0 0;
+  color: var(--hfy-muted);
+  font-size: var(--hfy-supporting-copy-size);
+}
+
+.hfy-style-system .residency-talent-detail-card .artist-section-heading .eyebrow,
+.hfy-style-system .residency-talent-detail-card .artist-definition-list dt,
+.hfy-style-system .residency-talent-detail-card .artist-booking-list :is(span, small),
+.hfy-style-system .residency-talent-detail-card .artist-mini-weekday,
+.hfy-style-system .residency-talent-detail-card .artist-mini-day {
+  font-size: 10px;
+}
+
+.hfy-style-system .residency-talent-detail-card .artist-definition-list dd {
+  font-size: 12px;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-safe-talent-card {
+  gap: var(--hfy-space-4);
+  padding-bottom: var(--hfy-space-6);
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-header > div:first-child {
+  min-width: 0;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-header h2 {
+  overflow-wrap: anywhere;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-editor {
+  display: grid;
+  gap: var(--hfy-space-6);
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-section {
+  display: grid;
+  justify-items: start;
+  gap: var(--hfy-space-2);
+  padding-top: var(--hfy-space-4);
+  border-top: 1px solid var(--hfy-line);
+  margin: 0;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-section small {
+  color: var(--hfy-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-section > .error {
+  margin: 0;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-actions {
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: var(--hfy-space-1);
+}
+
+.hfy-style-system .residency-talent-detail-card .client-artist-profile-row {
+  min-width: 0;
+  column-gap: var(--hfy-space-6);
+}
+
+.hfy-style-system .residency-talent-detail-card .client-artist-facts .residency-fact-grid {
+  row-gap: var(--hfy-space-6);
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.hfy-style-system .residency-talent-detail-card .client-artist-owed-summary {
+  padding: var(--hfy-space-3) var(--hfy-space-4);
+}
+
+.hfy-style-system .residency-talent-detail-card .client-artist-owed-summary :is(span, small) {
+  font-size: 10px;
+}
+
+.hfy-style-system .residency-talent-detail-card > .artist-detail-section {
+  padding-block: var(--hfy-space-6);
+}
+
+@container residency-talent-workspace (max-width: 940px) {
+  .hfy-style-system .residency-talent-body .artist-lookup-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .hfy-style-system .residency-collection-panel {
+    min-height: 0;
+    max-height: var(--hfy-collection-panel-scroll-ceiling-compact);
+  }
+
+  .hfy-style-system .residency-talent-detail-card {
+    min-height: 560px;
+  }
+}
+
 @media (max-width: 1500px) {
   .hfy-style-system .workspace-surface-talent .artist-roster-panel {
     border-right: 0;
@@ -2935,12 +3234,12 @@
     flex-direction: column;
   }
 
-  .hfy-style-system .settings-page-body,
+  .hfy-style-system .residency-page-body,
   .hfy-style-system .workspace-surface-settings > :is(.residency-setup-grid, .residency-grid),
   .hfy-style-system .workspace-surface-dashboard > :is(.developer-residencies-section, .hfy-work-queue-section, .active-residencies-section),
   .hfy-style-system .workspace-surface-dashboard > .hfy-request-queue-section,
   .hfy-style-system .workspace-surface-residency-overview > :is(.residency-overview-grid, .workspace-shortcuts) {
-    padding: 16px;
+    padding: var(--hfy-page-content-inset-compact);
   }
 
   .hfy-style-system .workspace-surface-talent > .page-header {
@@ -3220,7 +3519,7 @@
 }
 
 /* Financial surfaces keep Platform subscription records visually and structurally separate from talent money. */
-.hfy-style-system .settings-tabs {
+.hfy-style-system .residency-tabs {
   display: flex;
   width: fit-content;
   gap: 4px;
@@ -3231,7 +3530,7 @@
   background: color-mix(in srgb, var(--hfy-cloud) 82%, white);
 }
 
-.hfy-style-system .settings-tabs a {
+.hfy-style-system .residency-tabs a {
   padding: 9px 15px;
   border: 1px solid transparent;
   border-radius: 9px;
@@ -3241,7 +3540,7 @@
   text-decoration: none;
 }
 
-.hfy-style-system .settings-tabs a.active {
+.hfy-style-system .residency-tabs a.active {
   border-color: color-mix(in srgb, var(--owner-accent, #2783dc) 42%, var(--hfy-line));
   color: var(--hfy-ink);
   background: white;
@@ -3295,16 +3594,16 @@
 .hfy-style-system .finance-rate-needed-button:hover { border-color: color-mix(in srgb, var(--hfy-coral) 78%, #8a3b35); background: color-mix(in srgb, var(--hfy-coral) 21%, white); }
 .hfy-style-system .finance-rate-needed-button:focus-visible { outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--hfy-coral) 30%, transparent); }
 
-.hfy-style-system .platform-billing-summary {
+.hfy-style-system .residency-metric-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
-.hfy-style-system .platform-billing-summary article { display: grid; align-content: start; gap: 7px; min-height: 142px; padding: 20px; border: 1px solid var(--hfy-line); border-radius: 16px; background: white; box-shadow: 0 8px 24px rgba(26, 55, 84, .06); }
-.hfy-style-system .platform-billing-summary article > small { color: var(--hfy-muted); text-transform: uppercase; letter-spacing: .08em; }
-.hfy-style-system .platform-billing-summary article > strong { font-size: clamp(18px, 2vw, 26px); }
-.hfy-style-system .platform-billing-summary article > span:not(.status) { color: var(--hfy-muted); }
+.hfy-style-system .residency-metric-grid > .residency-surface-card { display: grid; align-content: start; gap: 7px; min-height: 142px; padding: var(--hfy-surface-card-padding); }
+.hfy-style-system .residency-metric-grid > .residency-surface-card > small { color: var(--hfy-muted); text-transform: uppercase; letter-spacing: .08em; }
+.hfy-style-system .residency-metric-grid > .residency-surface-card > strong { font-size: clamp(18px, 2vw, 26px); }
+.hfy-style-system .residency-metric-grid > .residency-surface-card > span:not(.status) { color: var(--hfy-muted); }
 
 .hfy-style-system .platform-plan-breakdown {
   display: grid;
@@ -3328,8 +3627,8 @@
   box-shadow: 0 8px 24px rgba(26, 55, 84, .06);
 }
 .hfy-style-system :is(.platform-committed-plan-section, .platform-live-usage-section) { padding: 20px; }
-.hfy-style-system .workspace-surface-platform-billing .platform-committed-plan-section {
-  container-name: billing-plan-details;
+.hfy-style-system .residency-fact-grid-container {
+  container-name: residency-fact-grid;
   container-type: inline-size;
 }
 .hfy-style-system :is(.platform-plan-section-heading, .platform-live-usage-section) h2 {
@@ -3343,11 +3642,12 @@
   line-height: 1.5;
 }
 .hfy-style-system .platform-live-usage-section { border-top-color: var(--hfy-line); background: color-mix(in srgb, var(--hfy-cloud) 22%, white); }
-.hfy-style-system .platform-plan-facts { border-top-color: var(--hfy-line); }
-.hfy-style-system .workspace-surface-platform-billing .platform-plan-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.hfy-style-system .platform-plan-facts > div { border-left-color: var(--hfy-line); }
-.hfy-style-system .platform-plan-facts dt { font-size: 10px; font-weight: 750; }
-.hfy-style-system .platform-plan-facts dd { font-size: 12px; line-height: 1.4; }
+.hfy-style-system .residency-fact-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 20px 0 0; padding: 17px 0 0; border-top: 1px solid var(--hfy-line); }
+.hfy-style-system .residency-fact-grid > div { display: grid; align-content: start; gap: 5px; min-width: 0; padding: 0 16px; border-left: 1px solid var(--hfy-line); }
+.hfy-style-system .residency-fact-grid > div:first-child { padding-left: 0; border-left: 0; }
+.hfy-style-system .residency-fact-grid > div:last-child { padding-right: 0; }
+.hfy-style-system .residency-fact-grid dt { color: var(--hfy-muted); font-size: 10px; font-weight: 750; }
+.hfy-style-system .residency-fact-grid dd { margin: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 800; line-height: 1.4; text-transform: capitalize; }
 .hfy-style-system .workspace-surface-platform-billing .platform-invoice-history {
   container-name: billing-invoice-history;
   container-type: inline-size;
@@ -3386,14 +3686,14 @@
 .hfy-style-system .full-programming-notice { padding: 14px 16px; border: 1px solid color-mix(in srgb, #2783dc 35%, var(--hfy-line)); border-radius: 12px; background: color-mix(in srgb, #2783dc 7%, white); }
 .hfy-style-system .full-programming-notice p { margin: 5px 0 0; color: var(--hfy-muted); }
 
-@container billing-plan-details (max-width: 680px) {
-  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts {
+@container residency-fact-grid (max-width: 680px) {
+  .hfy-style-system .residency-fact-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px;
   }
 
-  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div,
-  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div:nth-child(4) {
+  .hfy-style-system .residency-fact-grid > div,
+  .hfy-style-system .residency-fact-grid > div:nth-child(4) {
     padding: 0;
     border-left: 0;
   }
@@ -3433,32 +3733,32 @@
 }
 
 @media (max-width: 850px) {
-  .hfy-style-system .platform-billing-summary,
+  .hfy-style-system .residency-metric-grid,
   .hfy-style-system .platform-plan-breakdown { grid-template-columns: 1fr; }
   .hfy-style-system .finance-accordion > summary { align-items: flex-start; }
-  .hfy-style-system .platform-billing-summary article { min-height: 0; }
+  .hfy-style-system .residency-metric-grid > .residency-surface-card { min-height: 0; }
 }
 
 @media (max-width: 700px) {
-  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts {
+  .hfy-style-system .residency-fact-grid {
     grid-template-columns: 1fr;
     gap: 12px;
   }
 
-  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div,
-  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div:nth-child(4) {
+  .hfy-style-system .residency-fact-grid > div,
+  .hfy-style-system .residency-fact-grid > div:nth-child(4) {
     padding: 0 0 12px;
     border: 0;
     border-bottom: 1px solid var(--hfy-line);
   }
 
-  .hfy-style-system .workspace-surface-platform-billing .platform-plan-facts > div:last-child {
+  .hfy-style-system .residency-fact-grid > div:last-child {
     padding-bottom: 0;
     border-bottom: 0;
   }
 }
 
 @media (max-width: 650px) {
-  .hfy-style-system .workspace-surface-client-settings > .settings-tabs { margin-inline: 16px; }
+  .hfy-style-system .workspace-surface-client-settings > .residency-tabs { margin-inline: var(--hfy-page-content-inset-compact); }
   .hfy-style-system .platform-annual-confirmation-actions { padding-inline: 16px; }
 }

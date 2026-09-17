@@ -89,11 +89,12 @@ describe("Residency workspace boundaries", () => {
   });
 
   it("uses one shared compact header on detail workspaces while Calendar and Day Parts keep integrated headings", async () => {
-    const [sharedHeader, calendar, dayparts, artistLookup, roster, finances, payouts, invoices, settings] = await Promise.all([
+    const [sharedHeader, calendar, dayparts, artistLookup, clientArtistLookup, roster, finances, payouts, invoices, settings] = await Promise.all([
       readFile(new URL("../src/components/residency-page-header.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/calendar/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/dayparts/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/roster/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/finances/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/payouts/page.tsx", import.meta.url), "utf8"),
@@ -101,9 +102,10 @@ describe("Residency workspace boundaries", () => {
       readFile(new URL("../src/app/residency/settings/page.tsx", import.meta.url), "utf8"),
     ]);
     expect(sharedHeader).toContain('className="page-header client-page-header residency-page-header"');
-    for (const source of [artistLookup, finances, settings]) {
+    for (const source of [clientArtistLookup, finances, settings]) {
       expect(source).toContain("<ResidencyPageHeader");
     }
+    expect(artistLookup).toContain("<ResidencyPageSurface");
     expect(payouts).toContain('redirect("/residency/finances")');
     expect(invoices).toContain('redirect("/residency/finances")');
     expect(roster).toContain('redirect("/residency/talent")');
