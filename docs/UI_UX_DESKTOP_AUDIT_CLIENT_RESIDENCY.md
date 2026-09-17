@@ -106,13 +106,14 @@ Priority: P1
 Applies to: populated `/residency/talent`
 Status: **resolved**
 
-The first shared-system pass left three route-level alignment regressions: the Active/Owed/Archived filter group retained a content-sized minimum width, Archive Artist remained isolated in a full-width section, and the edit action row sat at the wrong alignment immediately above the next section divider.
+The first shared-system pass left three route-level state and alignment regressions: the Active/Owed/Archived filter group retained a content-sized minimum width, Archive Artist appeared in the default-view header, and entering edit mode left the read-only details and Upcoming Bookings visible below the form.
 
 Resolution:
 
-- The three roster filters now share the available filter-track width proportionally while retaining the existing tab treatment.
-- Edit and Archive Artist now form one contextual action group in the artist header. The archive explanation remains attached as supporting copy instead of creating another section.
-- Save changes and Cancel now align to the form's trailing edge, and shared spacing tokens provide separation before the following section divider.
+- The earlier `546b7f2` rule was confirmed in the deployed stylesheet and produced three equal tracks in an isolated render, but it depended on a roster-card ancestor and had not been visually verified on the route before closeout. The filter now owns an explicit route-level grid class: three equal tracks for Active/Owed/Archived, or one full track in the single-tab programming variant. A browser-rendered before/after comparison confirmed the content-sized cluster changes to three equal-width controls across the available track.
+- Archive Artist is absent from the default detail header and appears only inside edit mode as a standalone destructive action with its original warning copy directly below it.
+- Edit state is coordinated by the Talent workspace so all default-view material below the profile card—including read-only facts, owed assignments, Upcoming Bookings, and the calendar—is removed while editing. Save or Cancel exits edit mode and restores that material.
+- Save changes and Cancel remain aligned to the form's trailing edge; the Archive Artist area begins after shared-token spacing and its own separated boundary, without a divider touching the form actions.
 - No artist content, data, permissions, or action behavior changed.
 
 ### CR-003 — Settings tabs shift when switching Account ↔ Billing

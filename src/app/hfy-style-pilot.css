@@ -3022,20 +3022,26 @@
   padding: var(--hfy-surface-card-padding);
 }
 
-.hfy-style-system .residency-talent-roster-card .artist-roster-tabs {
+.hfy-style-system .residency-talent-filter-tabs {
   width: 100%;
   min-width: 0;
   overflow: visible;
 }
 
-.hfy-style-system .residency-talent-roster-card .artist-roster-tabs > div {
+.hfy-style-system .residency-talent-filter-tabs > div {
   width: 100%;
   min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.hfy-style-system .residency-talent-roster-card .artist-roster-tabs button {
+.hfy-style-system .residency-talent-filter-tabs[data-tab-count="1"] > div {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hfy-style-system .residency-talent-filter-tabs button {
+  width: 100%;
   min-width: 0;
-  flex: 1 1 0;
   justify-content: center;
 }
 
@@ -3094,46 +3100,34 @@
   overflow-wrap: anywhere;
 }
 
-.hfy-style-system .residency-talent-detail-card .client-owned-artist-header-controls {
-  min-width: 0;
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-editor {
   display: grid;
-  justify-items: end;
-  gap: var(--hfy-space-2);
+  gap: var(--hfy-space-6);
 }
 
-.hfy-style-system .residency-talent-detail-card .client-owned-artist-header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-section {
+  display: grid;
+  justify-items: start;
   gap: var(--hfy-space-2);
-}
-
-.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-action {
+  padding-top: var(--hfy-space-4);
+  border-top: 1px solid var(--hfy-line);
   margin: 0;
 }
 
-.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-help {
-  max-width: 260px;
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-section small {
   color: var(--hfy-muted);
   font-size: 10px;
   line-height: 1.45;
-  text-align: right;
 }
 
-.hfy-style-system .residency-talent-detail-card .client-owned-artist-header-controls > .error {
-  max-width: 260px;
+.hfy-style-system .residency-talent-detail-card .client-owned-artist-archive-section > .error {
   margin: 0;
-  text-align: right;
 }
 
 .hfy-style-system .residency-talent-detail-card .client-owned-artist-actions {
   align-items: center;
   justify-content: flex-end;
   padding-top: var(--hfy-space-1);
-}
-
-.hfy-style-system .residency-talent-detail-card .client-safe-talent-card--editing {
-  padding-bottom: var(--hfy-space-6);
 }
 
 .hfy-style-system .residency-talent-detail-card .client-artist-profile-row {

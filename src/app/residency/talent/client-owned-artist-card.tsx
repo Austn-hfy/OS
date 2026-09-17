@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useState, type FormEvent } from "react";
 import { ResidencyFactGrid } from "@/components/residency-design-system";
 import {
   archiveClientOwnedArtistAction,
@@ -24,8 +24,7 @@ function creationLabel(artist: ClientSafeManagedTalent, residencyName: string): 
   return "Creator source unavailable";
 }
 
-export function ClientOwnedArtistCard({ artist, canManage, residencyName, outstandingOwedCents, outstandingAssignmentCount }: { artist: ClientSafeManagedTalent; canManage: boolean; residencyName: string; outstandingOwedCents: number; outstandingAssignmentCount: number }) {
-  const [editing, setEditing] = useState(false);
+export function ClientOwnedArtistCard({ artist, canManage, residencyName, outstandingOwedCents, outstandingAssignmentCount, editing, onEditingChange }: { artist: ClientSafeManagedTalent; canManage: boolean; residencyName: string; outstandingOwedCents: number; outstandingAssignmentCount: number; editing: boolean; onEditingChange: (artistId: string, editing: boolean) => void }) {
   const [genre, setGenre] = useState(artist.genres[0] ?? TALENT_GENRES[0]);
   const [updateState, updateAction, updating] = useActionState(updateClientOwnedArtistAction, initialState);
   const [archiveState, archiveAction, archiving] = useActionState(archiveClientOwnedArtistAction, initialState);
@@ -34,29 +33,31 @@ export function ClientOwnedArtistCard({ artist, canManage, residencyName, outsta
     if (!window.confirm(`Archive ${artist.stageName}? They will leave future scheduling choices, while existing bookings stay intact.`)) event.preventDefault();
   }
 
-  return <article className={`client-safe-talent-card${editing ? " client-safe-talent-card--editing" : ""}`}>
-    <header className="client-owned-artist-header"><div><span className="status client-owned">Residency artist</span><h2>{artist.stageName}</h2></div>{canManage && !editing ? <div className="client-owned-artist-header-controls">
-      <div className="client-owned-artist-header-actions">
-        <button className="button secondary" type="button" onClick={() => setEditing(true)}>Edit</button>
-        <form className="client-owned-artist-archive-action" action={archiveAction} onSubmit={confirmArchive}>
-          <input type="hidden" name="artistId" value={artist.id} />
-          <button className="button secondary danger-button" type="submit" disabled={archiving} aria-describedby={`artist-archive-help-${artist.id}`}>{archiving ? "Archiving…" : "Archive Artist"}</button>
-        </form>
-      </div>
-      <small className="client-owned-artist-archive-help" id={`artist-archive-help-${artist.id}`}>Removes this artist from future scheduling without erasing their record or booking history.</small>
-      {archiveState.status === "error" ? <p className="error" aria-live="polite">{archiveState.message}</p> : null}
-    </div> : null}</header>
-    <p className="client-artist-creation-source">{creationLabel(artist, residencyName)}</p>
-    {editing ? <form className="client-owned-artist-form" action={updateAction}>
-      <input type="hidden" name="artistId" value={artist.id} />
-      <div className="field"><label htmlFor={`artist-name-${artist.id}`}>Name</label><input id={`artist-name-${artist.id}`} name="name" required maxLength={200} defaultValue={artist.stageName} /></div>
-      <div className="field"><label htmlFor={`artist-contact-${artist.id}`}>Contact <span>(optional)</span></label><input id={`artist-contact-${artist.id}`} name="contact" maxLength={300} defaultValue={artist.clientContact} /></div>
-      <div className="field"><label htmlFor={`artist-market-${artist.id}`}>Home market <span>(optional)</span></label><input id={`artist-market-${artist.id}`} name="homeMarket" maxLength={200} defaultValue={artist.homeMarket} /></div>
-      <div className="field"><label htmlFor={`artist-instagram-${artist.id}`}>Instagram <span>(optional)</span></label><input id={`artist-instagram-${artist.id}`} name="instagramHandle" maxLength={160} defaultValue={artist.instagramHandle} /></div>
-      <div className="field"><label htmlFor={`artist-genre-${artist.id}`}>Genre</label><select id={`artist-genre-${artist.id}`} name="genre" value={genre} onChange={(event) => setGenre(event.target.value)}>{TALENT_GENRES.map((preset) => <option value={preset} key={preset}>{preset}</option>)}<option value="custom">Custom</option></select>{genre === "custom" ? <input aria-label="Custom genre" name="customGenre" required maxLength={80} defaultValue={artist.genres[0]} /> : <input name="customGenre" type="hidden" value="" />}</div>
-      <div className="client-owned-artist-actions"><button className="button" type="submit" disabled={updating}>{updating ? "Saving…" : "Save changes"}</button><button className="button secondary" type="button" onClick={() => setEditing(false)} disabled={updating}>{updateState.status === "success" ? "Done" : "Cancel"}</button></div>
-      {updateState.status !== "idle" ? <p className={updateState.status === "error" ? "error" : "success"} aria-live="polite">{updateState.message}</p> : null}
-    </form> : <div className="client-artist-profile-row"><div className="client-artist-facts"><div className="residency-fact-grid-container"><ResidencyFactGrid facts={[{ key: "genre", label: "Genre", value: artist.genres.length ? artist.genres.join(", ") : "Not listed" }, { key: "market", label: "Home market", value: artist.homeMarket || "Not listed" }, { key: "instagram", label: "Instagram", value: artist.instagramHandle || "Not listed" }, { key: "contact", label: "Contact", value: artist.clientContact || "Not listed" }]} /></div></div><aside className="client-artist-owed-summary"><span>Outstanding owed</span><strong>{money(outstandingOwedCents)}</strong><small>{outstandingAssignmentCount} Assignment{outstandingAssignmentCount === 1 ? "" : "s"}</small></aside></div>}
+  useEffect(() => {
+    if (editing && updateState.status === "success") onEditingChange(artist.id, false);
+  }, [artist.id, editing, onEditingChange, updateState.status]);
+
+  return <article className="client-safe-talent-card">
+    <header className="client-owned-artist-header"><div><span className="status client-owned">Residency artist</span><h2>{artist.stageName}</h2></div>{canManage && !editing ? <button className="button secondary" type="button" onClick={() => onEditingChange(artist.id, true)}>Edit</button> : null}</header>
+    {!editing ? <p className="client-artist-creation-source">{creationLabel(artist, residencyName)}</p> : null}
+    {editing ? <div className="client-owned-artist-editor">
+      <form className="client-owned-artist-form" action={updateAction}>
+        <input type="hidden" name="artistId" value={artist.id} />
+        <div className="field"><label htmlFor={`artist-name-${artist.id}`}>Name</label><input id={`artist-name-${artist.id}`} name="name" required maxLength={200} defaultValue={artist.stageName} /></div>
+        <div className="field"><label htmlFor={`artist-contact-${artist.id}`}>Contact <span>(optional)</span></label><input id={`artist-contact-${artist.id}`} name="contact" maxLength={300} defaultValue={artist.clientContact} /></div>
+        <div className="field"><label htmlFor={`artist-market-${artist.id}`}>Home market <span>(optional)</span></label><input id={`artist-market-${artist.id}`} name="homeMarket" maxLength={200} defaultValue={artist.homeMarket} /></div>
+        <div className="field"><label htmlFor={`artist-instagram-${artist.id}`}>Instagram <span>(optional)</span></label><input id={`artist-instagram-${artist.id}`} name="instagramHandle" maxLength={160} defaultValue={artist.instagramHandle} /></div>
+        <div className="field"><label htmlFor={`artist-genre-${artist.id}`}>Genre</label><select id={`artist-genre-${artist.id}`} name="genre" value={genre} onChange={(event) => setGenre(event.target.value)}>{TALENT_GENRES.map((preset) => <option value={preset} key={preset}>{preset}</option>)}<option value="custom">Custom</option></select>{genre === "custom" ? <input aria-label="Custom genre" name="customGenre" required maxLength={80} defaultValue={artist.genres[0]} /> : <input name="customGenre" type="hidden" value="" />}</div>
+        <div className="client-owned-artist-actions"><button className="button" type="submit" disabled={updating}>{updating ? "Saving…" : "Save changes"}</button><button className="button secondary" type="button" onClick={() => onEditingChange(artist.id, false)} disabled={updating}>Cancel</button></div>
+        {updateState.status !== "idle" ? <p className={updateState.status === "error" ? "error" : "success"} aria-live="polite">{updateState.message}</p> : null}
+      </form>
+      <form className="client-owned-artist-archive-section" action={archiveAction} onSubmit={confirmArchive}>
+        <input type="hidden" name="artistId" value={artist.id} />
+        <button className="button secondary danger-button" type="submit" disabled={archiving}>{archiving ? "Archiving…" : "Archive Artist"}</button>
+        <small>Removes this artist from future scheduling without erasing their record or booking history.</small>
+        {archiveState.status === "error" ? <p className="error" aria-live="polite">{archiveState.message}</p> : null}
+      </form>
+    </div> : <div className="client-artist-profile-row"><div className="client-artist-facts"><div className="residency-fact-grid-container"><ResidencyFactGrid facts={[{ key: "genre", label: "Genre", value: artist.genres.length ? artist.genres.join(", ") : "Not listed" }, { key: "market", label: "Home market", value: artist.homeMarket || "Not listed" }, { key: "instagram", label: "Instagram", value: artist.instagramHandle || "Not listed" }, { key: "contact", label: "Contact", value: artist.clientContact || "Not listed" }]} /></div></div><aside className="client-artist-owed-summary"><span>Outstanding owed</span><strong>{money(outstandingOwedCents)}</strong><small>{outstandingAssignmentCount} Assignment{outstandingAssignmentCount === 1 ? "" : "s"}</small></aside></div>}
   </article>;
 }
 
