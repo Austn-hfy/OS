@@ -1827,12 +1827,10 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-payment-method-card form { align-self: end; margin-top: auto; padding-top: 8px; }
 .platform-payment-method-card form .button { width: 100%; }
 .platform-plan-and-usage { display: grid; padding: 0; overflow: hidden; border-color: #d5e0ea; box-shadow: 0 8px 26px rgba(31,55,80,.06); }
-.platform-plan-and-usage-title { padding: 22px 22px 0; }
-.platform-plan-and-usage-title h2 { margin: 0; }
 .platform-committed-plan-section, .platform-live-usage-section { padding: 22px; }
 .platform-live-usage-section { display: grid; gap: 14px; border-top: 1px solid #dce5ed; background: #fbfdff; }
 .platform-plan-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-.platform-plan-section-heading h3, .platform-live-usage-section h3 { margin: 3px 0 0; font-size: 22px; }
+.platform-plan-section-heading h2, .platform-live-usage-section h2 { margin: 3px 0 0; font-size: 22px; }
 .platform-plan-term-badge { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 7px 10px; border: 1px solid #8fc9aa; border-radius: 999px; color: #17633f; background: #e8f7ef; font-size: 9px; font-weight: 900; letter-spacing: .04em; }
 .platform-plan-term-badge.scheduled { border-color: #b9d6ef; color: #14558d; background: #f2f8ff; }
 .platform-plan-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 0; margin: 20px 0 0; padding: 17px 0 0; border-top: 1px solid var(--line); }
@@ -1887,7 +1885,7 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-annual-switch.scheduled strong, .platform-annual-switch.active strong { color: #17633f; }
 .platform-annual-switch.active { border-color: #8fc9aa; background: #f0faf5; }
 .platform-annual-confirmation { width: min(720px, 100%); }
-.platform-annual-confirmation > form { min-height: 0; overflow-y: auto; }
+.platform-annual-confirmation > form { min-height: 0; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 .platform-annual-confirmation-body { display: grid; gap: 14px; }
 .platform-annual-plan-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .platform-annual-plan-comparison article { display: grid; gap: 6px; padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: white; }
@@ -1905,7 +1903,7 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-annual-timeline li > div { display: grid; align-content: start; gap: 3px; padding-top: 3px; }
 .platform-annual-timeline strong { font-size: 12px; }
 .platform-annual-timeline li > div > span { color: var(--muted); font-size: 10px; line-height: 1.5; }
-.platform-annual-confirmation-actions { display: flex; justify-content: space-between; }
+.platform-annual-confirmation-actions { position: static; bottom: auto; display: flex; justify-content: flex-end; margin: 0; }
 .platform-plan-breakdown dl, .residency-overview-plan-list { display: grid; gap: 9px; margin: 0; }
 .platform-plan-breakdown dl > div, .residency-overview-plan-list > div { display: flex; justify-content: space-between; gap: 14px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
 .platform-plan-breakdown dt, .residency-overview-plan-list dt { color: var(--muted); font-size: 10px; }
