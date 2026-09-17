@@ -40,6 +40,7 @@ describe("Residency Talent responsive layout", () => {
 
     expect(workspace).toContain('className="artist-roster-tabs residency-talent-filter-tabs"');
     expect(workspace).toContain("data-tab-count={tabs.length}");
+    expect(talentStyles).toMatch(/\.residency-talent-filter-tabs \{[\s\S]*?width: calc\(100% \+ var\(--hfy-surface-card-padding\) \+ var\(--hfy-surface-card-padding\)\);[\s\S]*?margin-inline: calc\(0px - var\(--hfy-surface-card-padding\)\);/);
     expect(talentStyles).toMatch(/\.residency-talent-filter-tabs > div \{[\s\S]*?display: grid;[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
     expect(talentStyles).toMatch(/\.residency-talent-filter-tabs\[data-tab-count="1"\] > div \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/);
     expect(workspace).toContain("!selected.archivedAt && !selectedIsEditing");
@@ -51,5 +52,8 @@ describe("Residency Talent responsive layout", () => {
     expect(artistCard).not.toContain('className="client-owned-artist-delete"');
     expect(talentStyles).toMatch(/\.client-owned-artist-actions \{[\s\S]*?justify-content: flex-end;/);
     expect(talentStyles).toMatch(/\.client-owned-artist-archive-section \{[\s\S]*?border-top: 1px solid var\(--hfy-line\);/);
+    expect(talentStyles).toMatch(/\.residency-talent-detail-card \.client-safe-talent-card \{[\s\S]*?padding-bottom: var\(--hfy-space-6\);/);
+    expect(talentStyles).toMatch(/\.residency-talent-detail-card \.client-artist-facts \.residency-fact-grid \{[\s\S]*?row-gap: var\(--hfy-space-6\);/);
+    expect(talentStyles).toMatch(/\.residency-talent-detail-card > \.artist-detail-section \{[\s\S]*?padding-block: var\(--hfy-space-6\);/);
   });
 });

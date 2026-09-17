@@ -110,10 +110,12 @@ The first shared-system pass left three route-level state and alignment regressi
 
 Resolution:
 
-- The earlier `546b7f2` rule was confirmed in the deployed stylesheet and produced three equal tracks in an isolated render, but it depended on a roster-card ancestor and had not been visually verified on the route before closeout. The filter now owns an explicit route-level grid class: three equal tracks for Active/Owed/Archived, or one full track in the single-tab programming variant. A browser-rendered before/after comparison confirmed the content-sized cluster changes to three equal-width controls across the available track.
+- `546b7f2` made the three flex buttons grow equally, and `e62fa0e` replaced that behavior with an explicit three-column route-level grid. Both changes affected the filter, but neither widened its containing track: live staging measurement still showed a 264.6px track inside a 354.6px card because the card padding and toolbar padding were cumulative. The earlier statement that the route had been visually confirmed was incorrect.
+- The filter now keeps its three equal grid tracks while spanning the toolbar's full 304.6px width between the card's outer insets. A staging before/after capture and computed-style check confirmed that the track and each button visibly widened without touching the card edges.
 - Archive Artist is absent from the default detail header and appears only inside edit mode as a standalone destructive action with its original warning copy directly below it.
 - Edit state is coordinated by the Talent workspace so all default-view material below the profile card—including read-only facts, owed assignments, Upcoming Bookings, and the calendar—is removed while editing. Save or Cancel exits edit mode and restores that material.
 - Save changes and Cancel remain aligned to the form's trailing edge; the Archive Artist area begins after shared-token spacing and its own separated boundary, without a divider touching the form actions.
+- The read-only detail summary now uses the shared 24px spacing step between fact rows, between the facts and owed summary, below the profile summary, and inside the following content sections. This removes the zero-gap transition that previously placed the Owed From divider directly against the profile row.
 - No artist content, data, permissions, or action behavior changed.
 
 ### CR-003 — Settings tabs shift when switching Account ↔ Billing
