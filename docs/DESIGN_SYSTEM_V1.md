@@ -1,8 +1,8 @@
 # HFY OS Design System V1
 
-Version: 1.1
+Version: 1.5
 Last updated: September 17, 2026
-Changed this revision: Promoted the approved Talent searchable roster into the reusable Compact Collection Panel pattern, with semantic density tokens, shared Residency components, and browser-rendered visual regression coverage.
+Changed this revision: Corrected the v1.2–v1.5 scope so shared system contracts, cross-cutting principles, and Calendar-only implementation rules are explicitly separated before production promotion.
 
 This document turns the approved client Settings benchmark into reusable implementation rules. It complements `docs/BRAND_GUIDELINES.md`: the brand guide defines the visual identity, while this document defines the page-level components and tokens that enforce it in HFY OS.
 
@@ -92,10 +92,58 @@ The panel must remain visually stable at 1440px, 1200px, and 1024px. At every wi
 - Standard content begins at the same inset as sibling tabs and page-level controls.
 - Desktop verification remains required at 1440px, 1200px, and 1024px, plus continuous resizing through intermediate widths.
 
+## Cross-cutting interaction principles
+
+These principles apply sitewide, but they are behavioral guardrails rather than a shared visual component family. A route does not inherit Calendar's numeric breakpoints, anatomy, or CSS merely by following them.
+
+| Principle | Sitewide requirement |
+| --- | --- |
+| Component-aware responsiveness | A self-contained surface such as a panel, command bar, or dialog responds to its actual available width when its width can differ materially from the browser viewport. Browser-width media queries alone are insufficient in that case. |
+| Containment | Controls, records, popovers, and action footers remain inside their owning surface. A compact state must reflow before content clips or creates document-level horizontal overflow. |
+| Overlay scrolling | A modal or takeover uses one intentional scrolling region. Fixed or sticky headers and footers may remain visible, but nested full-height scrollers and negative-margin edge bleed are prohibited. |
+| Keyboard and focus | Opening a modal moves focus inside it; Tab and Shift+Tab remain contained; Escape closes reversible states; closing restores focus to the initiating control. Reversible popovers close on outside interaction or Escape. |
+
+## Calendar Implementation Profile
+
+Scope: **Residency Calendar only.** This is a page-specific adoption profile, not a reusable shared component family. The Calendar may consume shared tokens and the cross-cutting principles above, but its command-bar breakpoints, Month/Week typography, seven-day grid behavior, Batch/Share structures, Daypart fields, and numeric compact thresholds must not be copied to another page as sitewide defaults. A future extraction must explicitly promote any genuinely repeated pattern before another route adopts it.
+
+Calendar is a purpose-built operational surface rather than a stack of standard content cards. It still follows the sitewide layer model: the application canvas sits below one frosted Calendar surface, and the opaque Month or Week grid is the working surface above it. Individual days and events are records inside that working surface and must not be wrapped in additional `ResidencySurfaceCard` layers.
+
+### Calendar-only desktop contract
+
+| Role | Locked value or rule | Authority |
+| --- | --- | --- |
+| Page rhythm | Calendar uses the same desktop top inset as the Residency page family. | `--hfy-space-*` page composition |
+| Header grammar | Residency Calendar uses `{Residency name} · Calendar` above the `Calendar` H1. | Page-family copy contract |
+| Wide command bar | When the command-bar container is wider than `920px`, filters, view switcher, and actions occupy one proportional row. | Named `calendar-command-secondary` container |
+| Intermediate command bar | At `920px` or narrower, filters occupy one complete row; the view switcher and actions occupy a second row. Controls must never overlap or form an uneven intermediate state. | Named `calendar-command-secondary` container |
+| Compact primary header | When the Calendar surface itself is `700px` or narrower, the title and month/week cluster use separate rows. At `520px` or narrower, Batch Edit and date navigation stack inside that cluster. These decisions use Calendar container width, not browser width. | Named `client-calendar-page` container |
+| Month event type | Event title and supporting time/status text are both at least `10px`. | `--hfy-calendar-event-title-size`, `--hfy-calendar-event-meta-size` |
+| Week type | Weekday labels and event metadata are at least `10px`; event titles remain `12px`. | `--hfy-calendar-weekday-size`, `--hfy-calendar-week-event-title-size`, `--hfy-calendar-week-event-meta-size` |
+| Week grid | From 1440px through 1024px, all seven days fit the available Calendar surface without a forced `1120px` minimum width or horizontal scrolling. | Calendar operational layout |
+| Week readable-width floor | Below `640px` of actual Calendar surface width, the Week grid becomes one contained horizontal scroller with seven `110px` minimum day tracks. Event content must never escape its own card. | Named `client-calendar-page` container |
+| View-as banner | At compact desktop widths, the banner uses the active Calendar page gutter and must not widen the document. | Residency shell gutter contract |
+
+The Month and Week layouts must pass at 1440px, 1200px, and 1024px and while resizing continuously between them. The compact bridge must additionally pass with long real-world event copy at 900px, 700px, and 600px. The final mobile Calendar presentation is intentionally not defined here; until that chapter is approved, Week preserves the seven-day model in a contained horizontal surface rather than compressing its columns below practical reading and touch sizes.
+
+### Calendar-only interaction contract
+
+| Interaction | Locked value or rule |
+| --- | --- |
+| Anchored menus | Batch Edit and the status legend stay attached to their trigger, remain inside the viewport, and close on outside interaction or Escape. Escape returns focus to the trigger. |
+| Add/edit dialogs | Calendar quick-add and edit dialogs use the current Calendar overlay padding, fixed header, one scrolling body, and a contained action footer. The footer may remain sticky within that single scroll region, but it must use normal positive insets and must never use negative margins to create a full-bleed edge. |
+| Compact scheduling dialog | The dialog responds to its own usable width rather than the browser width. At `720px` or narrower, the selected Daypart, date actions, assignment choices, and scheduling footer reflow into contained rows; at `520px`, time fields and actions stack further. No form control, option card, or footer action may extend beyond the dialog body. |
+| Share dialog | All management views remain inside the same dialog boundary. Form actions use the contained footer treatment and never reach into the rounded dialog edge. |
+| Batch workspaces | A batch workspace has one fixed header and one scrolling list/body. Expanded rows may contain controls, but must not create document-level horizontal scrolling or a second full-height vertical scroller. |
+| Nested pickers | Room, artist, and color choices stay within their owning dialog. Floating pickers are viewport-constrained and close on selection, outside interaction, or Escape where reversible. |
+| Focus | Calendar dialogs and popovers implement the cross-cutting keyboard and focus principle above. |
+| Desktop coverage | Representative Batch menu, status legend, Share, quick-add, quick-edit, and batch-takeover states require visual and overflow checks at 1440px, 1200px, and 1024px. Schedule Daypart additionally requires compact visual coverage at 760px and 600px plus continuous containment checks from 900px through 480px. |
+
 ## Adoption status
 
 - Settings → Account: authoritative benchmark, now rendered through shared primitives.
 - Settings → Billing: authoritative benchmark, now rendered through shared primitives.
 - Residency Overview: first proof of concept. Its existing content, links, data, and behavior are unchanged; only the page composition and styling consume V1 primitives.
 - Residency Talent: adopted. The route uses the shared page surface, header, body, Surface cards, section header, fact grid, and Compact Collection Panel family. `TalentWorkspaceShell` remains the domain-specific master/detail composition; the searchable roster is no longer page-specific.
+- Residency Calendar: page-specific implementation profile adopted. It reuses core tokens and cross-cutting interaction principles, but its numeric breakpoints, seven-day grid, command bar, Batch/Share structures, and Schedule Daypart anatomy remain Calendar-local rather than shared system components. Mobile remains deferred.
 - Other Residency pages: not yet migrated and require separate review.

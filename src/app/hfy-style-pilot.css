@@ -769,6 +769,7 @@
   background: transparent;
 }
 .hfy-style-system .main.calendar-main { padding-top: 20px; padding-bottom: 20px; }
+.hfy-style-system .client-shell .main.calendar-main { padding-top: 38px; }
 .hfy-style-system .page-header { margin-bottom: var(--hfy-space-8); }
 .hfy-style-system .page-header h1 {
   margin: 7px 0 10px;
@@ -1291,6 +1292,9 @@
   .hfy-style-system .client-shell .main:has(> .residency-page-surface) > .view-as-banner {
     margin-inline: calc(-1 * clamp(20px, 3vw, 42px));
   }
+  .hfy-style-system .client-shell .main:has(> .calendar-page) > .view-as-banner {
+    margin-inline: calc(-1 * clamp(20px, 3vw, 42px));
+  }
   .hfy-style-system .calendar-command-bar { align-items: stretch; flex-direction: column; }
   .hfy-style-system .calendar-command-controls { width: 100%; flex-wrap: wrap; gap: 12px; }
   .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) { margin-right: 0; }
@@ -1300,6 +1304,7 @@
 
 @media (max-width: 900px) {
   .hfy-style-system .main { padding-top: 28px; }
+  .hfy-style-system .client-shell .main.calendar-main { padding-top: 28px; }
   .hfy-style-system .page-header { margin-bottom: var(--hfy-space-6); }
   .hfy-style-system .page-header h1 { font-size: clamp(34px, 9vw, 48px); }
   .hfy-style-system .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2229,6 +2234,11 @@
 }
 
 /* The calendar command bar uses the real content width after the sidebar. */
+.hfy-style-system .client-shell .client-calendar-page {
+  container-name: client-calendar-page;
+  container-type: inline-size;
+}
+
 .hfy-style-system .calendar-command-bar {
   width: 100%;
   min-width: 0;
@@ -2254,6 +2264,11 @@
   justify-items: stretch;
   padding-top: 10px;
   border-top: 1px solid var(--hfy-line);
+}
+
+.hfy-style-system .client-shell .calendar-command-secondary {
+  container-name: calendar-command-secondary;
+  container-type: inline-size;
 }
 
 .hfy-style-system .calendar-command-secondary .calendar-toolbar {
@@ -2298,6 +2313,152 @@
 .hfy-style-system .calendar-command-primary .month-navigation {
   width: auto;
   min-width: 230px;
+}
+
+.hfy-style-system .client-shell .calendar-main .calendar-weekday {
+  font-size: var(--hfy-calendar-weekday-size);
+}
+
+.hfy-style-system .client-shell .calendar-main .month-calendar-wrap.compact .calendar-event {
+  min-height: 15px;
+  padding: 2px 4px;
+  line-height: 1.1;
+}
+
+.hfy-style-system .client-shell .calendar-main .month-calendar-wrap.compact .calendar-event-line strong {
+  font-size: var(--hfy-calendar-event-title-size);
+}
+
+.hfy-style-system .client-shell .calendar-main .month-calendar-wrap.compact :is(.calendar-event-line > span, .calendar-event small) {
+  font-size: var(--hfy-calendar-event-meta-size);
+  line-height: 1.1;
+}
+
+.hfy-style-system .client-shell .calendar-main .month-calendar-wrap.compact .calendar-more-events {
+  min-height: 12px;
+  font-size: var(--hfy-calendar-event-meta-size);
+  line-height: 1.1;
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar {
+  min-width: 0;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-day-header {
+  gap: var(--hfy-space-1);
+  padding: var(--hfy-space-2);
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-day-header span {
+  font-size: var(--hfy-calendar-weekday-size);
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-events {
+  gap: var(--hfy-space-2);
+  padding: var(--hfy-space-2);
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-event {
+  overflow: hidden;
+  gap: var(--hfy-space-1);
+  padding: var(--hfy-space-2);
+  border-left-width: 3px;
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-event > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-event strong {
+  font-size: var(--hfy-calendar-week-event-title-size);
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-event :is(span, b) {
+  font-size: var(--hfy-calendar-week-event-meta-size);
+}
+
+.hfy-style-system .client-shell .calendar-main .week-calendar-event b {
+  overflow-wrap: anywhere;
+}
+
+@container client-calendar-page (max-width: 700px) {
+  .hfy-style-system .client-shell .calendar-command-primary {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--hfy-space-3);
+  }
+
+  .hfy-style-system .client-shell .calendar-command-primary .calendar-month-cluster {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-content: stretch;
+    gap: var(--hfy-space-3);
+  }
+
+  .hfy-style-system .client-shell .calendar-command-primary .calendar-batch-launcher {
+    justify-self: start;
+  }
+
+  .hfy-style-system .client-shell .calendar-command-primary .month-navigation {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hfy-style-system .client-shell .calendar-command-primary .month-navigation h2 {
+    min-width: 0;
+    overflow: hidden;
+    font-size: clamp(16px, 3.2cqi, 18px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@container client-calendar-page (max-width: 640px) {
+  .hfy-style-system .client-shell .calendar-main .week-calendar-wrap {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .hfy-style-system .client-shell .calendar-main .week-calendar {
+    min-width: 770px;
+    grid-template-columns: repeat(7, minmax(110px, 1fr));
+  }
+}
+
+@container client-calendar-page (max-width: 520px) {
+  .hfy-style-system .client-shell .calendar-command-primary .calendar-month-cluster {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container calendar-command-secondary (max-width: 920px) {
+  .hfy-style-system .client-shell .calendar-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--hfy-space-2) var(--hfy-space-4);
+  }
+
+  .hfy-style-system .client-shell .calendar-toolbar-filters {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .hfy-style-system .client-shell .calendar-toolbar-filters .calendar-toolbar-select {
+    flex: 1 1 0;
+  }
+
+  .hfy-style-system .client-shell .calendar-toolbar-filters .calendar-toolbar-select select,
+  .hfy-style-system .client-shell .calendar-toolbar-filters .calendar-toolbar-select:nth-of-type(2) select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hfy-style-system .client-shell .calendar-toolbar-view { justify-self: start; }
+  .hfy-style-system .client-shell .calendar-toolbar-actions { justify-self: end; }
 }
 
 .hfy-style-system .calendar-command-primary .calendar-needs-summary {
@@ -2493,9 +2654,17 @@
   width: min(760px, 100%);
   max-height: calc(100dvh - 64px);
 }
+.hfy-style-system .calendar-event-dialog {
+  container-name: calendar-event-dialog;
+  container-type: inline-size;
+}
 .hfy-style-system .quick-modal-header { padding: 17px 20px 14px; }
 .hfy-style-system .quick-modal-body { gap: 10px; padding: 14px 20px 18px; }
 .hfy-style-system .quick-book-form { gap: 12px; }
+.hfy-style-system .calendar-event-dialog :is(.quick-modal-body, .quick-book-form, .quick-book-form > *) {
+  min-width: 0;
+  max-width: 100%;
+}
 .hfy-style-system .quick-selected-daypart-editable {
   display: grid;
   grid-template-columns: minmax(150px, 0.62fr) minmax(320px, 1.38fr);
@@ -2559,6 +2728,116 @@
   padding: 12px 20px 14px;
 }
 
+/* Calendar dialogs keep actions inside the rounded boundary without full-bleed negative margins. */
+.hfy-style-system .calendar-event-dialog .quick-modal-body {
+  scrollbar-gutter: stable;
+}
+.hfy-style-system .calendar-event-dialog .quick-modal-footer {
+  bottom: 0;
+  flex-wrap: wrap;
+  margin: var(--hfy-space-2) 0 0;
+  padding: var(--hfy-space-3) var(--hfy-space-4);
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-control);
+  box-shadow: 0 -8px 20px rgba(48, 65, 78, 0.04);
+}
+.hfy-style-system .calendar-event-dialog .quick-modal-footer > span {
+  min-width: min(220px, 100%);
+  flex: 1 1 220px;
+}
+
+@container calendar-event-dialog (max-width: 720px) {
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable .date-exception-actions {
+    grid-column: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable .date-exception-actions > small {
+    grid-column: 1 / -1;
+    margin-right: 0;
+  }
+
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable .date-exception-actions :is(.button, .remove-dj-button) {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .hfy-style-system .calendar-event-dialog .client-assignment-choices.equal-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer > span {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button:nth-of-type(1) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button:nth-of-type(2) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button:nth-of-type(3) {
+    grid-column: 3;
+    grid-row: 2;
+  }
+}
+
+@container calendar-event-dialog (max-width: 520px) {
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable .date-exception-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hfy-style-system .calendar-event-dialog .quick-inline-time-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button:nth-of-type(3) {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+}
+.hfy-style-system .calendar-batch-menu,
+.hfy-style-system .calendar-status-legend-menu,
+.hfy-style-system .quick-color-popover {
+  max-width: calc(100vw - 64px);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.hfy-style-system .quick-color-popover {
+  max-height: min(520px, calc(100dvh - 96px));
+  overflow-y: auto;
+}
+
 @media (max-width: 1050px) {
   .hfy-style-system .calendar-command-secondary { align-items: stretch; }
 }
@@ -2607,6 +2886,16 @@
   .hfy-style-system .daypart-workspace-heading { min-height: 0; padding: 16px 18px; }
   .hfy-style-system .quick-modal-backdrop { padding: 12px; }
   .hfy-style-system .quick-modal { max-height: calc(100dvh - 24px); }
+  .hfy-style-system .calendar-event-dialog .quick-modal-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .hfy-style-system .calendar-event-dialog .quick-modal-footer > span {
+    min-width: 0;
+    flex-basis: auto;
+    margin: 0;
+  }
+  .hfy-style-system .calendar-event-dialog .quick-modal-footer .button { width: 100%; }
   .hfy-style-system .quick-selected-daypart-editable { grid-template-columns: 1fr; }
   .hfy-style-system .quick-selected-daypart-editable .date-exception-actions { grid-column: auto; }
 }

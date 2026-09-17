@@ -1,7 +1,7 @@
 # HFY OS desktop UI/UX audit — Client Residency
 
-Status: Settings desktop benchmark complete; Overview and Talent adopted; broader client audit remains active
-Date: September 16, 2026
+Status: Settings desktop benchmark complete; Overview, Talent, and Calendar desktop adopted; broader client audit remains active
+Date: September 17, 2026
 Scope: the client-facing Residency workspace reached through **View as Residency**
 Reference screen: **Settings → Billing**
 
@@ -53,7 +53,7 @@ The final Settings pass deliberately did not begin the future shared-component o
 
 Priority: P0
 Applies to: every Residency page while viewed from Developer mode
-Reviewed-route status: **resolved for Account, Billing, Overview, and Talent**
+Reviewed-route status: **resolved for Account, Billing, Overview, Talent, and Calendar**
 Broader status: open for the other Residency routes
 
 At viewport widths at or below 1200px, `.main` switches to a smaller horizontal gutter while `.view-as-banner` retained the negative margin calculated from the wider gutter.
@@ -100,6 +100,11 @@ Resolution:
 - The outer page, roster, and detail now use `ResidencyPageSurface`, `ResidencyPageBody`, and white `ResidencySurfaceCard` layers with the locked spacing tokens.
 - The existing `TalentWorkspaceShell` remains the domain-specific master/detail composition. It is already shared by HFY and Residency Talent, so no new generic design-system component is proposed until a non-Talent page demonstrates the same need.
 
+Resolution for Calendar:
+
+- The View-as banner now uses Calendar's active compact-desktop gutter at and below 1200px.
+- Calendar remains a purpose-built operational surface; the fix does not force it into the shared content-card component hierarchy.
+
 ### CR-002A — Talent post-adoption control alignment
 
 Priority: P1
@@ -145,24 +150,36 @@ Resolution:
 
 Priority: P1
 Applies to: month view at desktop and compact desktop widths
-Status: open; intentionally untouched because this pass is Settings-only
+Status: **resolved for Residency Calendar desktop**
 
 At 1024px, the rendered event title is 8px and the time/status line is 7px.
+
+Resolution:
+
+- Month event titles and time/status text now use semantic Calendar tokens with a 10px minimum.
+- Compact event rows gained the minimum height and padding required by the readable type scale without changing event content or behavior.
+- Week metadata and weekday labels now follow the same 10px floor; Week event titles remain 12px.
 
 ### CR-005 — Calendar begins on a different vertical rhythm
 
 Priority: P1
 Applies to: `/residency/calendar`
-Status: open; intentionally untouched because this pass is Settings-only
+Status: **resolved for Residency Calendar desktop**
 
 Calendar begins roughly 18px higher than the standard Residency workspace after the View-as banner.
+
+Resolution:
+
+- Calendar now uses the standard 38px desktop page inset instead of its former 20px exception.
+- The existing compact-layout page inset remains in effect below the desktop range.
 
 ### CR-006 — Page eyebrow language has no stable meaning
 
 Priority: P1
 Applies to: all Residency pages
 Settings status: **resolved for Account and Billing**
-Broader status: open for the other Residency routes
+Calendar status: **resolved**
+Broader status: open for the remaining Residency routes
 
 Resolution for Settings:
 
@@ -174,6 +191,88 @@ Resolution for Settings:
 The differing H1 text is intentional: the eyebrow communicates the shared family while each title names the current task.
 
 Talent remains open under this copy-specific item. Its existing eyebrow text was intentionally preserved because the Talent task prohibits content changes; only its header component, spacing, and action placement were standardized.
+
+Calendar now uses `{Residency name} · Calendar` as its route-family eyebrow while retaining `Calendar` as the task-level H1. The shared owner/programming Calendar keeps its existing wording because this pass is Residency-only.
+
+### CR-006A — Calendar command bar and Week view break at compact desktop widths
+
+Priority: P0
+Applies to: `/residency/calendar` from 1200px through 1024px
+Status: **resolved for Residency Calendar desktop**
+
+The original command bar kept three symmetric columns until the viewport reached 700px even though its filter cluster was wider than the available first track by 1200px. Status and Daypart controls consequently overlapped the Month/Week switcher throughout the required compact-desktop range. Week view separately forced a 1120px internal grid and horizontal scrolling.
+
+Resolution:
+
+- The command-bar wrapper is now a named inline-size container.
+- Above 920px of available command-bar width, filters, the view switcher, and actions remain in one row.
+- At 920px or below, both filters occupy an even full-width row and the view switcher/actions occupy a second row. There is no 3-column compressed state between those layouts.
+- The Residency Week grid now divides the available operational surface into seven equal tracks through 1024px instead of enforcing a 1120px minimum.
+- Month and Week visual coverage protects the 1440px, 1200px, and 1024px desktop states. Mobile Calendar behavior remains intentionally deferred.
+
+### CR-006B — Calendar opened states lacked a complete containment and regression pass
+
+Priority: P1
+Applies to: `/residency/calendar` at 1440px, 1200px, and 1024px
+Status: **resolved for Residency Calendar desktop**
+
+The first Calendar pass covered the closed Month and Week canvases, but it did not visually protect Batch Edit, Schedule All, Share Calendar, the status legend, quick add/edit dialogs, or their nested pickers. The quick add/edit and Share form actions also retained negative-margin sticky footers, repeating the same containment risk previously fixed in Billing. The main Calendar and batch dialogs closed on Escape but did not consistently trap focus or return it to the initiating control.
+
+Resolution:
+
+- Calendar quick-add and event-edit footers now stay inside the dialog with positive spacing, a complete boundary, and no negative-margin bleed.
+- Share Calendar form actions use the same contained treatment.
+- Quick add/edit, Schedule All, and Batch Edit takeovers now move focus inside, trap Tab/Shift+Tab, close on Escape, and restore focus to their trigger.
+- Batch Edit and the status legend close on outside interaction or Escape; the color picker follows the same reversible-popover behavior and closes after a selection.
+- Batch, legend, and color popovers are constrained to the viewport and contain their own overscroll.
+- Visual and geometry regression coverage now protects representative Batch menu, status legend, Share, quick-add, quick-edit, and batch-takeover states at 1440px, 1200px, and 1024px, in addition to the existing Month/Week coverage.
+
+Intentionally unchanged:
+
+- Calendar data, scheduling behavior, Share-link behavior, copy, and Month/Week content were not redesigned.
+- The mobile Calendar presentation remains deferred to the mobile chapter.
+
+### CR-006C — Week view compresses long event content below the desktop checkpoints
+
+Priority: P0
+Applies to: `/residency/calendar` between the approved desktop range and the future mobile layout
+Status: **resolved with a compact bridge; final mobile layout remains deferred**
+
+The 1024px regression fixture used short event names, so it did not expose the failure visible with production-like content at smaller intermediate widths. Once the Calendar’s actual content area narrowed, the primary header still followed browser-width media queries, the date range extended past the right edge, and long status/title words escaped their Week event cards.
+
+Resolution:
+
+- The Calendar page itself is now the responsive container for the primary header and Week grid.
+- At `700px` of Calendar surface width, the title and scheduling/date controls move to separate rows; at `520px`, Batch Edit and date navigation stack again.
+- Long Week event children are width-contained and the status line may wrap long words when necessary.
+- Below a `640px` Calendar surface, Week stops compressing its seven columns and becomes a contained horizontal scroller with a `110px` minimum day width.
+- Added long-content visual and geometry coverage at 900px, 700px, and 600px in addition to the existing 1440px, 1200px, and 1024px checks.
+
+Intentionally unchanged:
+
+- Month and Week retain the approved desktop appearance at 1440px, 1200px, and 1024px.
+- This is a safe compact-width bridge, not the final mobile Calendar redesign.
+
+### CR-006D — Schedule Daypart dialog clips its form and footer at compact widths
+
+Priority: P0
+Applies to: `/residency/calendar` Schedule Daypart dialog between the approved desktop range and the future mobile layout
+Status: **resolved with a compact dialog bridge; final mobile layout remains deferred**
+
+The dialog's responsive decisions followed the browser width rather than the dialog's actual usable width. At the reported compact state, the date actions, Request HFY card, notes field, and footer controls extended past the right edge and were hidden by the rounded dialog boundary.
+
+Resolution:
+
+- Schedule Daypart is now a named responsive container and all form layers are explicitly width-contained.
+- At `720px` of dialog width, the selected Daypart summary, date actions, Client Managed/Request HFY choices, and footer actions reflow into complete contained rows.
+- At `520px`, the time fields and action groups stack further instead of compressing or clipping.
+- The established desktop dialog remains unchanged above the compact threshold.
+- Added visual coverage at 760px and 600px plus continuous geometry checks from 900px through 480px.
+
+Intentionally unchanged:
+
+- Scheduling data, copy, submission behavior, assignment choices, and desktop dialog styling were not redesigned.
+- The final mobile Calendar/dialog presentation remains part of the future mobile chapter.
 
 ### CR-007 — Header actions use different placement and emphasis rules
 
@@ -460,7 +559,7 @@ Required assertions:
 3. **Completed for Settings:** finalize the Account/Billing header and type hierarchy.
 4. **Completed for Billing:** repair the annual-switch dialog footer.
 5. **Completed for Talent:** fix compact-desktop collapse and adopt the shared V1 page/card hierarchy.
-6. Correct Calendar top rhythm, command-bar wrapping, and event type size in its own scoped pass.
+6. **Completed for Calendar desktop:** correct top rhythm, command-bar wrapping, event type size, Week sizing, and compact View-as gutter behavior.
 7. Normalize other page eyebrows, button emphasis, and sidebar attention behavior.
 8. Consolidate repeated workspace CSS and introduce shared components only after the visual benchmark is approved.
 9. Add desktop overflow and visual-regression coverage.
