@@ -40,7 +40,8 @@ describe("Residency Talent responsive layout", () => {
 
     expect(workspace).toContain('className="artist-roster-tabs residency-talent-filter-tabs"');
     expect(workspace).toContain("data-tab-count={tabs.length}");
-    expect(talentStyles).toMatch(/\.residency-talent-filter-tabs \{[\s\S]*?width: calc\(100% \+ var\(--hfy-surface-card-padding\) \+ var\(--hfy-surface-card-padding\)\);[\s\S]*?margin-inline: calc\(0px - var\(--hfy-surface-card-padding\)\);/);
+    expect(talentStyles).toMatch(/\.residency-talent-roster-card \.artist-roster-toolbar \{[\s\S]*?padding: var\(--hfy-surface-card-padding\) 0;/);
+    expect(talentStyles).toMatch(/\.residency-talent-filter-tabs \{[\s\S]*?width: 100%;[\s\S]*?margin-inline: 0;/);
     expect(talentStyles).toMatch(/\.residency-talent-filter-tabs > div \{[\s\S]*?display: grid;[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
     expect(talentStyles).toMatch(/\.residency-talent-filter-tabs\[data-tab-count="1"\] > div \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/);
     expect(workspace).toContain("!selected.archivedAt && !selectedIsEditing");

@@ -3019,13 +3019,13 @@
 }
 
 .hfy-style-system .residency-talent-roster-card .artist-roster-toolbar {
-  padding: var(--hfy-surface-card-padding);
+  padding: var(--hfy-surface-card-padding) 0;
 }
 
 .hfy-style-system .residency-talent-filter-tabs {
-  width: calc(100% + var(--hfy-surface-card-padding) + var(--hfy-surface-card-padding));
+  width: 100%;
   min-width: 0;
-  margin-inline: calc(0px - var(--hfy-surface-card-padding));
+  margin-inline: 0;
   overflow: visible;
 }
 
