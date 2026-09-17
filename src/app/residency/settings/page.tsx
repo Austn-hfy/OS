@@ -13,9 +13,11 @@ export default async function ResidencySettingsPage() {
   const actor = await requireResidencyActor();
   if (!canResidencyRoleAccess(actor.accessRole, "settings")) redirect("/residency/calendar");
   const settings = await getResidencyClientSettings(actor.residencyId);
-  return <WorkspaceSurface className="residency-workspace-surface workspace-surface-settings">
-    <ResidencyPageHeader eyebrow="Residency workspace" title="Settings" />
-    <nav className="settings-tabs" aria-label="Settings sections"><Link className="active" href="/residency/settings">Account</Link>{platformBillingAvailable ? <Link href="/residency/settings/billing">Billing</Link> : null}</nav>
-    <ResidencySettingsForm settings={settings} />
+  return <WorkspaceSurface className="residency-workspace-surface workspace-surface-settings workspace-surface-client-settings">
+    <ResidencyPageHeader eyebrow="Settings · Account" title="Account settings" />
+    <nav className="settings-tabs" aria-label="Settings sections"><Link className="active" aria-current="page" href="/residency/settings">Account</Link>{platformBillingAvailable ? <Link href="/residency/settings/billing">Billing</Link> : null}</nav>
+    <div className="settings-page-body settings-account-body">
+      <ResidencySettingsForm settings={settings} />
+    </div>
   </WorkspaceSurface>;
 }

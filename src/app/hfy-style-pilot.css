@@ -1288,6 +1288,9 @@
 
 @media (max-width: 1200px) {
   .hfy-style-system .main { padding-inline: clamp(20px, 3vw, 42px); }
+  .hfy-style-system .client-shell .main:has(> .workspace-surface-client-settings) > .view-as-banner {
+    margin-inline: calc(-1 * clamp(20px, 3vw, 42px));
+  }
   .hfy-style-system .calendar-command-bar { align-items: stretch; flex-direction: column; }
   .hfy-style-system .calendar-command-controls { width: 100%; flex-wrap: wrap; gap: 12px; }
   .hfy-style-system .calendar-command-controls > :is(.calendar-view-filters, .calendar-filter-form, .calendar-filter) { margin-right: 0; }
@@ -2859,18 +2862,42 @@
   gap: 0;
 }
 
-/* Settings keeps its meaningful form sections but loses the extra outer card. */
-.hfy-style-system .workspace-surface-settings > :is(.residency-client-settings-form, .residency-setup-grid, .residency-grid) {
-  margin: 0;
-  padding: 20px;
+/* Client Settings sibling routes share one fixed tab and content origin. */
+.hfy-style-system .workspace-surface-client-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
 }
 
-.hfy-style-system .workspace-surface-settings > .residency-client-settings-form {
+.hfy-style-system .workspace-surface-client-settings > .settings-tabs {
+  margin: 18px 20px 0;
+}
+
+.hfy-style-system .settings-page-body {
+  min-width: 0;
+  display: grid;
+  gap: 18px;
+  padding: 18px 20px 20px;
+}
+
+.hfy-style-system .settings-account-body > .residency-client-settings-form {
+  margin: 0;
+  padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
+}
+
+.hfy-style-system .settings-account-body .residency-client-settings-form > section > div:first-child p:last-child {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.hfy-style-system .workspace-surface-settings > :is(.residency-setup-grid, .residency-grid) {
+  margin: 0;
+  padding: 20px;
 }
 
 .hfy-style-system .workspace-surface-dashboard > :is(.developer-residencies-section, .hfy-work-queue-section, .active-residencies-section) {
@@ -2913,7 +2940,8 @@
     flex-direction: column;
   }
 
-  .hfy-style-system .workspace-surface-settings > :is(.residency-client-settings-form, .residency-setup-grid, .residency-grid),
+  .hfy-style-system .settings-page-body,
+  .hfy-style-system .workspace-surface-settings > :is(.residency-setup-grid, .residency-grid),
   .hfy-style-system .workspace-surface-dashboard > :is(.developer-residencies-section, .hfy-work-queue-section, .active-residencies-section),
   .hfy-style-system .workspace-surface-dashboard > .hfy-request-queue-section,
   .hfy-style-system .workspace-surface-residency-overview > :is(.residency-overview-grid, .workspace-shortcuts) {
@@ -3201,7 +3229,7 @@
   display: flex;
   width: fit-content;
   gap: 4px;
-  margin-bottom: 18px;
+  margin: 0;
   padding: 4px;
   border: 1px solid var(--hfy-line);
   border-radius: 12px;
@@ -3223,14 +3251,6 @@
   color: var(--hfy-ink);
   background: white;
   box-shadow: 0 3px 10px rgba(26, 55, 84, .12), inset 0 -2px var(--owner-accent, #2783dc);
-}
-
-.hfy-style-system .workspace-surface-platform-billing > :not(.client-page-header) {
-  margin-inline: 20px;
-}
-
-.hfy-style-system .workspace-surface-platform-billing > :last-child {
-  margin-bottom: 20px;
 }
 
 .hfy-style-system .finance-accordions,
@@ -3312,11 +3332,43 @@
   background: white;
   box-shadow: 0 8px 24px rgba(26, 55, 84, .06);
 }
-.hfy-style-system .platform-plan-and-usage-title { padding: 22px 22px 0; }
+.hfy-style-system :is(.platform-committed-plan-section, .platform-live-usage-section) { padding: 20px; }
+.hfy-style-system :is(.platform-plan-section-heading, .platform-live-usage-section) h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  line-height: 1.15;
+}
+.hfy-style-system .platform-plan-section-heading > div > p:last-child {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .hfy-style-system .platform-live-usage-section { border-top-color: var(--hfy-line); background: color-mix(in srgb, var(--hfy-cloud) 22%, white); }
 .hfy-style-system .platform-plan-facts { border-top-color: var(--hfy-line); }
 .hfy-style-system .platform-plan-facts > div { border-left-color: var(--hfy-line); }
+.hfy-style-system .platform-plan-facts dt { font-size: 10px; font-weight: 750; }
+.hfy-style-system .platform-plan-facts dd { font-size: 12px; line-height: 1.4; }
 .hfy-style-system .platform-annual-switch.offer { padding: 13px 15px; }
+.hfy-style-system .platform-annual-switch strong { font-size: 14px; }
+.hfy-style-system .platform-annual-switch span { font-size: 11px; }
+.hfy-style-system .platform-client-usage-heading > span { font-size: 11px; font-weight: 650; }
+.hfy-style-system .platform-client-usage-heading strong { font-size: 18px; }
+.hfy-style-system .platform-client-usage-heading small { font-size: 10px; }
+.hfy-style-system .platform-live-usage-section .privacy-note { font-size: 11px; line-height: 1.5; }
+.hfy-style-system .platform-annual-confirmation > form {
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.hfy-style-system .platform-annual-confirmation-body { overflow-y: auto; }
+.hfy-style-system .platform-annual-confirmation-actions {
+  position: static;
+  bottom: auto;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 14px 20px 16px;
+}
 .hfy-style-system .platform-owner-card { border: 1px solid var(--hfy-line); border-radius: 16px; background: white; box-shadow: 0 8px 24px rgba(26, 55, 84, .06); }
 .hfy-style-system .platform-owner-plan-summary > div { min-height: 112px; padding: 18px; border: 1px solid var(--hfy-line); background: color-mix(in srgb, var(--hfy-cloud) 45%, white); }
 .hfy-style-system .platform-payment-method-card form { align-self: end; margin-top: auto; padding-top: 10px; }
@@ -3325,12 +3377,13 @@
 .hfy-style-system .full-programming-notice { padding: 14px 16px; border: 1px solid color-mix(in srgb, #2783dc 35%, var(--hfy-line)); border-radius: 12px; background: color-mix(in srgb, #2783dc 7%, white); }
 .hfy-style-system .full-programming-notice p { margin: 5px 0 0; color: var(--hfy-muted); }
 @media (max-width: 850px) {
-  .hfy-style-system .workspace-surface-platform-billing > :not(.client-page-header) {
-    margin-inline: 16px;
-  }
-  .hfy-style-system .workspace-surface-platform-billing > :last-child { margin-bottom: 16px; }
   .hfy-style-system .platform-billing-summary,
   .hfy-style-system .platform-plan-breakdown { grid-template-columns: 1fr; }
   .hfy-style-system .finance-accordion > summary { align-items: flex-start; }
   .hfy-style-system .platform-billing-summary article { min-height: 0; }
+}
+
+@media (max-width: 650px) {
+  .hfy-style-system .workspace-surface-client-settings > .settings-tabs { margin-inline: 16px; }
+  .hfy-style-system .platform-annual-confirmation-actions { padding-inline: 16px; }
 }
