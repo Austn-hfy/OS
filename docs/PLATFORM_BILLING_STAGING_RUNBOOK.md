@@ -15,7 +15,7 @@ Production intentionally has no Stripe test keys. Viewing or creating a Committe
 
 ## Additive migration
 
-Apply the migration series through `drizzle/0051_platform_billing_buckets_v14.sql` to the staging database before deploying the application. Migration 0051:
+Apply the migration series through `drizzle/0051_platform_billing_buckets_v14.sql` before deploying the application. Main's shift-change-request migrations occupy 0042–0044, the Platform billing series begins at 0045, and migration 0051:
 
 1. Aborts before schema changes if a legacy row exceeds 60 Talent or 15 House slots.
 2. Rounds legacy counts upward to the nearest standard bucket, with minimums of 10 Talent and 5 House.
