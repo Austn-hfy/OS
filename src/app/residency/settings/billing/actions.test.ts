@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireResidencyActor } from "@/lib/auth";
-import { createPlatformPaymentMethodCheckout, createPlatformSubscriptionCheckout, switchResidencyCommittedPlanToAnnual } from "@/services/platform-stripe";
+import { beginResidencyAnnualSwitch, createPlatformPaymentMethodCheckout, createPlatformSubscriptionCheckout } from "@/services/platform-stripe";
 import { startResidencyPlatformCheckoutAction, switchResidencyPlatformPlanToAnnualAction, updateResidencyPlatformCardAction } from "./actions";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -10,11 +11,17 @@ vi.mock("@/lib/auth", () => ({ requireResidencyActor: vi.fn() }));
 vi.mock("@/services/platform-stripe", () => ({
   createPlatformPaymentMethodCheckout: vi.fn(),
   createPlatformSubscriptionCheckout: vi.fn(),
-  switchResidencyCommittedPlanToAnnual: vi.fn(),
+  beginResidencyAnnualSwitch: vi.fn(),
 }));
 
 const initialState = { status: "idle" as const, message: "" };
 const environmentHold = new Error("Platform billing can run only in production or the stable staging deployment.");
+
+function confirmedAnnualSwitch() {
+  const formData = new FormData();
+  formData.set("confirmation", "switch_to_annual");
+  return formData;
+}
 
 describe("Residency billing action hold responses", () => {
   beforeEach(() => {
@@ -47,12 +54,18 @@ describe("Residency billing action hold responses", () => {
   });
 
   it("lets a manager schedule annual billing through the existing plan-change service", async () => {
-    await expect(switchResidencyPlatformPlanToAnnualAction(initialState, new FormData())).resolves.toEqual({
-      status: "success",
-      message: "Annual billing is scheduled for your next renewal.",
+    vi.mocked(beginResidencyAnnualSwitch).mockResolvedValue({
+      kind: "scheduled",
+      effectiveAt: "2026-10-01",
+      annualUpfrontAmountCents: 810_000,
     });
 
-    expect(switchResidencyCommittedPlanToAnnual).toHaveBeenCalledWith(expect.objectContaining({
+    await expect(switchResidencyPlatformPlanToAnnualAction(initialState, confirmedAnnualSwitch())).resolves.toEqual({
+      status: "success",
+      message: "Annual billing is scheduled. Your current monthly plan remains active until renewal.",
+    });
+
+    expect(beginResidencyAnnualSwitch).toHaveBeenCalledWith(expect.objectContaining({
       kind: "residency",
       residencyId: "00000000-0000-4000-8000-000000000002",
       accessRole: "manager",
@@ -64,10 +77,30 @@ describe("Residency billing action hold responses", () => {
   it("does not let a non-manager switch the billing term", async () => {
     vi.mocked(requireResidencyActor).mockResolvedValue({ accessRole: "calendar_viewer" } as never);
 
-    await expect(switchResidencyPlatformPlanToAnnualAction(initialState, new FormData())).resolves.toEqual({
+    await expect(switchResidencyPlatformPlanToAnnualAction(initialState, confirmedAnnualSwitch())).resolves.toEqual({
       status: "error",
       message: "Manager access is required.",
     });
-    expect(switchResidencyCommittedPlanToAnnual).not.toHaveBeenCalled();
+    expect(beginResidencyAnnualSwitch).not.toHaveBeenCalled();
+  });
+
+  it("requires the explicit confirmation before calling the plan service", async () => {
+    await expect(switchResidencyPlatformPlanToAnnualAction(initialState, new FormData())).resolves.toEqual({
+      status: "error",
+      message: "Review and confirm the annual plan before continuing.",
+    });
+    expect(beginResidencyAnnualSwitch).not.toHaveBeenCalled();
+  });
+
+  it("redirects the no-card branch into the existing Stripe Checkout", async () => {
+    vi.mocked(beginResidencyAnnualSwitch).mockResolvedValue({
+      kind: "checkout",
+      url: "https://checkout.stripe.com/c/pay/cs_test",
+      paymentPath: "collect_card_and_start_annual",
+    });
+
+    await switchResidencyPlatformPlanToAnnualAction(initialState, confirmedAnnualSwitch());
+
+    expect(redirect).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_test");
   });
 });

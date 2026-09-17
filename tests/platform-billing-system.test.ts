@@ -52,22 +52,50 @@ describe("Platform committed billing", () => {
   });
 
   it("presents capacities and a Residency-scoped annual switch without client revision copy", async () => {
-    const [clientPage, clientAction, ownerPage, ownerForm] = await Promise.all([
+    const [clientPage, clientAction, annualConfirmation, ownerPage, ownerForm] = await Promise.all([
       readSource("../src/app/residency/settings/billing/page.tsx"),
       readSource("../src/app/residency/settings/billing/actions.ts"),
+      readSource("../src/app/residency/settings/billing/annual-switch-confirmation.tsx"),
       readSource("../src/app/app/platform-billing/page.tsx"),
       readSource("../src/app/app/platform-billing/committed-plan-form.tsx"),
     ]);
 
-    expect(clientPage).toContain("Save 25% by paying annually");
+    expect(clientPage).toContain("annualSavingsAmountCents");
     expect(clientPage).toContain("switchResidencyPlatformPlanToAnnualAction");
-    expect(clientAction).toContain("switchResidencyCommittedPlanToAnnual(actor)");
+    expect(clientAction).toContain("beginResidencyAnnualSwitch(actor)");
+    expect(clientAction).toContain('formData.get("confirmation") !== "switch_to_annual"');
+    expect(annualConfirmation).toContain("Current plan");
+    expect(annualConfirmation).toContain("New plan");
+    expect(annualConfirmation).toContain("annualUpfrontAmountCents");
+    expect(annualConfirmation).toContain("annualSavingsAmountCents");
+    expect(annualConfirmation).toContain('<button className="button secondary" type="button" ref={cancelRef}');
+    expect(annualConfirmation).toContain("Keep month-to-month");
+    expect(annualConfirmation).toContain("card in Stripe Checkout");
+    expect(clientPage).toContain("Annual billing scheduled");
+    expect(clientPage).toContain("Annual plan active");
     expect(clientPage).toContain("Talent capacity");
     expect(clientPage).toContain("House capacity");
     expect(clientPage).not.toContain("Current plan · revision");
     expect(ownerPage).toContain("Committed Plan · revision");
     expect(ownerForm).toContain("Talent capacity");
     expect(ownerForm).toContain("House capacity");
+  });
+
+  it("keeps the monthly plan visible until Stripe activates the scheduled annual Price", async () => {
+    const [clientData, clientPage, stripeService, webhookService] = await Promise.all([
+      readSource("../src/data/residency-client.ts"),
+      readSource("../src/app/residency/settings/billing/page.tsx"),
+      readSource("../src/services/platform-stripe.ts"),
+      readSource("../src/services/platform-stripe-webhooks.ts"),
+    ]);
+
+    expect(stripeService).toContain("deferActivationUntilRenewal: true");
+    expect(stripeService).toContain("const activatedPlanValues = defersActivation ? {} :");
+    expect(clientData).toContain("pendingAnnualChange");
+    expect(clientPage).toContain("Your month-to-month plan remains active until");
+    expect(webhookService).toContain("eq(platformSubscriptionRevisions.stripePriceId, item.price.id)");
+    expect(webhookService).toContain("term: activatedRevision.term");
+    expect(webhookService).toContain("revision: activatedRevision.revision");
   });
 });
 

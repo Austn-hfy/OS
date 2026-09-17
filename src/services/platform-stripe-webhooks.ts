@@ -10,8 +10,9 @@ import {
   platformSubscriptions,
   stripeWebhookEvents,
 } from "@/db/schema";
+import { assertPlatformPlan, PLATFORM_SLOT_UNIT_AMOUNT_CENTS } from "@/domain/platform-billing";
 import { queuePlatformPaymentFailedAlerts, resolvePlatformPaymentFailure, sendPendingPlatformBillingAlerts } from "@/services/platform-billing-alerts";
-import { queueAnnualCancellationRefund } from "@/services/platform-stripe";
+import { queueAnnualCancellationRefund, scheduleResidencyCommittedPlanToAnnual } from "@/services/platform-stripe";
 import { getStripe } from "@/lib/stripe";
 import { requireResidencyLiveBillingApproval } from "@/services/live-billing-safety";
 
@@ -21,6 +22,57 @@ function objectId(value: string | { id: string } | null | undefined) {
 
 function dateFromUnix(value: number) {
   return new Date(value * 1_000).toISOString().slice(0, 10);
+}
+
+function subscriptionPeriodStart(subscription: Stripe.Subscription) {
+  return subscription.items.data.reduce((earliest, item) => Math.min(earliest, item.current_period_start), Number.MAX_SAFE_INTEGER);
+}
+
+async function createCompletedAnnualCheckoutRevision(
+  plan: typeof platformSubscriptions.$inferSelect,
+  subscription: Stripe.Subscription,
+  priceId: string,
+) {
+  const metadata = subscription.metadata;
+  if (metadata.annual_switch !== "true") return undefined;
+  const revision = Number(metadata.committed_plan_revision);
+  const talentBucketSize = Number(metadata.talent_bucket_size);
+  const houseBucketSize = Number(metadata.house_bucket_size);
+  const slotUnitAmountCents = Number(metadata.slot_unit_amount_cents);
+  if (revision !== plan.revision + 1 || metadata.subscription_term !== "annual") {
+    throw new Error("Completed annual Checkout metadata does not match the next local plan revision.");
+  }
+  assertPlatformPlan({ term: "annual", talentBucketSize, houseBucketSize, slotUnitAmountCents });
+  if (talentBucketSize !== plan.talentBucketSize || houseBucketSize !== plan.houseBucketSize || slotUnitAmountCents !== PLATFORM_SLOT_UNIT_AMOUNT_CENTS) {
+    throw new Error("Completed annual Checkout changed capacity or slot pricing unexpectedly.");
+  }
+  const startsOn = dateFromUnix(subscriptionPeriodStart(subscription));
+  const renewsOn = dateFromUnix(subscription.items.data.reduce((latest, item) => Math.max(latest, item.current_period_end), 0));
+  const [created] = await getDb().insert(platformSubscriptionRevisions).values({
+    platformSubscriptionId: plan.id,
+    residencyId: plan.residencyId,
+    revision,
+    term: "annual",
+    talentBucketSize,
+    houseBucketSize,
+    slotUnitAmountCents,
+    startsOn,
+    renewsOn,
+    changeReason: "Residency manager switched to annual billing through Checkout",
+    changedByUserId: metadata.changed_by_user_id || null,
+    stripeSyncStatus: "pending",
+    stripePriceId: priceId,
+  }).onConflictDoNothing({
+    target: [platformSubscriptionRevisions.platformSubscriptionId, platformSubscriptionRevisions.revision],
+  }).returning();
+  if (created) return created;
+  const [existing] = await getDb().select().from(platformSubscriptionRevisions).where(and(
+    eq(platformSubscriptionRevisions.platformSubscriptionId, plan.id),
+    eq(platformSubscriptionRevisions.revision, revision),
+    eq(platformSubscriptionRevisions.stripePriceId, priceId),
+  )).limit(1);
+  if (!existing) throw new Error("The completed annual Checkout conflicts with an existing plan revision.");
+  return existing;
 }
 
 function mapSubscriptionStatus(status: Stripe.Subscription.Status): typeof platformSubscriptions.$inferSelect.status {
@@ -88,6 +140,13 @@ export async function syncStripeSubscription(stripeSubscriptionId: string) {
   }
   const item = subscription.items.data[0];
   if (!item) throw new Error("Stripe subscription has no item.");
+  const priceRevisionRows = await getDb().select().from(platformSubscriptionRevisions).where(and(
+    eq(platformSubscriptionRevisions.platformSubscriptionId, plan.id),
+    eq(platformSubscriptionRevisions.stripePriceId, item.price.id),
+  )).limit(1);
+  let priceRevision: typeof platformSubscriptionRevisions.$inferSelect | undefined = priceRevisionRows[0];
+  priceRevision ??= await createCompletedAnnualCheckoutRevision(plan, subscription, item.price.id);
+  const activatedRevision = priceRevision && priceRevision.revision > plan.revision ? priceRevision : null;
   const card = await paymentCard(subscription);
   const nextChargeTimestamp = subscription.items.data.reduce((latest, candidate) => Math.max(latest, candidate.current_period_end), 0);
   const now = new Date();
@@ -96,6 +155,14 @@ export async function syncStripeSubscription(stripeSubscriptionId: string) {
     await queueAnnualCancellationRefund(plan, now);
   }
   const [updated] = await getDb().update(platformSubscriptions).set({
+    ...(activatedRevision ? {
+      revision: activatedRevision.revision,
+      term: activatedRevision.term,
+      talentBucketSize: activatedRevision.talentBucketSize,
+      houseBucketSize: activatedRevision.houseBucketSize,
+      slotUnitAmountCents: activatedRevision.slotUnitAmountCents,
+      startsOn: dateFromUnix(subscriptionPeriodStart(subscription)),
+    } : {}),
     stripeCustomerId: objectId(subscription.customer),
     stripeSubscriptionId: subscription.id,
     stripeSubscriptionItemId: item.id,
@@ -110,8 +177,13 @@ export async function syncStripeSubscription(stripeSubscriptionId: string) {
     updatedAt: now,
   }).where(eq(platformSubscriptions.id, plan.id)).returning();
   const metadataRevision = Number(subscription.metadata.committed_plan_revision);
-  const revision = Number.isInteger(metadataRevision) && metadataRevision > 0 ? metadataRevision : plan.revision;
+  const revision = activatedRevision?.revision
+    ?? (Number.isInteger(metadataRevision) && metadataRevision > 0 ? metadataRevision : plan.revision);
   await getDb().update(platformSubscriptionRevisions).set({
+    ...(activatedRevision ? {
+      startsOn: dateFromUnix(subscriptionPeriodStart(subscription)),
+      renewsOn: nextChargeTimestamp ? dateFromUnix(nextChargeTimestamp) : activatedRevision.renewsOn,
+    } : {}),
     stripeSyncStatus: "synced",
     stripeSyncError: "",
     stripePriceId: item.price.id,
@@ -166,9 +238,10 @@ async function applyCompletedCheckout(session: Stripe.Checkout.Session) {
     if (subscriptionId) return syncStripeSubscription(subscriptionId);
     return null;
   }
-  if (session.mode === "setup" && session.metadata?.purpose === "update_platform_subscription_card") {
-    const residencyId = session.metadata.hfy_residency_id;
-    const platformSubscriptionId = session.metadata.hfy_platform_subscription_id;
+  const metadata = session.metadata;
+  if (session.mode === "setup" && metadata && ["update_platform_subscription_card", "update_card_and_switch_annual"].includes(metadata.purpose ?? "")) {
+    const residencyId = metadata.hfy_residency_id;
+    const platformSubscriptionId = metadata.hfy_platform_subscription_id;
     if (!residencyId || !platformSubscriptionId) throw new Error("Completed card-update Checkout Session is missing HFY metadata.");
     await requireResidencyLiveBillingApproval({
       residencyId,
@@ -179,7 +252,7 @@ async function applyCompletedCheckout(session: Stripe.Checkout.Session) {
     });
     const setupIntentId = objectId(session.setup_intent);
     const customerId = objectId(session.customer);
-    const subscriptionId = session.metadata.stripe_subscription_id;
+    const subscriptionId = metadata.stripe_subscription_id;
     if (!setupIntentId || !customerId || !subscriptionId) throw new Error("Completed card-update Checkout Session is missing Stripe references.");
     const stripe = getStripe();
     const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
@@ -187,7 +260,14 @@ async function applyCompletedCheckout(session: Stripe.Checkout.Session) {
     if (!paymentMethodId) throw new Error("Completed card-update Checkout Session has no Payment Method.");
     await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: paymentMethodId } });
     await stripe.subscriptions.update(subscriptionId, { default_payment_method: paymentMethodId, proration_behavior: "none" });
-    return syncStripeSubscription(subscriptionId);
+    const synced = await syncStripeSubscription(subscriptionId);
+    if (metadata.purpose === "update_card_and_switch_annual") {
+      const userId = metadata.changed_by_user_id;
+      const email = metadata.changed_by_email;
+      if (!userId || !email) throw new Error("Annual-switch card Checkout is missing the initiating manager metadata.");
+      await scheduleResidencyCommittedPlanToAnnual({ residencyId, userId, email });
+    }
+    return synced;
   }
   return null;
 }
