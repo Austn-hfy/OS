@@ -2654,9 +2654,17 @@
   width: min(760px, 100%);
   max-height: calc(100dvh - 64px);
 }
+.hfy-style-system .calendar-event-dialog {
+  container-name: calendar-event-dialog;
+  container-type: inline-size;
+}
 .hfy-style-system .quick-modal-header { padding: 17px 20px 14px; }
 .hfy-style-system .quick-modal-body { gap: 10px; padding: 14px 20px 18px; }
 .hfy-style-system .quick-book-form { gap: 12px; }
+.hfy-style-system .calendar-event-dialog :is(.quick-modal-body, .quick-book-form, .quick-book-form > *) {
+  min-width: 0;
+  max-width: 100%;
+}
 .hfy-style-system .quick-selected-daypart-editable {
   display: grid;
   grid-template-columns: minmax(150px, 0.62fr) minmax(320px, 1.38fr);
@@ -2736,6 +2744,87 @@
 .hfy-style-system .calendar-event-dialog .quick-modal-footer > span {
   min-width: min(220px, 100%);
   flex: 1 1 220px;
+}
+
+@container calendar-event-dialog (max-width: 720px) {
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable .date-exception-actions {
+    grid-column: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable .date-exception-actions > small {
+    grid-column: 1 / -1;
+    margin-right: 0;
+  }
+
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable .date-exception-actions :is(.button, .remove-dj-button) {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .hfy-style-system .calendar-event-dialog .client-assignment-choices.equal-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer > span {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button:nth-of-type(1) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button:nth-of-type(2) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button:nth-of-type(3) {
+    grid-column: 3;
+    grid-row: 2;
+  }
+}
+
+@container calendar-event-dialog (max-width: 520px) {
+  .hfy-style-system .calendar-event-dialog .quick-selected-daypart-editable .date-exception-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hfy-style-system .calendar-event-dialog .quick-inline-time-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hfy-style-system .calendar-event-dialog .calendar-schedule-footer .button:nth-of-type(3) {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
 }
 .hfy-style-system .calendar-batch-menu,
 .hfy-style-system .calendar-status-legend-menu,

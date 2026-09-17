@@ -51,7 +51,17 @@ function quickDialogFixture(editing: boolean) {
   const content = editing
     ? `<div class="quick-time-summary"><span>Lobby Sessions</span><strong>8:00–11:00 PM</strong></div><section class="replacement-editor"><div class="replacement-step"><span>1</span><div><strong>Scheduled artist</strong><small>Edit hours or change the artist without leaving Calendar.</small></div></div><div class="quick-dj-time-fields"><div class="field"><label>Starts</label><select><option>8:00 PM</option></select></div><div class="field"><label>Ends</label><select><option>11:00 PM</option></select></div></div></section><div class="quick-reschedule-list"><div class="quick-reschedule-row"><div class="quick-existing-dj"><span>DJ 1</span><strong>DANAISY</strong><small>8:00–11:00 PM</small></div><div class="quick-existing-actions">${button("Edit hours", "button secondary")}${button("Change DJ", "button secondary")}</div></div></div>`
     : `<section class="quick-selected-daypart quick-selected-daypart-editable"><div class="quick-selected-daypart-summary"><span>Selected Daypart</span><strong>Lobby Sessions</strong><small>Lobby</small></div><div class="quick-selected-window"><span>Hours for this date</span><div class="quick-inline-time-fields"><div class="field"><label>Starts</label><select><option>8:00 PM</option></select></div><div class="field"><label>Ends</label><select><option>11:00 PM</option></select></div></div></div></section><div class="client-assignment-choices equal-options"><button class="artist-choice-option"><span>Client Managed</span><strong>+ Add your own artist</strong><small>Choose a Residency artist and track the amount owed.</small></button><button class="request-hfy-option"><span>HFY system option</span><strong>Request HFY</strong><small>Send this date to HFY for staffing.</small></button></div><div class="field quick-booking-notes"><label>Notes <span>optional</span></label><textarea>Load-in through the lobby entrance.</textarea></div>`;
-  return `<div class="quick-modal-backdrop calendar-quick-modal-backdrop"><section class="quick-modal calendar-event-dialog ${editing ? "quick-modal-edit" : ""}" role="dialog"><header class="quick-modal-header"><div><p class="eyebrow">Wednesday, 2026-09-16</p><h2>${editing ? "Manage · Lobby Sessions" : "Schedule Daypart"}</h2></div><button class="quick-modal-close">×</button></header><div class="quick-modal-body"><form class="quick-book-form">${content}<footer class="quick-modal-footer">${editing ? button("Delete Shift", "button danger-button") : button("Back", "button secondary")}<span>${editing ? "Only this scheduled date is affected." : "Ready to schedule?"}</span>${button("Cancel", "button secondary")}${button(editing ? "Done" : "Save Lobby Sessions")}</footer></form></div></section></div>`;
+  return `<div class="quick-modal-backdrop calendar-quick-modal-backdrop"><section class="quick-modal calendar-event-dialog ${editing ? "quick-modal-edit" : ""}" role="dialog"><header class="quick-modal-header"><div><p class="eyebrow">Wednesday, 2026-09-16</p><h2>${editing ? "Manage · Lobby Sessions" : "Schedule Daypart"}</h2></div><button class="quick-modal-close">×</button></header><div class="quick-modal-body"><form class="quick-book-form">${content}<footer class="quick-modal-footer ${editing ? "" : "calendar-schedule-footer"}">${editing ? button("Delete Shift", "button danger-button") : button("Back", "button secondary")}<span>${editing ? "Only this scheduled date is affected." : "Ready to schedule?"}</span>${button("Cancel", "button secondary")}${button(editing ? "Done" : "Save Lobby Sessions")}</footer></form></div></section></div>`;
+}
+
+function compactScheduleDialogFixture() {
+  return `<div class="quick-modal-backdrop calendar-quick-modal-backdrop"><section class="quick-modal calendar-event-dialog" role="dialog"><header class="quick-modal-header"><div><p class="eyebrow">Tuesday, 2026-09-15</p><h2>Schedule Daypart</h2></div><button class="quick-modal-close">×</button></header><div class="quick-modal-body"><form class="quick-book-form">
+    <section class="quick-selected-daypart quick-selected-daypart-editable"><div class="quick-selected-daypart-summary"><span>Selected Daypart</span><strong>Sunset Yoga</strong><small>Pool</small></div><div class="quick-selected-window"><div class="quick-selected-window-heading"><span>Hours for this date</span></div><small>Recommended window: 6:00 PM–7:00 PM</small><div class="quick-inline-time-fields"><div class="field"><label>Starts</label><select><option>6:00 PM</option></select></div><div class="field"><label>Ends</label><select><option>7:00 PM</option></select></div></div></div><div class="date-exception-actions"><small>Any change applies only to 2026-09-15.</small>${button("Save custom hours", "button secondary")}${button("Skip this date", "remove-dj-button")}</div></section>
+    <div class="quick-assignment-heading"><div><strong>Choose who handles this date</strong><small>Add one of your own artists, or ask HFY to staff this entire date.</small></div></div>
+    <div class="client-assignment-choices equal-options"><button class="artist-choice-option"><span>Client Managed</span><strong>+ Add your artist</strong><small>Choose one of your Residency’s artists and manage the rate yourself.</small></button><button class="request-hfy-option"><span>HFY system option</span><strong>Request HFY</strong><small>Send this entire date to HFY without choosing an artist or seeing HFY rates.</small></button></div>
+    <div class="field quick-booking-notes"><label>Notes <span>optional</span></label><textarea placeholder="Anything the team should know about this booking"></textarea></div>
+    <footer class="quick-modal-footer calendar-schedule-footer">${button("Back", "button secondary")}<span>Ready to schedule? The artist rate can be completed later.</span>${button("Cancel", "button secondary")}${button("Mark scheduled")}</footer>
+  </form></div></section></div>`;
 }
 
 function batchTakeoverFixture() {
@@ -87,6 +97,23 @@ async function fixtureDocument(state: InteractionState) {
     @media (max-width: 1200px) { .visual-command-stage { padding: 32px; } }
   `;
   return `<!doctype html><html><head><meta charset="utf-8"><style>${tokens}\n${localGlobals}\n${pilot}\n${localShareStyles}\n${fixtureStyles}</style></head><body><div class="hfy-style-system">${fixture(state)}</div></body></html>`;
+}
+
+async function compactScheduleDocument() {
+  const [tokens, globals, pilot, font] = await Promise.all([
+    readFile(new URL("../src/app/hfy-design-tokens.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
+    readFile(new URL("../node_modules/next/dist/next-devtools/server/font/geist-latin.woff2", import.meta.url)),
+  ]);
+  const localGlobals = globals.replace(/^@import[^;]+;\s*/m, "");
+  const fixtureStyles = `
+    @font-face { font-family: VisualGeist; src: url(data:font/woff2;base64,${font.toString("base64")}) format("woff2"); font-weight: 100 900; font-style: normal; }
+    :root { --hfy-font-sans: VisualGeist, Arial, sans-serif; }
+    html, body { width: 100%; min-height: 100%; }
+    body { margin: 0; background: linear-gradient(135deg, #dbeaf2, #f4dfd9); font-family: VisualGeist, Arial, sans-serif; }
+  `;
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${tokens}\n${localGlobals}\n${pilot}\n${fixtureStyles}</style></head><body><div class="hfy-style-system">${compactScheduleDialogFixture()}</div></body></html>`;
 }
 
 async function visualDifference(page: Page, actual: Buffer, expected: Buffer) {
@@ -177,6 +204,96 @@ describe("Residency Calendar interaction-state visual regression", () => {
         expect(difference.meanDifference).toBeLessThan(6);
         expect(difference.changedPixelRatio).toBeLessThan(0.12);
       }
+    }
+  }, 120_000);
+
+  it("reflows the Schedule Daypart dialog before its content can clip", async () => {
+    const html = await compactScheduleDocument();
+    for (const viewport of [
+      { width: 760, height: 800 },
+      { width: 600, height: 800 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.setContent(html, { waitUntil: "load" });
+      await page.evaluate(() => document.fonts.ready);
+
+      const metrics = await page.evaluate(() => {
+        const element = (selector: string) => {
+          const match = document.querySelector<HTMLElement>(selector);
+          if (!match) throw new Error(`Missing compact Schedule Daypart selector: ${selector}`);
+          return match;
+        };
+        const dialog = element(".calendar-event-dialog");
+        const body = element(".calendar-event-dialog .quick-modal-body");
+        const form = element(".calendar-event-dialog .quick-book-form");
+        const choiceGrid = element(".client-assignment-choices.equal-options");
+        const footer = element(".calendar-schedule-footer");
+        const dialogBounds = dialog.getBoundingClientRect();
+        const bodyBounds = body.getBoundingClientRect();
+        const descendants = [...form.children, ...footer.children] as HTMLElement[];
+        return {
+          noDocumentOverflow: document.documentElement.scrollWidth === document.documentElement.clientWidth,
+          dialogInsideViewport: dialogBounds.left >= -0.5 && dialogBounds.right <= window.innerWidth + 0.5,
+          bodyHasNoHorizontalOverflow: body.scrollWidth <= body.clientWidth + 1,
+          childrenContained: descendants.every((child) => {
+            const bounds = child.getBoundingClientRect();
+            return bounds.left >= bodyBounds.left - 0.5 && bounds.right <= bodyBounds.right + 0.5;
+          }),
+          optionColumnCount: getComputedStyle(choiceGrid).gridTemplateColumns.split(" ").length,
+          footerDisplay: getComputedStyle(footer).display,
+        };
+      });
+
+      expect(metrics).toEqual({
+        noDocumentOverflow: true,
+        dialogInsideViewport: true,
+        bodyHasNoHorizontalOverflow: true,
+        childrenContained: true,
+        optionColumnCount: 1,
+        footerDisplay: "grid",
+      });
+
+      const screenshot = await page.screenshot({ fullPage: true, animations: "disabled" });
+      const baselineUrl = new URL(`residency-calendar-schedule-compact-${viewport.width}.png`, baselineDirectory);
+      if (process.env.UPDATE_CALENDAR_INTERACTION_VISUALS === "1") {
+        await mkdir(baselineDirectory, { recursive: true });
+        await writeFile(baselineUrl, screenshot);
+      }
+      const baseline = await readFile(baselineUrl);
+      const difference = await visualDifference(page, screenshot, baseline);
+      expect(difference.meanDifference).toBeLessThan(6);
+      expect(difference.changedPixelRatio).toBeLessThan(0.12);
+    }
+  }, 120_000);
+
+  it("keeps the Schedule Daypart dialog contained throughout continuous narrowing", async () => {
+    const html = await compactScheduleDocument();
+    for (let width = 900; width >= 480; width -= 20) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.setContent(html, { waitUntil: "load" });
+      const metrics = await page.evaluate(() => {
+        const dialog = document.querySelector<HTMLElement>(".calendar-event-dialog");
+        const body = document.querySelector<HTMLElement>(".calendar-event-dialog .quick-modal-body");
+        const form = document.querySelector<HTMLElement>(".calendar-event-dialog .quick-book-form");
+        if (!dialog || !body || !form) throw new Error("Missing compact Schedule Daypart fixture");
+        const dialogBounds = dialog.getBoundingClientRect();
+        const bodyBounds = body.getBoundingClientRect();
+        return {
+          noDocumentOverflow: document.documentElement.scrollWidth === document.documentElement.clientWidth,
+          dialogInsideViewport: dialogBounds.left >= -0.5 && dialogBounds.right <= window.innerWidth + 0.5,
+          bodyHasNoHorizontalOverflow: body.scrollWidth <= body.clientWidth + 1,
+          childrenContained: [...form.children].every((child) => {
+            const bounds = child.getBoundingClientRect();
+            return bounds.left >= bodyBounds.left - 0.5 && bounds.right <= bodyBounds.right + 0.5;
+          }),
+        };
+      });
+      expect(metrics, `Schedule Daypart geometry failed at ${width}px`).toEqual({
+        noDocumentOverflow: true,
+        dialogInsideViewport: true,
+        bodyHasNoHorizontalOverflow: true,
+        childrenContained: true,
+      });
     }
   }, 120_000);
 });

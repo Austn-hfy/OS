@@ -1,8 +1,8 @@
 # HFY OS Design System V1
 
-Version: 1.4
+Version: 1.5
 Last updated: September 17, 2026
-Changed this revision: Closed the Calendar compact-width gap with container-aware primary-header reflow, contained Week scrolling below the readable seven-column floor, and long-event overflow protection.
+Changed this revision: Locked container-aware compact behavior for Calendar scheduling dialogs so forms, option cards, and action footers reflow before their content can clip.
 
 This document turns the approved client Settings benchmark into reusable implementation rules. It complements `docs/BRAND_GUIDELINES.md`: the brand guide defines the visual identity, while this document defines the page-level components and tokens that enforce it in HFY OS.
 
@@ -119,11 +119,12 @@ The Month and Week layouts must pass at 1440px, 1200px, and 1024px and while res
 | --- | --- |
 | Anchored menus | Batch Edit and the status legend stay attached to their trigger, remain inside the viewport, and close on outside interaction or Escape. Escape returns focus to the trigger. |
 | Add/edit dialogs | Use the sitewide overlay padding, fixed header, one scrolling body, and a contained action footer. The footer may remain sticky within that single scroll region, but it must use normal positive insets and must never use negative margins to create a full-bleed edge. |
+| Compact scheduling dialog | The dialog responds to its own usable width rather than the browser width. At `720px` or narrower, the selected Daypart, date actions, assignment choices, and scheduling footer reflow into contained rows; at `520px`, time fields and actions stack further. No form control, option card, or footer action may extend beyond the dialog body. |
 | Share dialog | All management views remain inside the same dialog boundary. Form actions use the contained footer treatment and never reach into the rounded dialog edge. |
 | Batch workspaces | A batch workspace has one fixed header and one scrolling list/body. Expanded rows may contain controls, but must not create document-level horizontal scrolling or a second full-height vertical scroller. |
 | Nested pickers | Room, artist, and color choices stay within their owning dialog. Floating pickers are viewport-constrained and close on selection, outside interaction, or Escape where reversible. |
 | Focus | Opening a modal dialog moves focus inside it, Tab and Shift+Tab remain contained, Escape closes reversible states, and closing returns focus to the initiating control. |
-| Desktop coverage | Representative Batch menu, status legend, Share, quick-add, quick-edit, and batch-takeover states require visual and overflow checks at 1440px, 1200px, and 1024px. |
+| Desktop coverage | Representative Batch menu, status legend, Share, quick-add, quick-edit, and batch-takeover states require visual and overflow checks at 1440px, 1200px, and 1024px. Schedule Daypart additionally requires compact visual coverage at 760px and 600px plus continuous containment checks from 900px through 480px. |
 
 ## Adoption status
 

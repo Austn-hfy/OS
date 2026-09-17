@@ -253,6 +253,27 @@ Intentionally unchanged:
 - Month and Week retain the approved desktop appearance at 1440px, 1200px, and 1024px.
 - This is a safe compact-width bridge, not the final mobile Calendar redesign.
 
+### CR-006D — Schedule Daypart dialog clips its form and footer at compact widths
+
+Priority: P0
+Applies to: `/residency/calendar` Schedule Daypart dialog between the approved desktop range and the future mobile layout
+Status: **resolved with a compact dialog bridge; final mobile layout remains deferred**
+
+The dialog's responsive decisions followed the browser width rather than the dialog's actual usable width. At the reported compact state, the date actions, Request HFY card, notes field, and footer controls extended past the right edge and were hidden by the rounded dialog boundary.
+
+Resolution:
+
+- Schedule Daypart is now a named responsive container and all form layers are explicitly width-contained.
+- At `720px` of dialog width, the selected Daypart summary, date actions, Client Managed/Request HFY choices, and footer actions reflow into complete contained rows.
+- At `520px`, the time fields and action groups stack further instead of compressing or clipping.
+- The established desktop dialog remains unchanged above the compact threshold.
+- Added visual coverage at 760px and 600px plus continuous geometry checks from 900px through 480px.
+
+Intentionally unchanged:
+
+- Scheduling data, copy, submission behavior, assignment choices, and desktop dialog styling were not redesigned.
+- The final mobile Calendar/dialog presentation remains part of the future mobile chapter.
+
 ### CR-007 — Header actions use different placement and emphasis rules
 
 Priority: P1
