@@ -24,6 +24,8 @@ describe("Residency role option responsive layout", () => {
 
   for (const viewport of [
     { width: 1440, height: 900, formStacked: false, choicesStacked: false },
+    { width: 1200, height: 900, formStacked: false, choicesStacked: false },
+    { width: 1100, height: 900, formStacked: true, choicesStacked: false },
     { width: 1024, height: 900, formStacked: true, choicesStacked: false },
     { width: 768, height: 900, formStacked: true, choicesStacked: false },
     { width: 375, height: 812, formStacked: true, choicesStacked: true },
@@ -36,36 +38,51 @@ describe("Residency role option responsive layout", () => {
           * { box-sizing: border-box; }
           body { margin: 0; padding: 20px; }
           main { width: min(1100px, 100%); margin: 0 auto; }
+          @media (min-width: 850px) { main { width: min(1100px, calc(100% - 252px)); margin: 0 0 0 252px; } }
         </style>
         <main>
-          <form class="residency-user-invite-form">
-            <label class="field"><span>Email addresses</span><textarea>viewer@example.com</textarea></label>
-            <fieldset>
-              <legend>Access role</legend>
-              <label class="residency-role-option">
-                <input type="radio" name="role" value="calendar_viewer" checked />
-                <span><strong>Calendar viewer</strong><small>Calendar only. No Account, Billing, Talent, or Finances access.</small></span>
-              </label>
-              <label class="residency-role-option">
-                <input type="radio" name="role" value="manager" />
-                <span><strong>Manager</strong><small>Full workspace, Account, users, roles, and Billing.</small></span>
-              </label>
-            </fieldset>
-            <button class="button" type="button">Send invite</button>
-          </form>
+          <section class="residency-users-card">
+            <form class="residency-user-invite-form">
+              <label class="field"><span>Email addresses</span><textarea>viewer@example.com</textarea></label>
+              <fieldset>
+                <legend>Access role</legend>
+                <label class="residency-role-option">
+                  <input type="radio" name="role" value="calendar_viewer" checked />
+                  <span><strong>Calendar viewer</strong><small>Calendar only. No Account, Billing, Talent, or Finances access.</small></span>
+                </label>
+                <label class="residency-role-option">
+                  <input type="radio" name="role" value="manager" />
+                  <span><strong>Manager</strong><small>Full workspace, Account, users, roles, and Billing.</small></span>
+                </label>
+              </fieldset>
+              <button class="button" type="button">Send invite</button>
+            </form>
+            <div class="residency-user-row">
+              <div class="residency-user-identity"><strong>Residency Manager</strong><span>manager@example.com</span></div>
+              <div class="residency-user-role"><strong>Manager</strong><small>Full workspace, Account, users, roles, and Billing.</small></div>
+              <div class="residency-user-actions"><button class="button secondary" type="button">Save role</button><button class="button secondary" type="button">View as manager</button></div>
+            </div>
+          </section>
         </main>
       `);
 
       const metrics = await page.evaluate(() => {
         const form = document.querySelector<HTMLElement>(".residency-user-invite-form")!;
+        const card = document.querySelector<HTMLElement>(".residency-users-card")!;
         const fieldset = document.querySelector<HTMLElement>("fieldset")!;
+        const userRow = document.querySelector<HTMLElement>(".residency-user-row")!;
         const options = [...document.querySelectorAll<HTMLElement>(".residency-role-option")];
         const copy = [...document.querySelectorAll<HTMLElement>(".residency-role-option > span")];
         const boxes = options.map((option) => option.getBoundingClientRect());
+        const formBox = form.getBoundingClientRect();
+        const cardBox = card.getBoundingClientRect();
+        const userRowBox = userRow.getBoundingClientRect();
 
         return {
           documentContained: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
           formContained: form.scrollWidth <= form.clientWidth,
+          formContainedInCard: formBox.left >= cardBox.left - 1 && formBox.right <= cardBox.right + 1,
+          userRowContainedInCard: userRowBox.left >= cardBox.left - 1 && userRowBox.right <= cardBox.right + 1 && userRow.scrollWidth <= userRow.clientWidth,
           equalWidths: Math.abs(boxes[0].width - boxes[1].width) < 1,
           formStacked: getComputedStyle(form).gridTemplateColumns.split(" ").length === 1,
           choicesStacked: Math.abs(boxes[0].top - boxes[1].top) > 1,
@@ -78,6 +95,8 @@ describe("Residency role option responsive layout", () => {
       expect(metrics).toMatchObject({
         documentContained: true,
         formContained: true,
+        formContainedInCard: true,
+        userRowContainedInCard: true,
         equalWidths: true,
         formStacked: viewport.formStacked,
         choicesStacked: viewport.choicesStacked,
