@@ -13,8 +13,8 @@ describe("annual switch comparison", () => {
   });
 
   it("branches from the persisted Stripe and card state", () => {
-    expect(annualSwitchPaymentPath({ stripeSubscriptionId: "sub_123", cardLast4: "4242" })).toBe("charge_card_at_renewal");
+    expect(annualSwitchPaymentPath({ stripeSubscriptionId: "sub_123", cardLast4: "4242" })).toBe("charge_card_immediately");
     expect(annualSwitchPaymentPath({ stripeSubscriptionId: null, cardLast4: "" })).toBe("collect_card_and_start_annual");
-    expect(annualSwitchPaymentPath({ stripeSubscriptionId: "sub_123", cardLast4: "" })).toBe("collect_card_then_schedule");
+    expect(annualSwitchPaymentPath({ stripeSubscriptionId: "sub_123", cardLast4: "" })).toBe("collect_card_then_charge_immediately");
   });
 });
