@@ -72,10 +72,11 @@ function InvoiceAlertIcon() {
   return <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 3.5h10V16l-2-1-2 1-2-1-2 1-2-1zM8 7h4M8 10h4M8 13h2" /></svg>;
 }
 
-function calendarHref(date: string, eventId?: string, openDate = false) {
+function calendarHref(date: string, eventId?: string, openDate = false, returnToOverview = false) {
   const query = new URLSearchParams({ calendarView: "week", week: date });
   if (eventId) query.set("event", eventId);
   else if (openDate) query.set("date", date);
+  if (returnToOverview) query.set("returnTo", `/residency?day=${date}`);
   return `/residency/calendar?${query.toString()}`;
 }
 
@@ -146,7 +147,7 @@ export default async function ResidencyOverviewPage({
                 <div className="residency-overview-day-heading">
                   <span className="residency-overview-day-name">{weekday(day.date)}</span>
                   <span className="residency-overview-day-markers">
-                    {index === 0 ? <i aria-label="Today" /> : null}
+                    {index === 0 && !selected ? <i>Today</i> : null}
                     {selected ? <b>Selected</b> : null}
                   </span>
                 </div>
@@ -181,12 +182,12 @@ export default async function ResidencyOverviewPage({
                     <small>{staffing}</small>
                   </div>
                   <span className="residency-overview-day-service-label">{serviceStatusLabel(service.status)}</span>
-                  <Link className="residency-overview-day-service-action" href={calendarHref(selectedDay.date, service.calendarEventId)}>{serviceActionLabel(service.status)} <ArrowIcon /></Link>
+                  <Link className="residency-overview-day-service-action" href={calendarHref(selectedDay.date, service.calendarEventId, false, true)}>{serviceActionLabel(service.status)} <ArrowIcon /></Link>
                 </article>;
               })}
             </div> : <div className="residency-overview-day-empty">
               <div><strong>No programming scheduled</strong><p>Add an activity or open this week in Calendar.</p></div>
-              <Link className="residency-overview-day-service-action" href={calendarHref(selectedDay.date, undefined, true)}>Add activity <ArrowIcon /></Link>
+              <Link className="residency-overview-day-service-action" href={calendarHref(selectedDay.date, undefined, true, true)}>Add activity <ArrowIcon /></Link>
             </div>}
           </section>
         </ResidencySurfaceCard>

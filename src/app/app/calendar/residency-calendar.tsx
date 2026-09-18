@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { addCalendarAssignmentAction, addClientManagedOccurrenceAssignmentAction, bookResidencyDateAction, cancelHfyTalentRequestAction, clearDaypartDateExceptionAction, createResidencyRoomAction, deleteCalendarShiftAction, deleteOneTimeOccurrenceAction, previewShiftTimeEditAction, removeCalendarAssignmentAction, requestHfyForScheduleOccurrenceAction, rescheduleAssignmentAction, saveDaypartDateOverrideAction, skipDaypartDateAction, submitShiftChangeRequestAction, updateDaypartOccurrenceAction, updateOneTimeOccurrenceAction, updateOneTimeShiftAction, updateShiftTimeAction, type CreateRoomActionState, type ResidencyActionState, type ShiftTimeEditPreview } from "@/app/app/actions";
 import { HfyRequestFulfillment } from "@/app/app/hfy-request-fulfillment";
 import { createClientOwnedArtistAction } from "@/app/residency/actions";
@@ -99,6 +99,7 @@ type ResidencyCalendarProps = {
   residencySelectionParam?: "residency" | "calendarResidency";
   initialEventId?: string;
   initialDate?: string;
+  modalReturnPath?: string;
   initialBatchDaypartId?: string;
   previewMode?: boolean;
   fullProgramming?: boolean;
@@ -324,7 +325,7 @@ function SchedulingActivityDetailsRow({
   </div>;
 }
 
-export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialDate, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialDate, modalReturnPath, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
   const quickDialogRef = useRef<HTMLElement>(null);
   const quickDialogCloseRef = useRef<HTMLButtonElement>(null);
@@ -370,6 +371,14 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
   const [batchSchedule, setBatchSchedule] = useState<BatchScheduleState | null>(null);
   const [bookingFeedbackDate, setBookingFeedbackDate] = useState<string | null>(null);
   const [addedTalent, setAddedTalent] = useState<typeof talent>([]);
+  const closeModal = useCallback((refreshCalendar = false) => {
+    if (modalReturnPath) {
+      router.replace(modalReturnPath, { scroll: false });
+      return;
+    }
+    setModal(null);
+    if (refreshCalendar) router.refresh();
+  }, [modalReturnPath, router]);
   const submitBooking = async (previous: ResidencyActionState, formData: FormData) => {
     const submittedDate = batchSchedule?.expandedDate ?? (modal?.type === "add" ? modal.date : null);
     setBookingFeedbackDate(submittedDate);
@@ -386,7 +395,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
         }
         router.refresh();
       } else {
-        setModal(null);
+        closeModal();
       }
     }
     return result;
@@ -409,7 +418,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
           setBatchSchedule(null);
           router.refresh();
         } else {
-          setModal(null);
+          closeModal();
         }
         return;
       }
@@ -437,7 +446,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
       window.removeEventListener("keydown", handleDialogKeys);
       if (returnFocusTarget?.isConnected) returnFocusTarget.focus();
     };
-  }, [batchOpen, modalOpen, router]);
+  }, [batchOpen, closeModal, modalOpen, router]);
 
   useEffect(() => {
     const savedDaypart = window.localStorage.getItem("hfy-calendar-daypart-filter");
@@ -992,8 +1001,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
     if (result.status === "success") {
       setNewAssignmentDraft(null);
       if (materializedTrackingTalentOccurrence) {
-        setModal(null);
-        router.refresh();
+        closeModal(true);
       }
     }
   }
@@ -1007,8 +1015,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
     setEditPending(false);
     setEditState(result);
     if (result.status === "success") {
-      setModal(null);
-      router.refresh();
+      closeModal(true);
     }
   }
 
@@ -1085,7 +1092,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
     const result = await deleteCalendarShiftAction(formData);
     setEditState(result);
     setEditPending(false);
-    if (result.status === "success") setModal(null);
+    if (result.status === "success") closeModal();
   }
 
   async function submitShiftChangeRequest() {
@@ -1159,9 +1166,8 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
       const result = await updateShiftTimeAction(shiftTimeFormData(editingEvent, shiftTimeEditDraft));
       setEditState(result);
       if (result.status === "success") {
-        setModal(null);
+        closeModal(true);
         setShiftTimeEditDraft(null);
-        router.refresh();
       }
     } catch {
       setEditState({ status: "error", message: "Unable to update this Shift time." });
@@ -1200,8 +1206,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
         : await updateOneTimeOccurrenceAction(formData);
       setEditState(result);
       if (result.status === "success") {
-        setModal(null);
-        router.refresh();
+        closeModal(true);
       }
     } catch {
       setEditState({ status: "error", message: "Choose valid one-time slot details and hours." });
@@ -1226,8 +1231,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
       const result = await updateDaypartOccurrenceAction(formData);
       setEditState(result);
       if (result.status === "success") {
-        setModal(null);
-        router.refresh();
+        closeModal(true);
       }
     } catch {
       setEditState({ status: "error", message: "Choose valid hours for this scheduled date." });
@@ -1246,8 +1250,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
     setEditPending(false);
     setEditState(result);
     if (result.status === "success") {
-      setModal(null);
-      router.refresh();
+      closeModal(true);
     }
   }
 
@@ -1273,8 +1276,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
     setEditPending(false);
     setDateActionState(result);
     if (result.status === "success") {
-      setModal(null);
-      router.refresh();
+      closeModal(true);
     }
   }
 
@@ -1298,8 +1300,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
     setEditPending(false);
     setDateActionState(result);
     if (result.status === "success") {
-      setModal(null);
-      router.refresh();
+      closeModal(true);
     }
   }
 
@@ -1316,8 +1317,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
     setEditPending(false);
     setDateActionState(result);
     if (result.status === "success") {
-      setModal(null);
-      router.refresh();
+      closeModal(true);
     }
   }
 
@@ -1332,8 +1332,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
     setEditPending(false);
     setDateActionState(result);
     if (result.status === "success") {
-      setModal(null);
-      router.refresh();
+      closeModal(true);
     }
   }
 
@@ -1544,11 +1543,11 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
         ? <WeekCalendar weekStart={activeWeekStart} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />
         : <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />}
 
-      {modal ? <div className="quick-modal-backdrop calendar-quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setModal(null); }}>
+      {modal ? <div className="quick-modal-backdrop calendar-quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) closeModal(); }}>
         <section className={`quick-modal calendar-event-dialog ${modal.type === "edit" ? "quick-modal-edit" : ""} ${modal.type === "add" && addMode === "room" ? "quick-modal-room-picker" : ""}`} ref={quickDialogRef} role="dialog" aria-modal="true" aria-labelledby="quick-modal-title">
           <header className="quick-modal-header">
             <div><p className="eyebrow">{modal.type === "add" ? `${weekdayNames[weekdayForDate(modal.date)]}, ${modal.date}` : editingEvent?.date}</p><h2 id="quick-modal-title">{modal.type === "add" ? addMode === "room" ? "Where is this happening?" : addMode === "activity" ? "What's happening here?" : addMode === "new-type" ? "Create new" : addMode === "new-repeat" ? "Does this repeat?" : addMode === "one-time" ? activeSuggestion?.createMode === "standing_weekly" ? "Create a recurring Daypart" : activeSuggestion?.createMode === "calendar_only" ? "Create a reusable template" : "Create a one-time activity" : "Schedule Daypart" : `Manage · ${editingEvent?.title ?? "Slot"}`}</h2></div>
-            <button className="quick-modal-close" ref={quickDialogCloseRef} type="button" aria-label="Close popup" onClick={() => setModal(null)}>×</button>
+            <button className="quick-modal-close" ref={quickDialogCloseRef} type="button" aria-label={modalReturnPath ? "Close and return to Overview" : "Close popup"} onClick={() => closeModal()}>×</button>
           </header>
 
           <div className="quick-modal-body">
@@ -1557,9 +1556,9 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
                 <div className="quick-picker-intro"><strong>Choose a room or space</strong><small>Start typing to find an existing room. A new room is created only when you explicitly choose that option.</small></div>
                 <div className="field quick-room-combobox-field"><label>Room / space</label><RoomCombobox rooms={availableRooms} value={newRoomName} selectedRoomId={null} creationConfirmed={newRoomPromptOpen} placeholder="Start typing, for example Amigo" ariaLabel="Choose or create a room" autoFocus onChange={(roomName) => { setNewRoomName(roomName); setNewRoomPromptOpen(false); setRoomCreateState(initialActionState); }} onSelect={chooseRoom} onCreate={openNewRoomPrompt} /></div>
                 {newRoomPromptOpen ? <div className="quick-new-room-prompt"><div className="quick-new-room-name-summary"><span>New room or space</span><strong>{newRoomName}</strong></div><div className="field"><label>Room color</label><RoomHuePicker value={newRoomHue} onChange={setNewRoomHue} ariaLabel="Choose the new room color" /><small>The next automatic color is preselected. Pick another if you prefer.</small></div><div className="quick-new-room-actions"><button className="button secondary" type="button" onClick={() => { setNewRoomPromptOpen(false); setRoomCreateState(initialActionState); }}>Back</button><button className="button" type="button" disabled={roomCreating || !newRoomName.trim()} onClick={() => void createNewRoom()}>{roomCreating ? "Adding…" : "Create space"}</button></div>{roomCreateState.status === "error" ? <p className="error" aria-live="polite">{roomCreateState.message}</p> : null}</div> : null}
-                <div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button></div>
+                <div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => closeModal()}>Cancel</button></div>
               </div>
-              : addMode === "activity" ? <div className="quick-room-picker-shell"><div className="quick-picker-heading"><button className="button secondary" type="button" onClick={returnToRoomPicker}>← Rooms</button><div><span>Selected room</span><strong>{selectedRoom?.name}</strong></div></div>{roomSuggestions.length ? <div className="quick-funnel-tiles" role="group" aria-label={`Choose an activity in ${selectedRoom?.name ?? "this room"}`}>{roomSuggestions.map((suggestion) => <button className="quick-funnel-tile activity" style={{ "--room-color": suggestion.color, "--room-fill": roomColor(selectedRoom?.hue ?? "blue", "pale"), "--room-text": roomColor(selectedRoom?.hue ?? "blue", "dark") } as CSSProperties} type="button" onClick={() => chooseSuggestion(suggestion)} key={suggestion.daypartId}><strong>{suggestion.name}</strong>{suggestion.existing ? <Status value="scheduled" /> : null}{suggestion.billingMode === "billed_by_hfy" ? <i className="hfy-booking-indicator" aria-label="HFY booked" /> : null}</button>)}</div> : <p className="quick-funnel-empty">Nothing is saved in {selectedRoom?.name} yet.</p>}<div className="quick-funnel-divider" /><button className="quick-funnel-wide-tile" type="button" onClick={chooseCreateNew}><strong>Create new</strong><span aria-hidden="true">+</span></button><div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button></div></div>
+              : addMode === "activity" ? <div className="quick-room-picker-shell"><div className="quick-picker-heading"><button className="button secondary" type="button" onClick={returnToRoomPicker}>← Rooms</button><div><span>Selected room</span><strong>{selectedRoom?.name}</strong></div></div>{roomSuggestions.length ? <div className="quick-funnel-tiles" role="group" aria-label={`Choose an activity in ${selectedRoom?.name ?? "this room"}`}>{roomSuggestions.map((suggestion) => <button className="quick-funnel-tile activity" style={{ "--room-color": suggestion.color, "--room-fill": roomColor(selectedRoom?.hue ?? "blue", "pale"), "--room-text": roomColor(selectedRoom?.hue ?? "blue", "dark") } as CSSProperties} type="button" onClick={() => chooseSuggestion(suggestion)} key={suggestion.daypartId}><strong>{suggestion.name}</strong>{suggestion.existing ? <Status value="scheduled" /> : null}{suggestion.billingMode === "billed_by_hfy" ? <i className="hfy-booking-indicator" aria-label="HFY booked" /> : null}</button>)}</div> : <p className="quick-funnel-empty">Nothing is saved in {selectedRoom?.name} yet.</p>}<div className="quick-funnel-divider" /><button className="quick-funnel-wide-tile" type="button" onClick={chooseCreateNew}><strong>Create new</strong><span aria-hidden="true">+</span></button><div className="quick-slot-picker-actions"><button className="button secondary" type="button" onClick={() => closeModal()}>Cancel</button></div></div>
               : addMode === "new-type" ? <div className="quick-room-picker-shell"><div className="quick-picker-heading"><button className="button secondary" type="button" onClick={returnToAddPicker}>← Back</button><div><span>Room</span><strong>{selectedRoom?.name}</strong></div></div><div className="field quick-one-time-type"><label>Type</label><div className="daypart-type-options">{!fullProgramming ? <button type="button" onClick={() => chooseOneTimeType("dj_artist")}><strong>Talent Activity</strong><small>Schedule talent with assignments and the appropriate financial tracking.</small></button> : null}<button type="button" onClick={() => chooseOneTimeType("house_activity")}><strong>House Activity</strong><small>Schedule an activity or host without Assignment, Payout, or Invoice records.</small></button></div>{fullProgramming ? <small>HFY creates and staffs all Talent Activities for Full Programming accounts.</small> : null}</div></div>
               : addMode === "new-repeat" ? <div className="quick-room-picker-shell"><div className="quick-picker-heading"><button className="button secondary" type="button" onClick={() => setAddMode("new-type")}>← Back</button><div><span>{activeSuggestion?.type === "house_activity" ? "House Activity" : "Talent Activity"}</span><strong>{selectedRoom?.name}</strong></div></div><div className="quick-repeat-options" role="group" aria-label="Does this repeat?"><button type="button" onClick={() => chooseCreateMode("standing_weekly")}><strong>Same weekday every week</strong><small>Save a recurring Daypart and schedule this date now.</small></button><button type="button" onClick={() => chooseCreateMode("calendar_only")}><strong>Occasionally, might reuse</strong><small>The activity name becomes a reusable template in Day Parts. Program and host details stay attached only to this scheduled date.</small></button><button type="button" onClick={() => chooseCreateMode("one_time")}><strong>No, just this once</strong><small>Schedule only this date without saving a reusable item.</small></button></div></div>
               : <form action={formAction} className="quick-book-form">
@@ -1568,7 +1567,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
 
                 {state.status === "error" ? <p className="error" aria-live="polite">{state.message}</p> : null}
                 {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
-                {activeSuggestion && !activeSuggestion.existing && activeSuggestion.exceptionKind !== "skip" ? clientStandingHfy ? <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={returnToAddPicker}>Back</button><span>No action needed for this date.</span><button className="button" type="button" onClick={() => setModal(null)}>Done</button></footer> : <footer className="quick-modal-footer calendar-schedule-footer"><button className="button secondary" type="button" onClick={activeSuggestion.oneTime ? () => setAddMode("new-repeat") : returnToAddPicker}>Back</button><span>{activeSuggestion.type === "dj_artist" && previewMode && !activeSuggestion.requestHfy ? "Ready to schedule? The artist rate can be completed later." : activeSuggestion.type ? "Ready to schedule?" : "Choose an activity type to continue."}</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Cancel</button><button className="button" type="submit" disabled={bookingSubmitDisabled}>{pending ? "Saving…" : activeSuggestion.requestHfy ? "Send Request to HFY" : activeSuggestion.oneTime ? "Mark scheduled" : activeSuggestion.billingMode === "tracking_only" && !activeSuggestion.slots.length ? "Mark scheduled" : `Save ${activeSuggestion.name || "Daypart"}`}</button></footer> : activeSuggestion ? <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={returnToAddPicker}>Back</button><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer> : null}
+                {activeSuggestion && !activeSuggestion.existing && activeSuggestion.exceptionKind !== "skip" ? clientStandingHfy ? <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={returnToAddPicker}>Back</button><span>No action needed for this date.</span><button className="button" type="button" onClick={() => closeModal()}>Done</button></footer> : <footer className="quick-modal-footer calendar-schedule-footer"><button className="button secondary" type="button" onClick={activeSuggestion.oneTime ? () => setAddMode("new-repeat") : returnToAddPicker}>Back</button><span>{activeSuggestion.type === "dj_artist" && previewMode && !activeSuggestion.requestHfy ? "Ready to schedule? The artist rate can be completed later." : activeSuggestion.type ? "Ready to schedule?" : "Choose an activity type to continue."}</span><button className="button secondary" type="button" onClick={() => closeModal()}>Cancel</button><button className="button" type="submit" disabled={bookingSubmitDisabled}>{pending ? "Saving…" : activeSuggestion.requestHfy ? "Send Request to HFY" : activeSuggestion.oneTime ? "Mark scheduled" : activeSuggestion.billingMode === "tracking_only" && !activeSuggestion.slots.length ? "Mark scheduled" : `Save ${activeSuggestion.name || "Daypart"}`}</button></footer> : activeSuggestion ? <footer className="quick-modal-footer"><button className="button secondary" type="button" onClick={returnToAddPicker}>Back</button><button className="button secondary" type="button" onClick={() => closeModal()}>Done</button></footer> : null}
               </form>
             ) : editingEvent ? editingEvent.recordType === "nonfinancial_occurrence" ? <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
@@ -1576,14 +1575,14 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
               {editingEvent.assignments.length ? <div className="quick-reschedule-list">{editingEvent.assignments.map((assignment, index) => <div className="quick-reschedule-row" key={assignment.id}><div className="quick-existing-dj"><span>DJ {index + 1}</span><strong>{assignment.talentName}</strong><small>{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).startMinute)}–{formatLocalMinute(resolveAssignmentMinutes(editingEvent.shiftStartMinute, editingEvent.shiftEndMinute, assignment.startClock, assignment.endClock).endMinute)}</small></div></div>)}</div> : null}
               {editState.status !== "idle" ? <p className={editState.status === "error" ? "error" : "success"} aria-live="polite">{editState.message}</p> : null}
               {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
-              <footer className="quick-modal-footer">{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button> : <button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingOccurrence}>Delete activity</button>}<span>{editingEvent.daypartId ? datedRemovalHelp : "One-time activity"}</span><button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
+              <footer className="quick-modal-footer">{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button> : <button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingOccurrence}>Delete activity</button>}<span>{editingEvent.daypartId ? datedRemovalHelp : "One-time activity"}</span><button className="button secondary" type="button" onClick={() => closeModal()}>Done</button></footer>
             </> : <>
               <div className="quick-time-summary"><span>{editingEvent.title}</span><strong>{editingEvent.time}</strong></div>
               {shiftTimeEditor}
               {managerShiftRequestControl}
               {!editingEvent.daypartId && editingEvent.economicsMode !== "hfy_request" ? oneTimeRecordEditor : null}
               {editingEvent.programDetails || editingEvent.manualHostName ? <div className="quick-program-fields">{editingEvent.programDetails ? <div><span>Program / activity</span><strong>{editingEvent.programDetails}</strong></div> : null}{editingEvent.manualHostName ? <div><span>Host / guest</span><strong>{editingEvent.manualHostName}</strong></div> : null}</div> : null}
-              {pendingHfyRequest && editingEvent.hfyRequestId ? <section className="replacement-editor new-assignment-editor hfy-request-calendar-editor"><div className="replacement-step"><span>1</span><div><strong>Schedule the requested shift</strong><small>Choose one artist or split the full service window. Residency rates apply automatically.</small></div></div><HfyRequestFulfillment requestId={editingEvent.hfyRequestId} shiftName={editingEvent.title} shiftStartMinute={editingEvent.shiftStartMinute} shiftEndMinute={editingEvent.shiftEndMinute} artists={requestTalent.map((artist) => ({ id: artist.id, stageName: artist.stageName, homeMarket: artist.homeMarket }))} ratesConfigured={residencyTalentRateConfigured && residency.clientHourlyRateCents > 0} onSuccess={() => { setModal(null); router.refresh(); }} /></section> : editingEventCanManageAssignments ? <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours{previewMode ? "." : " because those hours determine pay."}</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft) || (!previewMode && !residencyTalentRateConfigured)} onClick={() => startAddingAssignment()}>+ Add another DJ</button></div> : <div className="request-hfy-selection"><div><span>{editingEvent.economicsMode === "hfy_request" ? "Pending request" : editingEvent.economicsMode === "client_owned" ? "Client-managed slot" : "HFY-managed slot"}</span><strong>{editingEvent.economicsMode === "hfy_request" ? "Request HFY is awaiting fulfillment" : "This slot is read-only here"}</strong><small>{editingEvent.economicsMode === "client_owned" ? "The client controls its artist assignments and private rates." : previewMode ? "HFY controls staffing and both HFY rates. Your Invoice will show the resulting billed total." : "This slot is not editable here."}</small></div></div>}
+              {pendingHfyRequest && editingEvent.hfyRequestId ? <section className="replacement-editor new-assignment-editor hfy-request-calendar-editor"><div className="replacement-step"><span>1</span><div><strong>Schedule the requested shift</strong><small>Choose one artist or split the full service window. Residency rates apply automatically.</small></div></div><HfyRequestFulfillment requestId={editingEvent.hfyRequestId} shiftName={editingEvent.title} shiftStartMinute={editingEvent.shiftStartMinute} shiftEndMinute={editingEvent.shiftEndMinute} artists={requestTalent.map((artist) => ({ id: artist.id, stageName: artist.stageName, homeMarket: artist.homeMarket }))} ratesConfigured={residencyTalentRateConfigured && residency.clientHourlyRateCents > 0} onSuccess={() => closeModal(true)} /></section> : editingEventCanManageAssignments ? <div className="quick-existing-toolbar"><p className="quick-guidance">Add, change, or remove one DJ at a time. Every change requires explicit hours{previewMode ? "." : " because those hours determine pay."}</p><button className="button" type="button" disabled={editPending || Boolean(newAssignmentDraft) || (!previewMode && !residencyTalentRateConfigured)} onClick={() => startAddingAssignment()}>+ Add another DJ</button></div> : <div className="request-hfy-selection"><div><span>{editingEvent.economicsMode === "hfy_request" ? "Pending request" : editingEvent.economicsMode === "client_owned" ? "Client-managed slot" : "HFY-managed slot"}</span><strong>{editingEvent.economicsMode === "hfy_request" ? "Request HFY is awaiting fulfillment" : "This slot is read-only here"}</strong><small>{editingEvent.economicsMode === "client_owned" ? "The client controls its artist assignments and private rates." : previewMode ? "HFY controls staffing and both HFY rates. Your Invoice will show the resulting billed total." : "This slot is not editable here."}</small></div></div>}
               {editingEventCanManageAssignments && !previewMode && !residencyTalentRateConfigured ? <p className="error" aria-live="polite">{MISSING_RESIDENCY_TALENT_RATE_MESSAGE}</p> : null}
               {newAssignmentDraft ? <section className="replacement-editor new-assignment-editor">
                 <div className="replacement-step"><span>1</span><div><strong>Choose the DJ</strong><small>Only artists approved for this Residency appear here.</small></div></div>
@@ -1620,7 +1619,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
               {editState.status !== "idle" ? <p className={editState.status === "error" ? "error" : "success"} aria-live="polite">{editState.message}</p> : null}
               {dateActionState.status === "error" ? <p className="error" aria-live="polite">{dateActionState.message}</p> : null}
               {!editingEvent.assignments.length ? <div className="empty quick-empty">This Shift has no Assignment slots to edit.</div> : null}
-              <footer className="quick-modal-footer">{pendingHfyRequest ? <span>Pending Request HFY for {editingEvent.date}.</span> : managerHfyShiftLocked ? <span>{canManage ? pendingShiftChangeRequest ? "HFY review is pending; the Shift remains unchanged." : "Use Submit Request above to ask HFY for a change." : "HFY manages changes to this Shift."}</span> : editingEventCanManageAssignments ? <><button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingShift}>Delete Shift</button>{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button> : null}<span>{editingEvent.daypartId ? datedRemovalHelp : "Deletion is blocked once financial history is finalized."}</span></> : fullProgramming && previewMode && editingEvent.daypartId ? <><button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button><span>{editingReusableTemplate ? datedRemovalHelp : `HFY will remove staffing for this date; ${datedRemovalHelp}`}</span></> : previewMode && !fullProgramming && editingEvent.economicsMode === "hfy_request" ? <><button className="button danger-button" type="button" disabled={editPending} onClick={cancelSelectedHfyRequest}>{editPending ? "Cancelling…" : "Cancel Request HFY"}</button><span>Only {editingEvent.date} will return to Client Managed.</span></> : <span>{fullProgramming && previewMode ? "HFY manages talent staffing for this activity." : "Ownership controls are enforced for this slot."}</span>}<button className="button secondary" type="button" onClick={() => setModal(null)}>Done</button></footer>
+              <footer className="quick-modal-footer">{pendingHfyRequest ? <span>Pending Request HFY for {editingEvent.date}.</span> : managerHfyShiftLocked ? <span>{canManage ? pendingShiftChangeRequest ? "HFY review is pending; the Shift remains unchanged." : "Use Submit Request above to ask HFY for a change." : "HFY manages changes to this Shift."}</span> : editingEventCanManageAssignments ? <><button className="button danger-button" type="button" disabled={editPending} onClick={deleteExistingShift}>Delete Shift</button>{editingEvent.daypartId ? <button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button> : null}<span>{editingEvent.daypartId ? datedRemovalHelp : "Deletion is blocked once financial history is finalized."}</span></> : fullProgramming && previewMode && editingEvent.daypartId ? <><button className="button danger-button" type="button" disabled={editPending} onClick={skipSelectedDate}>{datedRemovalLabel}</button><span>{editingReusableTemplate ? datedRemovalHelp : `HFY will remove staffing for this date; ${datedRemovalHelp}`}</span></> : previewMode && !fullProgramming && editingEvent.economicsMode === "hfy_request" ? <><button className="button danger-button" type="button" disabled={editPending} onClick={cancelSelectedHfyRequest}>{editPending ? "Cancelling…" : "Cancel Request HFY"}</button><span>Only {editingEvent.date} will return to Client Managed.</span></> : <span>{fullProgramming && previewMode ? "HFY manages talent staffing for this activity." : "Ownership controls are enforced for this slot."}</span>}<button className="button secondary" type="button" onClick={() => closeModal()}>Done</button></footer>
             </> : <div className="empty quick-empty">This slot is no longer available.</div>}
           </div>
         </section>
