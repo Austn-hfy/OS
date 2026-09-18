@@ -23,9 +23,10 @@ describe("Residency role option responsive layout", () => {
   });
 
   for (const viewport of [
-    { width: 1440, height: 900, stacked: false },
-    { width: 768, height: 900, stacked: false },
-    { width: 375, height: 812, stacked: true },
+    { width: 1440, height: 900, formStacked: false, choicesStacked: false },
+    { width: 1024, height: 900, formStacked: true, choicesStacked: false },
+    { width: 768, height: 900, formStacked: true, choicesStacked: false },
+    { width: 375, height: 812, formStacked: true, choicesStacked: true },
   ]) {
     it(`keeps both role choices readable and interactive at ${viewport.width}px`, async () => {
       const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
@@ -38,7 +39,7 @@ describe("Residency role option responsive layout", () => {
         </style>
         <main>
           <form class="residency-user-invite-form">
-            <label class="field"><span>Email addresses</span><input value="viewer@example.com" /></label>
+            <label class="field"><span>Email addresses</span><textarea>viewer@example.com</textarea></label>
             <fieldset>
               <legend>Access role</legend>
               <label class="residency-role-option">
@@ -66,7 +67,8 @@ describe("Residency role option responsive layout", () => {
           documentContained: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
           formContained: form.scrollWidth <= form.clientWidth,
           equalWidths: Math.abs(boxes[0].width - boxes[1].width) < 1,
-          stacked: Math.abs(boxes[0].top - boxes[1].top) > 1,
+          formStacked: getComputedStyle(form).gridTemplateColumns.split(" ").length === 1,
+          choicesStacked: Math.abs(boxes[0].top - boxes[1].top) > 1,
           containedInFieldset: boxes.every((box) => box.left >= fieldset.getBoundingClientRect().left - 1 && box.right <= fieldset.getBoundingClientRect().right + 1),
           copyContained: copy.every((node) => node.scrollWidth <= node.clientWidth && node.scrollHeight <= node.clientHeight),
           copyOverflow: copy.map((node) => getComputedStyle(node).overflow),
@@ -77,7 +79,8 @@ describe("Residency role option responsive layout", () => {
         documentContained: true,
         formContained: true,
         equalWidths: true,
-        stacked: viewport.stacked,
+        formStacked: viewport.formStacked,
+        choicesStacked: viewport.choicesStacked,
         containedInFieldset: true,
         copyContained: true,
       });
