@@ -1,13 +1,13 @@
 # HFY OS — Residency Build Specification
 
-**Version:** v6  
+**Version:** v7  
 **Status:** Production as-built specification  
-**Effective date:** August 31, 2026  
+**Effective date:** September 18, 2026  
 **Production application:** https://hfy.app  
-**Production baseline:** `bd4442b`  
-**Supersedes:** v5
+**Production baseline:** `c28fb02`  
+**Supersedes:** v6
 
-> **Changed this revision (v5 → v6):** Rewritten to describe the production platform as it exists now. This revision replaces the previous Residency model and workflow descriptions with the implemented Daypart-type and billing-mode model; nonfinancial schedule occurrences; single-date skip/custom-hours exceptions; the unified real-client/View As route tree; the client-safe Residency workspace; scoped public calendar links; the isolated staging environment and promotion process; and the current connection-pooling, `pdx1`, and serverless bundle-isolation configuration.
+> **Changed this revision (v6 → v7):** Added the calendar category-rail redesign; fixed Batch Edit staffing ownership so state is derived from actual occurrence data and both Client Managed and Request HFY are available; and fixed Share Calendar selected-Daypart scoping so selected Dayparts correctly scope the public calendar and unstaffed House Activities are no longer dropped.
 
 ## 1. Purpose and system boundary
 
@@ -387,4 +387,4 @@ The behaviors in this specification are backed by database constraints, server v
 - database pool configuration, transaction rollback, and bounded concurrency; and
 - unauthenticated/forbidden status handling on the internal Daypart API.
 
-This v6 document describes the production implementation at revision `bd4442b`; it does not redefine behavior independently of that deployed code and schema.
+This v7 document describes the production implementation at revision `c28fb02`; it does not redefine behavior independently of that deployed code and schema.
