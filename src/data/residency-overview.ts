@@ -1,12 +1,11 @@
 import "server-only";
 
-import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   assignments,
   clientAssignmentTerms,
   invoices,
-  residencyTalent,
   scheduleOccurrences,
   scheduleOccurrenceTalent,
   shifts,
@@ -47,21 +46,6 @@ export type ResidencyClientOverview = {
     nextPendingConfirmation: { talentName: string; activityName: string; serviceDate: string } | null;
     overdueInvoiceCount: number;
     overdueInvoiceCents: number;
-  };
-  talent: {
-    activeRosterCount: number;
-    upcomingTalentCount: number;
-    pendingConfirmationCount: number;
-    upcomingBookings: Array<{
-      id: string;
-      talentId: string | null;
-      talentName: string;
-      ownership: "hfy" | "residency";
-      activityName: string;
-      room: string;
-      serviceDate: string;
-      bookingStatus: "pending" | "confirmed";
-    }>;
   };
   finances: {
     currentMonthCommitmentsCents: number;
@@ -128,9 +112,7 @@ export async function getResidencyClientOverview(
     weekOccurrenceTalentRows,
     daypartRows,
     dateExceptions,
-    activeRosterRows,
-    upcomingAssignmentRows,
-    upcomingOccurrenceTalentRows,
+    pendingConfirmationRows,
     directTalentRows,
     currentMonthHfyRows,
     invoiceRows,
@@ -186,66 +168,19 @@ export async function getResidencyClientOverview(
       )),
     getDaypartsForResidency(residencyId),
     getDaypartDateExceptionsForResidencies([residencyId], weekRange),
-    database.select({ talentId: talent.id }).from(talent)
-      .innerJoin(residencyTalent, and(
-        eq(residencyTalent.talentId, talent.id),
-        eq(residencyTalent.residencyId, residencyId),
-        eq(residencyTalent.active, true),
-        eq(residencyTalent.clientVisible, true),
-      ))
-      .where(and(
-        eq(talent.talentStatus, "active"),
-        isNull(talent.archivedAt),
-        or(isNull(talent.exclusiveResidencyId), eq(talent.exclusiveResidencyId, residencyId)),
-      )),
     database.select({
-      id: assignments.id,
-      talentId: assignments.talentId,
-      visibleTalentId: residencyTalent.talentId,
       talentName: talent.stageName,
-      ownership: talent.ownership,
       activityName: shifts.name,
-      room: shifts.room,
       serviceDate: shifts.serviceDate,
       startsAt: assignments.startsAt,
-      bookingStatus: assignments.bookingStatus,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
       .innerJoin(talent, eq(assignments.talentId, talent.id))
-      .leftJoin(residencyTalent, and(
-        eq(residencyTalent.talentId, talent.id),
-        eq(residencyTalent.residencyId, residencyId),
-        eq(residencyTalent.active, true),
-        eq(residencyTalent.clientVisible, true),
-      ))
       .where(and(
         eq(shifts.residencyId, residencyId),
         gte(shifts.serviceDate, today),
-        inArray(assignments.bookingStatus, ["offered", "pending_hfy_confirmation", "confirmed", "completed"]),
+        inArray(assignments.bookingStatus, ["offered", "pending_hfy_confirmation"]),
       )).orderBy(asc(shifts.serviceDate), asc(assignments.startsAt)),
-    database.select({
-      id: scheduleOccurrenceTalent.id,
-      talentId: scheduleOccurrenceTalent.talentId,
-      visibleTalentId: residencyTalent.talentId,
-      talentName: talent.stageName,
-      ownership: talent.ownership,
-      activityName: scheduleOccurrences.name,
-      room: scheduleOccurrences.room,
-      serviceDate: scheduleOccurrences.serviceDate,
-      startsAt: scheduleOccurrenceTalent.startsAt,
-    }).from(scheduleOccurrenceTalent)
-      .innerJoin(scheduleOccurrences, eq(scheduleOccurrenceTalent.occurrenceId, scheduleOccurrences.id))
-      .innerJoin(talent, eq(scheduleOccurrenceTalent.talentId, talent.id))
-      .leftJoin(residencyTalent, and(
-        eq(residencyTalent.talentId, talent.id),
-        eq(residencyTalent.residencyId, residencyId),
-        eq(residencyTalent.active, true),
-        eq(residencyTalent.clientVisible, true),
-      ))
-      .where(and(
-        eq(scheduleOccurrences.residencyId, residencyId),
-        gte(scheduleOccurrences.serviceDate, today),
-      )).orderBy(asc(scheduleOccurrences.serviceDate), asc(scheduleOccurrenceTalent.startsAt)),
     database.select({
       serviceDate: shifts.serviceDate,
       startsAt: assignments.startsAt,
@@ -328,34 +263,6 @@ export async function getResidencyClientOverview(
     };
   });
 
-  const assignmentBookings = upcomingAssignmentRows.map((booking) => ({
-    id: `assignment:${booking.id}`,
-    talentId: booking.visibleTalentId,
-    rawTalentId: booking.talentId,
-    talentName: booking.talentName,
-    ownership: booking.ownership,
-    activityName: booking.activityName,
-    room: booking.room,
-    serviceDate: booking.serviceDate,
-    startsAt: booking.startsAt,
-    bookingStatus: ["offered", "pending_hfy_confirmation"].includes(booking.bookingStatus) ? "pending" as const : "confirmed" as const,
-  }));
-  const occurrenceBookings = upcomingOccurrenceTalentRows.map((booking) => ({
-    id: `occurrence-talent:${booking.id}`,
-    talentId: booking.visibleTalentId,
-    rawTalentId: booking.talentId,
-    talentName: booking.talentName,
-    ownership: booking.ownership,
-    activityName: booking.activityName,
-    room: booking.room,
-    serviceDate: booking.serviceDate,
-    startsAt: booking.startsAt,
-    bookingStatus: "confirmed" as const,
-  }));
-  const upcomingBookings = [...assignmentBookings, ...occurrenceBookings]
-    .sort((left, right) => left.serviceDate.localeCompare(right.serviceDate) || left.startsAt.getTime() - right.startsAt.getTime());
-  const pendingBookings = assignmentBookings.filter((booking) => booking.bookingStatus === "pending");
-
   const directTalentAmounts = directTalentRows.map((row) => ({
     serviceDate: row.serviceDate,
     amountCents: calculateClientOwedCents(
@@ -387,29 +294,14 @@ export async function getResidencyClientOverview(
         room: openServices[0].room,
         serviceDate: openServices[0].serviceDate,
       } : null,
-      pendingConfirmationCount: pendingBookings.length,
-      nextPendingConfirmation: pendingBookings[0] ? {
-        talentName: pendingBookings[0].talentName,
-        activityName: pendingBookings[0].activityName,
-        serviceDate: pendingBookings[0].serviceDate,
+      pendingConfirmationCount: pendingConfirmationRows.length,
+      nextPendingConfirmation: pendingConfirmationRows[0] ? {
+        talentName: pendingConfirmationRows[0].talentName,
+        activityName: pendingConfirmationRows[0].activityName,
+        serviceDate: pendingConfirmationRows[0].serviceDate,
       } : null,
       overdueInvoiceCount: overdueInvoices.length,
       overdueInvoiceCents: overdueInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0),
-    },
-    talent: {
-      activeRosterCount: activeRosterRows.length,
-      upcomingTalentCount: new Set(upcomingBookings.map((booking) => booking.rawTalentId)).size,
-      pendingConfirmationCount: pendingBookings.length,
-      upcomingBookings: upcomingBookings.slice(0, 3).map((booking) => ({
-        id: booking.id,
-        talentId: booking.talentId,
-        talentName: booking.talentName,
-        ownership: booking.ownership,
-        activityName: booking.activityName,
-        room: booking.room,
-        serviceDate: booking.serviceDate,
-        bookingStatus: booking.bookingStatus,
-      })),
     },
     finances: {
       currentMonthCommitmentsCents: currentMonthHfyCents + currentMonthDirectCents,

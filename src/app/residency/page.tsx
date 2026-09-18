@@ -52,10 +52,6 @@ function money(cents: number) {
   }).format(cents / 100);
 }
 
-function initials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "HF";
-}
-
 function ArrowIcon() {
   return <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 12 12 4M6 4h6v6" /></svg>;
 }
@@ -155,36 +151,6 @@ export default async function ResidencyOverviewPage() {
           </div> : <div className="residency-overview-all-clear">
             <span aria-hidden="true">✓</span><div><strong>All clear</strong><p>No open scheduling gaps, pending confirmations, or overdue talent invoices need attention.</p></div>
           </div>}
-        </ResidencySurfaceCard>
-
-        <ResidencySurfaceCard className="residency-overview-talent-card">
-          <ResidencySectionHeader
-            title="Talent"
-            eyebrow="Upcoming roster"
-            description="Active roster and upcoming talent bookings."
-            aside={<Link className="residency-overview-link" href="/residency/talent">View talent <ArrowIcon /></Link>}
-            split
-          />
-          <dl className="residency-overview-talent-stats">
-            <div><dt>Active roster</dt><dd>{overview.talent.activeRosterCount}</dd></div>
-            <div><dt>Upcoming</dt><dd>{overview.talent.upcomingTalentCount}</dd></div>
-            <div><dt>Pending</dt><dd>{overview.talent.pendingConfirmationCount}</dd></div>
-          </dl>
-          {overview.talent.upcomingBookings.length ? <div className="residency-overview-bookings">
-            {overview.talent.upcomingBookings.map((booking) => {
-              const href = booking.talentId && (actor.residencyTier !== "complete" || booking.ownership === "hfy")
-                ? `/residency/talent?artist=${booking.talentId}`
-                : null;
-              const content = <>
-                <span className="residency-overview-avatar" aria-hidden="true">{initials(booking.talentName)}</span>
-                <span className="residency-overview-booking-copy"><strong>{booking.talentName}</strong><small>{booking.activityName} · {booking.room}</small></span>
-                <time dateTime={booking.serviceDate}>{shortDate(booking.serviceDate)}</time>
-              </>;
-              return href
-                ? <Link className="residency-overview-booking" href={href} key={booking.id}>{content}</Link>
-                : <div className="residency-overview-booking" key={booking.id}>{content}</div>;
-            })}
-          </div> : <div className="residency-overview-empty">No upcoming talent bookings are scheduled.</div>}
         </ResidencySurfaceCard>
 
         <ResidencySurfaceCard className="residency-overview-finance-card">
