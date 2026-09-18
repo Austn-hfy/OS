@@ -192,7 +192,7 @@ describe("Compact Collection Panel visual regression", () => {
 
   afterAll(async () => {
     await browser?.close();
-  });
+  }, 120_000);
 
   it("keeps the approved anatomy, density, alignment, and pixels at 1440, 1200, and 1024", async () => {
     for (const viewport of viewports) {

@@ -1,8 +1,8 @@
 # HFY OS Design System V1
 
-Version: 1.5
+Version: 1.6
 Last updated: September 17, 2026
-Changed this revision: Corrected the v1.2–v1.5 scope so shared system contracts, cross-cutting principles, and Calendar-only implementation rules are explicitly separated before production promotion.
+Changed this revision: Added the Residency Day Parts implementation profile, its operational-grid tokens, and its page-specific responsive and overlay contracts without promoting those structures to shared sitewide components.
 
 This document turns the approved client Settings benchmark into reusable implementation rules. It complements `docs/BRAND_GUIDELINES.md`: the brand guide defines the visual identity, while this document defines the page-level components and tokens that enforce it in HFY OS.
 
@@ -139,6 +139,31 @@ The Month and Week layouts must pass at 1440px, 1200px, and 1024px and while res
 | Focus | Calendar dialogs and popovers implement the cross-cutting keyboard and focus principle above. |
 | Desktop coverage | Representative Batch menu, status legend, Share, quick-add, quick-edit, and batch-takeover states require visual and overflow checks at 1440px, 1200px, and 1024px. Schedule Daypart additionally requires compact visual coverage at 760px and 600px plus continuous containment checks from 900px through 480px. |
 
+## Day Parts Implementation Profile
+
+Scope: **Residency Day Parts only.** Day Parts uses the shared Residency page surface, header, body inset, spacing, color, and type tokens. Its room-by-week schedule, time-positioned blocks, room editor, and Daypart editor are operational structures specific to this route; their numeric tracks and compact thresholds are not locked sitewide rules.
+
+Day Parts follows the layer model as an operational workspace: the application canvas sits below one frosted `ResidencyPageSurface`, and the opaque weekly board is the working surface above it. Room rows, weekday cells, and time-positioned blocks are records inside that board and do not receive additional `ResidencySurfaceCard` wrappers.
+
+The Compact Collection Panel does not apply. Day Parts is a spatial schedule by room and weekday, not a searchable/filterable collection with count, sort, and selectable list rows.
+
+### Day Parts-only responsive contract
+
+| Role | Locked value or rule | Authority |
+| --- | --- | --- |
+| Header and body | Use `ResidencyPageHeader` and the standard `ResidencyPageBody` inset inside `ResidencyPageSurface`; the create action occupies the page-header action slot. | Shared Residency primitives |
+| Header grammar | Use `Day Parts · Schedule setup` above the `Weekly Daypart grid` H1. | Page-family copy contract |
+| Board readable floor | The complete board has an `840px` minimum working width: a `112px` room track plus seven day tracks of at least `104px`. | `--hfy-dayparts-board-min-width`, `--hfy-dayparts-room-track`, `--hfy-dayparts-day-track-min` |
+| Compact board | When the page body is narrower than the board floor, the board becomes one contained horizontal scroller. The room column stays sticky, a visible scroll cue appears, and the document itself must not widen. | Named `residency-dayparts-workspace` container |
+| Board type | Weekday labels are `10px`, room names are `12px`, event titles are `11px`, and event metadata is `10px`. | `--hfy-dayparts-weekday-size`, `--hfy-dayparts-room-size`, `--hfy-dayparts-event-title-size`, `--hfy-dayparts-event-meta-size` |
+| Daypart editor | Maximum width is `1120px` with a fixed header, one vertically scrolling body, and a contained footer. The editor responds to its own width at `900px`, `640px`, and `520px`; these are Day Parts-only thresholds. | Named `residency-daypart-editor` container, `--hfy-dayparts-drawer-max-width` |
+| Weekly-hours editor | Wide state shows seven readable day tracks. Intermediate state keeps those tracks in one contained horizontal scroller. At `520px` of editor width, the seven day controls form one vertical stack. | Named `residency-daypart-editor` container, `--hfy-dayparts-editor-day-min-width` |
+| Form controls | Two-choice and settings groups stack at `640px` of editor width. Supporting form copy uses a `10px` minimum. | `--hfy-dayparts-editor-supporting-size` |
+| Room editor | Uses one scrolling body and one contained action footer. At narrow width, color choices use two even columns and the danger action stacks below its warning copy. | Named `residency-room-editor` container |
+| Saved-template popover | Remains viewport-constrained. At a narrow popover width, template metadata moves below the template name rather than forcing horizontal overflow. | Named `residency-room-template-popover` container |
+| Focus | Daypart and room dialogs move focus inside, trap Tab/Shift+Tab, close on Escape, and restore focus to the initiating control. More Actions supports menu focus and arrow-key movement. Saved-template popovers close on outside interaction, scroll/resize, or Escape. | Cross-cutting keyboard and focus principle |
+| Coverage | The closed page is checked continuously from `1440px` through `390px`. Representative Daypart editor states are checked at `1440px`, `1024px`, `760px`, `600px`, and `390px`; the room editor and saved-template popover receive narrow-width containment checks. | Day Parts visual contracts |
+
 ## Adoption status
 
 - Settings → Account: authoritative benchmark, now rendered through shared primitives.
@@ -146,4 +171,5 @@ The Month and Week layouts must pass at 1440px, 1200px, and 1024px and while res
 - Residency Overview: first proof of concept. Its existing content, links, data, and behavior are unchanged; only the page composition and styling consume V1 primitives.
 - Residency Talent: adopted. The route uses the shared page surface, header, body, Surface cards, section header, fact grid, and Compact Collection Panel family. `TalentWorkspaceShell` remains the domain-specific master/detail composition; the searchable roster is no longer page-specific.
 - Residency Calendar: page-specific implementation profile adopted. It reuses core tokens and cross-cutting interaction principles, but its numeric breakpoints, seven-day grid, command bar, Batch/Share structures, and Schedule Daypart anatomy remain Calendar-local rather than shared system components. Mobile remains deferred.
+- Residency Day Parts: page-specific implementation profile adopted. It uses the shared Residency page surface/header/body and core tokens while keeping its weekly operational grid and editors route-specific. The Compact Collection Panel is intentionally not used.
 - Other Residency pages: not yet migrated and require separate review.

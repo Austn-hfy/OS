@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { deleteResidencyRoomAction, removeDaypartAction, saveDaypartAction, updateResidencyRoomAction, type CreateRoomActionState, type ResidencyActionState } from "@/app/app/actions";
 import { DEFAULT_DAYPART_COLOR, clockToMinute, contrastTextColor, formatLocalMinute, minuteToClock, resolveEndMinute, roomColor, roomDaypartColor, roomHueForIndex, weekdayNames, type DaypartBillingMode, type DaypartScheduleMode, type DaypartType, type RoomHue } from "@/domain/dayparts";
@@ -12,6 +12,7 @@ import { formatDate } from "@/components/format";
 import { TimeSelect } from "@/components/time-select";
 import { daypartNeedsDefaultArtistRate } from "@/domain/daypart-rate-attention";
 import { useReportDaypartRateAttention } from "@/components/daypart-rate-attention-context";
+import { ResidencyPageBody, ResidencyPageHeader, ResidencyPageSurface } from "@/components/residency-design-system";
 import type { ResidencyRoom } from "@/services/rooms";
 
 export type DaypartRow = {
@@ -66,6 +67,12 @@ type TemplatePopoverState = {
 };
 
 const initialActionState: ResidencyActionState = { status: "idle", message: "" };
+
+function focusableElements(container: HTMLElement | null): HTMLElement[] {
+  if (!container) return [];
+  return [...container.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+    .filter((element) => element.getAttribute("aria-hidden") !== "true" && element.offsetParent !== null);
+}
 
 function optionalDjCount(value: string): number | null {
   const count = Number(value);
@@ -159,12 +166,18 @@ function displayRange(dayparts: DaypartRow[]) {
   };
 }
 
-export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved, onClose, readOnly = false, hideFinancials = false, initialCreate = false, fullProgrammingClient = false }: { residencyId: string; dayparts: DaypartRow[]; residencyRooms: ResidencyRoom[]; onSaved?: () => void; onClose?: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean; fullProgrammingClient?: boolean }) {
+export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved, onClose, readOnly = false, hideFinancials = false, initialCreate = false, fullProgrammingClient = false, residencySurface = false }: { residencyId: string; dayparts: DaypartRow[]; residencyRooms: ResidencyRoom[]; onSaved?: () => void; onClose?: () => void; readOnly?: boolean; hideFinancials?: boolean; initialCreate?: boolean; fullProgrammingClient?: boolean; residencySurface?: boolean }) {
   const [draft, setDraft] = useState<EditorDraft | null>(null);
   const [roomDraft, setRoomDraft] = useState<{ roomId: string; name: string; hue: RoomHue } | null>(null);
   const [templatePopover, setTemplatePopover] = useState<TemplatePopoverState | null>(null);
   const templateTriggerRef = useRef<HTMLButtonElement>(null);
   const templatePopoverRef = useRef<HTMLDivElement>(null);
+  const draftDialogRef = useRef<HTMLElement>(null);
+  const draftReturnFocusRef = useRef<HTMLElement | null>(null);
+  const roomDialogRef = useRef<HTMLElement>(null);
+  const roomReturnFocusRef = useRef<HTMLElement | null>(null);
+  const roomDraftOpenRef = useRef(false);
+  const editorActionsTriggerRef = useRef<HTMLButtonElement>(null);
   const [roomPending, setRoomPending] = useState(false);
   const [roomDeletePending, setRoomDeletePending] = useState(false);
   const [roomState, setRoomState] = useState<CreateRoomActionState>(initialActionState);
@@ -215,6 +228,8 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   const showDraftRate = showHfyRate || showClientRate;
   const draftRateValue = showHfyRate ? draft?.defaultTalentRate ?? "" : draft?.clientDefaultRate ?? "";
   const draftRateLabel = showHfyRate ? "Default talent rate" : "Default artist rate";
+  const draftOpen = Boolean(draft);
+  const roomDraftOpen = Boolean(roomDraft);
 
   useEffect(() => {
     if (!initialCreate || readOnly || openedInitialDraft.current) return;
@@ -224,24 +239,44 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   }, [dayparts.length, fullProgrammingClient, initialCreate, readOnly]);
 
   useEffect(() => {
-    if (!draft) return;
+    if (!draftOpen) return;
     const priorOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (editorActionsOpen) setEditorActionsOpen(false);
-      else {
-        setDraft(null);
-        setActiveUntilExpanded(false);
-        setRateExpanded(false);
-      }
-    };
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = priorOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [draft, editorActionsOpen]);
+  }, [draftOpen]);
+
+  useEffect(() => {
+    if (!draftOpen) return;
+    const handleDialogKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (editorActionsOpen) {
+          setEditorActionsOpen(false);
+          editorActionsTriggerRef.current?.focus();
+        } else {
+          setDraft(null);
+          setActiveUntilExpanded(false);
+          setRateExpanded(false);
+        }
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusableElements(draftDialogRef.current);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleDialogKeys);
+    return () => window.removeEventListener("keydown", handleDialogKeys);
+  }, [draftOpen, editorActionsOpen]);
 
   useEffect(() => {
     if (!editorActionsOpen) return;
@@ -249,20 +284,45 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
       if (!editorActionsRef.current?.contains(event.target as Node)) setEditorActionsOpen(false);
     };
     document.addEventListener("pointerdown", closeOnOutsideClick);
-    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+    const frame = window.requestAnimationFrame(() => editorActionsRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus());
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+    };
   }, [editorActionsOpen]);
 
   useEffect(() => {
-    if (!roomDraft) return;
+    if (!roomDraftOpen) return;
     const priorOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setRoomDraft(null); };
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = priorOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [roomDraft]);
+  }, [roomDraftOpen]);
+
+  useEffect(() => {
+    if (!roomDraftOpen) return;
+    const handleDialogKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setRoomDraft(null);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusableElements(roomDialogRef.current);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleDialogKeys);
+    return () => window.removeEventListener("keydown", handleDialogKeys);
+  }, [roomDraftOpen]);
 
   useEffect(() => {
     if (!templatePopover) return;
@@ -289,12 +349,58 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
   }, [templatePopover]);
 
   useEffect(() => {
-    const draftIsOpen = Boolean(draft);
-    if (draftIsOpen !== draftOpenRef.current) {
+    if (draftOpen && !draftOpenRef.current) {
+      draftReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setDateValidationRequested(false);
-      draftOpenRef.current = draftIsOpen;
+      const frame = window.requestAnimationFrame(() => {
+        const preferred = draftDialogRef.current?.querySelector<HTMLElement>(".daypart-editor-scroll button:not([disabled]), .daypart-editor-scroll input:not([disabled]), .daypart-editor-scroll select:not([disabled])");
+        (preferred ?? focusableElements(draftDialogRef.current)[0])?.focus();
+      });
+      draftOpenRef.current = true;
+      return () => window.cancelAnimationFrame(frame);
     }
-  }, [draft]);
+    if (!draftOpen && draftOpenRef.current) {
+      setDateValidationRequested(false);
+      draftOpenRef.current = false;
+      const frame = window.requestAnimationFrame(() => draftReturnFocusRef.current?.focus());
+      return () => window.cancelAnimationFrame(frame);
+    }
+  }, [draftOpen]);
+
+  useEffect(() => {
+    if (roomDraftOpen && !roomDraftOpenRef.current) {
+      roomReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const frame = window.requestAnimationFrame(() => {
+        (roomDialogRef.current?.querySelector<HTMLElement>("input:not([disabled])") ?? focusableElements(roomDialogRef.current)[0])?.focus();
+      });
+      roomDraftOpenRef.current = true;
+      return () => window.cancelAnimationFrame(frame);
+    }
+    if (!roomDraftOpen && roomDraftOpenRef.current) {
+      roomDraftOpenRef.current = false;
+      const frame = window.requestAnimationFrame(() => roomReturnFocusRef.current?.focus());
+      return () => window.cancelAnimationFrame(frame);
+    }
+  }, [roomDraftOpen]);
+
+  function handleEditorMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])')];
+    if (!items.length) return;
+    const currentIndex = Math.max(0, items.indexOf(document.activeElement as HTMLButtonElement));
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      items[(currentIndex + 1) % items.length].focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      items[(currentIndex - 1 + items.length) % items.length].focus();
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      items[0].focus();
+    } else if (event.key === "End") {
+      event.preventDefault();
+      items.at(-1)?.focus();
+    }
+  }
 
   useEffect(() => {
     if (!showDateValidation) return;
@@ -500,15 +606,21 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
     }
   }
 
+  const ManagerSurface = residencySurface ? ResidencyPageSurface : "section";
+  const ManagerBody = residencySurface ? ResidencyPageBody : "div";
+  const headingActions = <div className="daypart-workspace-actions">{readOnly ? null : <button className="button" type="button" onClick={() => { const next = blankDraft(); setDraft(fullProgrammingClient ? { ...next, type: "house_activity" } : next); }}>{fullProgrammingClient ? "+ Add House Activity" : "+ Add Daypart"}</button>}{onClose ? <button className="quick-modal-close" type="button" aria-label="Close Day Parts" onClick={onClose}>×</button> : null}</div>;
+
   return (
-    <section className="daypart-manager">
-      <div className="section-heading daypart-workspace-heading"><div><p className="eyebrow">Schedule setup</p><h2>Weekly Daypart grid</h2><p className="subhead">Weekly Dayparts project onto the Calendar until scheduled.</p></div><div className="daypart-workspace-actions">{readOnly ? null : <button className="button" type="button" onClick={() => { const next = blankDraft(); setDraft(fullProgrammingClient ? { ...next, type: "house_activity" } : next); }}>{fullProgrammingClient ? "+ Add House Activity" : "+ Add Daypart"}</button>}{onClose ? <button className="quick-modal-close" type="button" aria-label="Close Day Parts" onClick={onClose}>×</button> : null}</div></div>
+    <ManagerSurface className={`daypart-manager${residencySurface ? " residency-dayparts-surface" : ""}`}>
+      {residencySurface ? <ResidencyPageHeader eyebrow="Day Parts · Schedule setup" title="Weekly Daypart grid" description="Weekly Dayparts project onto the Calendar until scheduled.">{headingActions}</ResidencyPageHeader> : <div className="section-heading daypart-workspace-heading"><div><p className="eyebrow">Schedule setup</p><h2>Weekly Daypart grid</h2><p className="subhead">Weekly Dayparts project onto the Calendar until scheduled.</p></div>{headingActions}</div>}
+
+      <ManagerBody className={residencySurface ? "residency-dayparts-body" : "daypart-workspace-body"}>
 
       {fullProgrammingClient ? <div className="full-programming-notice"><strong>HFY manages all Talent Activities</strong><span>You can create and edit House Activities here. Talent Activities and artist scheduling are handled by HFY; single-date skips and custom hours remain available from Calendar.</span></div> : null}
 
       {missingRateDayparts.length ? <div className="daypart-rate-attention-banner" role="status"><span aria-hidden="true">!</span><div><strong>{missingRateDayparts.length} default artist {missingRateDayparts.length === 1 ? "rate needs" : "rates need"} attention</strong><p>Open every highlighted Talent Activity and enter a rate above $0. You can keep building the schedule, but HFY OS cannot calculate what the artist is owed until these rates are saved.</p></div></div> : null}
 
-      {residencyRooms.length ? <div className="daypart-week-board" style={{ "--daypart-grid-start": range.start, "--daypart-grid-end": range.end } as CSSProperties}>
+      {residencyRooms.length ? <>{residencySurface ? <p className="daypart-week-scroll-hint">Scroll horizontally to view all seven days <span aria-hidden="true">→</span></p> : null}<div className="daypart-week-scroll" role="region" aria-label="Weekly Daypart schedule by room" tabIndex={0}><div className="daypart-week-board" style={{ "--daypart-grid-start": range.start, "--daypart-grid-end": range.end } as CSSProperties}>
         <div className="daypart-week-corner"><strong>Room</strong><span>{formatLocalMinute(range.start)}–{formatLocalMinute(range.end)}</span></div>
         {weekdayNames.map((weekday) => <div className="daypart-week-heading" key={weekday}>{weekday.slice(0, 3)}</div>)}
         {residencyRooms.map((room) => {
@@ -558,14 +670,15 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
           })}
         </div>;
         })}
-      </div> : readOnly ? <div className="card empty daypart-empty-grid">No weekly Dayparts are configured for this Residency.</div> : <button className="card empty daypart-empty-grid" type="button" onClick={() => setDraft(blankDraft())}>No weekly Dayparts yet. Click to create one.</button>}
+      </div></div></> : readOnly ? <div className="card empty daypart-empty-grid">No weekly Dayparts are configured for this Residency.</div> : <button className="card empty daypart-empty-grid" type="button" onClick={() => setDraft(blankDraft())}>No weekly Dayparts yet. Click to create one.</button>}
+      </ManagerBody>
 
       {templatePopover && typeof document !== "undefined" ? (() => {
         const room = residencyRooms.find((item) => item.id === templatePopover.roomId);
         const roomTemplates = templatesByRoomId.get(templatePopover.roomId) ?? [];
         if (!room || !roomTemplates.length) return null;
         return createPortal(<div
-          className="room-template-popover"
+          className={`room-template-popover${residencySurface ? " residency-room-template-popover" : ""}`}
           id={`room-${room.id}-templates`}
           ref={templatePopoverRef}
           role="dialog"
@@ -584,11 +697,11 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
         </div>, document.body);
       })() : null}
 
-      {roomDraft ? <div className="room-editor-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setRoomDraft(null); }}><aside className="room-editor-panel" role="dialog" aria-modal="true" aria-labelledby="room-editor-title"><div className="room-editor-heading"><div><p className="eyebrow">Room &amp; space</p><h2 id="room-editor-title">Edit room</h2></div><button className="quick-modal-close" type="button" aria-label="Close room editor" onClick={() => setRoomDraft(null)}>×</button></div><div className="room-editor-body"><div className="field"><label htmlFor="room-editor-name">Room name</label><input id="room-editor-name" value={roomDraft.name} onChange={(event) => setRoomDraft({ ...roomDraft, name: event.target.value })} maxLength={160} autoFocus required /></div><div className="field"><label>Room color</label><RoomHuePicker value={roomDraft.hue} onChange={(hue) => setRoomDraft({ ...roomDraft, hue })} ariaLabel={`Choose the room color for ${roomDraft.name}`} /><small>Saving updates the room name everywhere and recolors its Dayparts and reusable templates across four high-contrast shades.</small></div><div className="daypart-danger-zone"><div><strong>Delete room</strong><small>Only an empty room can be deleted. Existing Dayparts, templates, and dated Calendar activities are always preserved.</small></div><button className="remove-dj-button" type="button" disabled={roomPending || roomDeletePending} onClick={() => void deleteRoom()}>{roomDeletePending ? "Deleting…" : "Delete room"}</button></div>{roomState.status === "error" ? <p className="error" aria-live="polite">{roomState.message}</p> : null}</div><div className="room-editor-actions"><button className="button secondary" type="button" disabled={roomPending || roomDeletePending} onClick={() => setRoomDraft(null)}>Cancel</button><button className="button" type="button" disabled={roomPending || roomDeletePending || !roomDraft.name.trim()} onClick={() => void saveRoom()}>{roomPending ? "Saving…" : "Save room"}</button></div></aside></div> : roomState.status === "success" ? <p className="success" aria-live="polite">{roomState.message}</p> : null}
+      {roomDraft ? <div className={`room-editor-backdrop${residencySurface ? " residency-room-editor-backdrop" : ""}`} onMouseDown={(event) => { if (event.currentTarget === event.target) setRoomDraft(null); }}><aside className={`room-editor-panel${residencySurface ? " residency-room-editor-panel" : ""}`} ref={roomDialogRef} role="dialog" aria-modal="true" aria-labelledby="room-editor-title"><div className="room-editor-heading"><div><p className="eyebrow">Room &amp; space</p><h2 id="room-editor-title">Edit room</h2></div><button className="quick-modal-close" type="button" aria-label="Close room editor" onClick={() => setRoomDraft(null)}>×</button></div><div className="room-editor-body"><div className="field"><label htmlFor="room-editor-name">Room name</label><input id="room-editor-name" value={roomDraft.name} onChange={(event) => setRoomDraft({ ...roomDraft, name: event.target.value })} maxLength={160} autoFocus required /></div><div className="field"><label>Room color</label><RoomHuePicker value={roomDraft.hue} onChange={(hue) => setRoomDraft({ ...roomDraft, hue })} ariaLabel={`Choose the room color for ${roomDraft.name}`} /><small>Saving updates the room name everywhere and recolors its Dayparts and reusable templates across four high-contrast shades.</small></div><div className="daypart-danger-zone"><div><strong>Delete room</strong><small>Only an empty room can be deleted. Existing Dayparts, templates, and dated Calendar activities are always preserved.</small></div><button className="remove-dj-button" type="button" disabled={roomPending || roomDeletePending} onClick={() => void deleteRoom()}>{roomDeletePending ? "Deleting…" : "Delete room"}</button></div>{roomState.status === "error" ? <p className="error" aria-live="polite">{roomState.message}</p> : null}</div><div className="room-editor-actions"><button className="button secondary" type="button" disabled={roomPending || roomDeletePending} onClick={() => setRoomDraft(null)}>Cancel</button><button className="button" type="button" disabled={roomPending || roomDeletePending || !roomDraft.name.trim()} onClick={() => void saveRoom()}>{roomPending ? "Saving…" : "Save room"}</button></div></aside></div> : roomState.status === "success" ? <p className="success" aria-live="polite">{roomState.message}</p> : null}
 
       {draft ? (
-        <div className="daypart-drawer-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) { setDraft(null); setActiveUntilExpanded(false); setRateExpanded(false); setEditorActionsOpen(false); } }}>
-          <aside className="daypart-drawer" role="dialog" aria-modal="true" aria-labelledby="daypart-editor-title">
+        <div className={`daypart-drawer-backdrop${residencySurface ? " residency-daypart-drawer-backdrop" : ""}`} onMouseDown={(event) => { if (event.currentTarget === event.target) { setDraft(null); setActiveUntilExpanded(false); setRateExpanded(false); setEditorActionsOpen(false); } }}>
+          <aside className={`daypart-drawer${residencySurface ? " residency-daypart-drawer" : ""}`} ref={draftDialogRef} role="dialog" aria-modal="true" aria-labelledby="daypart-editor-title">
             <form className="daypart-editor" action={formAction} onSubmit={(event) => {
               if (draft.scheduleMode === "calendar_only" || draft.rules.some((rule) => rule.enabled && rule.start && rule.end)) return;
               event.preventDefault();
@@ -650,13 +763,13 @@ export function DaypartManager({ residencyId, dayparts, residencyRooms, onSaved,
                 {removeState.status === "error" ? <p className="error" aria-live="polite">{removeState.message}</p> : null}
               </div>
               <div className="daypart-editor-actions">
-                {draft.id ? <div className="daypart-editor-more" ref={editorActionsRef}><button className="daypart-editor-more-trigger" type="button" aria-haspopup="menu" aria-expanded={editorActionsOpen} onClick={() => setEditorActionsOpen((open) => !open)}>More actions <span aria-hidden="true">⌄</span></button>{editorActionsOpen ? <div className="daypart-editor-more-menu" role="menu">{draft.scheduleMode === "standing_weekly" ? <button type="button" role="menuitem" onClick={() => { setDraft({ ...draft, active: !draft.active }); setEditorActionsOpen(false); }}>{draft.active ? "Pause Daypart" : "Resume Daypart"}</button> : null}<button className="danger" type="button" role="menuitem" disabled={removePending} onClick={() => { setEditorActionsOpen(false); void removeCurrentDaypart(); }}>{removePending ? "Removing…" : draft.scheduleMode === "calendar_only" ? "Delete / archive template" : "Delete / archive Daypart"}</button></div> : null}</div> : null}
+                {draft.id ? <div className="daypart-editor-more" ref={editorActionsRef}><button className="daypart-editor-more-trigger" ref={editorActionsTriggerRef} type="button" aria-haspopup="menu" aria-expanded={editorActionsOpen} onClick={() => setEditorActionsOpen((open) => !open)}>More actions <span aria-hidden="true">⌄</span></button>{editorActionsOpen ? <div className="daypart-editor-more-menu" role="menu" onKeyDown={handleEditorMenuKeyDown}>{draft.scheduleMode === "standing_weekly" ? <button type="button" role="menuitem" onClick={() => { setDraft({ ...draft, active: !draft.active }); setEditorActionsOpen(false); }}>{draft.active ? "Pause Daypart" : "Resume Daypart"}</button> : null}<button className="danger" type="button" role="menuitem" disabled={removePending} onClick={() => { setEditorActionsOpen(false); void removeCurrentDaypart(); }}>{removePending ? "Removing…" : draft.scheduleMode === "calendar_only" ? "Delete / archive template" : "Delete / archive Daypart"}</button></div> : null}</div> : null}
                 <div className="daypart-editor-primary-actions"><button className="button secondary" type="button" onClick={() => { setDraft(null); setActiveUntilExpanded(false); setRateExpanded(false); setEditorActionsOpen(false); }}>Cancel</button>{draft.type && (draft.type === "house_activity" || draft.billingMode) && draft.scheduleMode ? <button className="button" disabled={pending || !hasSelectedRoom} type="submit">{pending ? "Saving…" : draft.scheduleMode === "calendar_only" ? "Save template" : "Save Daypart"}</button> : null}</div>
               </div>
             </form>
           </aside>
         </div>
       ) : state.message ? <p className={state.status === "error" ? "error" : "success"} aria-live="polite">{state.message}</p> : null}
-    </section>
+    </ManagerSurface>
   );
 }

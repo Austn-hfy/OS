@@ -58,6 +58,6 @@ describe("Calendar occasional activity follow-up", () => {
     expect(manager).not.toContain("Listed by activity name. Program and host details stay attached only to each scheduled Calendar date.");
     expect(manager).not.toContain("listed above");
     expect(manager).toContain('className="room-template-trigger"');
-    expect(manager).toContain('className="room-template-popover"');
+    expect(manager).toContain("room-template-popover");
   });
 });

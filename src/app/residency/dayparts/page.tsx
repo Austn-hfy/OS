@@ -15,6 +15,7 @@ export default async function ResidencyDaypartsPage({ searchParams }: { searchPa
     dayparts={dayparts.map((daypart) => ({ ...daypart, defaultTalentRateCents: null }))}
     rooms={rooms}
     hideFinancials
+    residencySurface
     fullProgrammingClient={actor.residencyTier === "complete"}
     initialCreate={actor.accessRole === "manager" && params.create === "1"}
   />;
