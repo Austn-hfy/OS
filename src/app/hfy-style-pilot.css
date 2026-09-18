@@ -970,8 +970,12 @@
 .hfy-style-system .calendar-weekday { color: var(--hfy-label); background: rgba(216, 225, 231, 0.8); }
 .hfy-style-system .calendar-day { background: rgba(250, 252, 253, 0.91); }
 .hfy-style-system .calendar-day.outside { background: rgba(222, 229, 234, 0.67); }
+.hfy-style-system .calendar-day.today { background: var(--hfy-action-soft); box-shadow: inset 0 0 0 2px var(--hfy-action-strong); }
 .hfy-style-system .calendar-day.selected { box-shadow: inset 0 0 0 2px var(--hfy-action-strong); }
+.hfy-style-system .calendar-day.today.selected { box-shadow: inset 0 0 0 2px var(--hfy-action-strong), inset 0 0 0 4px var(--hfy-action-soft); }
 .hfy-style-system .calendar-day time { color: var(--hfy-ink); font-family: var(--hfy-font-sans); }
+.hfy-style-system .calendar-day.today time { color: white; background: var(--hfy-action-strong); }
+.hfy-style-system .calendar-today-label { color: var(--hfy-action-ink); }
 .hfy-style-system .calendar-add-icon {
   border-color: var(--hfy-line);
   color: var(--hfy-muted);
@@ -984,10 +988,13 @@
 }
 .hfy-style-system .calendar-event { transition: transform var(--hfy-motion), filter var(--hfy-motion); }
 .hfy-style-system .calendar-event:is(.schedule-empty, .schedule-partial, .schedule-filled) {
-  color: #102334;
-  background: color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 64%, white);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 66%, transparent);
+  color: var(--hfy-ink);
+  border-color: var(--hfy-line);
+  border-left-color: var(--daypart-color, var(--hfy-action-strong));
+  background: var(--hfy-surface-raised);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
 }
+.hfy-style-system .calendar-attention-indicator { color: white; background: var(--hfy-warning); }
 .hfy-style-system .calendar-more-events { color: var(--hfy-action-strong); }
 
 /* Setup and recurring Dayparts */
@@ -1659,6 +1666,9 @@
 .hfy-style-system .public-calendar-agenda-heading .eyebrow { margin: 0 0 13px; line-height: 1; }
 .hfy-style-system .public-calendar-agenda-heading h2 { margin: 0 0 7px; font-size: clamp(26px, 2vw, 30px); line-height: 1.04; }
 .hfy-style-system .public-calendar-agenda-heading > p:not(.eyebrow) { margin: 0; color: var(--hfy-muted); font-size: 10px; line-height: 1.45; }
+.hfy-style-system .public-calendar-scope { display: grid; gap: 3px; margin-top: 13px; padding-top: 12px; border-top: 1px solid rgba(48, 68, 84, 0.09); }
+.hfy-style-system .public-calendar-scope strong { color: var(--hfy-label); font-size: 8px; font-weight: 760; letter-spacing: 0.08em; text-transform: uppercase; }
+.hfy-style-system .public-calendar-scope span { color: var(--hfy-ink-soft); font-size: 10px; font-weight: 680; line-height: 1.45; overflow-wrap: anywhere; }
 .hfy-style-system .public-calendar-agenda-list {
   min-width: 0;
   min-height: 0;
@@ -2209,8 +2219,12 @@
   background: rgba(220, 228, 233, 0.62);
 }
 
+.hfy-style-system .calendar-main .calendar-day.today {
+  background: var(--hfy-action-soft);
+}
+
 .hfy-style-system .calendar-main .calendar-event:is(.schedule-empty, .schedule-partial, .schedule-filled) {
-  background: color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 64%, white);
+  background: var(--hfy-surface-raised);
 }
 
 @media (max-width: 900px) {
@@ -2225,8 +2239,16 @@
   }
 }
 
-/* HFY state uses a secondary pink marker; the room color remains the pill fill. */
-.hfy-style-system :is(.calendar-event, .week-calendar-event):is(.hfy-pending, .hfy-confirmed) {
+/* HFY state stays secondary to the Daypart category rail. */
+.hfy-style-system .calendar-event:is(.hfy-pending, .hfy-confirmed) {
+  color: var(--hfy-ink);
+  border-color: var(--hfy-line);
+  border-left-color: var(--daypart-color, var(--hfy-action-strong));
+  background: var(--hfy-surface-raised);
+  box-shadow: inset 0 1px var(--hfy-inset-highlight);
+}
+
+.hfy-style-system .week-calendar-event:is(.hfy-pending, .hfy-confirmed) {
   color: #102334;
   border-left-color: var(--daypart-color, var(--hfy-action-strong));
   background: color-mix(in srgb, var(--daypart-color, var(--hfy-action-strong)) 64%, white);

@@ -72,4 +72,24 @@ describe("Calendar batch scheduling", () => {
     expect(pilotStyles).toContain(".hfy-style-system .calendar-batch-menu { border-color: var(--hfy-line); background: #f9fbfc; }");
     expect(pilotStyles).toContain(".calendar-batch-editor-row.is-complete:not(.expanded)");
   });
+
+  it("uses occurrence ownership in mixed calendars and removes duplicate dates", async () => {
+    const [editor, calendar, page, bookings] = await Promise.all([
+      readFile(new URL("../src/components/calendar-batch-editor.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/calendar/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8"),
+    ]);
+
+    expect(editor).toContain("isHfyManagedCalendarEvent(selectedEvent)");
+    expect(editor).toContain("addClientManagedOccurrenceAssignmentAction(formData)");
+    expect(editor).toContain("requestHfyForScheduleOccurrenceAction(formData)");
+    expect(editor).toContain('event.recordType === "nonfinancial_occurrence" && event.billingMode === "tracking_only"');
+    expect(editor).toContain("canChooseStaffingMode");
+    expect(calendar).toContain("previewMode && canManage");
+    expect(page).toContain("savedShiftDaypartDates");
+    expect(page).toContain("visibleOccurrences");
+    expect(page).not.toContain('actor.residencyTier === "complete" ? []');
+    expect(bookings).not.toContain('occurrence.residencyTier === "complete"');
+  });
 });

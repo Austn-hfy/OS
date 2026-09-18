@@ -7,6 +7,7 @@ describe("WeekCalendar", () => {
   it("shows seven days, full event details, and empty-day placeholders", () => {
     const html = renderToStaticMarkup(createElement(WeekCalendar, {
       weekStart: "2026-08-30",
+      today: "2026-09-01",
       events: [{
         id: "slot-1",
         date: "2026-09-01",
@@ -26,5 +27,8 @@ describe("WeekCalendar", () => {
     expect(html).toContain("2 talent");
     expect(html.match(/No dayparts/g)).toHaveLength(6);
     expect(html).toContain("--daypart-color:#EC4899");
+    expect(html).toContain('class="week-calendar-day today ');
+    expect(html).toContain('aria-current="date"');
+    expect(html).toContain("Today");
   });
 });

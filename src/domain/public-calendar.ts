@@ -7,8 +7,8 @@ const sourceRowSchema = z.object({
   daypartName: z.string().trim().min(1).max(160),
   room: z.string().trim().max(160),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-  artistName: z.string().trim().min(1).max(160),
-  instagramHandle: z.string().max(160),
+  artistName: z.string().trim().min(1).max(160).nullish(),
+  instagramHandle: z.string().max(160).nullish(),
   serviceDate: z.iso.date(),
   startsAt: z.coerce.date(),
   endsAt: z.coerce.date(),
@@ -27,11 +27,19 @@ const publicEntrySchema = z.object({
   date: z.iso.date(),
   startTime: z.string().min(1).max(40),
   endTime: z.string().min(1).max(40),
-  artists: z.array(publicArtistSchema).min(1).max(30),
+  artists: z.array(publicArtistSchema).max(30),
+}).passthrough();
+
+const publicDaypartSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  room: z.string().trim().max(160),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
 }).passthrough();
 
 const publicResponseSchema = z.object({
   residencyName: z.string().trim().min(1).max(160),
+  scope: z.enum(["all", "selected"]).default("all"),
+  dayparts: z.array(publicDaypartSchema).max(100).default([]),
   entries: z.array(publicEntrySchema).max(10_000),
 }).passthrough();
 
@@ -50,7 +58,18 @@ export type PublicCalendarEntry = Readonly<{
   artists: PublicCalendarArtist[];
 }>;
 
-export type PublicCalendarResponse = Readonly<{ residencyName: string; entries: PublicCalendarEntry[] }>;
+export type PublicCalendarDaypart = Readonly<{
+  name: string;
+  room: string;
+  color: string;
+}>;
+
+export type PublicCalendarResponse = Readonly<{
+  residencyName: string;
+  scope: PublicCalendarScope;
+  dayparts: PublicCalendarDaypart[];
+  entries: PublicCalendarEntry[];
+}>;
 export type PublicCalendarScope = "all" | "selected";
 
 export function issuePublicCalendarToken() {
@@ -104,9 +123,11 @@ export function projectPublicCalendarRows(rows: unknown[]): PublicCalendarEntry[
       endTime: localTime(row.endsAt, row.timezone),
       artists: [],
     };
-    const artist = { name: row.artistName, instagramHandle: row.instagramHandle };
-    if (!entry.artists.some((current) => current.name === artist.name && current.instagramHandle === artist.instagramHandle)) {
-      entry.artists.push(Object.freeze(artist));
+    if (row.artistName) {
+      const artist = { name: row.artistName, instagramHandle: row.instagramHandle ?? "" };
+      if (!entry.artists.some((current) => current.name === artist.name && current.instagramHandle === artist.instagramHandle)) {
+        entry.artists.push(Object.freeze(artist));
+      }
     }
     grouped.set(key, entry);
   }
@@ -122,6 +143,12 @@ export function enforcePublicCalendarResponse(candidate: unknown): PublicCalenda
   const parsed = publicResponseSchema.parse(candidate);
   return Object.freeze({
     residencyName: parsed.residencyName,
+    scope: parsed.scope,
+    dayparts: parsed.dayparts.map((daypart) => Object.freeze({
+      name: daypart.name,
+      room: daypart.room,
+      color: daypart.color,
+    })),
     entries: parsed.entries.map((entry) => Object.freeze({
       daypartName: entry.daypartName,
       room: entry.room,

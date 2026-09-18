@@ -11,9 +11,10 @@ function eventDetails(time: string) {
   return { timeRange, status: statusParts.join(" · ") || "Scheduled" };
 }
 
-export function WeekCalendar({ weekStart, events, selectedDate, onDateClick, onEventClick, ariaLabel = "Programming calendar week" }: {
+export function WeekCalendar({ weekStart, events, today, selectedDate, onDateClick, onEventClick, ariaLabel = "Programming calendar week" }: {
   weekStart: string;
   events: MonthCalendarEvent[];
+  today?: string;
   selectedDate?: string | null;
   onDateClick?: (date: string) => void;
   onEventClick?: (event: MonthCalendarEvent) => void;
@@ -25,9 +26,10 @@ export function WeekCalendar({ weekStart, events, selectedDate, onDateClick, onE
     <div className="week-calendar" role="grid" aria-label={ariaLabel}>
       {days.map((day) => {
         const dayEvents = events.filter((event) => event.date === day.iso);
-        return <section className={`week-calendar-day ${selectedDate === day.iso ? "selected" : ""}`} role="gridcell" key={day.iso}>
+        const isToday = today === day.iso;
+        return <section className={`week-calendar-day ${isToday ? "today" : ""} ${selectedDate === day.iso ? "selected" : ""}`} role="gridcell" key={day.iso}>
           <header className="week-calendar-day-header">
-            <div><span>{day.weekday}</span><time dateTime={day.iso}>{day.month} {day.day}</time></div>
+            <div><span>{isToday ? "Today" : day.weekday}</span><time dateTime={day.iso} aria-current={isToday ? "date" : undefined}>{day.month} {day.day}</time></div>
             {onDateClick ? <button type="button" aria-label={`Add to ${day.iso}`} onClick={() => onDateClick(day.iso)}>+</button> : null}
           </header>
           <div className="week-calendar-events">

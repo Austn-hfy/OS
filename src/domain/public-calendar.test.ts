@@ -67,6 +67,28 @@ describe("public calendar trust boundary", () => {
     expect(publicCalendarDaypartAllowed("selected", new Set(), "pool")).toBe(false);
   });
 
+  it("projects scheduled house activities without requiring an artist", () => {
+    expect(projectPublicCalendarRows([{
+      daypartName: "Deep Dives: Poolside Movie",
+      room: "Pool",
+      color: "#124A80",
+      artistName: null,
+      instagramHandle: null,
+      serviceDate: "2026-09-20",
+      startsAt: new Date("2026-09-21T02:00:00Z"),
+      endsAt: new Date("2026-09-21T04:00:00Z"),
+      timezone: "America/Los_Angeles",
+    }])).toEqual([{
+      daypartName: "Deep Dives: Poolside Movie",
+      room: "Pool",
+      color: "#124A80",
+      date: "2026-09-20",
+      startTime: "7:00 PM",
+      endTime: "9:00 PM",
+      artists: [],
+    }]);
+  });
+
   it("re-applies the same exact allow-list at the response boundary", () => {
     const response = enforcePublicCalendarResponse({
       residencyName: "Test 1",
@@ -86,6 +108,8 @@ describe("public calendar trust boundary", () => {
     });
     expect(response).toEqual({
       residencyName: "Test 1",
+      scope: "all",
+      dayparts: [],
       entries: [{
         daypartName: "Sunset DJ Set",
         room: "Rooftop",
@@ -96,7 +120,7 @@ describe("public calendar trust boundary", () => {
         artists: [{ name: "DJ Safe", instagramHandle: "@safe" }],
       }],
     });
-    expect(Object.keys(response)).toEqual(["residencyName", "entries"]);
+    expect(Object.keys(response)).toEqual(["residencyName", "scope", "dayparts", "entries"]);
     expect(Object.keys(response.entries[0])).toEqual(["daypartName", "room", "color", "date", "startTime", "endTime", "artists"]);
     expect(JSON.stringify(response)).not.toMatch(/billing@private|private@example|500|notes/);
   });

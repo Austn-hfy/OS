@@ -114,8 +114,8 @@ function calendarHeader(view: "month" | "week", compactHeader = false) {
 
 function calendarFixture(view: "month" | "week", fixtureEvents = events, compactHeader = false) {
   const calendar = view === "month"
-    ? createElement(MonthCalendar, { compact: true, monthKey: "2026-09", events: fixtureEvents })
-    : createElement(WeekCalendar, { weekStart: "2026-09-13", events: fixtureEvents });
+    ? createElement(MonthCalendar, { compact: true, monthKey: "2026-09", events: fixtureEvents, today: "2026-09-18" })
+    : createElement(WeekCalendar, { weekStart: "2026-09-13", events: fixtureEvents, today: "2026-09-18" });
 
   return renderToStaticMarkup(createElement(
     "div",

@@ -45,7 +45,8 @@ describe("Residency workspace boundaries", () => {
       readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8"),
     ]);
     expect(source).toContain("getResidencyClientSafeRoster(actor.residencyId)");
-    expect(source).toContain('talent={actor.residencyTier === "complete" ? [] : roster.filter');
+    expect(source).toContain('talent={roster.filter((artist) => artist.ownership === "residency")');
+    expect(source).not.toContain('actor.residencyTier === "complete" ? []');
     expect(rosterQuery).toContain(".innerJoin(residencyTalent");
     expect(rosterQuery).toContain("eq(residencyTalent.residencyId, residencyId)");
     expect(ownerPicker).toContain(".innerJoin(residencyTalent");

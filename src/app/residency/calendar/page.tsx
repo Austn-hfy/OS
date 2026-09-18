@@ -2,6 +2,7 @@ import { formatTimeInput } from "@/components/format";
 import { getCalendarData, getPublicCalendarLinkSettings, getScheduleOccurrenceData } from "@/data/internal";
 import { getResidencyClientSafeRoster } from "@/data/residency-client";
 import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, scheduleOccurrenceScheduling, slotSchedulingStatus } from "@/domain/dayparts";
+import { localDateKey } from "@/domain/time";
 import { requireResidencyActor } from "@/lib/auth";
 import { calendarToneForSlot, monthKeyForDate, monthRange, normalizeCalendarView, normalizeMonthKey, normalizeWeekStart, shiftDateKey, weekRange } from "@/lib/calendar";
 import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
@@ -65,7 +66,12 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
     };
   });
 
-  const savedOccurrences: ResidencyEvent[] = occurrences.map((occurrence) => {
+  const savedShiftDaypartDates = new Set(calendar.flatMap((shift) => shift.daypartId
+    ? [daypartDateKey(shift.daypartId, shift.serviceDate)]
+    : []));
+  const visibleOccurrences = occurrences.filter((occurrence) => !occurrence.daypartId
+    || !savedShiftDaypartDates.has(daypartDateKey(occurrence.daypartId, occurrence.serviceDate)));
+  const savedOccurrences: ResidencyEvent[] = visibleOccurrences.map((occurrence) => {
     const start = clockToMinute(formatTimeInput(occurrence.startsAt, actor.residencyTimezone));
     const end = resolveEndMinute(start, formatTimeInput(occurrence.endsAt, actor.residencyTimezone));
     const scheduling = scheduleOccurrenceScheduling(occurrence.type, occurrence.assignments.length > 0);
@@ -88,7 +94,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
 
   const existing = new Set([
     ...calendar.flatMap((shift) => shift.daypartId ? [daypartDateKey(shift.daypartId, shift.serviceDate)] : []),
-    ...occurrences.flatMap((occurrence) => occurrence.daypartId ? [daypartDateKey(occurrence.daypartId, occurrence.serviceDate)] : []),
+    ...visibleOccurrences.flatMap((occurrence) => occurrence.daypartId ? [daypartDateKey(occurrence.daypartId, occurrence.serviceDate)] : []),
   ]);
   const projected: ResidencyEvent[] = projectDaypartSlots(dayparts, range.from, range.to, existing, dateExceptions).map((slot) => ({
     id: slot.id, date: slot.date, title: slot.name, time: `${formatCompactMinuteRange(slot.startMinute, slot.endMinute)} · Needs scheduling`,
@@ -107,8 +113,8 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
   return <div className="calendar-page client-calendar-page"><ResidencyCalendar
     residency={{ id: actor.residencyId, name: actor.residencyName, timezone: actor.residencyTimezone, defaultTalentRateCents: 0, clientHourlyRateCents: 0, calendarLinkSettings }}
     headerEyebrow={`${actor.residencyName} · Calendar`}
-    monthKey={monthKey} calendarView={calendarView} weekStart={weekStart} events={events} rooms={rooms} dayparts={safeDayparts}
-    talent={actor.residencyTier === "complete" ? [] : roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
+    monthKey={monthKey} today={localDateKey(new Date(), actor.residencyTimezone)} calendarView={calendarView} weekStart={weekStart} events={events} rooms={rooms} dayparts={safeDayparts}
+    talent={roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
     dateExceptions={dateExceptions}
     previewMode fullProgramming={actor.residencyTier === "complete"} calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}
     initialEventId={params.event} initialDate={initialDate} modalReturnPath={modalReturnPath} initialBatchDaypartId={params.batchDaypart}

@@ -54,6 +54,9 @@ describe("persistent public calendar link management", () => {
     expect(publicCalendar).toContain("isNull(publicCalendarLinks.revokedAt)");
     expect(publicCalendar).toContain("eq(publicCalendarLinkDayparts.linkId, link.id)");
     expect(publicCalendar).not.toContain("eq(publicCalendarLinkDayparts.residencyId, link.residencyId)");
+    expect(publicCalendar).toContain(".from(scheduleOccurrences)");
+    expect(publicCalendar).toContain('eq(scheduleOccurrences.type, "house_activity")');
+    expect(publicCalendar).toContain(".leftJoin(scheduleOccurrenceTalent");
   });
 
   it("exposes every approved management state in the Share Calendar dialog", async () => {
