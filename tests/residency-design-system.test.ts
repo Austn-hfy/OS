@@ -46,7 +46,8 @@ describe("Residency design system V1", () => {
     expect(overview).toContain("ResidencySurfaceCard");
     expect(overview).toContain("ResidencySectionHeader");
     expect(overview).toContain("Open calendar");
-    expect(overview).toContain("View plan & invoice history");
+    expect(overview).not.toContain("View plan & invoice history");
+    expect(overview).not.toContain("Platform subscription");
     expect(talent).toContain("ResidencyPageSurface");
     for (const name of ["ResidencyPageHeader", "ResidencyPageBody", "ResidencySurfaceCard", "ResidencySectionHeader", "ResidencyCollectionPanel", "ResidencyCollectionRow"]) {
       expect(talentWorkspace).toContain(name);

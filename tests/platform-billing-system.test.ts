@@ -356,7 +356,7 @@ describe("per-Residency live-billing safety", () => {
 });
 
 describe("billing surface availability", () => {
-  it("keeps one shared availability gate for production, staging, previews, and unsupported environments", async () => {
+  it("keeps one shared availability gate on billing surfaces without gating the Residency Overview", async () => {
     const [appLayout, internalShell, ownerPage, residencyLayout, residencyShell, residencyOverview, settingsPage, residencyBillingPage, setupPage, ownerPdf, residencyPdf] = await Promise.all([
       readSource("../src/app/app/layout.tsx"),
       readSource("../src/components/internal-shell.tsx"),
@@ -376,8 +376,11 @@ describe("billing surface availability", () => {
     expect(ownerPage.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(ownerPage.indexOf("getPlatformRevenueDashboard()"));
     expect(ownerPage).toContain("notFound()");
     expect(residencyLayout).toContain("platformBillingAvailable ? await getResidencyPaymentFailure");
-    expect(residencyShell).toContain("canManage && platformBillingAvailable");
-    expect(residencyOverview.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(residencyOverview.indexOf("getResidencyPlatformBilling(actor.residencyId)"));
+    expect(residencyShell).toContain('{canManage ? <WorkspaceNavLink href="/residency"');
+    expect(residencyShell).not.toContain('canManage && platformBillingAvailable ? <WorkspaceNavLink href="/residency"');
+    expect(residencyOverview).toContain("getResidencyClientOverview(actor.residencyId)");
+    expect(residencyOverview).not.toContain("isCurrentPlatformBillingAvailable");
+    expect(residencyOverview).not.toContain("getResidencyPlatformBilling");
     expect(settingsPage).toContain('...(platformBillingAvailable ? [{ href: "/residency/settings/billing", label: "Billing" }] : [])');
     expect(residencyBillingPage.indexOf("isCurrentPlatformBillingAvailable()")).toBeLessThan(residencyBillingPage.indexOf("getResidencyPlatformBilling(actor.residencyId)"));
     expect(residencyBillingPage).toContain("notFound()");
