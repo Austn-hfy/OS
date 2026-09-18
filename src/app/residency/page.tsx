@@ -101,6 +101,12 @@ export default async function ResidencyOverviewPage({
   if (actor.accessRole !== "manager") redirect("/residency/access-limited");
   const overview = await getResidencyClientOverview(actor.residencyId, actor.residencyTimezone);
   const selectedDay = overview.week.find((day) => day.date === params.day) ?? overview.week[0];
+  const selectedDayNeedsAttention = selectedDay.openCount > 0 || selectedDay.pendingCount > 0;
+  const selectedDayTone = selectedDayNeedsAttention
+    ? "needs-attention"
+    : selectedDay.scheduledCount > 0
+      ? "is-ready"
+      : "is-neutral";
   const attentionCount = overview.attention.openServiceCount
     + overview.attention.pendingConfirmationCount
     + overview.attention.overdueInvoiceCount;
@@ -129,6 +135,8 @@ export default async function ResidencyOverviewPage({
           <div className="residency-overview-days">
             {overview.week.map((day, index) => {
               const selected = selectedDay.date === day.date;
+              const needsAttention = day.openCount > 0 || day.pendingCount > 0;
+              const tone = needsAttention ? "needs-attention" : day.scheduledCount > 0 ? "is-ready" : "is-neutral";
               const details = [
                 day.scheduledCount ? `${day.scheduledCount} scheduled` : "",
                 day.pendingCount ? `${day.pendingCount} pending` : "",
@@ -138,7 +146,7 @@ export default async function ResidencyOverviewPage({
                 ? day.services.map((service) => `${service.name} in ${service.room}: ${service.status}`).join("; ")
                 : "No programming scheduled";
               return <Link
-                className={`residency-overview-day${index === 0 ? " is-today" : ""}${day.openCount ? " needs-attention" : ""}${selected ? " is-selected" : ""}`}
+                className={`residency-overview-day${index === 0 ? " is-today" : ""} ${tone}${selected ? " is-selected" : ""}`}
                 aria-label={`${shortDate(day.date)}. ${servicesLabel}.`}
                 aria-current={selected ? "date" : undefined}
                 href={`/residency?day=${day.date}`}
@@ -147,8 +155,8 @@ export default async function ResidencyOverviewPage({
                 <div className="residency-overview-day-heading">
                   <span className="residency-overview-day-name">{weekday(day.date)}</span>
                   <span className="residency-overview-day-markers">
-                    {index === 0 && !selected ? <i>Today</i> : null}
-                    {selected ? <b>Selected</b> : null}
+                    {index === 0 ? <i>Today</i> : null}
+                    {needsAttention ? <b aria-label="Needs attention" title="Needs attention">!</b> : null}
                   </span>
                 </div>
                 <strong>{dayNumber(day.date)}</strong>
@@ -160,7 +168,7 @@ export default async function ResidencyOverviewPage({
               </Link>;
             })}
           </div>
-          <section className="residency-overview-day-detail" aria-labelledby="residency-overview-day-detail-title" aria-live="polite">
+          <section className={`residency-overview-day-detail ${selectedDayTone}`} aria-labelledby="residency-overview-day-detail-title" aria-live="polite">
             <header className="residency-overview-day-detail-header">
               <div><span className="residency-overview-day-detail-kicker"><i aria-hidden="true" />Day focus · {longWeekday(selectedDay.date)} selected</span><h3 id="residency-overview-day-detail-title">{fullDate(selectedDay.date)}</h3><p>{selectedDay.services.length ? `${selectedDay.services.length} ${selectedDay.services.length === 1 ? "activity" : "activities"} to review.` : "Nothing is programmed yet."}</p></div>
               <Link className="residency-overview-day-detail-week-link" href={calendarHref(selectedDay.date)}>View this week <ArrowIcon /></Link>

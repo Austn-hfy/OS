@@ -96,6 +96,7 @@ describe("Residency Overview availability", () => {
     expect(html).toContain("Friday, September 18");
     expect(html).toContain("This week");
     expect(html).toContain("Day focus");
+    expect(html).toContain('class="residency-overview-day-detail is-ready"');
     expect(html).toContain("View or edit");
     expect(html).toContain("6:00 PM–9:00 PM · Pool");
     expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-18&amp;event=shift-1&amp;returnTo=%2Fresidency%3Fday%3D2026-09-18"');
@@ -123,7 +124,8 @@ describe("Residency Overview availability", () => {
 
     expect(html).toContain("Sunday, September 20");
     expect(html).toContain("Day focus · Sunday selected");
-    expect(html).toContain("Selected");
+    expect(html).toContain('class="residency-overview-day-detail needs-attention"');
+    expect(html).toContain('aria-label="Needs attention"');
     expect(html).toContain("Schedule talent");
     expect(html).toContain("Talent has not been assigned");
     expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-20&amp;event=projected-1&amp;returnTo=%2Fresidency%3Fday%3D2026-09-20"');

@@ -56,7 +56,7 @@ const populatedOverview: ResidencyClientOverview = {
       service("7", "Sunday Brunch", "Restaurant", "scheduled"),
       service("8", "Sunday Dinner", "Restaurant", "open"),
     ] },
-    { date: "2026-09-21", scheduledCount: 1, pendingCount: 0, openCount: 0, services: [service("9", "Lobby Set", "Lobby", "scheduled")] },
+    { date: "2026-09-21", scheduledCount: 0, pendingCount: 0, openCount: 1, services: [service("9", "Lobby Set", "Lobby", "open")] },
     { date: "2026-09-22", scheduledCount: 1, pendingCount: 0, openCount: 0, services: [service("10", "Pool DJ", "Pool", "scheduled")] },
     { date: "2026-09-23", scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] },
     { date: "2026-09-24", scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] },
@@ -128,6 +128,7 @@ describe("Residency Overview responsive visual contract", () => {
   let browser: Browser;
   let page: Page;
   let populatedHtml: string;
+  let readyHtml: string;
   let emptyHtml: string;
 
   beforeAll(async () => {
@@ -135,6 +136,7 @@ describe("Residency Overview responsive visual contract", () => {
     browser = await chromium.launch({ headless: true, ...executable });
     page = await browser.newPage({ deviceScaleFactor: 1 });
     populatedHtml = await fixtureDocument(populatedOverview, "2026-09-21");
+    readyHtml = await fixtureDocument(populatedOverview, "2026-09-22");
     emptyHtml = await fixtureDocument(emptyOverview());
   }, 120_000);
 
@@ -168,9 +170,11 @@ describe("Residency Overview responsive visual contract", () => {
         const attentionCard = element(".residency-overview-attention-card").getBoundingClientRect();
         const financeCard = element(".residency-overview-finance-card").getBoundingClientRect();
         const selectedDay = element(".residency-overview-day.is-selected");
-        const dayDetailHeader = element(".residency-overview-day-detail-header");
+        const dayDetail = element(".residency-overview-day-detail");
         const today = element(".residency-overview-day.is-today");
-        const selectedMarker = element(".residency-overview-day-markers > b");
+        const todayMarker = element(".residency-overview-day.is-today .residency-overview-day-markers > i");
+        const attentionMarker = element(".residency-overview-day.is-selected .residency-overview-day-markers > b");
+        const attentionLine = element(".residency-overview-day.is-selected .residency-overview-coverage > .open");
         return {
           documentContained: document.documentElement.scrollWidth === viewportWidth,
           surfaceContained: surface.left >= -0.5 && surface.right <= viewportWidth + 0.5,
@@ -185,9 +189,11 @@ describe("Residency Overview responsive visual contract", () => {
           sevenDays: days.length === 7,
           correctDayColumns: dayColumns === expectedDayColumns,
           equalSummaryCardWidths: Math.abs(attentionCard.width - financeCard.width) <= 0.5,
-          selectionIsVisuallyLinked: selectedMarker.textContent === "Selected"
-            && getComputedStyle(selectedDay).backgroundColor === getComputedStyle(dayDetailHeader).backgroundColor
-            && getComputedStyle(selectedDay).backgroundColor !== getComputedStyle(today).backgroundColor,
+          selectionIsVisuallyLinked: todayMarker.textContent === "Today"
+            && attentionMarker.textContent === "!"
+            && getComputedStyle(selectedDay).borderTopColor === getComputedStyle(dayDetail).borderTopColor
+            && getComputedStyle(selectedDay).borderTopColor === getComputedStyle(attentionLine).backgroundColor
+            && getComputedStyle(selectedDay).backgroundColor === getComputedStyle(today).backgroundColor,
           largeMoneyContained: money.left >= financeCard.left - 0.5 && money.right <= financeCard.right + 0.5,
         };
       });
@@ -209,6 +215,26 @@ describe("Residency Overview responsive visual contract", () => {
     await page.setContent(populatedHtml, { waitUntil: "load" });
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: "/private/tmp/hfy-residency-overview-1200.png", fullPage: true });
+  }, 120_000);
+
+  it("uses the scheduled green as the only selection accent for a ready day", async () => {
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await page.setContent(readyHtml, { waitUntil: "load" });
+    await page.evaluate(() => document.fonts.ready);
+
+    const colors = await page.evaluate(() => {
+      const selected = document.querySelector<HTMLElement>(".residency-overview-day.is-selected")!;
+      const detail = document.querySelector<HTMLElement>(".residency-overview-day-detail")!;
+      const scheduledLine = selected.querySelector<HTMLElement>(".residency-overview-coverage > .scheduled")!;
+      return {
+        selected: getComputedStyle(selected).borderTopColor,
+        detail: getComputedStyle(detail).borderTopColor,
+        scheduled: getComputedStyle(scheduledLine).backgroundColor,
+      };
+    });
+
+    expect(colors.selected).toBe(colors.scheduled);
+    expect(colors.detail).toBe(colors.scheduled);
   }, 120_000);
 
   it("keeps the all-clear and empty states calm and contained on a narrow screen", async () => {
