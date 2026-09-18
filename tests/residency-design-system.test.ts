@@ -5,7 +5,7 @@ const readSource = (path: string) => readFile(new URL(path, import.meta.url), "u
 
 describe("Residency design system V1", () => {
   it("exports the approved primitives and applies them to adopted Residency routes", async () => {
-    const [system, account, billing, overview, talent, talentWorkspace, talentCard, tokens, docs] = await Promise.all([
+    const [system, account, billing, overview, talent, talentWorkspace, talentCard, dayparts, daypartManager, tokens, docs] = await Promise.all([
       readSource("../src/components/residency-design-system.tsx"),
       readSource("../src/app/residency/settings/page.tsx"),
       readSource("../src/app/residency/settings/billing/page.tsx"),
@@ -13,6 +13,8 @@ describe("Residency design system V1", () => {
       readSource("../src/app/residency/talent/page.tsx"),
       readSource("../src/app/residency/talent/client-artist-lookup.tsx"),
       readSource("../src/app/residency/talent/client-owned-artist-card.tsx"),
+      readSource("../src/app/residency/dayparts/page.tsx"),
+      readSource("../src/app/app/setup/daypart-manager.tsx"),
       readSource("../src/app/hfy-design-tokens.css"),
       readSource("../docs/DESIGN_SYSTEM_V1.md"),
     ]);
@@ -49,11 +51,17 @@ describe("Residency design system V1", () => {
       expect(talentWorkspace).toContain(name);
     }
     expect(talentCard).toContain("ResidencyFactGrid");
+    expect(dayparts).toContain("residencySurface");
+    for (const name of ["ResidencyPageSurface", "ResidencyPageHeader", "ResidencyPageBody"]) {
+      expect(daypartManager).toContain(name);
+    }
     expect(tokens).toContain("--hfy-page-content-inset: 20px;");
     expect(tokens).toContain("--hfy-surface-card-radius: 16px;");
     expect(tokens).toContain("--hfy-collection-panel-scroll-ceiling: 680px;");
-    expect(docs).toContain("Version: 1.5");
+    expect(tokens).toContain("--hfy-dayparts-board-min-width: 840px;");
+    expect(docs).toContain("Version: 1.8");
     expect(docs).toContain("## Compact Collection Panel");
+    expect(docs).toContain("## Day Parts Implementation Profile");
     expect(docs).toContain("Changed this revision:");
   });
 });

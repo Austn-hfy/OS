@@ -1,6 +1,6 @@
 # HFY OS desktop UI/UX audit — Client Residency
 
-Status: Settings desktop benchmark complete; Overview, Talent, and Calendar desktop adopted; broader client audit remains active
+Status: Settings desktop benchmark complete; Overview, Talent, Calendar, and Day Parts adopted; broader client audit remains active
 Date: September 17, 2026
 Scope: the client-facing Residency workspace reached through **View as Residency**
 Reference screen: **Settings → Billing**
@@ -19,7 +19,7 @@ The following manager-facing routes were reviewed during the initial audit:
 | --- | --- | --- |
 | Overview | `/residency` | Shared workspace surface with two summary cards |
 | Calendar | `/residency/calendar` | Purpose-built operational surface |
-| Day Parts | `/residency/dayparts` | Purpose-built header, alert, and weekly grid |
+| Day Parts | `/residency/dayparts` | Shared Residency page frame with a purpose-built operational weekly grid |
 | Talent | `/residency/talent` | Shared workspace surface with roster/detail split |
 | Finances | `/residency/finances` | Shared workspace surface with two accordions |
 | Account | `/residency/settings` | Shared Settings surface with tabs and account form |
@@ -53,7 +53,7 @@ The final Settings pass deliberately did not begin the future shared-component o
 
 Priority: P0
 Applies to: every Residency page while viewed from Developer mode
-Reviewed-route status: **resolved for Account, Billing, Overview, Talent, and Calendar**
+Reviewed-route status: **resolved for Account, Billing, Overview, Talent, Calendar, and Day Parts**
 Broader status: open for the other Residency routes
 
 At viewport widths at or below 1200px, `.main` switches to a smaller horizontal gutter while `.view-as-banner` retained the negative margin calculated from the wider gutter.
@@ -104,6 +104,11 @@ Resolution for Calendar:
 
 - The View-as banner now uses Calendar's active compact-desktop gutter at and below 1200px.
 - Calendar remains a purpose-built operational surface; the fix does not force it into the shared content-card component hierarchy.
+
+Resolution for Day Parts:
+
+- Residency Day Parts now identifies itself as a `ResidencyPageSurface`, so the View-as banner uses the active compact-desktop gutter.
+- The weekly board owns its compact-width overflow; the page document stays width-contained from 1440px through 390px.
 
 ### CR-002A — Talent post-adoption control alignment
 
@@ -194,6 +199,8 @@ Talent remains open under this copy-specific item. Its existing eyebrow text was
 
 Calendar now uses `{Residency name} · Calendar` as its route-family eyebrow while retaining `Calendar` as the task-level H1. The shared owner/programming Calendar keeps its existing wording because this pass is Residency-only.
 
+Day Parts now uses `DAY PARTS · SCHEDULE SETUP` above `Weekly Daypart grid`. The owner/programming Day Parts heading remains unchanged because the shared manager opts into this page-family copy only on the Residency route.
+
 ### CR-006A — Calendar command bar and Week view break at compact desktop widths
 
 Priority: P0
@@ -280,7 +287,7 @@ Priority: P1
 Applies to: Day Parts, Talent, Settings, and Billing
 Settings status: **resolved / intentionally unchanged**
 Talent status: **resolved**
-Broader status: open for Day Parts
+Day Parts status: **resolved**
 
 Settings already follows the preferred action model:
 
@@ -291,6 +298,8 @@ Settings already follows the preferred action model:
 No action was moved because the current Billing benchmark already follows the intended hierarchy.
 
 Talent now places `+ New Artist` in the shared page header action slot instead of absolutely positioning it from inside the roster toolbar.
+
+Day Parts now places `+ Add Daypart` or `+ Add House Activity` in the shared Residency page-header action slot. The action becomes full-width only after the header enters its compact stacked state.
 
 ### CR-008 — View-as mode duplicates the Exit action
 
@@ -323,6 +332,11 @@ Resolution for Talent:
 - Roster controls and metadata now use the shared supporting scales rather than route-local 8px labels.
 - Detail facts use the shared 10px label / 12px value hierarchy.
 - Page and section headings now come from the shared header primitives.
+
+Resolution for Day Parts:
+
+- Weekly-board labels, room names, event titles, and event metadata now use semantic Day Parts tokens with a 10px normal-text floor.
+- Editor supporting copy and weekly field labels use the route's 10px supporting token instead of 8–9px one-off values.
 
 ### CR-011 — Universal surface clipping hides layout mistakes
 
@@ -404,6 +418,62 @@ Resolution:
 - Invoice periods now use separate semantic start and end dates. They remain inline when the table has room and stack vertically when the invoice card narrows.
 - The compact invoice table removes its fixed minimum width, uses a fixed proportional column layout, and reduces cell padding while preserving the current full-desktop table.
 - Billing was rechecked continuously from 1440px down to the 700px mobile breakpoint. Account and all other routes were intentionally excluded.
+
+### CR-017 — Day Parts weekly grid collapses at compact widths
+
+Priority: P0
+Applies to: `/residency/dayparts`
+Status: **resolved with a contained responsive bridge; live-review correction verified**
+
+The original eight-track grid divided whatever width remained after the Residency sidebar between one room column and seven weekdays. At 1024px and below, day tracks, room labels, and time-positioned event blocks compressed until their text became truncated or unreadable. The manager then hid the overflow, so the missing content could not be reached.
+
+Resolution:
+
+- The board now preserves an 840px readable working width: one 112px room track and seven weekday tracks of at least 104px.
+- When the Day Parts body is narrower than that floor, one named horizontal scroller contains the complete board instead of widening the document.
+- The first staging pass declared the room column sticky but retained `overflow: hidden` on the inner board. Live review showed that this inner boundary prevented the sticky positioning from following the actual horizontal scroller.
+- The board now uses non-scrolling clipping, and the opaque room header plus every room label remain pinned to the scroller's left edge while only weekday tracks move. A visible compact-width cue explains that all seven days remain available horizontally.
+- Weekday, room, event-title, and event-metadata sizes now come from semantic Day Parts tokens. Short time-positioned events also use a `42px` tokenized minimum height so the title and time are not vertically clipped.
+- Continuous geometry coverage from 1440px through 390px confirms no document-level overflow, no header/action collision, and no day track below its readable floor. At every overflowing width, the test now performs a real horizontal scroll and measures the locked room track, weekday travel, and event-content containment.
+
+### CR-018 — Day Parts bypasses the Residency page-family layer and header rules
+
+Priority: P1
+Applies to: `/residency/dayparts`
+Status: **resolved**
+
+The Residency route previously rendered the shared `DaypartManager` directly, leaving its custom heading card outside the shared page-surface, page-header, and body-inset system. That also prevented the shell from recognizing the route for compact View-as containment.
+
+Resolution:
+
+- Only the Residency route opts the shared manager into `ResidencyPageSurface`, `ResidencyPageHeader`, and `ResidencyPageBody`; the owner/programming Day Parts surface remains visually unchanged.
+- The route now follows the canvas → frosted page surface → opaque operational board layer sequence.
+- `Day Parts · Schedule setup` and the H1 use the page-family header grammar, and the create action uses the shared header action position.
+- Day Parts is documented as a page-specific operational profile in `docs/DESIGN_SYSTEM_V1.md` v1.8. Its spatial weekly board is not a Compact Collection Panel and was not forced into that unrelated shared component.
+
+### CR-019 — Day Parts editors and popovers have undefined intermediate states
+
+Priority: P1
+Applies to: `/residency/dayparts`
+Status: **resolved; live staging overlay-boundary correction verified**
+
+The Daypart drawer depended mainly on browser-width media queries even though its available width differs from the viewport. At intermediate widths the seven weekly rule cards could widen the entire form, while two-column choice groups, setting tiles, footer actions, and the room editor did not have one coordinated compact contract. Dialog focus entered and exited inconsistently, and repeated draft updates could preserve the page's locked body-scroll state after closing.
+
+Resolution:
+
+- The Daypart editor is now a named inline-size container with a fixed header, one vertical scrolling body, and a contained footer.
+- At intermediate widths, the seven weekly day controls use their own horizontal scroller; at 520px of editor width they become one vertical stack. Choice and settings groups stack at 640px, and wider definition rows reflow before clipping.
+- Compact footer actions occupy complete rows; More Actions remains contained and supports menu focus plus Arrow Up/Down, Home, and End navigation.
+- The room editor uses a two-column compact hue grid, a stacked danger action, and an even contained action footer. The saved-template popover stacks its metadata when its own width becomes narrow.
+- Daypart and room dialogs now move focus inside, trap Tab/Shift+Tab, close on Escape, restore focus to their initiating control, and release body-scroll locking reliably after edits.
+- Live staging review showed that rendering the fixed editors inside the frosted page surface made that filtered surface their positioning boundary. The editor started below the View-as banner, extended beyond the viewport, and hid its action footer.
+- The Daypart and room editors now mount through document-level portals, so their backdrops and panels are anchored to the viewport independently of the page surface.
+- Visual and containment checks cover the Daypart editor at 1440px, 1024px, 760px, 600px, and 390px plus the room editor and saved-template popover at narrow width. They now also measure the viewport boundary and footer visibility.
+
+Intentionally unchanged:
+
+- Daypart data, time calculations, room behavior, templates, rates, save/delete behavior, and Calendar projection logic.
+- The weekly board and editor remain a Day Parts-specific implementation profile rather than a new reusable component family.
 
 ## Settings benchmark decisions
 
@@ -560,10 +630,11 @@ Required assertions:
 4. **Completed for Billing:** repair the annual-switch dialog footer.
 5. **Completed for Talent:** fix compact-desktop collapse and adopt the shared V1 page/card hierarchy.
 6. **Completed for Calendar desktop:** correct top rhythm, command-bar wrapping, event type size, Week sizing, and compact View-as gutter behavior.
-7. Normalize other page eyebrows, button emphasis, and sidebar attention behavior.
-8. Consolidate repeated workspace CSS and introduce shared components only after the visual benchmark is approved.
-9. Add desktop overflow and visual-regression coverage.
-10. Lock the desktop rulebook, then begin the mobile chapter.
+7. **Completed for Day Parts:** adopt the shared page frame, preserve a readable weekly grid, and contain editor/popover states from desktop through the compact bridge.
+8. Normalize other page eyebrows, button emphasis, and sidebar attention behavior.
+9. Consolidate repeated workspace CSS and introduce shared components only after the visual benchmark is approved.
+10. Add desktop overflow and visual-regression coverage.
+11. Lock the desktop rulebook, then begin the mobile chapter.
 
 ## Definition of done for Settings desktop
 

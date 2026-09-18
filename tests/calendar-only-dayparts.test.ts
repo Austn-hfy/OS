@@ -31,7 +31,7 @@ describe("Calendar Only Dayparts", () => {
     expect(manager).toContain("roomTemplates.length ? <button");
     expect(manager).toContain('className="room-template-trigger"');
     expect(manager).toContain('roomTemplates.length === 1 ? "template" : "templates"');
-    expect(manager).toContain('className="room-template-popover"');
+    expect(manager).toContain("room-template-popover");
     expect(manager).toContain('daypart.type === "house_activity" ? "House Activity" : "Talent Activity"');
     expect(manager).toContain("<em>Default hours</em>");
     expect(manager).toContain("setDraft(draftFromDaypart(daypart, room))");

@@ -36,12 +36,13 @@ describe("site-wide workspace surface consistency", () => {
     expect(clientRoster).toContain('redirect("/residency/talent")');
   });
 
-  it("keeps Calendar and Day Parts on their purpose-built integrated layouts", async () => {
-    const [ownerCalendar, ownerDayparts, clientCalendar, clientDayparts] = await Promise.all([
+  it("keeps Calendar purpose-built while Residency Day Parts adopts the shared frame around its operational grid", async () => {
+    const [ownerCalendar, ownerDayparts, clientCalendar, clientDayparts, daypartManager] = await Promise.all([
       readSource("../src/app/app/calendar/page.tsx"),
       readSource("../src/app/app/dayparts/page.tsx"),
       readSource("../src/app/residency/calendar/page.tsx"),
       readSource("../src/app/residency/dayparts/page.tsx"),
+      readSource("../src/app/app/setup/daypart-manager.tsx"),
     ]);
 
     for (const source of [ownerCalendar, ownerDayparts, clientCalendar, clientDayparts]) {
@@ -49,6 +50,12 @@ describe("site-wide workspace surface consistency", () => {
     }
     expect(ownerDayparts).not.toContain('<header className="page-header');
     expect(clientDayparts).not.toContain('<header className="page-header');
+    expect(clientDayparts).toContain("residencySurface");
+    expect(daypartManager).toContain("ResidencyPageSurface");
+    expect(daypartManager).toContain("const ManagerSurface");
+    expect(daypartManager).toContain("<ResidencyPageHeader");
+    expect(daypartManager).toContain("ResidencyPageBody");
+    expect(daypartManager).toContain("const ManagerBody");
   });
 
   it("removes nested page chrome without flattening record and metric cards", async () => {

@@ -88,11 +88,12 @@ describe("Residency workspace boundaries", () => {
     expect(styles).toContain("grid-template-columns: 32px minmax(0, 1fr) auto");
   });
 
-  it("uses one shared compact header on detail workspaces while Calendar and Day Parts keep integrated headings", async () => {
-    const [sharedHeader, calendar, dayparts, artistLookup, clientArtistLookup, roster, finances, payouts, invoices, settings] = await Promise.all([
+  it("uses one shared compact header on detail workspaces and Residency Day Parts while Calendar stays integrated", async () => {
+    const [sharedHeader, calendar, dayparts, daypartManager, artistLookup, clientArtistLookup, roster, finances, payouts, invoices, settings] = await Promise.all([
       readFile(new URL("../src/components/residency-page-header.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/calendar/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/dayparts/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/setup/daypart-manager.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/page.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/client-artist-lookup.tsx", import.meta.url), "utf8"),
       readFile(new URL("../src/app/residency/talent/roster/page.tsx", import.meta.url), "utf8"),
@@ -110,7 +111,8 @@ describe("Residency workspace boundaries", () => {
     expect(invoices).toContain('redirect("/residency/finances")');
     expect(roster).toContain('redirect("/residency/talent")');
     expect(calendar).not.toContain("<ResidencyPageHeader");
-    expect(dayparts).not.toContain("<ResidencyPageHeader");
+    expect(dayparts).toContain("residencySurface");
+    expect(daypartManager).toContain("<ResidencyPageHeader");
   });
 
   it("consolidates Residency Talent and Finances into single workspace surfaces", async () => {

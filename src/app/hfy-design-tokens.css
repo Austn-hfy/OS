@@ -77,6 +77,19 @@
   --hfy-calendar-week-event-title-size: 12px;
   --hfy-calendar-week-event-meta-size: 10px;
 
+  /* Day Parts operational surface */
+  --hfy-dayparts-board-min-width: 840px;
+  --hfy-dayparts-room-track: 112px;
+  --hfy-dayparts-day-track-min: 104px;
+  --hfy-dayparts-weekday-size: 10px;
+  --hfy-dayparts-room-size: 12px;
+  --hfy-dayparts-event-title-size: 11px;
+  --hfy-dayparts-event-meta-size: 10px;
+  --hfy-dayparts-event-min-height: 42px;
+  --hfy-dayparts-editor-supporting-size: 10px;
+  --hfy-dayparts-editor-day-min-width: 124px;
+  --hfy-dayparts-drawer-max-width: 1120px;
+
   --hfy-control-height: 44px;
   --hfy-control-height-large: 52px;
   --hfy-radius-control: 11px;
