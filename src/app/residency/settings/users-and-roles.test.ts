@@ -4,17 +4,22 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
 describe("Residency Users & Roles account experience", () => {
-  it("uses the approved layered person cards and card-width-responsive layout", async () => {
-    const css = await read("../../../app/globals.css");
+  it("uses the approved Focus Panel and card-width-responsive layout", async () => {
+    const [css, component] = await Promise.all([read("../../../app/globals.css"), read("./users-and-roles.tsx")]);
     expect(css).toContain(".residency-users-card { container: residency-users / inline-size; }");
     expect(css).toContain(".residency-user-invite-form { display: grid; min-width: 0;");
-    expect(css).toContain(".residency-user-card-top { min-width: 0; display: flex;");
-    expect(css).toContain(".residency-user-card-bottom { min-width: 0; display: grid;");
-    expect(css).toContain("grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr)");
+    expect(css).toContain(".residency-user-focus-layout { min-width: 0; display: grid;");
+    expect(css).toContain("grid-template-columns: minmax(240px, .72fr) minmax(0, 1.28fr)");
+    expect(css).toContain(".residency-user-focus-list { min-width: 0; display: grid;");
+    expect(css).toContain(".residency-user-focus-detail { min-width: 0; display: grid;");
+    expect(css).toContain(".residency-user-focus-option[aria-pressed=\"true\"]");
     expect(css).toContain("@container residency-users (max-width: 860px)");
     expect(css).toContain("@container residency-users (max-width: 560px)");
-    expect(css).toContain(".residency-user-invite-form, .residency-user-card-bottom { grid-template-columns: minmax(0, 1fr); }");
-    expect(css).toContain(".residency-user-card-top { align-items: flex-start; flex-direction: column; }");
+    expect(css).toContain(".residency-user-focus-layout { grid-template-columns: minmax(0, 1fr); }");
+    expect(css).toContain(".residency-user-invite-form, .residency-user-focus-list, .residency-user-focus-detail-grid { grid-template-columns: minmax(0, 1fr); }");
+    expect(component).toContain("const [selectedUserId, setSelectedUserId] = useState");
+    expect(component).toContain("aria-pressed={selectedUser?.id === user.id}");
+    expect(component).toContain("id=\"residency-user-focus-detail\"");
   });
 
   it("defaults bulk invitations to Calendar viewer and explains both roles at assignment time", async () => {

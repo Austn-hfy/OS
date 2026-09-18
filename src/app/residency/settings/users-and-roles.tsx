@@ -50,8 +50,10 @@ function initials(name: string, email: string) {
 export function UsersAndRoles({ users, currentUserId }: { users: ResidencyUser[]; currentUserId: string }) {
   const [inviteState, inviteAction, invitePending] = useActionState(inviteResidencyUsersAction, initialState);
   const [message, setMessage] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState(users[0]?.id ?? "");
   const [pending, startTransition] = useTransition();
   const seatsAvailable = Math.max(0, 4 - users.length);
+  const selectedUser = users.find((user) => user.id === selectedUserId) ?? users[0];
 
   function run(action: (formData: FormData) => Promise<void>, formData: FormData, success: string) {
     setMessage("");
@@ -94,75 +96,102 @@ export function UsersAndRoles({ users, currentUserId }: { users: ResidencyUser[]
       {inviteState.status !== "idle" ? <p className={inviteState.status === "error" ? "error" : "success"} role="status">{inviteState.message}</p> : null}
     </form>
 
-    <div className="residency-user-list" role="list" aria-label="People with access">
-      {users.map((user) => <article className={`residency-user-card ${user.state}`} role="listitem" key={user.id}>
-        <div className="residency-user-card-top">
+    <div className="residency-user-focus-layout">
+      <div className="residency-user-focus-list" role="group" aria-label="People with access">
+        {users.map((user) => <button
+          aria-controls="residency-user-focus-detail"
+          aria-pressed={selectedUser?.id === user.id}
+          className="residency-user-focus-option"
+          key={user.id}
+          onClick={() => setSelectedUserId(user.id)}
+          type="button"
+        >
+          <span className="residency-user-avatar" aria-hidden="true">{initials(user.name, user.email)}</span>
+          <span>
+            <strong>{user.state === "active" ? user.name : user.email}</strong>
+            <small>{user.accessRole ? roleDetails[user.accessRole].label : "No access"} · {user.state === "active" ? "Enrolled" : "Pending"}</small>
+          </span>
+        </button>)}
+      </div>
+
+      {selectedUser ? <section className={`residency-user-focus-detail ${selectedUser.state}`} id="residency-user-focus-detail" key={selectedUser.id} aria-live="polite">
+        <div className="residency-user-focus-detail-head">
           <div className="residency-user-identity">
-            <span className="residency-user-avatar" aria-hidden="true">{initials(user.name, user.email)}</span>
+            <span className="residency-user-avatar" aria-hidden="true">{initials(selectedUser.name, selectedUser.email)}</span>
             <span>
-              <strong>{user.state === "active" ? user.name : user.email}</strong>
-              <small>{user.state === "active" ? user.email : `Invited ${formatDate(user.invitedAt)} by ${user.invitedBy?.displayName ?? user.invitedBy?.email ?? "HFY"}`}</small>
+              <strong>{selectedUser.state === "active" ? selectedUser.name : selectedUser.email}</strong>
+              <small>{selectedUser.state === "active" ? selectedUser.email : `Invited ${formatDate(selectedUser.invitedAt)} by ${selectedUser.invitedBy?.displayName ?? selectedUser.invitedBy?.email ?? "HFY"}`}</small>
             </span>
           </div>
 
           <div className="residency-user-status">
-            {user.isPrimary ? <span className="status active">Primary contact</span> : null}
-            <span className={`status ${user.state === "active" ? "active" : "pending"}`}>{user.state === "active" ? "Enrolled" : "Invitation pending"}</span>
+            {selectedUser.isPrimary ? <span className="status active">Primary contact</span> : null}
+            <span className={`status ${selectedUser.state === "active" ? "active" : "pending"}`}>{selectedUser.state === "active" ? "Enrolled" : "Invitation pending"}</span>
           </div>
         </div>
 
-        <div className="residency-user-card-bottom">
+        <div className="residency-user-focus-detail-grid">
           <div className="residency-user-access">
-            {user.state === "active" ? <form className="residency-user-role-form" action={(formData) => run(changeResidencyUserRoleAction, formData, "Role updated.")}>
-              <input type="hidden" name="contactId" value={user.id} />
-              <select name="role" defaultValue={user.accessRole ?? "calendar_viewer"} aria-label={`Role for ${user.name}`} disabled={pending || user.userId === currentUserId}>
+            <small className="residency-user-focus-label">Access role</small>
+            {selectedUser.state === "active" ? <form className="residency-user-role-form" action={(formData) => run(changeResidencyUserRoleAction, formData, "Role updated.")}>
+              <input type="hidden" name="contactId" value={selectedUser.id} />
+              <select name="role" defaultValue={selectedUser.accessRole ?? "calendar_viewer"} aria-label={`Role for ${selectedUser.name}`} disabled={pending || selectedUser.userId === currentUserId}>
                 <option value="calendar_viewer">Calendar viewer</option>
                 <option value="manager">Manager</option>
               </select>
-              <button className="button secondary" type="submit" disabled={pending || user.userId === currentUserId}>Update role</button>
+              <button className="button secondary" type="submit" disabled={pending || selectedUser.userId === currentUserId}>Update role</button>
             </form> : <div className="residency-user-pending-role">
-              <strong>{user.accessRole ? roleDetails[user.accessRole].label : "No access"}</strong>
-              <small>{user.accessRole ? roleDetails[user.accessRole].description : "No workspace access."}</small>
+              <strong>{selectedUser.accessRole ? roleDetails[selectedUser.accessRole].label : "No access"}</strong>
+              <small>{selectedUser.accessRole ? roleDetails[selectedUser.accessRole].description : "No workspace access."}</small>
             </div>}
           </div>
 
+          <div className="residency-user-focus-access-copy">
+            <small className="residency-user-focus-label">{selectedUser.state === "active" ? "Account access" : "Invitation"}</small>
+            <p>{selectedUser.state === "active"
+              ? selectedUser.accessRole ? roleDetails[selectedUser.accessRole].description : "No workspace access."
+              : `Sent ${formatDate(selectedUser.invitedAt)} by ${selectedUser.invitedBy?.displayName ?? selectedUser.invitedBy?.email ?? "HFY"}.`}</p>
+          </div>
+        </div>
+
+        {selectedUser.state === "active" && (selectedUser.roleHistory[0] || selectedUser.roleChangedAt) ? <small className="residency-user-audit">
+          {selectedUser.roleHistory[0]
+            ? `Changed from ${selectedUser.roleHistory[0].previousRole?.replaceAll("_", " ")} to ${selectedUser.roleHistory[0].newRole?.replaceAll("_", " ")} by ${selectedUser.roleHistory[0].actor} on ${formatDate(selectedUser.roleHistory[0].changedAt)}`
+            : `Last changed by ${selectedUser.roleChangedBy?.displayName ?? selectedUser.roleChangedBy?.email ?? "HFY"} on ${formatDate(selectedUser.roleChangedAt)}`}
+        </small> : null}
+
+        <div className="residency-user-focus-actions">
           <div className="residency-user-actions">
-            {user.state === "active" ? <>
-              {user.membershipId && user.userId !== currentUserId ? <form action={enterClientViewAsAction}>
-                <input type="hidden" name="membershipId" value={user.membershipId} />
+            {selectedUser.state === "active" ? <>
+              {selectedUser.membershipId && selectedUser.userId !== currentUserId ? <form action={enterClientViewAsAction}>
+                <input type="hidden" name="membershipId" value={selectedUser.membershipId} />
                 <button className="button secondary" type="submit">View as</button>
               </form> : null}
-              <form action={(formData) => run(requestResidencyUserPasswordResetAction, formData, `Password reset link sent to ${user.email}.`)}>
-                <input type="hidden" name="contactId" value={user.id} />
+              <form action={(formData) => run(requestResidencyUserPasswordResetAction, formData, `Password reset link sent to ${selectedUser.email}.`)}>
+                <input type="hidden" name="contactId" value={selectedUser.id} />
                 <button className="button secondary" type="submit" disabled={pending}>Reset password</button>
               </form>
-              {!user.isPrimary ? <form action={(formData) => run(setPrimaryResidencyContactAction, formData, "Primary contact updated.")}>
-                <input type="hidden" name="contactId" value={user.id} />
+              {!selectedUser.isPrimary ? <form action={(formData) => run(setPrimaryResidencyContactAction, formData, "Primary contact updated.")}>
+                <input type="hidden" name="contactId" value={selectedUser.id} />
                 <button className="button secondary" type="submit" disabled={pending}>Make primary</button>
               </form> : null}
-              {user.userId !== currentUserId ? <form action={(formData) => run(removeResidencyUserAction, formData, `${user.name} was removed.`)}>
-                <input type="hidden" name="contactId" value={user.id} />
-                <button className="button danger" type="submit" disabled={pending || user.isPrimary}>Remove</button>
-              </form> : null}
-            </> : <>
-              <form action={(formData) => run(resendResidencyInvitationAction, formData, `Invitation resent to ${user.email}.`)}>
-                <input type="hidden" name="contactId" value={user.id} />
-                <button className="button secondary" type="submit" disabled={pending}>Resend invite</button>
-              </form>
-              <form action={(formData) => run(removeResidencyUserAction, formData, `Invitation to ${user.email} was revoked.`)}>
-                <input type="hidden" name="contactId" value={user.id} />
-                <button className="button danger" type="submit" disabled={pending}>Revoke</button>
-              </form>
-            </>}
+            </> : <form action={(formData) => run(resendResidencyInvitationAction, formData, `Invitation resent to ${selectedUser.email}.`)}>
+              <input type="hidden" name="contactId" value={selectedUser.id} />
+              <button className="button secondary" type="submit" disabled={pending}>Resend invite</button>
+            </form>}
           </div>
 
-          {user.state === "active" && (user.roleHistory[0] || user.roleChangedAt) ? <small className="residency-user-audit">
-            {user.roleHistory[0]
-              ? `Changed from ${user.roleHistory[0].previousRole?.replaceAll("_", " ")} to ${user.roleHistory[0].newRole?.replaceAll("_", " ")} by ${user.roleHistory[0].actor} on ${formatDate(user.roleHistory[0].changedAt)}`
-              : `Last changed by ${user.roleChangedBy?.displayName ?? user.roleChangedBy?.email ?? "HFY"} on ${formatDate(user.roleChangedAt)}`}
-          </small> : null}
+          {selectedUser.state === "active"
+            ? selectedUser.userId !== currentUserId ? <form action={(formData) => run(removeResidencyUserAction, formData, `${selectedUser.name} was removed.`)}>
+              <input type="hidden" name="contactId" value={selectedUser.id} />
+              <button className="button danger" type="submit" disabled={pending || selectedUser.isPrimary}>Remove</button>
+            </form> : null
+            : <form action={(formData) => run(removeResidencyUserAction, formData, `Invitation to ${selectedUser.email} was revoked.`)}>
+              <input type="hidden" name="contactId" value={selectedUser.id} />
+              <button className="button danger" type="submit" disabled={pending}>Revoke</button>
+            </form>}
         </div>
-      </article>)}
+      </section> : <p className="residency-user-focus-empty">No people have access yet.</p>}
     </div>
     {message ? <p className={/unable|cannot|final|error/i.test(message) ? "error" : "success"} role="status">{message}</p> : null}
   </ResidencySurfaceCard>;

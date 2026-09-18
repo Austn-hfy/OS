@@ -1937,11 +1937,26 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .residency-user-invite-form > :is(.error, .success) { grid-column: 1 / -1; margin: 0; }
 .platform-pause-periods { display: flex; gap: 10px; margin: 0; padding: 0; border: 0; }
 .platform-pause-periods legend { margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; }
-.residency-user-list { min-width: 0; display: grid; gap: var(--hfy-space-3); }
-.residency-user-card { min-width: 0; overflow: hidden; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-card); background: white; }
-.residency-user-card-top { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--hfy-space-4); padding: var(--hfy-space-4) 18px; }
-.residency-user-card-bottom { min-width: 0; display: grid; grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr); gap: var(--hfy-space-4); align-items: center; padding: var(--hfy-space-3) 18px; border-top: 1px solid var(--hfy-line); background: var(--hfy-surface-nested); }
-.residency-user-card.pending .residency-user-card-bottom { background: color-mix(in srgb, var(--hfy-action-soft) 42%, white); }
+.residency-user-focus-layout { min-width: 0; display: grid; grid-template-columns: minmax(240px, .72fr) minmax(0, 1.28fr); gap: var(--hfy-space-4); align-items: start; }
+.residency-user-focus-list { min-width: 0; display: grid; align-content: start; gap: var(--hfy-space-2); }
+.residency-user-focus-option { width: 100%; min-width: 0; display: flex; align-items: center; gap: var(--hfy-space-3); padding: var(--hfy-space-3); border: 1px solid transparent; border-radius: 13px; color: var(--hfy-ink); background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.residency-user-focus-option:hover { border-color: color-mix(in srgb, var(--hfy-action-strong) 25%, var(--hfy-line)); background: color-mix(in srgb, var(--hfy-action-soft) 38%, white); }
+.residency-user-focus-option[aria-pressed="true"] { border-color: var(--hfy-line); background: var(--hfy-action-soft); }
+.residency-user-focus-option:focus-visible { outline: 3px solid color-mix(in srgb, var(--hfy-action-strong) 30%, transparent); outline-offset: 2px; }
+.residency-user-focus-option > span:last-child { min-width: 0; display: grid; gap: 3px; }
+.residency-user-focus-option strong { min-width: 0; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }
+.residency-user-focus-option small { min-width: 0; color: var(--hfy-muted); font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.residency-user-focus-detail { min-width: 0; display: grid; gap: var(--hfy-space-4); padding: 18px; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-card); background: var(--hfy-surface-nested); }
+.residency-user-focus-detail.pending { background: color-mix(in srgb, var(--hfy-action-soft) 42%, white); }
+.residency-user-focus-detail-head { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--hfy-space-4); }
+.residency-user-focus-detail-grid { min-width: 0; display: grid; grid-template-columns: minmax(170px, .65fr) minmax(0, 1.35fr); gap: var(--hfy-space-4); align-items: end; }
+.residency-user-focus-label { display: block; margin-bottom: 6px; color: var(--hfy-muted); font-size: 9px; font-weight: 800; }
+.residency-user-focus-access-copy { min-width: 0; }
+.residency-user-focus-access-copy p { margin: 0; color: var(--hfy-muted); font-size: var(--hfy-supporting-copy-size); line-height: 1.5; overflow-wrap: anywhere; }
+.residency-user-focus-actions { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--hfy-space-3); padding-top: var(--hfy-space-3); border-top: 1px solid var(--hfy-line); }
+.residency-user-focus-actions > form { flex: 0 0 auto; }
+.residency-user-focus-actions > form .button { width: auto; min-height: 36px; padding: 8px 11px; font-size: 10px; white-space: nowrap; }
+.residency-user-focus-empty { margin: 0; padding: 18px; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-card); color: var(--hfy-muted); background: var(--hfy-surface-nested); font-size: var(--hfy-supporting-copy-size); }
 .residency-user-identity { min-width: 0; display: flex; align-items: center; gap: var(--hfy-space-3); }
 .residency-user-avatar { flex: 0 0 38px; width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--hfy-action-strong) 28%, transparent); border-radius: 50%; color: var(--hfy-action-ink); background: var(--hfy-action-soft); font-size: 11px; font-weight: 850; }
 .residency-user-identity > span:last-child { min-width: 0; display: grid; gap: 3px; }
@@ -1958,7 +1973,7 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .residency-user-status .status { margin: 0; white-space: nowrap; }
 .residency-user-actions { min-width: 0; display: flex; flex-wrap: wrap; gap: var(--hfy-space-2); justify-content: flex-end; }
 .residency-user-actions form { min-width: 0; display: flex; }
-.residency-user-audit { grid-column: 1 / -1; display: block; padding-top: var(--hfy-space-2); border-top: 1px dashed var(--hfy-line); }
+.residency-user-audit { display: block; padding-top: var(--hfy-space-2); border-top: 1px dashed var(--hfy-line); }
 .account-security-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .account-security-grid form { display: grid; align-content: start; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 15px; background: #fafcfe; }
 .account-security-grid .button { justify-self: start; }
@@ -1986,19 +2001,19 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 @container residency-users (max-width: 860px) {
   .residency-user-invite-form { grid-template-columns: minmax(0, 1fr) minmax(180px, .48fr); }
   .residency-user-invite-submit { grid-column: 1 / -1; justify-self: start; margin-top: 0; }
-  .residency-user-card-bottom { grid-template-columns: minmax(190px, .72fr) minmax(0, 1.28fr); align-items: start; }
+  .residency-user-focus-layout { grid-template-columns: minmax(0, 1fr); }
+  .residency-user-focus-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .residency-user-actions { justify-content: flex-start; }
 }
 
 @container residency-users (max-width: 560px) {
   .residency-users-card .residency-section-header--split { align-items: flex-start; flex-direction: column; }
-  .residency-user-invite-form, .residency-user-card-bottom { grid-template-columns: minmax(0, 1fr); }
+  .residency-user-invite-form, .residency-user-focus-list, .residency-user-focus-detail-grid { grid-template-columns: minmax(0, 1fr); }
   .residency-user-invite-submit { grid-column: auto; width: 100%; }
-  .residency-user-card-top { align-items: flex-start; flex-direction: column; }
-  .residency-user-card-bottom { gap: var(--hfy-space-3); }
+  .residency-user-focus-detail-head, .residency-user-focus-actions { align-items: stretch; flex-direction: column; }
   .residency-user-actions { justify-content: flex-start; }
   .residency-user-actions form { flex: 1 1 130px; }
-  .residency-user-actions .button { width: 100%; }
+  .residency-user-actions .button, .residency-user-focus-actions > form, .residency-user-focus-actions > form .button { width: 100%; }
 }
 
 @media (max-width: 1050px) {
