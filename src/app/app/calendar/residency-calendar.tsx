@@ -71,6 +71,7 @@ type ResidencyCalendarProps = {
   residency: { id: string; name: string; timezone: string; defaultTalentRateCents: number; clientHourlyRateCents: number; calendarLinkSettings: PublicCalendarLinkSettings };
   headerEyebrow?: string;
   monthKey: string;
+  today?: string;
   calendarView?: CalendarViewMode;
   weekStart?: string;
   events: ResidencyEvent[];
@@ -325,7 +326,7 @@ function SchedulingActivityDetailsRow({
   </div>;
 }
 
-export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialDate, modalReturnPath, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, headerEyebrow, monthKey, today, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialDate, modalReturnPath, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
   const quickDialogRef = useRef<HTMLElement>(null);
   const quickDialogCloseRef = useRef<HTMLButtonElement>(null);
@@ -1540,8 +1541,8 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
         </div>
       </header>
       {calendarView === "week"
-        ? <WeekCalendar weekStart={activeWeekStart} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />
-        : <MonthCalendar compact monthKey={monthKey} events={filteredEvents} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />}
+        ? <WeekCalendar weekStart={activeWeekStart} events={filteredEvents} today={today} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />
+        : <MonthCalendar compact monthKey={monthKey} events={filteredEvents} today={today} selectedDate={modal?.type === "add" ? modal.date : editingEvent?.date} onDateClick={canManage ? openDate : undefined} onEventClick={canManage ? openEvent : undefined} />}
 
       {modal ? <div className="quick-modal-backdrop calendar-quick-modal-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) closeModal(); }}>
         <section className={`quick-modal calendar-event-dialog ${modal.type === "edit" ? "quick-modal-edit" : ""} ${modal.type === "add" && addMode === "room" ? "quick-modal-room-picker" : ""}`} ref={quickDialogRef} role="dialog" aria-modal="true" aria-labelledby="quick-modal-title">

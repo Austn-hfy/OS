@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("calendar scheduling status visuals", () => {
-  it("keeps one strong Daypart color across scheduling states and reserves the check for filled slots", async () => {
+  it("uses neutral event pills, Daypart category rails, and attention-only status marks", async () => {
     const [globals, pilot, legend] = await Promise.all([
       readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
       readFile(new URL("../src/app/hfy-style-pilot.css", import.meta.url), "utf8"),
@@ -10,14 +10,14 @@ describe("calendar scheduling status visuals", () => {
     ]);
 
     expect(globals).toContain(".calendar-event.schedule-empty, .calendar-event.schedule-partial, .calendar-event.schedule-filled");
-    expect(globals).toContain(".calendar-event.schedule-filled .calendar-event-line::after");
-    expect(globals).not.toMatch(/\.calendar-event\.schedule-partial\s*\{[\s\S]*?36%/);
-    expect(globals).not.toMatch(/\.calendar-event\.schedule-filled\s*\{[\s\S]*?14%/);
+    expect(globals).toContain(".calendar-attention-indicator");
+    expect(globals).not.toContain(".calendar-event.schedule-filled .calendar-event-line::after");
+    expect(globals).toContain("border-left-color: var(--daypart-color, #2783dc)");
     expect(pilot).toContain(".calendar-event:is(.schedule-empty, .schedule-partial, .schedule-filled)");
-    expect(pilot).not.toMatch(/\.calendar-event\.schedule-partial\s*\{/);
-    expect(legend).toContain("Color: Daypart identity");
-    expect(legend).toContain("No check: needs or partially scheduled");
-    expect(legend).toContain("Checkmark: scheduled");
+    expect(pilot).toContain("HFY state stays secondary to the Daypart category rail");
+    expect(legend).toContain("Color rail: Daypart identity");
+    expect(legend).toContain("Orange mark: needs or partially scheduled");
+    expect(legend).toContain("No status mark: scheduled");
     expect(legend).toContain("Outlined pink dot: HFY request pending");
     expect(legend).toContain("Filled pink dot: HFY booked");
     expect(legend).toContain('<summary role="button" aria-label="Color key" title="Color key">');
@@ -31,7 +31,7 @@ describe("calendar scheduling status visuals", () => {
       readFile(new URL("../src/components/month-calendar.tsx", import.meta.url), "utf8"),
     ]);
 
-    expect(pilot).toContain("the room color remains the pill fill");
+    expect(pilot).toContain("HFY state stays secondary to the Daypart category rail");
     expect(globals).toContain(".hfy-booking-indicator");
     expect(globals).toContain(".hfy-pending .hfy-booking-indicator");
     expect(month).toContain('event.bookingState === "hfy_pending" ? "HFY request pending" : "HFY booked"');

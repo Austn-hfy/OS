@@ -2,6 +2,7 @@ import { formatTimeInput } from "@/components/format";
 import { getCalendarData, getPublicCalendarLinkSettings, getScheduleOccurrenceData } from "@/data/internal";
 import { getResidencyClientSafeRoster } from "@/data/residency-client";
 import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, scheduleOccurrenceScheduling, slotSchedulingStatus } from "@/domain/dayparts";
+import { localDateKey } from "@/domain/time";
 import { requireResidencyActor } from "@/lib/auth";
 import { calendarToneForSlot, monthKeyForDate, monthRange, normalizeCalendarView, normalizeMonthKey, normalizeWeekStart, shiftDateKey, weekRange } from "@/lib/calendar";
 import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from "@/services/dayparts";
@@ -107,7 +108,7 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
   return <div className="calendar-page client-calendar-page"><ResidencyCalendar
     residency={{ id: actor.residencyId, name: actor.residencyName, timezone: actor.residencyTimezone, defaultTalentRateCents: 0, clientHourlyRateCents: 0, calendarLinkSettings }}
     headerEyebrow={`${actor.residencyName} · Calendar`}
-    monthKey={monthKey} calendarView={calendarView} weekStart={weekStart} events={events} rooms={rooms} dayparts={safeDayparts}
+    monthKey={monthKey} today={localDateKey(new Date(), actor.residencyTimezone)} calendarView={calendarView} weekStart={weekStart} events={events} rooms={rooms} dayparts={safeDayparts}
     talent={actor.residencyTier === "complete" ? [] : roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
     dateExceptions={dateExceptions}
     previewMode fullProgramming={actor.residencyTier === "complete"} calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}

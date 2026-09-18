@@ -25,7 +25,7 @@ export type MonthCalendarTone = CalendarTone;
 
 const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function MonthCalendar({ monthKey, events, selectedDate, onDateClick, onEventClick, compact = false, ariaLabel = "Programming calendar" }: { monthKey: string; events: MonthCalendarEvent[]; selectedDate?: string | null; onDateClick?: (date: string) => void; onEventClick?: (event: MonthCalendarEvent) => void; compact?: boolean; ariaLabel?: string }) {
+export function MonthCalendar({ monthKey, events, today, selectedDate, onDateClick, onEventClick, compact = false, ariaLabel = "Programming calendar" }: { monthKey: string; events: MonthCalendarEvent[]; today?: string; selectedDate?: string | null; onDateClick?: (date: string) => void; onEventClick?: (event: MonthCalendarEvent) => void; compact?: boolean; ariaLabel?: string }) {
   const days = monthGrid(monthKey);
   const calendarStyle = { "--calendar-weeks": days.length / 7 } as CSSProperties;
   const maxVisibleEvents = compact ? 4 : 5;
@@ -37,12 +37,16 @@ export function MonthCalendar({ monthKey, events, selectedDate, onDateClick, onE
           const dayEvents = events.filter((event) => event.date === day.iso);
           const visibleEvents = dayEvents.slice(0, maxVisibleEvents);
           const hiddenCount = dayEvents.length - visibleEvents.length;
-          return <div className={`calendar-day ${onDateClick ? "interactive" : ""} ${day.inMonth ? "" : "outside"} ${selectedDate === day.iso ? "selected" : ""}`} role="gridcell" key={day.iso}>
-            {onDateClick ? <button className="calendar-date-trigger" type="button" aria-label={`Add to ${day.iso}`} onClick={() => onDateClick(day.iso)}><span className="calendar-day-header"><time dateTime={day.iso}>{day.day}</time>{day.inMonth ? <span className="calendar-add-icon" aria-hidden="true">+</span> : null}</span></button> : <div className="calendar-day-header"><time dateTime={day.iso}>{day.day}</time></div>}
+          const isToday = today === day.iso;
+          const dateLabel = <><time dateTime={day.iso} aria-current={isToday ? "date" : undefined}>{day.day}</time>{isToday ? <span className="calendar-today-label">Today</span> : null}</>;
+          return <div className={`calendar-day ${onDateClick ? "interactive" : ""} ${day.inMonth ? "" : "outside"} ${isToday ? "today" : ""} ${selectedDate === day.iso ? "selected" : ""}`} role="gridcell" key={day.iso}>
+            {onDateClick ? <button className="calendar-date-trigger" type="button" aria-label={`Add to ${day.iso}`} onClick={() => onDateClick(day.iso)}><span className="calendar-day-header">{dateLabel}{day.inMonth ? <span className="calendar-add-icon" aria-hidden="true">+</span> : null}</span></button> : <div className="calendar-day-header">{dateLabel}</div>}
             <div className="calendar-events">{visibleEvents.map((event) => {
               const eventStyle = event.color ? { "--daypart-color": event.color, "--daypart-text-color": contrastTextColor(event.color) } as CSSProperties : undefined;
               const eventClassName = `calendar-event ${event.schedulingStatus ? `schedule-${event.schedulingStatus}` : event.color ? "custom-color" : event.tone ?? "blue"} ${event.bookingState ? event.bookingState.replace("_", "-") : ""}`;
-              const content = <><span className="calendar-event-line"><strong>{event.title}</strong><span>{event.time}</span></span>{compact ? null : <small>{event.residencyName}</small>}{event.bookingState ? <i className="hfy-booking-indicator" aria-label={event.bookingState === "hfy_pending" ? "HFY request pending" : "HFY booked"} /> : null}</>;
+              const needsAttention = event.schedulingStatus === "empty" || event.schedulingStatus === "partial";
+              const visibleTime = event.schedulingStatus ? event.time.split(" · ")[0] : event.time;
+              const content = <><span className="calendar-event-line"><strong>{event.title}</strong><span>{visibleTime}</span>{needsAttention ? <i className="calendar-attention-indicator" aria-hidden="true">!</i> : null}</span>{compact ? null : <small>{event.residencyName}</small>}{event.bookingState ? <i className="hfy-booking-indicator" aria-label={event.bookingState === "hfy_pending" ? "HFY request pending" : "HFY booked"} /> : null}</>;
               const tooltip = [event.title, event.room, event.time, compact ? event.residencyName : null].filter(Boolean).join(" · ");
               if (onEventClick) return <button className={eventClassName} style={eventStyle} type="button" title={tooltip} aria-label={`Open ${event.title} on ${event.date}`} onClick={() => onEventClick(event)} key={event.id}>{content}</button>;
               if (event.href) return <Link className={eventClassName} style={eventStyle} title={tooltip} aria-label={`Open ${event.title} on ${event.date}`} href={event.href} key={event.id}>{content}</Link>;

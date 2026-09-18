@@ -5,6 +5,7 @@ import { CalendarStatusLegend } from "@/components/calendar-status-legend";
 import { getCalendarData, getPublicCalendarLinkSettings, getResidencyList } from "@/data/internal";
 import { calendarToneForSlot, monthKeyForDate, monthLabel, monthRange, normalizeCalendarView, normalizeMonthKey, normalizeWeekStart, shiftDateKey, shiftMonthKey, weekRange } from "@/lib/calendar";
 import { calendarColorForEconomics, clockToMinute, daypartDateKey, formatCompactMinuteRange, projectDaypartSlots, resolveAssignmentMinutes, resolveEndMinute, slotSchedulingStatus } from "@/domain/dayparts";
+import { localDateKey } from "@/domain/time";
 import { getActiveTalentLookup, getDaypartDateExceptionsForResidencies, getDaypartsForResidencies, getDaypartsForResidency, getHfyRequestTalentLookup } from "@/services/dayparts";
 import { isHfyManagedEconomicsMode, isStandingHfyDaypart } from "@/domain/hfy-programming";
 import { ResidencyCalendar } from "./residency-calendar";
@@ -208,6 +209,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         key={selectedResidency.id}
         residency={{ id: selectedResidency.id, name: selectedResidency.name, timezone: selectedResidency.timezone, defaultTalentRateCents: selectedResidency.defaultTalentRateCents, clientHourlyRateCents: selectedResidency.clientHourlyRateCents, calendarLinkSettings }}
         monthKey={monthKey}
+        today={localDateKey(new Date(), selectedResidency.timezone)}
         calendarView={calendarView}
         weekStart={weekStart}
         events={events}
