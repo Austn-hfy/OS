@@ -418,7 +418,7 @@ describe("Platform Invoice document", () => {
 });
 
 describe("payment failure access invariant", () => {
-  it("shows the failure on every Residency page without changing authorization", async () => {
+  it("shows the 14-day grace deadline on every Residency page and restricts only operational writes afterward", async () => {
     const [layout, auth, alerts, accountSetup, invoiceDelivery, outboundEmail, eslintConfig] = await Promise.all([
       readSource("../src/app/residency/layout.tsx"),
       readSource("../src/lib/auth.ts"),
@@ -431,9 +431,11 @@ describe("payment failure access invariant", () => {
     expect(layout).toContain("getResidencyPaymentFailure");
     expect(layout).toContain("platformBillingAvailable ? await getResidencyPaymentFailure");
     expect(layout).toContain("platform-payment-failure-banner");
-    expect(layout).toContain("Your portal remains fully available");
+    expect(layout).toContain("Full access continues");
+    expect(layout).toContain("paymentFailure.graceEndsAt");
     expect(auth).not.toContain("paymentFailedAt");
-    expect(alerts).toContain('accessBehavior: "never_restrict"');
+    expect(auth).toContain("assertResidencyOperationalWriteAllowed");
+    expect(alerts).toContain('accessBehavior: "restrict_operational_writes_after_grace"');
     expect(alerts).toContain("sendPlatformBillingEmail");
     expect([accountSetup, invoiceDelivery].every((source) => source.includes("sendEmail"))).toBe(true);
     expect([alerts, accountSetup, invoiceDelivery].every((source) => !source.includes('from "resend"'))).toBe(true);

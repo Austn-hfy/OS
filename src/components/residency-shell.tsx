@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut, switchInternalTestResidency } from "@/app/actions";
 import { exitViewAsAction } from "@/app/app/view-as-actions";
+import { exitClientViewAsAction } from "@/app/residency/settings/client-view-as-actions";
 import type { ResidencyActor } from "@/lib/auth";
 import { WorkspaceNavLink } from "@/components/workspace-nav";
 import { DaypartRateAttentionReportProvider, type DaypartRateAttentionReport } from "@/components/daypart-rate-attention-context";
@@ -51,9 +52,9 @@ export function ResidencyShell({ actor, platformBillingAvailable, children }: { 
         </> : null}
       </nav>
       {canManage ? <div className="residency-sidebar-settings"><WorkspaceNavLink href="/residency/settings" label="Settings" description={platformBillingAvailable ? "Account and Platform billing" : "Account settings"} icon="settings" active={pathname.startsWith("/residency/settings")} /></div> : null}
-      <div className="sidebar-footer"><p>{actor.displayName}<br />{actor.email}</p>{actor.isViewAs ? <form action={exitViewAsAction}><button className="button secondary" type="submit">Exit preview</button></form> : <form action={signOut}><button className="button secondary" type="submit">Sign out</button></form>}</div>
+      <div className="sidebar-footer"><p>{actor.displayName}<br />{actor.email}</p>{actor.isViewAs ? <form action={exitViewAsAction}><button className="button secondary" type="submit">Exit preview</button></form> : actor.isClientViewAs ? <form action={exitClientViewAsAction}><button className="button secondary" type="submit">Exit View As</button></form> : <form action={signOut}><button className="button secondary" type="submit">Sign out</button></form>}</div>
     </aside>
     <main className={`main ${pathname === "/residency/calendar" ? "calendar-main" : ""}`}>
-      {actor.isViewAs ? <div className="view-as-banner" role="status"><strong>Viewing as: {actor.residencyName}</strong><span>Changes made here are live for this Residency.</span><form action={exitViewAsAction}><button type="submit">Exit preview</button></form></div> : null}{children}</main>
+      {actor.isViewAs ? <div className="view-as-banner" role="status"><strong>Viewing as: {actor.residencyName}</strong><span>Changes made here are live for this Residency.</span><form action={exitViewAsAction}><button type="submit">Exit preview</button></form></div> : actor.isClientViewAs ? <div className="view-as-banner" role="status"><strong>Viewing as {actor.viewAsDisplayName}</strong><span>Read-only preview · {actor.accessRole === "manager" ? "Manager" : "Calendar viewer"}</span><form action={exitClientViewAsAction}><button type="submit">Exit View As</button></form></div> : null}{children}</main>
   </div></DaypartRateAttentionReportProvider>;
 }

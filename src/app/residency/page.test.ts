@@ -58,10 +58,10 @@ describe("Residency Overview availability", () => {
     expect(html).not.toContain("Plan pending");
   });
 
-  it("continues to redirect calendar viewers before Overview data loads", async () => {
+  it("continues to redirect calendar viewers to access-limited before Overview data loads", async () => {
     vi.mocked(requireResidencyActor).mockResolvedValue({ ...manager, accessRole: "calendar_viewer" });
 
-    await expect(ResidencyOverviewPage()).rejects.toThrow("NEXT_REDIRECT:/residency/calendar");
+    await expect(ResidencyOverviewPage()).rejects.toThrow("NEXT_REDIRECT:/residency/access-limited");
     expect(getResidencyClientOverview).not.toHaveBeenCalled();
     expect(isCurrentPlatformBillingAvailable).not.toHaveBeenCalled();
     expect(getResidencyPlatformBilling).not.toHaveBeenCalled();

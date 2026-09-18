@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import { getDb } from "@/db/client";
 import {
@@ -15,6 +15,7 @@ import { queuePlatformPaymentFailedAlerts, resolvePlatformPaymentFailure, sendPe
 import { queueAnnualCancellationRefund, switchResidencyCommittedPlanToAnnualImmediately } from "@/services/platform-stripe";
 import { getStripe } from "@/lib/stripe";
 import { requireResidencyLiveBillingApproval } from "@/services/live-billing-safety";
+import { revokePendingInvitationsForCancelledResidency } from "@/services/residency-billing-management";
 
 function objectId(value: string | { id: string } | null | undefined) {
   return typeof value === "string" ? value : value?.id ?? null;
@@ -153,7 +154,9 @@ export async function syncStripeSubscription(stripeSubscriptionId: string) {
   const status = mapSubscriptionStatus(subscription.status);
   if (status === "cancelled" && plan.status !== "cancelled") {
     await queueAnnualCancellationRefund(plan, now);
+    await revokePendingInvitationsForCancelledResidency(plan.residencyId, now);
   }
+  const pauseIsEffective = Boolean(plan.pauseEffectiveAt && plan.pauseEffectiveAt <= now && plan.pauseResumesAt && plan.pauseResumesAt > now);
   const [updated] = await getDb().update(platformSubscriptions).set({
     ...(activatedRevision ? {
       revision: activatedRevision.revision,
@@ -168,7 +171,13 @@ export async function syncStripeSubscription(stripeSubscriptionId: string) {
     stripeSubscriptionItemId: item.id,
     stripeProductId: objectId(item.price.product),
     stripePriceId: item.price.id,
-    status,
+    status: pauseIsEffective && status === "active" ? "paused" : status,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    ...(activatedRevision ? {
+      pendingChangeKind: "none",
+      pendingChangeEffectiveAt: null,
+      pendingRevision: null,
+    } : {}),
     cardBrand: card.brand,
     cardLast4: card.last4,
     nextChargeAt: nextChargeTimestamp ? new Date(nextChargeTimestamp * 1_000) : null,
@@ -279,11 +288,15 @@ async function applyInvoiceEvent(event: Stripe.Event, invoice: Stripe.Invoice) {
   if (!record) return;
   if (event.type === "invoice.payment_failed") {
     const message = invoice.last_finalization_error?.message || "Stripe could not collect the Platform subscription payment.";
+    const failedAt = new Date();
+    const graceEndsAt = new Date(failedAt.getTime() + 14 * 24 * 60 * 60 * 1_000);
     await getDb().update(platformSubscriptions).set({
       status: "past_due",
-      paymentFailedAt: new Date(),
+      paymentFailedAt: sql`coalesce(${platformSubscriptions.paymentFailedAt}, ${failedAt})`,
+      paymentGraceEndsAt: sql`coalesce(${platformSubscriptions.paymentGraceEndsAt}, ${graceEndsAt})`,
+      accessRestrictedAt: null,
       paymentFailureMessage: message,
-      updatedAt: new Date(),
+      updatedAt: failedAt,
     }).where(eq(platformSubscriptions.id, record.platformSubscriptionId));
     const alertIds = await queuePlatformPaymentFailedAlerts({
       platformSubscriptionId: record.platformSubscriptionId,
@@ -293,12 +306,23 @@ async function applyInvoiceEvent(event: Stripe.Event, invoice: Stripe.Invoice) {
     if (alertIds.length) await sendPendingPlatformBillingAlerts(alertIds.length, alertIds);
   }
   if (event.type === "invoice.payment_succeeded" || event.type === "invoice.paid") {
-    await getDb().update(platformSubscriptions).set({
-      paymentFailedAt: null,
-      paymentFailureMessage: "",
-      updatedAt: new Date(),
-    }).where(eq(platformSubscriptions.id, record.platformSubscriptionId));
-    await resolvePlatformPaymentFailure(record.platformSubscriptionId);
+    const outstanding = await getDb().select({ id: platformSubscriptionInvoices.id })
+      .from(platformSubscriptionInvoices)
+      .where(and(
+        eq(platformSubscriptionInvoices.platformSubscriptionId, record.platformSubscriptionId),
+        inArray(platformSubscriptionInvoices.status, ["open", "uncollectible"]),
+        sql`${platformSubscriptionInvoices.amountDueCents} > ${platformSubscriptionInvoices.amountPaidCents}`,
+      )).limit(1);
+    if (!outstanding.length) {
+      await getDb().update(platformSubscriptions).set({
+        paymentFailedAt: null,
+        paymentGraceEndsAt: null,
+        accessRestrictedAt: null,
+        paymentFailureMessage: "",
+        updatedAt: new Date(),
+      }).where(eq(platformSubscriptions.id, record.platformSubscriptionId));
+      await resolvePlatformPaymentFailure(record.platformSubscriptionId);
+    }
   }
   if (["invoice.finalized", "invoice.payment_succeeded", "invoice.paid"].includes(event.type)) {
     const { generatePlatformInvoicePdfSafely } = await import("@/services/platform-invoices");

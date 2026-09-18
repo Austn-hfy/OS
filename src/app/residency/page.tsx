@@ -12,7 +12,7 @@ function date(value: string | null) {
 
 export default async function ResidencyOverviewPage() {
   const actor = await requireResidencyActor();
-  if (actor.accessRole !== "manager") redirect("/residency/calendar");
+  if (actor.accessRole !== "manager") redirect("/residency/access-limited");
   const overview = await getResidencyClientOverview(actor.residencyId);
   return <ResidencyPageSurface className="residency-overview-surface">
     <ResidencyPageHeader eyebrow="Residency workspace" title={`Welcome, ${actor.displayName}`} />

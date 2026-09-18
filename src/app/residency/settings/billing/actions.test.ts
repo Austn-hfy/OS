@@ -1,13 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireResidencyActor } from "@/lib/auth";
+import { requireResidencyActorForMutation } from "@/lib/auth";
 import { beginResidencyAnnualSwitch, createPlatformPaymentMethodCheckout, createPlatformSubscriptionCheckout, previewResidencyAnnualSwitch } from "@/services/platform-stripe";
-import { previewResidencyPlatformPlanAnnualSwitchAction, startResidencyPlatformCheckoutAction, switchResidencyPlatformPlanToAnnualAction, updateResidencyPlatformCardAction } from "./actions";
+import { previewResidencyCancellation, previewResidencyPause, previewResidencyPlanDowngrade, scheduleResidencyCancellation, scheduleResidencyPause, scheduleResidencyPlanDowngrade } from "@/services/residency-billing-management";
+import { confirmResidencyPlanChangeAction, previewResidencyPlanChangeAction, previewResidencyPlatformPlanAnnualSwitchAction, startResidencyPlatformCheckoutAction, switchResidencyPlatformPlanToAnnualAction, updateResidencyPlatformCardAction } from "./actions";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
-vi.mock("@/lib/auth", () => ({ requireResidencyActor: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ requireResidencyActorForMutation: vi.fn() }));
+vi.mock("@/services/residency-billing-management", () => ({
+  payResidencyInvoiceNow: vi.fn(),
+  previewResidencyCancellation: vi.fn(),
+  previewResidencyPause: vi.fn(),
+  previewResidencyPlanDowngrade: vi.fn(),
+  scheduleResidencyCancellation: vi.fn(),
+  scheduleResidencyPause: vi.fn(),
+  scheduleResidencyPlanDowngrade: vi.fn(),
+}));
 vi.mock("@/services/platform-stripe", () => ({
   createPlatformPaymentMethodCheckout: vi.fn(),
   createPlatformSubscriptionCheckout: vi.fn(),
@@ -28,7 +38,7 @@ function confirmedAnnualSwitch() {
 describe("Residency billing action hold responses", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(requireResidencyActor).mockResolvedValue({
+    vi.mocked(requireResidencyActorForMutation).mockResolvedValue({
       kind: "residency",
       userId: "00000000-0000-4000-8000-000000000001",
       email: "manager@example.test",
@@ -93,7 +103,7 @@ describe("Residency billing action hold responses", () => {
   });
 
   it("does not let a non-manager switch the billing term", async () => {
-    vi.mocked(requireResidencyActor).mockResolvedValue({ accessRole: "calendar_viewer" } as never);
+    vi.mocked(requireResidencyActorForMutation).mockResolvedValue({ accessRole: "calendar_viewer" } as never);
 
     await expect(switchResidencyPlatformPlanToAnnualAction(initialState, confirmedAnnualSwitch())).resolves.toEqual({
       status: "error",
@@ -120,5 +130,46 @@ describe("Residency billing action hold responses", () => {
     await switchResidencyPlatformPlanToAnnualAction(initialState, confirmedAnnualSwitch());
 
     expect(redirect).toHaveBeenCalledWith("https://checkout.stripe.com/c/pay/cs_test");
+  });
+
+  it("returns Stripe's real period-end preview for a capacity downgrade", async () => {
+    vi.mocked(previewResidencyPlanDowngrade).mockResolvedValue({
+      effectiveAt: "2026-10-01T00:00:00.000Z",
+      amountDueTodayCents: 0,
+      nextStripeInvoiceAmountCents: 45_000,
+      current: { term: "month_to_month", talentBucketSize: 20, houseBucketSize: 10 },
+      next: { term: "month_to_month", talentBucketSize: 10, houseBucketSize: 5 },
+    } as never);
+
+    await expect(previewResidencyPlanChangeAction({ kind: "downgrade", talentBucketSize: 10, houseBucketSize: 5, term: "month_to_month" }))
+      .resolves.toMatchObject({ status: "success", kind: "downgrade", preview: { amountDueTodayCents: 0, nextStripeInvoiceAmountCents: 45_000 } });
+    expect(previewResidencyPlanDowngrade).toHaveBeenCalledWith(expect.anything(), { talentBucketSize: 10, houseBucketSize: 5, term: "month_to_month" });
+  });
+
+  it.each([1, 2, 3] as const)("offers a %s-period pause and schedules only after confirmation", async (periods) => {
+    vi.mocked(previewResidencyPause).mockResolvedValue({ periods, effectiveAt: "2026-10-01T00:00:00.000Z", resumesAt: "2026-11-01T00:00:00.000Z", amountDueTodayCents: 0 });
+    vi.mocked(scheduleResidencyPause).mockResolvedValue({ effectiveAt: "2026-10-01T00:00:00.000Z", resumesAt: "2026-11-01T00:00:00.000Z" });
+    await expect(previewResidencyPlanChangeAction({ kind: "pause", periods })).resolves.toMatchObject({ status: "success", kind: "pause", preview: { periods } });
+    expect(scheduleResidencyPause).not.toHaveBeenCalled();
+    const data = new FormData();
+    data.set("confirmation", "confirm"); data.set("kind", "pause"); data.set("periods", String(periods));
+    await expect(confirmResidencyPlanChangeAction(initialState, data)).resolves.toMatchObject({ status: "success" });
+    expect(scheduleResidencyPause).toHaveBeenCalledWith(expect.anything(), periods);
+  });
+
+  it("keeps cancellation separate until explicit period-end confirmation", async () => {
+    vi.mocked(previewResidencyCancellation).mockResolvedValue({ effectiveAt: "2026-10-01T00:00:00.000Z", amountDueTodayCents: 0, current: {} } as never);
+    vi.mocked(scheduleResidencyCancellation).mockResolvedValue({ effectiveAt: "2026-10-01T00:00:00.000Z" });
+    await expect(previewResidencyPlanChangeAction({ kind: "cancel" })).resolves.toMatchObject({ status: "success", kind: "cancel", preview: { amountDueTodayCents: 0 } });
+    expect(scheduleResidencyCancellation).not.toHaveBeenCalled();
+    const data = new FormData(); data.set("confirmation", "confirm"); data.set("kind", "cancel");
+    await expect(confirmResidencyPlanChangeAction(initialState, data)).resolves.toMatchObject({ status: "success", message: expect.stringContaining("pending invitations revoke then") });
+    expect(scheduleResidencyCancellation).toHaveBeenCalledOnce();
+  });
+
+  it("does not schedule an unconfirmed downgrade", async () => {
+    const data = new FormData(); data.set("kind", "downgrade"); data.set("talentBucketSize", "10"); data.set("houseBucketSize", "5"); data.set("term", "month_to_month");
+    await expect(confirmResidencyPlanChangeAction(initialState, data)).resolves.toEqual({ status: "error", message: "Review and confirm this billing change before continuing." });
+    expect(scheduleResidencyPlanDowngrade).not.toHaveBeenCalled();
   });
 });

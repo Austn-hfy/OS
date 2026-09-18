@@ -1923,6 +1923,46 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .residency-overview-grid h2 { font-size: 24px; }
 .residency-overview-grid p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
+.residency-users-card, .account-security-card { display: grid; gap: 22px; padding: 22px; }
+.residency-user-invite-form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr) auto; gap: 16px; align-items: end; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #f8fbfe; }
+.residency-user-invite-form fieldset, .platform-pause-periods { display: flex; gap: 10px; margin: 0; padding: 0; border: 0; }
+.residency-user-invite-form legend, .platform-pause-periods legend { margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; }
+.residency-role-option { display: flex; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.residency-role-option span, .residency-role-option small { display: block; }
+.residency-role-option small { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.35; }
+.residency-user-list { display: grid; gap: 10px; }
+.residency-user-row { display: grid; grid-template-columns: minmax(190px, .8fr) minmax(240px, 1fr) minmax(260px, auto); gap: 18px; align-items: center; padding: 16px; border: 1px solid #d8e1e9; border-radius: 15px; background: white; }
+.residency-user-row.pending { border-style: dashed; background: #fafbfd; }
+.residency-user-identity, .residency-user-role { display: grid; gap: 5px; }
+.residency-user-identity > div { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.residency-user-identity > span, .residency-user-role > span, .residency-user-role small { color: var(--muted); font-size: 9px; line-height: 1.45; }
+.residency-user-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+.residency-user-actions form { display: flex; gap: 6px; }
+.residency-user-actions .button, .residency-user-actions select { min-height: 31px; padding: 7px 9px; font-size: 9px; }
+.account-security-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.account-security-grid form { display: grid; align-content: start; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 15px; background: #fafcfe; }
+.account-security-grid .button { justify-self: start; }
+.residency-access-limited { display: grid; gap: 14px; max-width: 680px; padding: 28px; }
+.residency-access-limited p { margin: 0; color: var(--muted); line-height: 1.6; }
+.residency-access-limited .button { justify-self: start; }
+.platform-self-service-plan { display: grid; gap: 14px; margin-top: 16px; padding-top: 18px; border-top: 1px solid var(--line); }
+.platform-self-service-heading h3 { margin: 3px 0; font-size: 17px; }
+.platform-self-service-heading p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: 10px; }
+.platform-self-service-tabs { display: flex; gap: 6px; }
+.platform-self-service-tabs button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: white; font-size: 9px; font-weight: 800; }
+.platform-self-service-tabs button.active { border-color: #8bbde8; color: #14558d; background: #edf6ff; }
+.platform-self-service-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.platform-self-service-fields label { display: grid; gap: 6px; color: var(--muted); font-size: 9px; font-weight: 800; }
+.platform-self-service-plan > .button { justify-self: start; }
+.platform-pause-periods label { display: flex; gap: 6px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.platform-self-service-pending { display: grid; gap: 4px; margin-top: 16px; padding: 14px; border: 1px solid #e0c77e; border-radius: 13px; background: #fff9e7; }
+.platform-self-service-pending span { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.platform-plan-change-confirmation { width: min(720px, 100%); }
+.platform-invoice-pay-now { display: grid; gap: 5px; }
+.platform-invoice-pay-now small { max-width: 180px; line-height: 1.35; }
+.platform-payment-failed-inline.restricted { border-color: #e2a4a4; background: #fff2f2; }
+.platform-payment-failure-banner.restricted { border-color: #e2a4a4; background: #fff2f2; }
+
 @media (max-width: 1050px) {
   .platform-owner-plan-summary, .platform-plan-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .platform-plan-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 18px; }
@@ -1945,4 +1985,7 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
   .platform-annual-plan-comparison { grid-template-columns: 1fr; }
   .platform-annual-confirmation-actions { align-items: stretch; flex-direction: column-reverse; }
   .platform-annual-confirmation-actions .button { width: 100%; }
+  .residency-user-invite-form, .residency-user-row, .account-security-grid, .platform-self-service-fields { grid-template-columns: 1fr; }
+  .residency-user-invite-form { align-items: stretch; }
+  .residency-user-actions { justify-content: flex-start; }
 }

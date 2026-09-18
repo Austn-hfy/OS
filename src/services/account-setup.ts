@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { accountSetupTokens, auditLog, residencyContacts, users } from "@/db/schema";
+import { accountSetupTokens, auditLog, residencies, residencyContacts, residencyMemberships, users } from "@/db/schema";
 import { hashAccountSetupToken } from "@/domain/account-setup";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -9,10 +9,10 @@ export type CompleteAccountSetupResult =
   | { status: "invalid" };
 
 type CompleteAccountSetupDependencies = {
-  consume: (tokenHash: string, password: string, now: Date) => Promise<{ email: string } | null>;
+  consume: (tokenHash: string, password: string, now: Date, profile: { name: string; phone: string }) => Promise<{ email: string } | null>;
 };
 
-async function consumePersistedAccountSetupToken(tokenHash: string, password: string, now: Date) {
+async function consumePersistedAccountSetupToken(tokenHash: string, password: string, now: Date, profile: { name: string; phone: string }) {
   return getDb().transaction(async (tx) => {
     const [setup] = await tx.update(accountSetupTokens)
       .set({ usedAt: now })
@@ -44,11 +44,32 @@ async function consumePersistedAccountSetupToken(tokenHash: string, password: st
     if (error) throw error;
 
     if (setup.contactId) {
+      await tx.update(users).set({ displayName: profile.name, updatedAt: now }).where(eq(users.id, setup.userId));
+      await tx.update(residencyMemberships).set({ active: true, updatedAt: now }).where(and(
+        eq(residencyMemberships.userId, setup.userId),
+        eq(residencyMemberships.residencyId, setup.residencyId!),
+      ));
       await tx.update(residencyContacts).set({
+        name: profile.name,
+        phone: profile.phone,
         invitationStatus: "active",
         acceptedAt: now,
         updatedAt: now,
       }).where(eq(residencyContacts.id, setup.contactId));
+      const [primary] = await tx.select({ id: residencyContacts.id }).from(residencyContacts).where(and(
+        eq(residencyContacts.residencyId, setup.residencyId!),
+        eq(residencyContacts.active, true),
+        eq(residencyContacts.isPrimary, true),
+      )).limit(1);
+      if (!primary) {
+        await tx.update(residencyContacts).set({ isPrimary: true, updatedAt: now }).where(eq(residencyContacts.id, setup.contactId));
+        await tx.update(residencies).set({
+          primaryContactName: profile.name,
+          primaryContactEmail: account.email,
+          primaryContactPhone: profile.phone,
+          updatedAt: now,
+        }).where(eq(residencies.id, setup.residencyId!));
+      }
     }
 
     await tx.insert(auditLog).values({
@@ -66,12 +87,15 @@ async function consumePersistedAccountSetupToken(tokenHash: string, password: st
 }
 
 export async function completeAccountSetup(
-  input: { token: string; password: string },
+  input: { token: string; password: string; name?: string; phone?: string },
   dependencies: CompleteAccountSetupDependencies = { consume: consumePersistedAccountSetupToken },
   now = new Date(),
 ): Promise<CompleteAccountSetupResult> {
   const token = input.token.trim();
   if (token.length < 32 || token.length > 256) return { status: "invalid" };
-  const completed = await dependencies.consume(hashAccountSetupToken(token), input.password, now);
+  const completed = await dependencies.consume(hashAccountSetupToken(token), input.password, now, {
+    name: input.name?.trim() || "Residency user",
+    phone: input.phone?.trim() || "",
+  });
   return completed ? { status: "success", email: completed.email } : { status: "invalid" };
 }

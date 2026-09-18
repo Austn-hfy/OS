@@ -47,6 +47,8 @@ describe("Residency failed-payment banner", () => {
   it("still displays an actual payment failure", async () => {
     vi.mocked(getResidencyPaymentFailure).mockResolvedValue({
       failedAt: "2026-09-18T12:00:00.000Z",
+      graceEndsAt: null,
+      restrictedAt: null,
       message: "The payment method was declined.",
     });
 
