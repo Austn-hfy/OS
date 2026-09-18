@@ -8,13 +8,16 @@ import { getDaypartDateExceptionsForResidencies, getDaypartsForResidency } from 
 import { ResidencyCalendar, type ResidencyEvent } from "@/app/app/calendar/residency-calendar";
 import { getRoomsForResidency } from "@/services/rooms";
 
-export default async function ResidencyClientCalendarPage({ searchParams }: { searchParams: Promise<{ month?: string; calendarView?: string; week?: string; batchDaypart?: string }> }) {
+export default async function ResidencyClientCalendarPage({ searchParams }: { searchParams: Promise<{ month?: string; calendarView?: string; week?: string; event?: string; date?: string; batchDaypart?: string }> }) {
   const [actor, params] = await Promise.all([requireResidencyActor(), searchParams]);
   const requestedMonthKey = normalizeMonthKey(params.month);
   const calendarView = normalizeCalendarView(params.calendarView);
   const weekStart = normalizeWeekStart(params.week, requestedMonthKey);
   const monthKey = calendarView === "week" ? monthKeyForDate(shiftDateKey(weekStart, 3)) : requestedMonthKey;
   const range = calendarView === "week" ? weekRange(weekStart) : monthRange(monthKey);
+  const initialDate = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) && params.date >= range.from && params.date <= range.to
+    ? params.date
+    : undefined;
   const [calendar, occurrences, dayparts, rooms, roster, calendarLinkSettings, dateExceptions] = await Promise.all([
     getCalendarData(actor.residencyId, range),
     getScheduleOccurrenceData(actor.residencyId, range),
@@ -105,6 +108,6 @@ export default async function ResidencyClientCalendarPage({ searchParams }: { se
     talent={actor.residencyTier === "complete" ? [] : roster.filter((artist) => artist.ownership === "residency").map((artist) => ({ ...artist, priority: null }))}
     dateExceptions={dateExceptions}
     previewMode fullProgramming={actor.residencyTier === "complete"} calendarBasePath="/residency/calendar" canManage={actor.accessRole === "manager"}
-    initialBatchDaypartId={params.batchDaypart}
+    initialEventId={params.event} initialDate={initialDate} initialBatchDaypartId={params.batchDaypart}
   /></div>;
 }

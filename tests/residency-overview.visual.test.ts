@@ -29,25 +29,35 @@ const manager: ResidencyActor = {
   availableResidencies: [],
 };
 
+function service(
+  id: string,
+  name: string,
+  room: string,
+  status: "scheduled" | "pending" | "open",
+  talentNames: string[] = [],
+): ResidencyClientOverview["week"][number]["services"][number] {
+  return { id, calendarEventId: id, daypartId: `daypart-${id}`, name, room, timeLabel: "6:00 PM–9:00 PM", talentNames, status };
+}
+
 const populatedOverview: ResidencyClientOverview = {
   asOfDate: "2026-09-18",
   week: [
     { date: "2026-09-18", scheduledCount: 3, pendingCount: 0, openCount: 0, services: [
-      { id: "1", name: "Pool DJ", room: "Pool", status: "scheduled" },
-      { id: "2", name: "Restaurant Dinner", room: "Restaurant", status: "scheduled" },
-      { id: "3", name: "Terrace Trivia", room: "Terrace", status: "scheduled" },
+      service("1", "Pool DJ", "Pool", "scheduled", ["Casey Rivera-Montgomery-Worthington"]),
+      service("2", "Restaurant Dinner", "Restaurant", "scheduled", ["Maya James"]),
+      service("3", "Terrace Trivia", "Terrace", "scheduled"),
     ] },
     { date: "2026-09-19", scheduledCount: 2, pendingCount: 1, openCount: 0, services: [
-      { id: "4", name: "Pool DJ", room: "Pool", status: "scheduled" },
-      { id: "5", name: "Late Night", room: "Lobby", status: "pending" },
-      { id: "6", name: "Cinema", room: "Screening room", status: "scheduled" },
+      service("4", "Pool DJ", "Pool", "scheduled"),
+      service("5", "Late Night", "Lobby", "pending"),
+      service("6", "Cinema", "Screening room", "scheduled"),
     ] },
     { date: "2026-09-20", scheduledCount: 1, pendingCount: 0, openCount: 1, services: [
-      { id: "7", name: "Sunday Brunch", room: "Restaurant", status: "scheduled" },
-      { id: "8", name: "Sunday Dinner", room: "Restaurant", status: "open" },
+      service("7", "Sunday Brunch", "Restaurant", "scheduled"),
+      service("8", "Sunday Dinner", "Restaurant", "open"),
     ] },
-    { date: "2026-09-21", scheduledCount: 1, pendingCount: 0, openCount: 0, services: [{ id: "9", name: "Lobby Set", room: "Lobby", status: "scheduled" }] },
-    { date: "2026-09-22", scheduledCount: 1, pendingCount: 0, openCount: 0, services: [{ id: "10", name: "Pool DJ", room: "Pool", status: "scheduled" }] },
+    { date: "2026-09-21", scheduledCount: 1, pendingCount: 0, openCount: 0, services: [service("9", "Lobby Set", "Lobby", "scheduled")] },
+    { date: "2026-09-22", scheduledCount: 1, pendingCount: 0, openCount: 0, services: [service("10", "Pool DJ", "Pool", "scheduled")] },
     { date: "2026-09-23", scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] },
     { date: "2026-09-24", scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] },
   ],
@@ -96,7 +106,7 @@ async function browserExecutable() {
 async function fixtureDocument(overview: ResidencyClientOverview) {
   vi.mocked(requireResidencyActor).mockResolvedValue(manager);
   vi.mocked(getResidencyClientOverview).mockResolvedValue(overview);
-  const pageMarkup = renderToStaticMarkup(await ResidencyOverviewPage());
+  const pageMarkup = renderToStaticMarkup(await ResidencyOverviewPage({ searchParams: Promise.resolve({}) }));
   const [tokens, globals, pilot, font] = await Promise.all([
     readFile(new URL("../src/app/hfy-design-tokens.css", import.meta.url), "utf8"),
     readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),

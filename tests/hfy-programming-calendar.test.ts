@@ -68,6 +68,20 @@ describe("HFY Programming calendar and Day Parts integration", () => {
     expect(month).toContain("event.href");
   });
 
+  it("deep-links Overview day actions into exact Residency calendar workflows", async () => {
+    const [overview, residencyPage, calendar] = await Promise.all([
+      readFile(new URL("../src/app/residency/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/residency/calendar/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
+    ]);
+
+    expect(overview).toContain('query.set("event", eventId)');
+    expect(overview).toContain('query.set("date", date)');
+    expect(residencyPage).toContain("initialEventId={params.event} initialDate={initialDate}");
+    expect(calendar).toContain("const initialProjectedEvent");
+    expect(calendar).toContain('initialSchedulingDate ? { type: "add", date: initialSchedulingDate }');
+  });
+
   it("enforces the default talent-rate guard in every HFY assignment entry point", async () => {
     const [bookings, requests, assignments] = await Promise.all([
       readFile(new URL("../src/services/residency-bookings.ts", import.meta.url), "utf8"),
