@@ -1917,6 +1917,7 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-billing-empty { padding: 28px; }
 .residency-overview-surface { display: grid; gap: 18px; }
 .residency-overview-grid { display: grid; gap: 18px; }
+.residency-overview-body > .residency-overview-grid { grid-template-columns: 1fr; }
 .residency-overview-grid > .card { display: grid; align-content: start; gap: 14px; min-height: 250px; padding: 22px; }
 .residency-overview-grid > .card > .button { align-self: end; justify-self: start; margin-top: auto; }
 .residency-overview-grid h2 { font-size: 24px; }

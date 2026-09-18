@@ -31,7 +31,7 @@ export function ResidencyShell({ actor, platformBillingAvailable, children }: { 
 
   return <DaypartRateAttentionReportProvider onReport={reportDaypartRateAttention}><div className="shell client-shell">
     <aside className={`sidebar client-sidebar ${canManage ? "residency-sidebar-with-settings" : ""}`}>
-      <Link className="brand" href={canManage && platformBillingAvailable ? "/residency" : "/residency/calendar"}><span className="brand-mark">HFY</span><span className="brand-copy"><strong>HFY OS</strong><span>{actor.isViewAs ? "Residency preview" : "Residency calendar"}</span></span></Link>
+      <Link className="brand" href={canManage ? "/residency" : "/residency/calendar"}><span className="brand-mark">HFY</span><span className="brand-copy"><strong>HFY OS</strong><span>{actor.isViewAs ? "Residency preview" : "Residency calendar"}</span></span></Link>
       <div className="client-residency-context"><small>Your Residency</small><strong>{actor.residencyName}</strong></div>
       {actor.isInternalTest && !actor.isViewAs ? <form action={switchInternalTestResidency} className="internal-test-residency-switcher">
         <span>Internal test account</span>
@@ -43,7 +43,7 @@ export function ResidencyShell({ actor, platformBillingAvailable, children }: { 
       </form> : null}
       <nav className="nav residency-workspace-nav" aria-label="Residency workspace">
         <p className="nav-label">Workspace</p>
-        {canManage && platformBillingAvailable ? <WorkspaceNavLink href="/residency" label="Overview" description="Plan and program summary" icon="overview" active={pathname === "/residency"} /> : null}
+        {canManage ? <WorkspaceNavLink href="/residency" label="Overview" description="Program status and next steps" icon="overview" active={pathname === "/residency"} /> : null}
         <WorkspaceNavLink href="/residency/calendar" label="Calendar" description="Schedule and bookings" icon="calendar" active={pathname === "/residency/calendar"} />
         {canManage ? <>
           <WorkspaceNavLink href="/residency/dayparts" label="Day Parts" description="Standing schedule" icon="dayparts" active={pathname === "/residency/dayparts"} attention={needsDaypartRateAttention} />
