@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const root = new URL("../", import.meta.url);
 
-describe("Residency role option responsive layout", () => {
+describe("Residency compact users roster responsive layout", () => {
   let browser: Awaited<ReturnType<typeof chromium.launch>>;
   let css = "";
 
@@ -23,14 +23,13 @@ describe("Residency role option responsive layout", () => {
   });
 
   for (const viewport of [
-    { width: 1440, height: 900, formStacked: false, choicesStacked: false },
-    { width: 1200, height: 900, formStacked: false, choicesStacked: false },
-    { width: 1100, height: 900, formStacked: true, choicesStacked: false },
-    { width: 1024, height: 900, formStacked: true, choicesStacked: false },
-    { width: 768, height: 900, formStacked: true, choicesStacked: false },
-    { width: 375, height: 812, formStacked: true, choicesStacked: true },
-  ]) {
-    it(`keeps both role choices readable and interactive at ${viewport.width}px`, async () => {
+    { width: 1440, height: 900, layout: "wide" },
+    { width: 1200, height: 900, layout: "wide" },
+    { width: 1024, height: 900, layout: "mid" },
+    { width: 768, height: 900, layout: "mid" },
+    { width: 375, height: 812, layout: "narrow" },
+  ] as const) {
+    it(`keeps the compact roster readable and contained at ${viewport.width}px`, async () => {
       const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
       await page.setContent(`
         <style>
@@ -42,90 +41,81 @@ describe("Residency role option responsive layout", () => {
         </style>
         <main>
           <section class="residency-users-card">
+            <div class="residency-section-header residency-section-header--split"><div><p class="eyebrow">Users &amp; roles</p><h2>People with access</h2><p>Pending invitations and active users both count toward the four-user limit.</p></div><span class="residency-user-seat-count">2 of 4 seats · 2 available</span></div>
             <form class="residency-user-invite-form">
-              <label class="field"><span>Email addresses</span><textarea>viewer@example.com</textarea></label>
-              <fieldset class="residency-role-options">
-                <legend>Access role</legend>
-                <label class="residency-role-option">
-                  <input type="radio" name="role" value="calendar_viewer" checked />
-                  <span><strong>Calendar viewer</strong><small>Calendar only. No Account, Billing, Talent, or Finances access.</small></span>
-                </label>
-                <label class="residency-role-option">
-                  <input type="radio" name="role" value="manager" />
-                  <span><strong>Manager</strong><small>Full workspace, Account, users, roles, and Billing.</small></span>
-                </label>
-              </fieldset>
-              <div class="residency-user-invite-actions"><button class="button" type="button">Send invite</button></div>
+              <label class="field residency-user-invite-email"><span>Email addresses</span><input value="viewer@example.com" /><small>Separate multiple addresses with commas.</small></label>
+              <label class="field residency-user-invite-role"><span>Access role</span><select id="invite-role"><option value="calendar_viewer">Calendar viewer</option><option value="manager">Manager</option></select><small>Calendar-only or full workspace access.</small></label>
+              <button class="button residency-user-invite-submit" type="button">Send invitations</button>
             </form>
-            <div class="residency-user-row">
-              <div class="residency-user-identity"><strong>Residency Manager</strong><span>manager@example.com</span></div>
-              <div class="residency-user-role"><strong>Manager</strong><small>Full workspace, Account, users, roles, and Billing.</small></div>
-              <div class="residency-user-actions"><button class="button secondary" type="button">Save role</button><button class="button secondary" type="button">View as manager</button></div>
+            <div class="residency-user-roster" role="table">
+              <div class="residency-user-roster-header" role="row"><span>Person</span><span>Access</span><span>Status</span><span>Actions</span></div>
+              <div class="residency-user-list" role="rowgroup">
+                <article class="residency-user-row active" role="row">
+                  <div class="residency-user-identity" role="cell"><span class="residency-user-avatar">AI</span><span><strong>Austyn Internal Test</strong><small>760amoreno@gmail.com</small></span></div>
+                  <div class="residency-user-access" role="cell"><form class="residency-user-role-form"><select aria-label="Role for Austyn Internal Test"><option>Manager</option><option>Calendar viewer</option></select><button class="button secondary" type="button">Save</button></form></div>
+                  <div class="residency-user-status" role="cell"><span class="status active">Primary contact</span><span class="status active">Enrolled</span></div>
+                  <div class="residency-user-actions" role="cell"><button class="button secondary" type="button">Reset password</button><button class="button secondary" type="button">View as</button></div>
+                </article>
+                <article class="residency-user-row pending" role="row">
+                  <div class="residency-user-identity" role="cell"><span class="residency-user-avatar">JL</span><span><strong>jordan.lee@example.com</strong><small>Invited Sep 18, 2026 by HFY</small></span></div>
+                  <div class="residency-user-access" role="cell"><div class="residency-user-pending-role"><strong>Calendar viewer</strong><small>Calendar only. No Account, Billing, Talent, or Finances access.</small></div></div>
+                  <div class="residency-user-status" role="cell"><span class="status pending">Invitation pending</span></div>
+                  <div class="residency-user-actions" role="cell"><button class="button secondary" type="button">Resend invite</button><button class="button danger" type="button">Revoke</button></div>
+                </article>
+              </div>
             </div>
           </section>
         </main>
       `);
 
       const metrics = await page.evaluate(() => {
-        const form = document.querySelector<HTMLElement>(".residency-user-invite-form")!;
         const card = document.querySelector<HTMLElement>(".residency-users-card")!;
-        const fieldset = document.querySelector<HTMLElement>("fieldset")!;
-        const userRow = document.querySelector<HTMLElement>(".residency-user-row")!;
-        const userIdentity = document.querySelector<HTMLElement>(".residency-user-identity")!;
-        const userRole = document.querySelector<HTMLElement>(".residency-user-role")!;
-        const userActions = document.querySelector<HTMLElement>(".residency-user-actions")!;
-        const options = [...document.querySelectorAll<HTMLElement>(".residency-role-option")];
-        const copy = [...document.querySelectorAll<HTMLElement>(".residency-role-option > span")];
-        const radios = [...document.querySelectorAll<HTMLInputElement>('.residency-role-option input[type="radio"]')];
-        const boxes = options.map((option) => option.getBoundingClientRect());
-        const formBox = form.getBoundingClientRect();
-        const cardBox = card.getBoundingClientRect();
-        const userRowBox = userRow.getBoundingClientRect();
+        const invite = document.querySelector<HTMLElement>(".residency-user-invite-form")!;
+        const roster = document.querySelector<HTMLElement>(".residency-user-roster")!;
+        const header = document.querySelector<HTMLElement>(".residency-user-roster-header")!;
+        const rows = [...document.querySelectorAll<HTMLElement>(".residency-user-row")];
+        const actions = [...document.querySelectorAll<HTMLElement>(".residency-user-actions")];
+        const firstRowStyle = getComputedStyle(rows[0]);
 
         return {
           documentContained: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-          formContained: form.scrollWidth <= form.clientWidth,
-          formContainedInCard: formBox.left >= cardBox.left - 1 && formBox.right <= cardBox.right + 1,
-          userRowContainedInCard: userRowBox.left >= cardBox.left - 1 && userRowBox.right <= cardBox.right + 1 && userRow.scrollWidth <= userRow.clientWidth,
-          equalWidths: Math.abs(boxes[0].width - boxes[1].width) < 1,
-          formStacked: getComputedStyle(form).gridTemplateColumns.split(" ").length === 1,
-          choicesStacked: Math.abs(boxes[0].top - boxes[1].top) > 1,
-          containedInFieldset: boxes.every((box) => box.left >= fieldset.getBoundingClientRect().left - 1 && box.right <= fieldset.getBoundingClientRect().right + 1),
-          copyContained: copy.every((node) => node.scrollWidth <= node.clientWidth && node.scrollHeight <= node.clientHeight),
-          copyHasReadableWidth: copy.every((node) => node.clientWidth >= 100),
-          copyOverflow: copy.map((node) => getComputedStyle(node).overflow),
-          copyWordBreak: copy.map((node) => getComputedStyle(node).wordBreak),
-          radioSizes: radios.map((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height })),
-          actionsUseOwnRow: userActions.getBoundingClientRect().top >= Math.max(userIdentity.getBoundingClientRect().bottom, userRole.getBoundingClientRect().bottom),
+          inviteContained: invite.scrollWidth <= invite.clientWidth,
+          rosterContained: roster.scrollWidth <= roster.clientWidth,
+          rowsContained: rows.every((row) => row.scrollWidth <= row.clientWidth && row.getBoundingClientRect().right <= card.getBoundingClientRect().right + 1),
+          controlsContained: [...document.querySelectorAll<HTMLElement>("input, select, button")].every((control) => control.getBoundingClientRect().right <= card.getBoundingClientRect().right + 1),
+          rosterHeaderVisible: getComputedStyle(header).display !== "none",
+          rowColumns: firstRowStyle.gridTemplateColumns.split(" ").length,
+          actionWidths: actions.map((action) => action.getBoundingClientRect().width),
+          clippedCopy: [...document.querySelectorAll<HTMLElement>(".residency-user-row strong, .residency-user-row small, .residency-user-actions .button")].some((node) => node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight),
         };
       });
 
-      expect(metrics).toMatchObject({
-        documentContained: true,
-        formContained: true,
-        formContainedInCard: true,
-        userRowContainedInCard: true,
-        equalWidths: true,
-        formStacked: viewport.formStacked,
-        choicesStacked: viewport.choicesStacked,
-        containedInFieldset: true,
-        copyContained: true,
-        copyHasReadableWidth: true,
-        actionsUseOwnRow: true,
-      });
-      expect(metrics.copyOverflow).not.toContain("hidden");
-      expect(metrics.copyOverflow).not.toContain("clip");
-      expect(metrics.copyWordBreak).toEqual(["normal", "normal"]);
-      expect(metrics.radioSizes).toEqual([{ width: 18, height: 18 }, { width: 18, height: 18 }]);
+      expect(metrics.documentContained).toBe(true);
+      expect(metrics.inviteContained).toBe(true);
+      expect(metrics.rosterContained).toBe(true);
+      expect(metrics.rowsContained).toBe(true);
+      expect(metrics.controlsContained).toBe(true);
+      expect(metrics.clippedCopy).toBe(false);
+      expect(metrics.actionWidths.every((width) => width > 0)).toBe(true);
 
-      const calendarViewer = page.locator('input[value="calendar_viewer"]');
-      const manager = page.locator('input[value="manager"]');
-      await manager.click();
-      expect(await manager.isChecked()).toBe(true);
-      expect(await calendarViewer.isChecked()).toBe(false);
-      await calendarViewer.click();
-      expect(await calendarViewer.isChecked()).toBe(true);
-      expect(await manager.isChecked()).toBe(false);
+      if (viewport.layout === "wide") {
+        expect(metrics.rosterHeaderVisible).toBe(true);
+        expect(metrics.rowColumns).toBe(4);
+      } else if (viewport.layout === "mid") {
+        expect(metrics.rosterHeaderVisible).toBe(false);
+        expect(metrics.rowColumns).toBe(2);
+      } else {
+        expect(metrics.rosterHeaderVisible).toBe(false);
+        expect(metrics.rowColumns).toBe(1);
+      }
+
+      const inviteRole = page.locator("#invite-role");
+      await inviteRole.selectOption("manager");
+      expect(await inviteRole.inputValue()).toBe("manager");
+      await inviteRole.selectOption("calendar_viewer");
+      expect(await inviteRole.inputValue()).toBe("calendar_viewer");
+      await page.getByRole("button", { name: "Reset password" }).click();
+      await page.getByRole("button", { name: "Resend invite" }).click();
 
       await page.close();
     });

@@ -6,7 +6,7 @@ import { auditLog } from "@/db/schema";
 import { getDb } from "@/db/client";
 import { requireResidencyActorForMutation } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { changeResidencyUserRole, inviteResidencyUsers, removeResidencyUser, resendResidencyInvitation, setPrimaryResidencyContact } from "@/services/residency-users";
+import { changeResidencyUserRole, inviteResidencyUsers, removeResidencyUser, requestResidencyUserPasswordReset, resendResidencyInvitation, setPrimaryResidencyContact } from "@/services/residency-users";
 
 export type AccountActionState = { status: "idle" | "success" | "error"; message: string };
 
@@ -41,6 +41,12 @@ export async function resendResidencyInvitationAction(formData: FormData) {
   const contactId = z.uuid().parse(formData.get("contactId"));
   await resendResidencyInvitation(actor, contactId);
   refreshAccount();
+}
+
+export async function requestResidencyUserPasswordResetAction(formData: FormData) {
+  const actor = await requireResidencyActorForMutation();
+  const contactId = z.uuid().parse(formData.get("contactId"));
+  await requestResidencyUserPasswordReset(actor, contactId);
 }
 
 export async function removeResidencyUserAction(formData: FormData) {
@@ -81,4 +87,3 @@ export async function requestOwnEmailChangeAction(_state: AccountActionState, fo
     return { status: "error", message: error instanceof Error ? error.message : "Unable to request this email change." };
   }
 }
-
