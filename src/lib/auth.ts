@@ -7,6 +7,7 @@ import { dayparts, residencies, residencyContacts, residencyMemberships, users }
 import { selectResidencyMembership, type ResidencyMembershipOption } from "@/domain/residency-membership";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { viewAsResidencyId } from "@/lib/view-as";
+import { clientViewAsMembershipId } from "@/lib/client-view-as";
 
 export const INTERNAL_TEST_RESIDENCY_COOKIE = "hfy_internal_test_residency";
 
@@ -27,7 +28,12 @@ export type ResidencyActor = {
   residencyTimezone: string;
   residencyTier: "operations_only" | "complete";
   accessRole: "manager" | "calendar_viewer";
+  actualAccessRole?: "manager" | "calendar_viewer";
   isViewAs: boolean;
+  isClientViewAs?: boolean;
+  viewAsUserId?: string;
+  viewAsDisplayName?: string;
+  viewAsEmail?: string;
   isInternalTest: boolean;
   availableResidencies: Array<Pick<ResidencyMembershipOption, "residencyId" | "residencyName" | "accessRole">>;
   needsDaypartRateAttention?: boolean;
@@ -110,7 +116,9 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
       displayName: current.profile.displayName,
       ...residency,
       accessRole: "manager",
+      actualAccessRole: "manager",
       isViewAs: true,
+      isClientViewAs: false,
       isInternalTest: false,
       availableResidencies: [],
     };
@@ -151,6 +159,21 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
       ne(residencyContacts.invitationStatus, "active"),
     ));
   }
+  const requestedPreviewMembershipId = membership.accessRole === "manager" ? await clientViewAsMembershipId() : null;
+  const [previewMembership] = requestedPreviewMembershipId ? await getDb().select({
+    membershipId: residencyMemberships.id,
+    userId: users.id,
+    displayName: users.displayName,
+    email: users.email,
+    accessRole: residencyMemberships.accessRole,
+  }).from(residencyMemberships)
+    .innerJoin(users, eq(residencyMemberships.userId, users.id))
+    .where(and(
+      eq(residencyMemberships.id, requestedPreviewMembershipId),
+      eq(residencyMemberships.residencyId, membership.residencyId),
+      eq(residencyMemberships.active, true),
+      eq(users.active, true),
+    )).limit(1) : [];
   return {
     kind: "residency",
     userId: current.profile.id,
@@ -160,8 +183,13 @@ const currentResidencyActor = cache(async (): Promise<ResidencyActor | null> => 
     residencyName: membership.residencyName,
     residencyTimezone: membership.residencyTimezone,
     residencyTier: membership.residencyTier,
-    accessRole: membership.accessRole,
+    accessRole: previewMembership?.accessRole ?? membership.accessRole,
+    actualAccessRole: membership.accessRole,
     isViewAs: false,
+    isClientViewAs: Boolean(previewMembership),
+    viewAsUserId: previewMembership?.userId,
+    viewAsDisplayName: previewMembership?.displayName,
+    viewAsEmail: previewMembership?.email,
     isInternalTest: current.profile.isInternalTest,
     needsDaypartRateAttention: membership.needsDaypartRateAttention,
     availableResidencies: current.profile.isInternalTest
@@ -207,6 +235,12 @@ export async function requireResidencyActor(): Promise<ResidencyActor> {
   return actor;
 }
 
+export async function requireResidencyActorForMutation(): Promise<ResidencyActor> {
+  const actor = await requireResidencyActor();
+  if (actor.isClientViewAs) throw new ResidencyAccessError(403, "Exit View As before making changes.");
+  return actor;
+}
+
 export async function requireActorForResidency(
   residencyId: string,
   options: { manager?: boolean } = {},
@@ -226,6 +260,9 @@ export async function requireActorForResidency(
     };
   }
   if (current.profile.role !== "hotel_user") throw new ResidencyAccessError(403, "This account cannot access a Residency.");
+  if ((await currentResidencyActor())?.isClientViewAs) {
+    throw new ResidencyAccessError(403, "Exit View As before making changes.");
+  }
   const [membership] = await getDb().select({
     residencyId: residencyMemberships.residencyId,
     residencyName: residencies.name,
@@ -246,6 +283,10 @@ export async function requireActorForResidency(
   if (options.manager && membership.accessRole !== "manager") {
     throw new ResidencyAccessError(403, "Manager access is required for this change.");
   }
+  if (options.manager) {
+    const { assertResidencyOperationalWriteAllowed } = await import("@/services/residency-access-state");
+    await assertResidencyOperationalWriteAllowed(membership.residencyId);
+  }
   return {
     kind: "residency",
     userId: current.profile.id,
@@ -256,7 +297,9 @@ export async function requireActorForResidency(
     residencyTimezone: membership.residencyTimezone,
     residencyTier: membership.residencyTier,
     accessRole: membership.accessRole,
+    actualAccessRole: membership.accessRole,
     isViewAs: false,
+    isClientViewAs: false,
     isInternalTest: current.profile.isInternalTest,
     availableResidencies: [],
   };

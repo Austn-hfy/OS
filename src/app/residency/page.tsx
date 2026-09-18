@@ -18,7 +18,7 @@ function date(value: string | null) {
 export default async function ResidencyOverviewPage() {
   const actor = await requireResidencyActor();
   if (!isCurrentPlatformBillingAvailable()) redirect("/residency/calendar");
-  if (actor.accessRole !== "manager") redirect("/residency/calendar");
+  if (actor.accessRole !== "manager") redirect("/residency/access-limited");
   const [overview, billing] = await Promise.all([
     getResidencyClientOverview(actor.residencyId),
     getResidencyPlatformBilling(actor.residencyId),

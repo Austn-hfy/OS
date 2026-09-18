@@ -4,6 +4,6 @@ import { redirect } from "next/navigation";
 
 export default async function ResidencyRosterPage() {
   const actor = await requireResidencyActor();
-  if (!canResidencyRoleAccess(actor.accessRole, "talent")) redirect("/residency/calendar");
+  if (!canResidencyRoleAccess(actor.accessRole, "talent")) redirect("/residency/access-limited");
   redirect("/residency/talent");
 }

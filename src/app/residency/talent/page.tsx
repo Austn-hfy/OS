@@ -7,7 +7,7 @@ import { ClientArtistLookup } from "./client-artist-lookup";
 
 export default async function ResidencyTalentPage({ searchParams }: { searchParams: Promise<{ artist?: string }> }) {
   const [actor, params] = await Promise.all([requireResidencyActor(), searchParams]);
-  if (!canResidencyRoleAccess(actor.accessRole, "talent")) redirect("/residency/calendar");
+  if (!canResidencyRoleAccess(actor.accessRole, "talent")) redirect("/residency/access-limited");
   const fullProgramming = actor.residencyTier === "complete";
   const artists = (await getResidencyClientTalentWorkspace(actor.residencyId))
     .filter((artist) => !fullProgramming || artist.ownership === "hfy");
