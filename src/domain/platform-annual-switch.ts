@@ -19,12 +19,12 @@ export function calculateAnnualSwitchComparison(plan: AnnualSwitchPlan) {
 }
 
 export type AnnualSwitchPaymentPath =
-  | "charge_card_at_renewal"
+  | "charge_card_immediately"
   | "collect_card_and_start_annual"
-  | "collect_card_then_schedule";
+  | "collect_card_then_charge_immediately";
 
 export function annualSwitchPaymentPath(plan: { stripeSubscriptionId: string | null; cardLast4: string }): AnnualSwitchPaymentPath {
   if (!plan.stripeSubscriptionId) return "collect_card_and_start_annual";
-  if (!plan.cardLast4) return "collect_card_then_schedule";
-  return "charge_card_at_renewal";
+  if (!plan.cardLast4) return "collect_card_then_charge_immediately";
+  return "charge_card_immediately";
 }

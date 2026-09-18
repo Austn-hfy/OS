@@ -1,8 +1,8 @@
 import "server-only";
 
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { assignments, auditLog, clientAssignmentTerms, dayparts, invoices, platformSubscriptionInvoices, platformSubscriptionRevisions, platformSubscriptions, residencies, residencyContacts, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent, users } from "@/db/schema";
+import { assignments, auditLog, clientAssignmentTerms, dayparts, invoices, platformSubscriptionInvoices, platformSubscriptions, residencies, residencyContacts, residencyTalent, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent, users } from "@/db/schema";
 import { calculateClientOwedCents, resolveClientHourlyRateCents } from "@/domain/client-rates";
 import { projectClientSafeRoster, projectClientSafeTalent, type ClientSafeManagedTalent } from "@/domain/client-safe-talent";
 import { projectClientSafeInvoice } from "@/domain/client-safe-invoice";
@@ -367,21 +367,6 @@ export async function getResidencyPlatformBilling(residencyId: string) {
     .where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
   if (!subscription) return { subscription: null, invoices: [] };
 
-  const [pendingAnnualRevision] = subscription.stripeSubscriptionId ? await getDb().select({
-    revision: platformSubscriptionRevisions.revision,
-    term: platformSubscriptionRevisions.term,
-    talentBucketSize: platformSubscriptionRevisions.talentBucketSize,
-    houseBucketSize: platformSubscriptionRevisions.houseBucketSize,
-    slotUnitAmountCents: platformSubscriptionRevisions.slotUnitAmountCents,
-    startsOn: platformSubscriptionRevisions.startsOn,
-    renewsOn: platformSubscriptionRevisions.renewsOn,
-  }).from(platformSubscriptionRevisions).where(and(
-    eq(platformSubscriptionRevisions.platformSubscriptionId, subscription.id),
-    gt(platformSubscriptionRevisions.revision, subscription.revision),
-    eq(platformSubscriptionRevisions.term, "annual"),
-    eq(platformSubscriptionRevisions.stripeSyncStatus, "pending"),
-  )).orderBy(desc(platformSubscriptionRevisions.revision)).limit(1) : [];
-
   const invoiceRows = await getDb().select({
     id: platformSubscriptionInvoices.id,
     stripeInvoiceId: platformSubscriptionInvoices.stripeInvoiceId,
@@ -408,10 +393,6 @@ export async function getResidencyPlatformBilling(residencyId: string) {
       nextChargeAt: subscription.nextChargeAt?.toISOString() ?? null,
       paymentFailedAt: subscription.paymentFailedAt?.toISOString() ?? null,
       ...amounts,
-      pendingAnnualChange: pendingAnnualRevision ? {
-        ...pendingAnnualRevision,
-        ...calculatePlatformPlanAmounts(pendingAnnualRevision, subscription.comped),
-      } : null,
     },
     invoices: invoiceRows,
     liveUsage: liveUsage?.usage ?? null,
