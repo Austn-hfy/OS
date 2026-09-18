@@ -296,9 +296,9 @@ Settings status: **resolved / intentionally unchanged**
 Talent status: **resolved**
 Day Parts status: **resolved**
 
-Settings already follows the preferred action model:
+Settings follows the preferred action model:
 
-- `Save Settings` remains at the Account form's bottom-right.
+- `Save Settings` remains at the Account form's bottom-right inside the white Account Surface card it affects.
 - Billing actions remain inside the card or offer they affect.
 - The Stripe test-mode badge remains in the Billing header.
 
@@ -408,7 +408,7 @@ Resolution:
 - Each Account section is now its own layer-3 white Surface card.
 - The cards match Billing's summary-card background, border, 16px radius, 20px padding, and soft shadow.
 - Inputs, labels, copy, and form behavior are unchanged.
-- The form-level status message, permissions note, and `Save Settings` action remain outside the cards because they apply to the form as a whole rather than to one section.
+- The form-level status message, Account note, and `Save Settings` action sit inside the Residency details Surface because they operate on that Account section and must not float directly on the haze layer.
 - Every other page must be checked against the same three-layer rule in a future scoped pass; no other route was reviewed or changed here.
 
 ### CR-016 — Billing breaks down between full desktop and mobile layouts
@@ -580,16 +580,32 @@ Intentionally unchanged:
 - Financial content, totals, tables, statuses, rate actions, invoice downloads, permissions, and the approved Surface-card/rate-dialog behavior.
 - The `{Residency name} finances` eyebrow remains open under CR-006 for a dedicated cross-route header-language pass.
 
+### CR-024 — Account actions and Users & Roles lose their owning layout
+
+Priority: P0
+Applies to: `/residency/settings`
+Status: **resolved**
+
+The Account note and `Save Settings` action rendered directly on the haze instead of inside the white Account Surface. In Users & Roles, the generic `input { width: 100% }` rule also applied to radio inputs, allowing each radio to consume the option width and collapse its label into a one-letter column. The invitation form and enrolled-user records then relied on browser-width breakpoints and a three-column action layout that became disproportionate inside the actual Settings card.
+
+Resolution:
+
+- The Account note, status message, and `Save Settings` action now live inside the Residency details Surface with a contained divider and footer row.
+- Users & Roles responds to the card's available width through a named inline-size container rather than the browser width alone.
+- Radio controls have a fixed `18px` control box; their label copy retains normal word breaking and a readable content track.
+- The invitation composer uses two balanced content columns at wide widths, one complete column at intermediate widths, and stacked role options at narrow widths.
+- Each user record uses two readable information columns with one separate contained action footer instead of a competing third action column.
+- Regression coverage now checks the actual radio geometry, readable label width, action-row placement, containment, and interactive selected states at 1440px, 1200px, 1100px, 1024px, 768px, and 375px.
+
 ## Settings benchmark decisions
 
 ### Account
 
 Retained:
 
-- Residency details and Primary contact section structure.
+- Residency details and Users & Roles section structure.
 - Two-column label/field relationship at desktop widths.
 - Input size and field spacing.
-- Save action and permissions note as page-level form-footer content outside the section cards.
 - Existing success and error messaging behavior.
 
 Changed:
@@ -598,7 +614,9 @@ Changed:
 - Tab and body origin.
 - Supporting-copy size.
 - Active-tab accessibility metadata.
-- Residency details and Primary contact now each sit in a Billing-matched white Surface card above the haze layer.
+- Residency details and Users & Roles sit in Billing-matched white Surface cards above the haze layer.
+- The Account note, status, and Save action are contained inside the Residency details Surface they affect.
+- Users & Roles uses card-width-responsive invitation, role-choice, user-record, and action layouts.
 
 ### Billing
 
@@ -646,7 +664,7 @@ Every page must preserve three visually distinct layers in this order:
 2. **Frosted haze:** the translucent layer above the base that establishes depth and groups the page workspace.
 3. **White Surface cards:** opaque white cards placed above the haze. Each card contains one distinct content section and owns its padding, border radius, low-contrast border, and soft shadow.
 
-Content sections must not place their headings, labels, fields, tables, or other primary content directly on the haze when the section is intended to read as a Surface card. Account was the first confirmed violation and was corrected by placing `Residency details` and `Primary contact` in separate layer-3 cards. Every other page remains subject to a future layer-structure check; this pass did not audit or change those pages.
+Content sections must not place their headings, labels, fields, tables, primary actions, or other owned content directly on the haze when the section is intended to read as a Surface card. Account was the first confirmed violation and was corrected by placing `Residency details` and `Users & Roles` in separate layer-3 cards, including each section's own actions. Every other page remains subject to a future layer-structure check; this pass did not audit or change those pages.
 
 ### 3. Layout tokens
 

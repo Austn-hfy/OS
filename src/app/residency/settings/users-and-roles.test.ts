@@ -6,14 +6,14 @@ const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 describe("Residency Users & Roles account experience", () => {
   it("keeps role choices equal-width and stacks them before their copy can clip", async () => {
     const css = await read("../../../app/globals.css");
-    expect(css).toContain(".residency-role-option { display: flex; flex: 1 1 0;");
-    expect(css).toContain(".residency-role-option > span { min-width: 0; overflow-wrap: break-word; }");
+    expect(css).toContain(".residency-users-card { container: residency-users / inline-size; }");
+    expect(css).toContain('.residency-role-option input[type="radio"] { width: 18px; height: 18px; min-height: 18px;');
+    expect(css).toContain(".residency-role-option > span { min-width: 0; overflow-wrap: normal; word-break: normal; }");
     expect(css).toContain(".residency-user-invite-form { display: grid; min-width: 0;");
-    expect(css).toContain("@media (max-width: 1199px)");
+    expect(css).toContain("@container residency-users (max-width: 860px)");
     expect(css).toContain(".residency-user-invite-form, .residency-user-row { grid-template-columns: minmax(0, 1fr); }");
-    expect(css).toContain("@media (max-width: 480px)");
-    expect(css).toContain(".residency-user-invite-form fieldset { flex-direction: column; }");
-    expect(css).toContain(".residency-role-option { flex: 0 1 auto; width: 100%; }");
+    expect(css).toContain("@container residency-users (max-width: 560px)");
+    expect(css).toContain(".residency-role-options { grid-template-columns: minmax(0, 1fr); }");
   });
 
   it("defaults bulk invitations to Calendar viewer and explains both roles at assignment time", async () => {

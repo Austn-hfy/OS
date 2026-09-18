@@ -44,7 +44,7 @@ describe("Residency role option responsive layout", () => {
           <section class="residency-users-card">
             <form class="residency-user-invite-form">
               <label class="field"><span>Email addresses</span><textarea>viewer@example.com</textarea></label>
-              <fieldset>
+              <fieldset class="residency-role-options">
                 <legend>Access role</legend>
                 <label class="residency-role-option">
                   <input type="radio" name="role" value="calendar_viewer" checked />
@@ -55,7 +55,7 @@ describe("Residency role option responsive layout", () => {
                   <span><strong>Manager</strong><small>Full workspace, Account, users, roles, and Billing.</small></span>
                 </label>
               </fieldset>
-              <button class="button" type="button">Send invite</button>
+              <div class="residency-user-invite-actions"><button class="button" type="button">Send invite</button></div>
             </form>
             <div class="residency-user-row">
               <div class="residency-user-identity"><strong>Residency Manager</strong><span>manager@example.com</span></div>
@@ -71,8 +71,12 @@ describe("Residency role option responsive layout", () => {
         const card = document.querySelector<HTMLElement>(".residency-users-card")!;
         const fieldset = document.querySelector<HTMLElement>("fieldset")!;
         const userRow = document.querySelector<HTMLElement>(".residency-user-row")!;
+        const userIdentity = document.querySelector<HTMLElement>(".residency-user-identity")!;
+        const userRole = document.querySelector<HTMLElement>(".residency-user-role")!;
+        const userActions = document.querySelector<HTMLElement>(".residency-user-actions")!;
         const options = [...document.querySelectorAll<HTMLElement>(".residency-role-option")];
         const copy = [...document.querySelectorAll<HTMLElement>(".residency-role-option > span")];
+        const radios = [...document.querySelectorAll<HTMLInputElement>('.residency-role-option input[type="radio"]')];
         const boxes = options.map((option) => option.getBoundingClientRect());
         const formBox = form.getBoundingClientRect();
         const cardBox = card.getBoundingClientRect();
@@ -88,7 +92,11 @@ describe("Residency role option responsive layout", () => {
           choicesStacked: Math.abs(boxes[0].top - boxes[1].top) > 1,
           containedInFieldset: boxes.every((box) => box.left >= fieldset.getBoundingClientRect().left - 1 && box.right <= fieldset.getBoundingClientRect().right + 1),
           copyContained: copy.every((node) => node.scrollWidth <= node.clientWidth && node.scrollHeight <= node.clientHeight),
+          copyHasReadableWidth: copy.every((node) => node.clientWidth >= 100),
           copyOverflow: copy.map((node) => getComputedStyle(node).overflow),
+          copyWordBreak: copy.map((node) => getComputedStyle(node).wordBreak),
+          radioSizes: radios.map((node) => ({ width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height })),
+          actionsUseOwnRow: userActions.getBoundingClientRect().top >= Math.max(userIdentity.getBoundingClientRect().bottom, userRole.getBoundingClientRect().bottom),
         };
       });
 
@@ -102,9 +110,13 @@ describe("Residency role option responsive layout", () => {
         choicesStacked: viewport.choicesStacked,
         containedInFieldset: true,
         copyContained: true,
+        copyHasReadableWidth: true,
+        actionsUseOwnRow: true,
       });
       expect(metrics.copyOverflow).not.toContain("hidden");
       expect(metrics.copyOverflow).not.toContain("clip");
+      expect(metrics.copyWordBreak).toEqual(["normal", "normal"]);
+      expect(metrics.radioSizes).toEqual([{ width: 18, height: 18 }, { width: 18, height: 18 }]);
 
       const calendarViewer = page.locator('input[value="calendar_viewer"]');
       const manager = page.locator('input[value="manager"]');

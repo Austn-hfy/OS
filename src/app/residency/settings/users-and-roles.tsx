@@ -54,9 +54,8 @@ export function UsersAndRoles({ users, currentUserId }: { users: ResidencyUser[]
     <ResidencySectionHeader eyebrow="Users & roles" title={`People with access · ${users.length}/4`} description="Pending invitations and active users both count toward the four-user limit." />
     <form action={inviteAction} className="residency-user-invite-form">
       <div className="field wide"><label htmlFor="invite-emails">Email addresses</label><textarea id="invite-emails" name="emails" rows={3} placeholder="alex@example.com, jordan@example.com" disabled={users.length >= 4} required /></div>
-      <fieldset><legend>Access role</legend><label className="residency-role-option"><input type="radio" name="role" value="calendar_viewer" defaultChecked /><span><strong>{roleDetails.calendar_viewer.label}</strong><small>{roleDetails.calendar_viewer.description}</small></span></label><label className="residency-role-option"><input type="radio" name="role" value="manager" /><span><strong>{roleDetails.manager.label}</strong><small>{roleDetails.manager.description}</small></span></label></fieldset>
-      {inviteState.status !== "idle" ? <p className={inviteState.status === "error" ? "error" : "success"} role="status">{inviteState.message}</p> : null}
-      <button className="button" type="submit" disabled={invitePending || users.length >= 4}>{invitePending ? "Sending…" : users.length >= 4 ? "Four-user limit reached" : "Send invitations"}</button>
+      <fieldset className="residency-role-options"><legend>Access role</legend><label className="residency-role-option"><input type="radio" name="role" value="calendar_viewer" defaultChecked /><span><strong>{roleDetails.calendar_viewer.label}</strong><small>{roleDetails.calendar_viewer.description}</small></span></label><label className="residency-role-option"><input type="radio" name="role" value="manager" /><span><strong>{roleDetails.manager.label}</strong><small>{roleDetails.manager.description}</small></span></label></fieldset>
+      <div className="residency-user-invite-actions">{inviteState.status !== "idle" ? <p className={inviteState.status === "error" ? "error" : "success"} role="status">{inviteState.message}</p> : null}<button className="button" type="submit" disabled={invitePending || users.length >= 4}>{invitePending ? "Sending…" : users.length >= 4 ? "Four-user limit reached" : "Send invitations"}</button></div>
     </form>
     <div className="residency-user-list">
       {users.map((user) => <article className={`residency-user-row ${user.state}`} key={user.id}>
@@ -78,4 +77,3 @@ export function UsersAndRoles({ users, currentUserId }: { users: ResidencyUser[]
     {message ? <p className={/unable|cannot|final|error/i.test(message) ? "error" : "success"} role="status">{message}</p> : null}
   </ResidencySurfaceCard>;
 }
-

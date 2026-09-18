@@ -3212,7 +3212,7 @@
   padding: var(--hfy-surface-card-padding);
 }
 
-.hfy-style-system .settings-account-body .residency-client-settings-form > section > div:first-child p:last-child {
+.hfy-style-system .settings-account-body .residency-client-settings-form > .settings-account-section > div:first-child p:last-child {
   font-size: 13px;
   line-height: 1.55;
 }

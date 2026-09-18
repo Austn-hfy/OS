@@ -219,12 +219,14 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .genre-options label { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.62); font-size: 12px; font-weight: 700; }
 .genre-options input { width: 17px; height: 17px; margin: 0; }
 .residency-client-settings-form { display: grid; gap: 22px; }
-.residency-client-settings-form > section { display: grid; grid-template-columns: minmax(220px,.7fr) minmax(0,1.3fr); gap: 28px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
-.residency-client-settings-form > section > div:first-child p:last-child { margin-top: 7px; color: var(--muted); line-height: 1.5; }
+.residency-client-settings-form > .settings-account-section { display: grid; grid-template-columns: minmax(220px,.7fr) minmax(0,1.3fr); gap: 24px 28px; }
+.residency-client-settings-form > .settings-account-section > div:first-child p:last-child { margin-top: 7px; color: var(--muted); line-height: 1.5; }
 .settings-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
 .settings-fields .wide { grid-column: 1 / -1; }
-.residency-client-settings-form > footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.residency-client-settings-form > footer span { color: var(--muted); font-size: 11px; }
+.settings-account-status, .settings-account-actions { grid-column: 1 / -1; }
+.settings-account-status { margin: 0; }
+.settings-account-actions { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.settings-account-actions span { color: var(--muted); font-size: var(--hfy-supporting-copy-size, 12px); line-height: 1.5; }
 .public-calendar-header { display: flex; align-items: flex-start; gap: 18px; padding: 28px; border: 1px solid rgba(255,255,255,.74); border-radius: 28px; background: rgba(249,251,252,.84); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
 .public-calendar-header .brand-mark { width: 48px; height: 48px; flex: 0 0 48px; }
 .public-calendar-header h1 { margin: 6px 0 8px; font-size: clamp(34px, 7vw, 54px); }
@@ -1738,9 +1740,9 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
   .payout-detail-panel { position: static; min-height: 480px; max-height: none; }
   .payout-detail-empty { min-height: 440px; }
   .residency-overview-grid, .workspace-shortcuts { grid-template-columns: 1fr; }
-  .residency-client-settings-form > section, .settings-fields { grid-template-columns: 1fr; }
+  .residency-client-settings-form > .settings-account-section, .settings-fields { grid-template-columns: 1fr; }
   .settings-fields .wide { grid-column: auto; }
-  .residency-client-settings-form > footer { align-items: stretch; flex-direction: column; }
+  .settings-account-actions { align-items: stretch; flex-direction: column; }
   .calendar-controls { align-items: stretch; flex-direction: column; }
   .month-navigation { justify-content: space-between; }
   .calendar-filter-form { align-items: end; }
@@ -1924,22 +1926,37 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .residency-overview-grid p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
 .residency-users-card, .account-security-card { display: grid; gap: 22px; padding: 22px; }
-.residency-user-invite-form { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr) auto; gap: 16px; align-items: end; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #f8fbfe; }
-.residency-user-invite-form fieldset, .platform-pause-periods { display: flex; gap: 10px; margin: 0; padding: 0; border: 0; }
-.residency-user-invite-form legend, .platform-pause-periods legend { margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; }
-.residency-role-option { display: flex; flex: 1 1 0; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
-.residency-role-option > span { min-width: 0; overflow-wrap: break-word; }
-.residency-role-option span, .residency-role-option small { display: block; }
-.residency-role-option small { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.35; }
-.residency-user-list { display: grid; gap: 10px; }
-.residency-user-row { display: grid; grid-template-columns: minmax(190px, .8fr) minmax(240px, 1fr) minmax(260px, auto); gap: 18px; align-items: center; padding: 16px; border: 1px solid #d8e1e9; border-radius: 15px; background: white; }
+.residency-users-card { container: residency-users / inline-size; }
+.residency-user-invite-form { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr); gap: 18px; align-items: start; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #f8fbfe; }
+.residency-user-invite-form > .field { min-width: 0; }
+.residency-role-options { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 10px; margin: 0; padding: 0; border: 0; }
+.residency-role-options legend { grid-column: 1 / -1; margin-bottom: 0; color: var(--muted); font-size: 10px; font-weight: 800; }
+.platform-pause-periods { display: flex; gap: 10px; margin: 0; padding: 0; border: 0; }
+.platform-pause-periods legend { margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; }
+.residency-role-option { min-width: 0; min-height: 82px; display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: white; cursor: pointer; }
+.residency-role-option:hover { border-color: var(--hfy-line-strong, rgba(48, 68, 84, 0.22)); background: #fbfdff; }
+.residency-role-option:has(input:checked) { border-color: var(--hfy-action-strong, #347fbb); background: var(--hfy-action-soft, rgba(139, 199, 241, 0.24)); box-shadow: inset 0 0 0 1px var(--hfy-focus-ring, rgba(74, 151, 210, 0.24)); }
+.residency-role-option:focus-within { outline: 3px solid var(--hfy-focus-ring, rgba(74, 151, 210, 0.24)); outline-offset: 2px; }
+.residency-role-option input[type="radio"] { width: 18px; height: 18px; min-height: 18px; margin: 2px 0 0; padding: 0; border-radius: 50%; accent-color: var(--forest); }
+.residency-role-option > span { min-width: 0; overflow-wrap: normal; word-break: normal; }
+.residency-role-option span, .residency-role-option strong, .residency-role-option small { display: block; }
+.residency-role-option strong { font-size: var(--hfy-supporting-copy-size, 12px); line-height: 1.3; }
+.residency-role-option small { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.residency-user-invite-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+.residency-user-invite-actions > :is(.error, .success) { flex: 1; margin: 0; }
+.residency-user-list { display: grid; gap: 12px; }
+.residency-user-row { display: grid; grid-template-columns: minmax(220px, .9fr) minmax(260px, 1.1fr); gap: 18px 24px; align-items: start; padding: 18px; border: 1px solid #d8e1e9; border-radius: 15px; background: white; }
 .residency-user-row.pending { border-style: dashed; background: #fafbfd; }
 .residency-user-identity, .residency-user-role { display: grid; gap: 5px; }
 .residency-user-identity > div { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
-.residency-user-identity > span, .residency-user-role > span, .residency-user-role small { color: var(--muted); font-size: 9px; line-height: 1.45; }
-.residency-user-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
-.residency-user-actions form { display: flex; gap: 6px; }
-.residency-user-actions .button, .residency-user-actions select { min-height: 31px; padding: 7px 9px; font-size: 9px; }
+.residency-user-identity > div > strong { font-size: 14px; line-height: 1.3; }
+.residency-user-role > strong { font-size: var(--hfy-supporting-copy-size, 12px); line-height: 1.35; }
+.residency-user-identity > span, .residency-user-role > span, .residency-user-role small { color: var(--muted); font-size: var(--hfy-supporting-copy-size, 12px); line-height: 1.45; }
+.residency-user-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--line); }
+.residency-user-actions form { min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.residency-user-actions .button, .residency-user-actions select { width: auto; min-height: 36px; padding: 8px 12px; font-size: 11px; }
+.residency-user-actions select { min-width: 144px; }
+.residency-user-actions > small { align-self: center; color: var(--muted); font-size: var(--hfy-supporting-copy-size, 12px); line-height: 1.45; }
 .account-security-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .account-security-grid form { display: grid; align-content: start; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 15px; background: #fafcfe; }
 .account-security-grid .button { justify-self: start; }
@@ -1964,10 +1981,18 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-payment-failed-inline.restricted { border-color: #e2a4a4; background: #fff2f2; }
 .platform-payment-failure-banner.restricted { border-color: #e2a4a4; background: #fff2f2; }
 
-@media (max-width: 1199px) {
+@container residency-users (max-width: 860px) {
   .residency-user-invite-form, .residency-user-row { grid-template-columns: minmax(0, 1fr); }
   .residency-user-invite-form { align-items: stretch; }
   .residency-user-actions { justify-content: flex-start; }
+}
+
+@container residency-users (max-width: 560px) {
+  .residency-role-options { grid-template-columns: minmax(0, 1fr); }
+  .residency-user-invite-actions { align-items: stretch; flex-direction: column; }
+  .residency-user-invite-actions .button { width: 100%; }
+  .residency-user-actions, .residency-user-actions form { width: 100%; }
+  .residency-user-actions .button, .residency-user-actions select { flex: 1 1 140px; }
 }
 
 @media (max-width: 1050px) {
@@ -1992,12 +2017,5 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
   .platform-annual-plan-comparison { grid-template-columns: 1fr; }
   .platform-annual-confirmation-actions { align-items: stretch; flex-direction: column-reverse; }
   .platform-annual-confirmation-actions .button { width: 100%; }
-  .residency-user-invite-form, .residency-user-row, .account-security-grid, .platform-self-service-fields { grid-template-columns: 1fr; }
-  .residency-user-invite-form { align-items: stretch; }
-  .residency-user-actions { justify-content: flex-start; }
-}
-
-@media (max-width: 480px) {
-  .residency-user-invite-form fieldset { flex-direction: column; }
-  .residency-role-option { flex: 0 1 auto; width: 100%; }
+  .account-security-grid, .platform-self-service-fields { grid-template-columns: 1fr; }
 }
