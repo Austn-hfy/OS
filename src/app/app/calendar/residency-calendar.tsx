@@ -517,7 +517,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, today, c
     daypartType: editingEvent.daypartType,
     economicsMode: editingEvent.economicsMode,
   }));
-  const materializedTrackingTalentOccurrence = Boolean(previewMode && !fullProgramming && canManage
+  const materializedTrackingTalentOccurrence = Boolean(previewMode && canManage
     && editingEvent?.recordType === "nonfinancial_occurrence" && editingEvent.daypartId
     && editingEvent.daypartType === "dj_artist" && editingEvent.billingMode === "tracking_only");
   const pendingHfyRequest = !previewMode && editingEvent?.economicsMode === "hfy_request";
@@ -1517,8 +1517,6 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, today, c
               fullProgramming={fullProgramming}
               canManage={canManage}
               initialDaypartId={initialBatchDaypartId}
-              monthKey={monthKey}
-              weekStart={calendarView === "week" ? activeWeekStart : undefined}
               onRefresh={() => router.refresh()}
             />
             <div className="month-navigation"><Link className="calendar-arrow" aria-label={`Previous ${calendarView}`} href={previousHref}>←</Link><h2>{calendarView === "week" ? weekLabel(activeWeekStart) : monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label={`Next ${calendarView}`} href={nextHref}>→</Link></div>

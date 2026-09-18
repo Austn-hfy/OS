@@ -27,14 +27,15 @@ describe("Full Programming account controls", () => {
     expect(manager).toContain('fullProgrammingClient && daypart.type === "dj_artist"');
   });
 
-  it("keeps Talent Activity creation unavailable while preserving the House Activity funnel", async () => {
+  it("keeps Talent Activity creation unavailable while preserving mixed-calendar client assignments", async () => {
     const [calendarPage, calendar, service] = await Promise.all([
       readSource("../src/app/residency/calendar/page.tsx"),
       readSource("../src/app/app/calendar/residency-calendar.tsx"),
       readSource("../src/services/residency-bookings.ts"),
     ]);
     expect(calendarPage).toContain('fullProgramming={actor.residencyTier === "complete"}');
-    expect(calendarPage).toContain('actor.residencyTier === "complete" ? []');
+    expect(calendarPage).toContain('talent={roster.filter((artist) => artist.ownership === "residency")');
+    expect(calendarPage).not.toContain('actor.residencyTier === "complete" ? []');
     expect(calendar).toContain('{!fullProgramming ? <button type="button" onClick={() => chooseOneTimeType("dj_artist")}');
     expect(calendar).toContain("HFY creates and staffs all Talent Activities for Full Programming accounts.");
     expect(calendar).toContain('setAddMode("new-type")');
@@ -44,6 +45,7 @@ describe("Full Programming account controls", () => {
     expect(service).toContain("requested.assignments.some");
     expect(service).toContain("autoTriggeredByFullProgramming");
     expect(service).toContain('economicsMode === "hfy_request"');
+    expect(service).not.toContain('occurrence.residencyTier === "complete"');
   });
 
   it("locks monthly talent invoices and carries finalized schedule changes forward", async () => {

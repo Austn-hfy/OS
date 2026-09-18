@@ -843,7 +843,6 @@ export async function addClientManagedAssignmentToScheduleOccurrence(actor: Audi
       billingMode: dayparts.billingMode,
       clientDefaultRateCents: dayparts.clientDefaultRateCents,
       timezone: residencies.timezone,
-      residencyTier: residencies.tier,
     }).from(scheduleOccurrences)
       .innerJoin(dayparts, and(
         eq(scheduleOccurrences.daypartId, dayparts.id),
@@ -861,7 +860,6 @@ export async function addClientManagedAssignmentToScheduleOccurrence(actor: Audi
       || occurrence.type !== "dj_artist" || occurrence.daypartType !== "dj_artist" || occurrence.billingMode !== "tracking_only") {
       throw new Error("Only a materialized Client Managed Talent occurrence can accept a registered artist here.");
     }
-    if (occurrence.residencyTier === "complete") throw new Error("HFY manages all talent for Full Programming accounts.");
 
     const linkedTalent = await tx.select({
       id: scheduleOccurrenceTalent.id,
@@ -1022,7 +1020,6 @@ export async function requestHfyForScheduleOccurrence(actor: AuditActor, occurre
       manualHostName: scheduleOccurrences.manualHostName,
       daypartType: dayparts.type,
       billingMode: dayparts.billingMode,
-      residencyTier: residencies.tier,
     }).from(scheduleOccurrences)
       .innerJoin(dayparts, and(
         eq(scheduleOccurrences.daypartId, dayparts.id),
@@ -1040,7 +1037,6 @@ export async function requestHfyForScheduleOccurrence(actor: AuditActor, occurre
       || occurrence.type !== "dj_artist" || occurrence.daypartType !== "dj_artist" || occurrence.billingMode !== "tracking_only") {
       throw new Error("Only a materialized Client Managed Talent occurrence can be sent to HFY here.");
     }
-    if (occurrence.residencyTier === "complete") throw new Error("HFY already manages Talent Activities for Full Programming accounts.");
     const linkedTalent = await tx.select({ id: scheduleOccurrenceTalent.id }).from(scheduleOccurrenceTalent)
       .where(eq(scheduleOccurrenceTalent.occurrenceId, occurrence.id)).limit(1);
     if (linkedTalent.length) throw new Error("Remove the client-managed artist before requesting HFY for this date.");
