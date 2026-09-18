@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const root = new URL("../", import.meta.url);
 
-describe("Residency compact users roster responsive layout", () => {
+describe("Residency layered person-card responsive layout", () => {
   let browser: Awaited<ReturnType<typeof chromium.launch>>;
   let css = "";
 
@@ -25,11 +25,11 @@ describe("Residency compact users roster responsive layout", () => {
   for (const viewport of [
     { width: 1440, height: 900, layout: "wide" },
     { width: 1200, height: 900, layout: "wide" },
-    { width: 1024, height: 900, layout: "mid" },
-    { width: 768, height: 900, layout: "mid" },
+    { width: 1024, height: 900, layout: "wide" },
+    { width: 768, height: 900, layout: "wide" },
     { width: 375, height: 812, layout: "narrow" },
   ] as const) {
-    it(`keeps the compact roster readable and contained at ${viewport.width}px`, async () => {
+    it(`keeps the layered person cards readable and contained at ${viewport.width}px`, async () => {
       const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
       await page.setContent(`
         <style>
@@ -47,23 +47,28 @@ describe("Residency compact users roster responsive layout", () => {
               <label class="field residency-user-invite-role"><span>Access role</span><select id="invite-role"><option value="calendar_viewer">Calendar viewer</option><option value="manager">Manager</option></select><small>Calendar-only or full workspace access.</small></label>
               <button class="button residency-user-invite-submit" type="button">Send invitations</button>
             </form>
-            <div class="residency-user-roster" role="table">
-              <div class="residency-user-roster-header" role="row"><span>Person</span><span>Access</span><span>Status</span><span>Actions</span></div>
-              <div class="residency-user-list" role="rowgroup">
-                <article class="residency-user-row active" role="row">
-                  <div class="residency-user-identity" role="cell"><span class="residency-user-avatar">AI</span><span><strong>Austyn Internal Test</strong><small>760amoreno@gmail.com</small></span></div>
-                  <div class="residency-user-access" role="cell"><form class="residency-user-role-form"><select aria-label="Role for Austyn Internal Test"><option>Manager</option><option>Calendar viewer</option></select><button class="button secondary" type="button">Save</button></form></div>
-                  <div class="residency-user-status" role="cell"><span class="status active">Primary contact</span><span class="status active">Enrolled</span></div>
-                  <div class="residency-user-actions" role="cell"><button class="button secondary" type="button">Reset password</button><button class="button secondary" type="button">View as</button></div>
-                </article>
-                <article class="residency-user-row pending" role="row">
-                  <div class="residency-user-identity" role="cell"><span class="residency-user-avatar">JL</span><span><strong>jordan.lee@example.com</strong><small>Invited Sep 18, 2026 by HFY</small></span></div>
-                  <div class="residency-user-access" role="cell"><div class="residency-user-pending-role"><strong>Calendar viewer</strong><small>Calendar only. No Account, Billing, Talent, or Finances access.</small></div></div>
-                  <div class="residency-user-status" role="cell"><span class="status pending">Invitation pending</span></div>
-                  <div class="residency-user-actions" role="cell"><button class="button secondary" type="button">Resend invite</button><button class="button danger" type="button">Revoke</button></div>
-                </article>
+            <div class="residency-user-list" role="list">
+              <article class="residency-user-card active" role="listitem">
+                <div class="residency-user-card-top">
+                  <div class="residency-user-identity"><span class="residency-user-avatar">AI</span><span><strong>Austyn Internal Test</strong><small>760amoreno@gmail.com</small></span></div>
+                  <div class="residency-user-status"><span class="status active">Primary contact</span><span class="status active">Enrolled</span></div>
+                </div>
+                <div class="residency-user-card-bottom">
+                  <div class="residency-user-access"><form class="residency-user-role-form"><select aria-label="Role for Austyn Internal Test"><option>Manager</option><option>Calendar viewer</option></select><button class="button secondary" type="button">Update role</button></form></div>
+                  <div class="residency-user-actions"><button class="button secondary" type="button">Reset password</button><button class="button secondary" type="button">View as</button></div>
+                </div>
+              </article>
+              <article class="residency-user-card pending" role="listitem">
+                <div class="residency-user-card-top">
+                  <div class="residency-user-identity"><span class="residency-user-avatar">JL</span><span><strong>jordan.lee@example.com</strong><small>Invited Sep 18, 2026 by HFY</small></span></div>
+                  <div class="residency-user-status"><span class="status pending">Invitation pending</span></div>
+                </div>
+                <div class="residency-user-card-bottom">
+                  <div class="residency-user-access"><div class="residency-user-pending-role"><strong>Calendar viewer</strong><small>Calendar only. No Account, Billing, Talent, or Finances access.</small></div></div>
+                  <div class="residency-user-actions"><button class="button secondary" type="button">Resend invite</button><button class="button danger" type="button">Revoke</button></div>
+                </div>
+              </article>
               </div>
-            </div>
           </section>
         </main>
       `);
@@ -71,43 +76,35 @@ describe("Residency compact users roster responsive layout", () => {
       const metrics = await page.evaluate(() => {
         const card = document.querySelector<HTMLElement>(".residency-users-card")!;
         const invite = document.querySelector<HTMLElement>(".residency-user-invite-form")!;
-        const roster = document.querySelector<HTMLElement>(".residency-user-roster")!;
-        const header = document.querySelector<HTMLElement>(".residency-user-roster-header")!;
-        const rows = [...document.querySelectorAll<HTMLElement>(".residency-user-row")];
+        const list = document.querySelector<HTMLElement>(".residency-user-list")!;
+        const cards = [...document.querySelectorAll<HTMLElement>(".residency-user-card")];
+        const cardBottoms = [...document.querySelectorAll<HTMLElement>(".residency-user-card-bottom")];
         const actions = [...document.querySelectorAll<HTMLElement>(".residency-user-actions")];
-        const firstRowStyle = getComputedStyle(rows[0]);
+        const firstBottomStyle = getComputedStyle(cardBottoms[0]);
 
         return {
           documentContained: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
           inviteContained: invite.scrollWidth <= invite.clientWidth,
-          rosterContained: roster.scrollWidth <= roster.clientWidth,
-          rowsContained: rows.every((row) => row.scrollWidth <= row.clientWidth && row.getBoundingClientRect().right <= card.getBoundingClientRect().right + 1),
+          listContained: list.scrollWidth <= list.clientWidth,
+          cardsContained: cards.every((personCard) => personCard.scrollWidth <= personCard.clientWidth && personCard.getBoundingClientRect().right <= card.getBoundingClientRect().right + 1),
+          cardBottomsContained: cardBottoms.every((bottom) => bottom.scrollWidth <= bottom.clientWidth),
           controlsContained: [...document.querySelectorAll<HTMLElement>("input, select, button")].every((control) => control.getBoundingClientRect().right <= card.getBoundingClientRect().right + 1),
-          rosterHeaderVisible: getComputedStyle(header).display !== "none",
-          rowColumns: firstRowStyle.gridTemplateColumns.split(" ").length,
+          bottomColumns: firstBottomStyle.gridTemplateColumns.split(" ").length,
           actionWidths: actions.map((action) => action.getBoundingClientRect().width),
-          clippedCopy: [...document.querySelectorAll<HTMLElement>(".residency-user-row strong, .residency-user-row small, .residency-user-actions .button")].some((node) => node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight),
+          clippedCopy: [...document.querySelectorAll<HTMLElement>(".residency-user-card strong, .residency-user-card small, .residency-user-actions .button")].some((node) => node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight),
         };
       });
 
       expect(metrics.documentContained).toBe(true);
       expect(metrics.inviteContained).toBe(true);
-      expect(metrics.rosterContained).toBe(true);
-      expect(metrics.rowsContained).toBe(true);
+      expect(metrics.listContained).toBe(true);
+      expect(metrics.cardsContained).toBe(true);
+      expect(metrics.cardBottomsContained).toBe(true);
       expect(metrics.controlsContained).toBe(true);
       expect(metrics.clippedCopy).toBe(false);
       expect(metrics.actionWidths.every((width) => width > 0)).toBe(true);
 
-      if (viewport.layout === "wide") {
-        expect(metrics.rosterHeaderVisible).toBe(true);
-        expect(metrics.rowColumns).toBe(4);
-      } else if (viewport.layout === "mid") {
-        expect(metrics.rosterHeaderVisible).toBe(false);
-        expect(metrics.rowColumns).toBe(2);
-      } else {
-        expect(metrics.rosterHeaderVisible).toBe(false);
-        expect(metrics.rowColumns).toBe(1);
-      }
+      expect(metrics.bottomColumns).toBe(viewport.layout === "wide" ? 2 : 1);
 
       const inviteRole = page.locator("#invite-role");
       await inviteRole.selectOption("manager");

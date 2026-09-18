@@ -94,16 +94,10 @@ export function UsersAndRoles({ users, currentUserId }: { users: ResidencyUser[]
       {inviteState.status !== "idle" ? <p className={inviteState.status === "error" ? "error" : "success"} role="status">{inviteState.message}</p> : null}
     </form>
 
-    <div className="residency-user-roster" role="table" aria-label="People with access">
-      <div className="residency-user-roster-header" role="row" aria-hidden="true">
-        <span>Person</span>
-        <span>Access</span>
-        <span>Status</span>
-        <span>Actions</span>
-      </div>
-      <div className="residency-user-list" role="rowgroup">
-        {users.map((user) => <article className={`residency-user-row ${user.state}`} role="row" key={user.id}>
-          <div className="residency-user-identity" role="cell">
+    <div className="residency-user-list" role="list" aria-label="People with access">
+      {users.map((user) => <article className={`residency-user-card ${user.state}`} role="listitem" key={user.id}>
+        <div className="residency-user-card-top">
+          <div className="residency-user-identity">
             <span className="residency-user-avatar" aria-hidden="true">{initials(user.name, user.email)}</span>
             <span>
               <strong>{user.state === "active" ? user.name : user.email}</strong>
@@ -111,26 +105,28 @@ export function UsersAndRoles({ users, currentUserId }: { users: ResidencyUser[]
             </span>
           </div>
 
-          <div className="residency-user-access" role="cell">
+          <div className="residency-user-status">
+            {user.isPrimary ? <span className="status active">Primary contact</span> : null}
+            <span className={`status ${user.state === "active" ? "active" : "pending"}`}>{user.state === "active" ? "Enrolled" : "Invitation pending"}</span>
+          </div>
+        </div>
+
+        <div className="residency-user-card-bottom">
+          <div className="residency-user-access">
             {user.state === "active" ? <form className="residency-user-role-form" action={(formData) => run(changeResidencyUserRoleAction, formData, "Role updated.")}>
               <input type="hidden" name="contactId" value={user.id} />
               <select name="role" defaultValue={user.accessRole ?? "calendar_viewer"} aria-label={`Role for ${user.name}`} disabled={pending || user.userId === currentUserId}>
                 <option value="calendar_viewer">Calendar viewer</option>
                 <option value="manager">Manager</option>
               </select>
-              <button className="button secondary" type="submit" disabled={pending || user.userId === currentUserId}>Save</button>
+              <button className="button secondary" type="submit" disabled={pending || user.userId === currentUserId}>Update role</button>
             </form> : <div className="residency-user-pending-role">
               <strong>{user.accessRole ? roleDetails[user.accessRole].label : "No access"}</strong>
               <small>{user.accessRole ? roleDetails[user.accessRole].description : "No workspace access."}</small>
             </div>}
           </div>
 
-          <div className="residency-user-status" role="cell">
-            {user.isPrimary ? <span className="status active">Primary contact</span> : null}
-            <span className={`status ${user.state === "active" ? "active" : "pending"}`}>{user.state === "active" ? "Enrolled" : "Invitation pending"}</span>
-          </div>
-
-          <div className="residency-user-actions" role="cell">
+          <div className="residency-user-actions">
             {user.state === "active" ? <>
               {user.membershipId && user.userId !== currentUserId ? <form action={enterClientViewAsAction}>
                 <input type="hidden" name="membershipId" value={user.membershipId} />
@@ -165,8 +161,8 @@ export function UsersAndRoles({ users, currentUserId }: { users: ResidencyUser[]
               ? `Changed from ${user.roleHistory[0].previousRole?.replaceAll("_", " ")} to ${user.roleHistory[0].newRole?.replaceAll("_", " ")} by ${user.roleHistory[0].actor} on ${formatDate(user.roleHistory[0].changedAt)}`
               : `Last changed by ${user.roleChangedBy?.displayName ?? user.roleChangedBy?.email ?? "HFY"} on ${formatDate(user.roleChangedAt)}`}
           </small> : null}
-        </article>)}
-      </div>
+        </div>
+      </article>)}
     </div>
     {message ? <p className={/unable|cannot|final|error/i.test(message) ? "error" : "success"} role="status">{message}</p> : null}
   </ResidencySurfaceCard>;

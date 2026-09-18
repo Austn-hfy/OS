@@ -4,15 +4,17 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
 describe("Residency Users & Roles account experience", () => {
-  it("uses the approved compact roster and card-width-responsive layout", async () => {
+  it("uses the approved layered person cards and card-width-responsive layout", async () => {
     const css = await read("../../../app/globals.css");
     expect(css).toContain(".residency-users-card { container: residency-users / inline-size; }");
     expect(css).toContain(".residency-user-invite-form { display: grid; min-width: 0;");
-    expect(css).toContain(".residency-user-roster-header, .residency-user-row");
+    expect(css).toContain(".residency-user-card-top { min-width: 0; display: flex;");
+    expect(css).toContain(".residency-user-card-bottom { min-width: 0; display: grid;");
+    expect(css).toContain("grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr)");
     expect(css).toContain("@container residency-users (max-width: 860px)");
-    expect(css).toContain(".residency-user-roster-header { display: none; }");
     expect(css).toContain("@container residency-users (max-width: 560px)");
-    expect(css).toContain(".residency-user-invite-form, .residency-user-row { grid-template-columns: minmax(0, 1fr); }");
+    expect(css).toContain(".residency-user-invite-form, .residency-user-card-bottom { grid-template-columns: minmax(0, 1fr); }");
+    expect(css).toContain(".residency-user-card-top { align-items: flex-start; flex-direction: column; }");
   });
 
   it("defaults bulk invitations to Calendar viewer and explains both roles at assignment time", async () => {
