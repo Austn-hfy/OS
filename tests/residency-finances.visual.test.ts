@@ -42,7 +42,7 @@ function fixture() {
     "invoice",
   );
 
-  return `<div class="hfy-style-system"><div class="shell client-shell visual-finances-shell"><aside class="sidebar client-sidebar"><div class="brand"><span class="brand-mark">HFY</span><span class="brand-copy"><strong>HFY OS</strong><span>Residency preview</span></span></div><div class="client-residency-context"><small>Your Residency</small><strong>HFY Internal Test Residency</strong></div></aside><main class="main"><div class="view-as-banner" role="status"><strong>Viewing as: HFY Internal Test Residency</strong><span>Changes made here are live for this Residency.</span><button type="button">Exit preview</button></div><section class="workspace-surface residency-workspace-surface residency-page-surface workspace-surface-finances"><header class="page-header client-page-header residency-page-header"><div><p class="eyebrow">HFY Internal Test Residency finances</p><h1>Finances</h1></div></header><div class="residency-page-body finance-accordions"><details class="finance-accordion card" open><summary><span><small>Directly sourced by your team</small><strong>Owed to Your Talent</strong></span><span><strong>$400.00</strong><small>informational only</small></span></summary><div class="finance-accordion-body"><p>This is a summary of what your Residency pays its own talent directly. HFY does not collect, send, or manage these payments.</p>${directTable}</div></details><details class="finance-accordion card" open><summary><span><small>HFY-managed programming</small><strong>Owed to HFY</strong></span><span><strong>$1,500.00</strong><small>outstanding</small></span></summary><div class="finance-accordion-body"><p>Invoices for talent sourced, scheduled, and paid by HFY. Your Platform subscription is managed separately in Settings → Billing.</p>${invoiceTable}</div></details></div></section></main></div></div>`;
+  return `<div class="hfy-style-system"><div class="shell client-shell visual-finances-shell"><aside class="sidebar client-sidebar"><div class="brand"><span class="brand-mark">HFY</span><span class="brand-copy"><strong>HFY OS</strong><span>Residency preview</span></span></div><div class="client-residency-context"><small>Your Residency</small><strong>HFY Internal Test Residency</strong></div></aside><main class="main"><div class="view-as-banner" role="status"><strong>Viewing as: HFY Internal Test Residency</strong><span>Changes made here are live for this Residency.</span><button type="button">Exit preview</button></div><section class="workspace-surface residency-workspace-surface residency-page-surface workspace-surface-finances"><header class="page-header client-page-header residency-page-header"><div><p class="eyebrow">HFY Internal Test Residency finances</p><h1>Finances</h1></div></header><div class="residency-page-body finance-accordions"><section class="card residency-surface-card residency-surface-card--white finance-disclosure-card"><details class="finance-accordion" open><summary><span><small>Directly sourced by your team</small><strong>Owed to Your Talent</strong></span><span><strong>$400.00</strong><small>informational only</small></span></summary><div class="finance-accordion-body"><p>This is a summary of what your Residency pays its own talent directly. HFY does not collect, send, or manage these payments.</p>${directTable}</div></details></section><section class="card residency-surface-card residency-surface-card--white finance-disclosure-card"><details class="finance-accordion" open><summary><span><small>HFY-managed programming</small><strong>Owed to HFY</strong></span><span><strong>$1,500.00</strong><small>outstanding</small></span></summary><div class="finance-accordion-body"><p>Invoices for talent sourced, scheduled, and paid by HFY. Your Platform subscription is managed separately in Settings → Billing.</p>${invoiceTable}</div></details></section></div></section></main></div></div>`;
 }
 
 function rateDialogFixture() {
@@ -100,6 +100,7 @@ describe("Residency Finances responsive visual contract", () => {
         const viewportWidth = document.documentElement.clientWidth;
         const surface = element(".workspace-surface-finances").getBoundingClientRect();
         const banner = element(".view-as-banner").getBoundingClientRect();
+        const cards = [...document.querySelectorAll<HTMLElement>(".finance-disclosure-card")];
         const summaries = [...document.querySelectorAll<HTMLElement>(".finance-accordion > summary")].map((node) => node.getBoundingClientRect());
         const bodies = [...document.querySelectorAll<HTMLElement>(".finance-accordion-body")].map((node) => node.getBoundingClientRect());
         const wraps = [...document.querySelectorAll<HTMLElement>(".finance-table-wrap")];
@@ -109,6 +110,14 @@ describe("Residency Finances responsive visual contract", () => {
           documentContained: document.documentElement.scrollWidth === viewportWidth,
           bannerContained: banner.left >= -0.5 && banner.right <= viewportWidth + 0.5,
           surfaceContained: surface.left >= -0.5 && surface.right <= viewportWidth + 0.5,
+          cardsContained: cards.every((card) => {
+            const rect = card.getBoundingClientRect();
+            return rect.left >= surface.left - 0.5 && rect.right <= surface.right + 0.5;
+          }),
+          cardsUseLockedSurface: cards.length === 2 && cards.every((card) => {
+            const style = getComputedStyle(card);
+            return style.backgroundColor === "rgb(255, 255, 255)" && style.borderRadius === "16px" && style.boxShadow !== "none";
+          }),
           summariesContained: summaries.every((summary) => summary.left >= surface.left - 0.5 && summary.right <= surface.right + 0.5),
           bodiesContained: bodies.every((body) => body.left >= surface.left - 0.5 && body.right <= surface.right + 0.5),
           wrappersContained: wraps.every((wrap) => {
@@ -124,6 +133,8 @@ describe("Residency Finances responsive visual contract", () => {
         documentContained: true,
         bannerContained: true,
         surfaceContained: true,
+        cardsContained: true,
+        cardsUseLockedSurface: true,
         summariesContained: true,
         bodiesContained: true,
         wrappersContained: true,

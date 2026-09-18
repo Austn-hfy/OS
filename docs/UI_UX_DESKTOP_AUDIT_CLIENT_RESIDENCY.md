@@ -1,6 +1,6 @@
 # HFY OS desktop UI/UX audit — Client Residency
 
-Status: Settings desktop benchmark complete; Overview, Talent, Calendar, Day Parts, and the Finances P0 responsive and rate-dialog passes adopted; broader client audit remains active
+Status: Settings desktop benchmark complete; Overview, Talent, Calendar, Day Parts, and the Finances responsive, rate-dialog, and layer-structure passes adopted; broader client audit remains active
 Date: September 17, 2026
 Scope: the client-facing Residency workspace reached through **View as Residency**
 Reference screen: **Settings → Billing**
@@ -532,6 +532,26 @@ Intentionally unchanged:
 
 - Rate calculation, save behavior, permissions, row data, table layout, and all copy.
 - The disclosure-card/layer treatment, typography cleanup, and header language remain assigned to later Finances passes.
+
+### CR-022 — Finances disclosures do not explicitly consume the locked white Surface-card layer
+
+Priority: P1
+Applies to: `/residency/finances`
+Status: **resolved in the Finances layer-structure pass**
+
+Finances already used the shared frosted page surface, but each ledger disclosure relied on the generic legacy `card` class directly. That made the visual result dependent on broad card styling instead of explicitly enforcing the locked canvas → frosted page surface → opaque white Surface-card sequence.
+
+Resolution:
+
+- Owed to Your Talent and Owed to HFY now each use the shared `ResidencySurfaceCard` white variant as their layer-three boundary.
+- The native `details` disclosure remains nested inside that Surface card, preserving its open/collapse behavior without introducing a Finances-specific component.
+- The shared Surface component now owns the white background, border, radius, and shadow. Finances CSS is limited to the disclosure's route-specific zero-padding and clipped-boundary composition.
+- Continuous Finances geometry coverage still runs from 1512px through 390px and now additionally verifies that both disclosures are contained white Surface cards using the locked radius and elevation.
+
+Intentionally unchanged:
+
+- Disclosure behavior, summary copy, totals, status language, table layout, rate actions, invoice downloads, financial data, and permissions.
+- Typography cleanup and header language remain assigned to the final Finances visual pass.
 
 ## Settings benchmark decisions
 

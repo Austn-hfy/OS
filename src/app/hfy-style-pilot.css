@@ -3850,7 +3850,14 @@
   min-width: 0;
 }
 
+.hfy-style-system .finance-disclosure-card {
+  padding: 0;
+  overflow: clip;
+}
+
 .hfy-style-system .finance-accordion {
+  width: 100%;
+  margin: 0;
   padding: 0;
   overflow: clip;
 }

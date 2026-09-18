@@ -9,6 +9,9 @@ describe("Residency Finances responsive contract", () => {
 
     expect(page).toContain("ResidencyPageSurface");
     expect(page).toContain("ResidencyPageBody");
+    expect(page).toContain("ResidencySurfaceCard");
+    expect(page.match(/<ResidencySurfaceCard className="finance-disclosure-card">/g)).toHaveLength(2);
+    expect(page).not.toContain('className="finance-accordion card"');
     expect(page).not.toContain("WorkspaceSurface");
     expect(page).toContain("Owed to Your Talent");
     expect(page).toContain("Owed to HFY");
