@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { addCalendarAssignmentAction, addClientManagedOccurrenceAssignmentAction, bookResidencyDateAction, rescheduleAssignmentAction, updateCalendarShiftDetailsAction, updateDaypartOccurrenceAction, type ResidencyActionState } from "@/app/app/actions";
+import { addCalendarAssignmentAction, addClientManagedOccurrenceAssignmentAction, bookResidencyDateAction, requestHfyForScheduleOccurrenceAction, rescheduleAssignmentAction, updateCalendarShiftDetailsAction, updateDaypartOccurrenceAction, type ResidencyActionState } from "@/app/app/actions";
 import type { ResidencyEvent } from "@/app/app/calendar/residency-calendar";
 import { ArtistSearchPicker, type CreateArtistResult } from "@/components/artist-search-picker";
 import { SensitiveInput } from "@/components/privacy-mode";
@@ -301,6 +301,10 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
         formData.set("manualHostName", draft.manualHostName);
         formData.set("notes", draft.notes);
         result = await updateDaypartOccurrenceAction(formData);
+      } else if (selectedEvent.recordType === "nonfinancial_occurrence" && selectedDaypart.type === "dj_artist" && draft.requestHfy) {
+        const formData = new FormData();
+        formData.set("occurrenceId", selectedEvent.id);
+        result = await requestHfyForScheduleOccurrenceAction(formData);
       } else if (selectedEvent.recordType === "nonfinancial_occurrence" && selectedDaypart.type === "dj_artist" && !selectedEvent.assignments.length) {
         const assignmentWindow = resolveAssignmentMinutes(selectedEvent.shiftStartMinute, selectedEvent.shiftEndMinute, draft.start, draft.end);
         const formData = new FormData();
@@ -397,6 +401,9 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
         {done ? <div className="calendar-batch-done"><span aria-hidden="true">✓</span><h3>Done</h3><p>You reached the end of this Daypart’s {rangeKind}.</p><button className="button" type="button" onClick={closeBatch}>Back to Calendar</button></div> : <div className="calendar-batch-list calendar-batch-editor-list">
           {selectedEvents.map((event, index) => {
             const expanded = event.id === expandedEventId;
+            const canChooseStaffingMode = previewMode && selectedDaypart.type === "dj_artist" && !event.assignments.length
+              && ((!fullProgramming && event.projected)
+                || (event.recordType === "nonfinancial_occurrence" && event.billingMode === "tracking_only"));
             const summary = savedSummaries[event.id] ?? occurrenceSummary(event);
             const complete = Boolean(summary);
             const stateClass = expanded ? "is-current" : complete ? "is-complete" : "is-upcoming";
@@ -410,7 +417,7 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
                 <span className="calendar-batch-row-chevron" aria-hidden="true">⌄</span>
               </button>
               {expanded && draft ? <div className="calendar-batch-form calendar-batch-editor-form" id={`calendar-batch-form-${event.id}`}>
-                {previewMode && !fullProgramming && event.projected && selectedDaypart.type === "dj_artist" ? <div className="calendar-batch-mode" role="group" aria-label="Scheduling method"><button type="button" className={!draft.requestHfy ? "active" : ""} onClick={() => { setDraft({ ...draft, requestHfy: false }); setValidationRequested(false); }}><strong>Client Managed</strong><small>Choose an artist now</small></button><button type="button" className={draft.requestHfy ? "active" : ""} onClick={() => { setDraft({ ...draft, requestHfy: true, talentId: "" }); setValidationRequested(false); }}><strong>Request HFY</strong><small>Send staffing to HFY</small></button></div> : null}
+                {canChooseStaffingMode ? <div className="calendar-batch-mode" role="group" aria-label="Scheduling method"><button type="button" className={!draft.requestHfy ? "active" : ""} onClick={() => { setDraft({ ...draft, requestHfy: false }); setValidationRequested(false); }}><strong>Client Managed</strong><small>Choose an artist now</small></button><button type="button" className={draft.requestHfy ? "active" : ""} onClick={() => { setDraft({ ...draft, requestHfy: true, talentId: "" }); setValidationRequested(false); }}><strong>Request HFY</strong><small>Send staffing to HFY</small></button></div> : null}
                 {event.economicsMode === "hfy_request" ? <div className="request-hfy-selection"><div><span>Request HFY</span><strong>HFY staffing is pending</strong><small>This occurrence remains in the list for review.</small></div></div> : draft.requestHfy ? <div className="request-hfy-selection"><div><span>Request HFY</span><strong>HFY will staff this occurrence</strong><small>Save &amp; Next sends this date to HFY without assigning a client artist.</small></div></div> : selectedEventReadOnly ? <div className="request-hfy-selection"><div><span>HFY managed</span><strong>{occurrenceSummary(event) || "HFY controls staffing"}</strong><small>This occurrence is available for review here; HFY-owned staffing remains unchanged.</small></div></div> : null}
                 {selectedDaypart.type === "dj_artist" && !selectedEventReadOnly && !draft.requestHfy && event.economicsMode !== "hfy_request" ? <>
                   {draft.talentId ? <div className="replacement-selected"><div><span>Selected artist</span><strong>{artists.find((artist) => artist.id === draft.talentId)?.name ?? event.assignments[0]?.talentName}</strong></div><button type="button" onClick={() => { setDraft({ ...draft, talentId: "" }); setValidationRequested(false); }}>Choose someone else</button></div> : <ArtistSearchPicker label="Choose artist" artists={artists} excludedIds={event.assignments.slice(1).map((assignment) => assignment.talentId).filter((id): id is string => Boolean(id))} onCreateArtist={canCreateArtist} onOpenChange={(open) => { if (open) keepExpandedEventVisible(event.id); }} onSelect={(talentId) => { setDraft({ ...draft, talentId }); setValidationRequested(false); }} />}

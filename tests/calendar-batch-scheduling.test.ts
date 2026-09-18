@@ -83,6 +83,9 @@ describe("Calendar batch scheduling", () => {
 
     expect(editor).toContain("isHfyManagedCalendarEvent(selectedEvent)");
     expect(editor).toContain("addClientManagedOccurrenceAssignmentAction(formData)");
+    expect(editor).toContain("requestHfyForScheduleOccurrenceAction(formData)");
+    expect(editor).toContain('event.recordType === "nonfinancial_occurrence" && event.billingMode === "tracking_only"');
+    expect(editor).toContain("canChooseStaffingMode");
     expect(calendar).toContain("previewMode && canManage");
     expect(page).toContain("savedShiftDaypartDates");
     expect(page).toContain("visibleOccurrences");
