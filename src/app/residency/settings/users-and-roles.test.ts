@@ -4,6 +4,15 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
 describe("Residency Users & Roles account experience", () => {
+  it("keeps role choices equal-width and stacks them before their copy can clip", async () => {
+    const css = await read("../../../app/globals.css");
+    expect(css).toContain(".residency-role-option { display: flex; flex: 1 1 0;");
+    expect(css).toContain(".residency-role-option > span { min-width: 0; overflow-wrap: break-word; }");
+    expect(css).toContain("@media (max-width: 480px)");
+    expect(css).toContain(".residency-user-invite-form fieldset { flex-direction: column; }");
+    expect(css).toContain(".residency-role-option { flex: 0 1 auto; width: 100%; }");
+  });
+
   it("defaults bulk invitations to Calendar viewer and explains both roles at assignment time", async () => {
     const [actions, component, settingsForm] = await Promise.all([read("./actions.ts"), read("./users-and-roles.tsx"), read("./settings-form.tsx")]);
     expect(actions).toContain('.default("calendar_viewer")');
