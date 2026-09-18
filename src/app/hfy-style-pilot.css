@@ -3842,6 +3842,14 @@
   gap: 16px;
 }
 
+.hfy-style-system .workspace-surface-finances {
+  overflow: visible;
+}
+
+.hfy-style-system .workspace-surface-finances :is(.finance-accordions, .finance-accordion, .finance-accordion-body) {
+  min-width: 0;
+}
+
 .hfy-style-system .finance-accordion {
   padding: 0;
   overflow: clip;
@@ -3858,12 +3866,27 @@
 }
 
 .hfy-style-system .finance-accordion > summary::-webkit-details-marker { display: none; }
-.hfy-style-system .finance-accordion > summary > span { display: grid; gap: 4px; }
+.hfy-style-system .finance-accordion > summary > span { min-width: 0; display: grid; gap: 4px; }
 .hfy-style-system .finance-accordion > summary > span:last-child { text-align: right; }
 .hfy-style-system .finance-accordion > summary small { color: var(--hfy-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 .hfy-style-system .finance-accordion > summary strong { font-size: 18px; }
 .hfy-style-system .finance-accordion-body { padding: 0 22px 22px; border-top: 1px solid var(--hfy-line); }
 .hfy-style-system .finance-accordion-body > p { margin: 16px 0; color: var(--hfy-muted); }
+.hfy-style-system .finance-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+  container-name: residency-finance-table;
+  container-type: inline-size;
+}
+.hfy-style-system .finance-table-wrap:focus-visible { outline: 3px solid var(--hfy-focus-ring); outline-offset: 2px; }
+.hfy-style-system .finance-table { width: 100%; }
+.hfy-style-system .finance-table--invoice { min-width: 760px; }
+.hfy-style-system .finance-invoice-period { display: inline-flex; gap: .24em; white-space: nowrap; }
 .hfy-style-system .finance-rate-needed-button {
   appearance: none;
   display: inline-flex;
@@ -3882,6 +3905,45 @@
 .hfy-style-system .finance-rate-needed-button small { color: #7a302d; font-size: 9px; font-weight: 800; white-space: nowrap; }
 .hfy-style-system .finance-rate-needed-button:hover { border-color: color-mix(in srgb, var(--hfy-coral) 78%, #8a3b35); background: color-mix(in srgb, var(--hfy-coral) 21%, white); }
 .hfy-style-system .finance-rate-needed-button:focus-visible { outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--hfy-coral) 30%, transparent); }
+
+@container residency-finance-table (max-width: 860px) {
+  .hfy-style-system .finance-table {
+    table-layout: fixed;
+  }
+
+  .hfy-style-system .finance-table--direct { min-width: 640px; }
+  .hfy-style-system .finance-table--invoice { min-width: 720px; }
+
+  .hfy-style-system .finance-table :is(th, td) {
+    min-width: 0;
+    padding: 10px 7px;
+    overflow-wrap: anywhere;
+  }
+
+  .hfy-style-system .finance-table--direct th:nth-child(1) { width: 20%; }
+  .hfy-style-system .finance-table--direct th:nth-child(2) { width: 25%; }
+  .hfy-style-system .finance-table--direct th:nth-child(3) { width: 18%; }
+  .hfy-style-system .finance-table--direct th:nth-child(4) { width: 16%; }
+  .hfy-style-system .finance-table--direct th:nth-child(5) { width: 21%; }
+
+  .hfy-style-system .finance-table--invoice th:nth-child(1) { width: 16%; }
+  .hfy-style-system .finance-table--invoice th:nth-child(2) { width: 16%; }
+  .hfy-style-system .finance-table--invoice th:nth-child(3) { width: 24%; }
+  .hfy-style-system .finance-table--invoice th:nth-child(4) { width: 13%; }
+  .hfy-style-system .finance-table--invoice th:nth-child(5) { width: 13%; }
+  .hfy-style-system .finance-table--invoice th:nth-child(6) { width: 18%; }
+
+  .hfy-style-system .finance-table--invoice .finance-invoice-period {
+    display: grid;
+    gap: 2px;
+    white-space: normal;
+  }
+
+  .hfy-style-system .finance-table--invoice .finance-invoice-period-separator { display: none; }
+  .hfy-style-system .finance-table--invoice .button { width: 100%; min-width: 0; padding-inline: 7px; white-space: normal; line-height: 1.2; text-align: center; }
+  .hfy-style-system .finance-table--direct .finance-rate-needed-button { max-width: 100%; flex-wrap: wrap; }
+  .hfy-style-system .finance-table--direct .finance-rate-needed-button small { white-space: normal; }
+}
 
 .hfy-style-system .residency-metric-grid {
   display: grid;

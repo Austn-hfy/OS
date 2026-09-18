@@ -1,6 +1,6 @@
 # HFY OS desktop UI/UX audit — Client Residency
 
-Status: Settings desktop benchmark complete; Overview, Talent, Calendar, and Day Parts adopted; broader client audit remains active
+Status: Settings desktop benchmark complete; Overview, Talent, Calendar, Day Parts, and the Finances P0 responsive pass adopted; broader client audit remains active
 Date: September 17, 2026
 Scope: the client-facing Residency workspace reached through **View as Residency**
 Reference screen: **Settings → Billing**
@@ -21,7 +21,7 @@ The following manager-facing routes were reviewed during the initial audit:
 | Calendar | `/residency/calendar` | Purpose-built operational surface |
 | Day Parts | `/residency/dayparts` | Shared Residency page frame with a purpose-built operational weekly grid |
 | Talent | `/residency/talent` | Shared workspace surface with roster/detail split |
-| Finances | `/residency/finances` | Shared workspace surface with two accordions |
+| Finances | `/residency/finances` | Shared Residency page surface with two financial disclosure tables |
 | Account | `/residency/settings` | Shared Settings surface with tabs and account form |
 | Billing | `/residency/settings/billing` | Shared Settings surface with plan, usage, and invoices |
 
@@ -53,7 +53,7 @@ The final Settings pass deliberately did not begin the future shared-component o
 
 Priority: P0
 Applies to: every Residency page while viewed from Developer mode
-Reviewed-route status: **resolved for Account, Billing, Overview, Talent, Calendar, and Day Parts**
+Reviewed-route status: **resolved for Account, Billing, Overview, Talent, Calendar, Day Parts, and Finances**
 Broader status: open for the other Residency routes
 
 At viewport widths at or below 1200px, `.main` switches to a smaller horizontal gutter while `.view-as-banner` retained the negative margin calculated from the wider gutter.
@@ -109,6 +109,11 @@ Resolution for Day Parts:
 
 - Residency Day Parts now identifies itself as a `ResidencyPageSurface`, so the View-as banner uses the active compact-desktop gutter.
 - The weekly board owns its compact-width overflow; the page document stays width-contained from 1440px through 390px.
+
+Resolution for Finances:
+
+- Finances now identifies itself as a `ResidencyPageSurface` and places its two disclosures inside `ResidencyPageBody`, so the compact View-as banner uses the active main gutter without route-local geometry.
+- Both financial tables own any width beyond their readable table floor inside keyboard-focusable horizontal regions; neither table can widen the disclosure, page surface, or document.
 
 ### CR-002A — Talent post-adoption control alignment
 
@@ -474,6 +479,36 @@ Intentionally unchanged:
 
 - Daypart data, time calculations, room behavior, templates, rates, save/delete behavior, and Calendar projection logic.
 - The weekly board and editor remain a Day Parts-specific implementation profile rather than a new reusable component family.
+
+### CR-020 — Finances disclosures and tables escape the page surface at compact widths
+
+Priority: P0
+Applies to: populated `/residency/finances`
+Status: **resolved in the Finances P0 responsive pass**
+
+The route used a generic `WorkspaceSurface`, so it was not included in the shared compact View-as gutter correction. Its financial tables inherited the global `720px` minimum width, while grid items and disclosure bodies retained their automatic minimum size. The outer workspace then hid the resulting overflow instead of assigning it to the table region.
+
+Previously measured:
+
+- At 1024px, the first disclosure summary extended about 61px beyond the page surface and its table about 39px beyond it.
+- At 900px, those overages grew to about 174px and 152px.
+- At 601px, live sandbox measurement showed each disclosure at 766px and both table wrappers at 722px inside a 561px page surface.
+- Below the 850px shell transition, totals, supporting copy, columns, and rate actions resumed clipping because the tables continued to determine their ancestors' width.
+
+Resolution:
+
+- The route now uses `ResidencyPageSurface` and `ResidencyPageBody`; the shared compact View-as banner rule applies automatically.
+- Every disclosure, disclosure body, and table region explicitly permits its grid track to shrink with `min-width: 0`.
+- Direct-talent and HFY-invoice tables now have separate, keyboard-focusable contained scroll regions with inline overscroll containment. Their readable table floors never widen the page.
+- At compact widths, both tables reuse Billing invoice-history's fixed-layout, reduced-padding, proportional-column treatment. The HFY service period stacks its start and end dates before the row becomes cramped; document and rate actions wrap within their assigned cells.
+- Route-local styling removes the generic workspace's forced overflow hiding so real layout errors are not silently cropped, while each disclosure continues to clip its own rounded boundary.
+- The HFY Internal Test Residency was used throughout. Its existing `HFYTEST-0001` draft was approved through the normal HFY invoice workflow, producing a real $1,500 client-visible invoice and PDF so both financial tables were populated during verification.
+- Automated geometry coverage samples every 17px from 1512px through 390px and checks 851px, 850px, and 849px explicitly. It verifies document, banner, surface, disclosure, supporting-copy, table-region, and rate-action containment at every width.
+
+Intentionally unchanged in this pass:
+
+- The rate dialog, disclosure-card/layer treatment, typography cleanup, and header language remain assigned to later Finances passes.
+- Financial data, totals, permissions, invoice download behavior, and direct-talent rate behavior were not changed.
 
 ## Settings benchmark decisions
 
