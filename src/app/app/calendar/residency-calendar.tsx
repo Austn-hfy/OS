@@ -1517,6 +1517,8 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, today, c
               fullProgramming={fullProgramming}
               canManage={canManage}
               initialDaypartId={initialBatchDaypartId}
+              monthKey={monthKey}
+              weekStart={calendarView === "week" ? activeWeekStart : undefined}
               onRefresh={() => router.refresh()}
             />
             <div className="month-navigation"><Link className="calendar-arrow" aria-label={`Previous ${calendarView}`} href={previousHref}>←</Link><h2>{calendarView === "week" ? weekLabel(activeWeekStart) : monthLabel(monthKey)}</h2><Link className="calendar-arrow" aria-label={`Next ${calendarView}`} href={nextHref}>→</Link></div>

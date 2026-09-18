@@ -72,4 +72,19 @@ describe("Calendar batch scheduling", () => {
     expect(pilotStyles).toContain(".hfy-style-system .calendar-batch-menu { border-color: var(--hfy-line); background: #f9fbfc; }");
     expect(pilotStyles).toContain(".calendar-batch-editor-row.is-complete:not(.expanded)");
   });
+
+  it("routes an internal Residency preview into the staff batch editor without changing the client page", async () => {
+    const [editor, calendar, actions] = await Promise.all([
+      readFile(new URL("../src/components/calendar-batch-editor.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/calendar/residency-calendar.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/app/app/actions.ts", import.meta.url), "utf8"),
+    ]);
+
+    expect(editor).toContain("resolveStaffBatchEditPathAction");
+    expect(editor).toContain('daypart?.type === "dj_artist" && daypart.billingMode === "billed_by_hfy"');
+    expect(editor).toContain("router.push(staffPath)");
+    expect(calendar).toContain("monthKey={monthKey}");
+    expect(actions).toContain("const actor = await getInternalActor()");
+    expect(actions).toContain("batchDaypart: parsed.data.daypartId");
+  });
 });

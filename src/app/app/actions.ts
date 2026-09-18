@@ -12,7 +12,7 @@ import { ROOM_HUE_ORDER } from "@/domain/dayparts";
 import { liveBillingApprovalPhrase } from "@/domain/live-billing";
 import { zonedLocalDateTimeToUtc } from "@/domain/time";
 import { prepareShiftChangeRequest, SHIFT_CHANGE_REQUEST_TYPES, type ShiftChangeRequestType } from "@/domain/shift-change-requests";
-import { isResidencyAccessError, requireActorForResidency, requireInternalActor, requireInternalActorForMutation, ResidencyAccessError } from "@/lib/auth";
+import { getInternalActor, isResidencyAccessError, requireActorForResidency, requireInternalActor, requireInternalActorForMutation, ResidencyAccessError } from "@/lib/auth";
 import { changeAssignmentPaidDate, markAssignmentPaid, replaceAssignmentTalent, rescheduleAssignment, transitionAssignment } from "@/services/assignments";
 import { clearDaypartDateException, removeDaypart, saveDaypart, saveDaypartDateOverride, skipDaypartDate } from "@/services/dayparts";
 import { saveInvoiceBranding } from "@/services/invoice-branding";
@@ -59,6 +59,35 @@ export type ResolveShiftChangeRequestActionState = ResidencyActionState & {
   httpStatus?: 401 | 403;
 };
 export type ArtistRosterOperation = "active" | "inactive" | "archive" | "restore" | "add_to_client_roster" | "remove_from_client_roster";
+
+export async function resolveStaffBatchEditPathAction(input: {
+  residencyId: string;
+  monthKey: string;
+  rangeKind: "month" | "week";
+  weekStart?: string;
+  daypartId: string;
+}): Promise<string | null> {
+  const actor = await getInternalActor();
+  if (!actor) return null;
+  const parsed = z.object({
+    residencyId: z.uuid(),
+    monthKey: z.string().regex(/^\d{4}-\d{2}$/),
+    rangeKind: z.enum(["month", "week"]),
+    weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    daypartId: z.uuid(),
+  }).safeParse(input);
+  if (!parsed.success) return null;
+  const query = new URLSearchParams({
+    calendarResidency: parsed.data.residencyId,
+    month: parsed.data.monthKey,
+    batchDaypart: parsed.data.daypartId,
+  });
+  if (parsed.data.rangeKind === "week" && parsed.data.weekStart) {
+    query.set("calendarView", "week");
+    query.set("week", parsed.data.weekStart);
+  }
+  return `/app/calendar?${query.toString()}`;
+}
 
 type InternalActor = Awaited<ReturnType<typeof requireInternalActor>>;
 

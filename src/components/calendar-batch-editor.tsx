@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { addCalendarAssignmentAction, bookResidencyDateAction, rescheduleAssignmentAction, updateCalendarShiftDetailsAction, updateDaypartOccurrenceAction, type ResidencyActionState } from "@/app/app/actions";
+import { useRouter } from "next/navigation";
+import { addCalendarAssignmentAction, bookResidencyDateAction, resolveStaffBatchEditPathAction, rescheduleAssignmentAction, updateCalendarShiftDetailsAction, updateDaypartOccurrenceAction, type ResidencyActionState } from "@/app/app/actions";
 import type { ResidencyEvent } from "@/app/app/calendar/residency-calendar";
 import { ArtistSearchPicker, type CreateArtistResult } from "@/components/artist-search-picker";
 import { SensitiveInput } from "@/components/privacy-mode";
@@ -46,6 +47,8 @@ type CalendarBatchEditorProps = {
   fullProgramming: boolean;
   canManage: boolean;
   initialDaypartId?: string;
+  monthKey: string;
+  weekStart?: string;
   onRefresh: () => void;
 };
 
@@ -90,7 +93,8 @@ function draftFromEvent(event: ResidencyEvent, previewMode: boolean): BatchDraft
   };
 }
 
-export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, dayparts, artists, canCreateArtist, previewMode, fullProgramming, canManage, initialDaypartId, onRefresh }: CalendarBatchEditorProps) {
+export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, dayparts, artists, canCreateArtist, previewMode, fullProgramming, canManage, initialDaypartId, monthKey, weekStart, onRefresh }: CalendarBatchEditorProps) {
+  const router = useRouter();
   const launcherRef = useRef<HTMLDetailsElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const dialogCloseRef = useRef<HTMLButtonElement>(null);
@@ -126,7 +130,19 @@ export function CalendarBatchEditor({ residency, rangeLabel, rangeKind, events, 
   const nextIncompleteEvent = selectedEvents.find((event) => !isOccurrenceComplete(event));
   const progressPercent = selectedEvents.length ? Math.round((completedCount / selectedEvents.length) * 100) : 0;
 
-  function openBatch(daypartId: string) {
+  async function openBatch(daypartId: string) {
+    const daypart = dayparts.find((item) => item.id === daypartId);
+    if (previewMode && daypart?.type === "dj_artist" && daypart.billingMode === "billed_by_hfy") {
+      try {
+        const staffPath = await resolveStaffBatchEditPathAction({ residencyId: residency.id, monthKey, rangeKind, weekStart, daypartId });
+        if (staffPath) {
+          router.push(staffPath);
+          return;
+        }
+      } catch {
+        // A real Residency user stays in the client-safe batch editor.
+      }
+    }
     setSelectedDaypartId(daypartId);
     setExpandedEventId("");
     setDraft(null);
