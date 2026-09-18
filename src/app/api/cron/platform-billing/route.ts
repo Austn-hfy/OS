@@ -2,6 +2,7 @@ import { isAuthorizedCron } from "@/lib/cron";
 import { assertCurrentPlatformBillingStaging } from "@/lib/platform-billing-stage";
 import { queueMonthlyOverageHeadsUps, sendPendingPlatformBillingAlerts } from "@/services/platform-billing-alerts";
 import { reconcileAllPlatformUsage } from "@/services/platform-usage";
+import { applyScheduledPlatformLifecycle } from "@/services/residency-billing-management";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -18,10 +19,11 @@ export async function GET(request: Request) {
     });
   }
   try {
+    const lifecycle = await applyScheduledPlatformLifecycle();
     const usage = await reconcileAllPlatformUsage();
     const headsUps = await queueMonthlyOverageHeadsUps();
     const alerts = await sendPendingPlatformBillingAlerts();
-    return Response.json({ ok: true, usageReconciled: usage.length, headsUpsQueued: headsUps.length, alerts });
+    return Response.json({ ok: true, lifecycle, usageReconciled: usage.length, headsUpsQueued: headsUps.length, alerts });
   } catch (error) {
     return Response.json({ ok: false, error: error instanceof Error ? error.message : "Platform billing automation failed" }, { status: 500 });
   }

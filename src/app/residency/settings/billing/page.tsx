@@ -9,8 +9,9 @@ import { calculateAnnualSwitchComparison } from "@/domain/platform-annual-switch
 import { isResidencyLiveStripeMode } from "@/domain/stripe-test-mode";
 import { requireResidencyActor } from "@/lib/auth";
 import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
-import { previewResidencyPlatformPlanAnnualSwitchAction, startResidencyPlatformCheckoutAction, switchResidencyPlatformPlanToAnnualAction, updateResidencyPlatformCardAction } from "./actions";
+import { confirmResidencyPlanChangeAction, payResidencyInvoiceNowAction, previewResidencyPlanChangeAction, previewResidencyPlatformPlanAnnualSwitchAction, startResidencyPlatformCheckoutAction, switchResidencyPlatformPlanToAnnualAction, updateResidencyPlatformCardAction } from "./actions";
 import { AnnualSwitchConfirmation } from "./annual-switch-confirmation";
+import { InvoicePayNowForm, PlanManagement } from "./plan-management";
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -19,6 +20,10 @@ function money(cents: number) {
 function date(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
     .format(new Date(value.length === 10 ? `${value}T12:00:00Z` : value));
+}
+
+function deadline(value: string) {
+  return `${new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(value))} UTC`;
 }
 
 function safeHostedInvoiceUrl(value: string | null) {
@@ -34,7 +39,7 @@ function safeHostedInvoiceUrl(value: string | null) {
 export default async function ResidencyPlatformBillingPage({ searchParams }: { searchParams: Promise<{ stripe?: string; card?: string; liveBilling?: string; annualSwitch?: string }> }) {
   if (!isCurrentPlatformBillingAvailable()) notFound();
   const actor = await requireResidencyActor();
-  if (!canResidencyRoleAccess(actor.accessRole, "settings")) redirect("/residency/calendar");
+  if (!canResidencyRoleAccess(actor.accessRole, "settings")) redirect("/residency/access-limited");
   const [billing, query] = await Promise.all([getResidencyPlatformBilling(actor.residencyId), searchParams]);
   const subscription = billing.subscription;
   const isLiveBilling = isResidencyLiveStripeMode(Boolean(subscription?.liveBillingApproved), {
@@ -59,7 +64,7 @@ export default async function ResidencyPlatformBillingPage({ searchParams }: { s
     {query.annualSwitch === "complete" ? <p className="success" role="status">Annual billing is active. Your prorated Stripe charge and new subscription invoice are shown below.</p> : null}
     {subscription ? <>
       {subscription.comped ? <section className="platform-comped-state active" role="status"><div><strong>Complimentary Platform plan</strong><span>Your Residency is permanently comped at $0. Its selected capacities still determine usage capacity.</span></div><span className="status active">COMPED</span></section> : null}
-      {subscription.paymentFailedAt ? <section className="platform-payment-failed-inline" role="alert"><strong>Payment failed</strong><span>{subscription.paymentFailureMessage || "Stripe could not collect the latest payment."} Your portal remains fully available.</span>{subscription.comped ? null : <PlatformBillingActionForm action={updateResidencyPlatformCardAction} label={cardActionLabel} pendingLabel="Opening card update…" />}</section> : null}
+      {subscription.paymentFailedAt ? <section className={`platform-payment-failed-inline ${subscription.accessRestrictedAt ? "restricted" : ""}`} role="alert"><strong>{subscription.accessRestrictedAt ? "Payment overdue — operational changes are restricted" : "Payment failed — 14-day grace period active"}</strong><span>{subscription.paymentFailureMessage || "Stripe could not collect the latest payment."} {subscription.accessRestrictedAt ? "Your data remains safe and visible. Pay the outstanding invoice to restore operational changes." : <>Full access continues through <strong>{subscription.paymentGraceEndsAt ? deadline(subscription.paymentGraceEndsAt) : "the grace deadline"}</strong>.</>}</span>{subscription.comped ? null : <PlatformBillingActionForm action={updateResidencyPlatformCardAction} label={cardActionLabel} pendingLabel="Opening card update…" />}</section> : null}
       <ResidencyMetricGrid className="platform-billing-summary">
         <ResidencySurfaceCard as="article"><small>Current plan</small><strong>{money(subscription.effectiveMonthlyAmountCents)} / month</strong><span>{subscription.term === "annual" ? `Annual · ${money(subscription.termChargeAmountCents)} paid upfront` : `Month-to-month · ${money(subscription.termChargeAmountCents)} per charge`}</span></ResidencySurfaceCard>
         {subscription.comped ? <ResidencySurfaceCard as="article"><small>Payment method</small><strong>Not required</strong><span>Permanent complimentary status</span></ResidencySurfaceCard> : <ResidencySurfaceCard as="article" className="platform-payment-method-card"><small>Card on file</small><strong>{subscription.cardLast4 ? `${subscription.cardBrand} •••• ${subscription.cardLast4}` : "No card on file"}</strong><span>Managed securely through Stripe</span><PlatformBillingActionForm action={subscription.stripeSubscriptionId ? updateResidencyPlatformCardAction : startResidencyPlatformCheckoutAction} label={cardActionLabel} pendingLabel={subscription.stripeSubscriptionId ? "Opening card update…" : "Starting Checkout…"} buttonClassName="button secondary" /></ResidencySurfaceCard>}
@@ -75,6 +80,7 @@ export default async function ResidencyPlatformBillingPage({ searchParams }: { s
             { key: "base", label: "Base monthly plan", value: money(subscription.baseMonthlyAmountCents) },
           ]} />
           {subscription.term === "month_to_month" && !subscription.comped && annualComparison ? <div className="platform-annual-switch offer"><div><strong>Save {money(annualComparison.annualSavingsAmountCents)} per year by paying annually</strong><span>Get 25% off with annual billing. Stripe calculates the exact immediate charge before you confirm.</span></div><AnnualSwitchConfirmation action={switchResidencyPlatformPlanToAnnualAction} previewAction={previewResidencyPlatformPlanAnnualSwitchAction} comparison={annualComparison} cardLabel={subscription.cardLast4 ? `${subscription.cardBrand} •••• ${subscription.cardLast4}` : null} isLiveBilling={isLiveBilling} /></div> : null}
+          {!subscription.comped && subscription.stripeSubscriptionId ? <PlanManagement current={subscription} pendingChange={subscription.pendingChangeKind === "none" ? null : { kind: subscription.pendingChangeKind, effectiveAt: subscription.pendingChangeEffectiveAt }} previewAction={previewResidencyPlanChangeAction} confirmAction={confirmResidencyPlanChangeAction} /> : null}
         </div>
         <div className="platform-live-usage-section">
           <div className="platform-comparison-heading"><div><p className="eyebrow">Live Usage · {billing.usagePeriod ? `${date(billing.usagePeriod.start)}–${date(billing.usagePeriod.end)}` : "current month"}</p><h2>{billing.comparison ? billing.comparison.withinPlan ? "Within plan" : `Over plan by ${billing.comparison.totalOverBy}` : "Calculating usage"}</h2></div></div>
@@ -82,7 +88,7 @@ export default async function ResidencyPlatformBillingPage({ searchParams }: { s
           <p className="privacy-note">Overages are logged for review. They do not create charges, change the plan, or restrict access.</p>
         </div>
       </ResidencySurfaceCard>
-      <ResidencySurfaceCard className="platform-invoice-history" id="invoice-history" variant="frosted"><ResidencySectionHeader eyebrow="Platform invoice history" title="Subscription invoices" />{billing.invoices.length ? <div className="table-wrap"><table><thead><tr><th>Invoice</th><th>Period</th><th>Amount</th><th>Paid</th><th>Status</th><th>Documents</th></tr></thead><tbody>{billing.invoices.map((invoice) => { const url = safeHostedInvoiceUrl(invoice.hostedInvoiceUrl); return <tr key={invoice.id}><td>{invoice.invoiceNumber || date(invoice.invoiceDate)}</td><td><span className="platform-invoice-period"><time dateTime={invoice.billingPeriodStart}>{date(invoice.billingPeriodStart)}</time><span className="platform-invoice-period-separator" aria-hidden="true">–</span><time dateTime={invoice.billingPeriodEnd}>{date(invoice.billingPeriodEnd)}</time></span></td><td>{money(invoice.amountDueCents)}</td><td>{money(invoice.amountPaidCents)}</td><td><span className={`status ${invoice.status}`}>{invoice.status}</span></td><td><div className="platform-invoice-links">{invoice.pdfStoragePath ? <Link className="button secondary" href={`/residency/settings/billing/invoices/${invoice.id}/pdf`}>Platform PDF</Link> : null}{url ? <a className="button secondary" href={url} target="_blank" rel="noreferrer">Stripe receipt</a> : null}{!invoice.pdfStoragePath && !url ? "—" : null}</div></td></tr>; })}</tbody></table></div> : <div className="empty">No Platform subscription invoices have been synced from Stripe yet.</div>}</ResidencySurfaceCard>
+      <ResidencySurfaceCard className="platform-invoice-history" id="invoice-history" variant="frosted"><ResidencySectionHeader eyebrow="Platform invoice history" title="Subscription invoices" />{billing.invoices.length ? <div className="table-wrap"><table><thead><tr><th>Invoice</th><th>Period</th><th>Amount</th><th>Paid</th><th>Status</th><th>Documents & payment</th></tr></thead><tbody>{billing.invoices.map((invoice) => { const url = safeHostedInvoiceUrl(invoice.hostedInvoiceUrl); const outstanding = invoice.status === "open" && invoice.amountDueCents > invoice.amountPaidCents; return <tr key={invoice.id}><td>{invoice.invoiceNumber || date(invoice.invoiceDate)}</td><td><span className="platform-invoice-period"><time dateTime={invoice.billingPeriodStart}>{date(invoice.billingPeriodStart)}</time><span className="platform-invoice-period-separator" aria-hidden="true">–</span><time dateTime={invoice.billingPeriodEnd}>{date(invoice.billingPeriodEnd)}</time></span></td><td>{money(invoice.amountDueCents)}</td><td>{money(invoice.amountPaidCents)}</td><td><span className={`status ${invoice.status}`}>{invoice.status}</span></td><td><div className="platform-invoice-links">{outstanding ? <InvoicePayNowForm invoiceId={invoice.id} action={payResidencyInvoiceNowAction} /> : null}{invoice.pdfStoragePath ? <Link className="button secondary" href={`/residency/settings/billing/invoices/${invoice.id}/pdf`}>Platform PDF</Link> : null}{url ? <a className="button secondary" href={url} target="_blank" rel="noreferrer">Stripe receipt</a> : null}{!outstanding && !invoice.pdfStoragePath && !url ? "—" : null}</div></td></tr>; })}</tbody></table></div> : <div className="empty">No Platform subscription invoices have been synced from Stripe yet.</div>}</ResidencySurfaceCard>
     </> : <section className="card empty platform-billing-empty"><h2>Platform billing is being finalized</h2><p>Your subscription record has not been connected to Stripe yet. HFY will add the plan, card, and next charge details here.</p></section>}
     </ResidencyPageBody>
   </ResidencyPageSurface>;
