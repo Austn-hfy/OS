@@ -132,6 +132,31 @@ describe("Residency Day Parts responsive visual contract", () => {
       expect(metrics.minimumDayWidth).toBeGreaterThanOrEqual(103);
       expect(metrics.scrollHintDisplay).toBe(metrics.localizedOverflow ? "flex" : "none");
 
+      if (metrics.localizedOverflow) {
+        const stickyMetrics = await page.evaluate(async () => {
+          const scroll = document.querySelector<HTMLElement>(".daypart-week-scroll")!;
+          const corner = document.querySelector<HTMLElement>(".daypart-week-corner")!;
+          const roomLabels = [...document.querySelectorAll<HTMLElement>(".daypart-room-label")];
+          const firstHeading = document.querySelector<HTMLElement>(".daypart-week-heading")!;
+          const scrollLeftEdge = scroll.getBoundingClientRect().left;
+          const headingBefore = firstHeading.getBoundingClientRect().left;
+          scroll.scrollLeft = Math.min(260, scroll.scrollWidth - scroll.clientWidth);
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          return {
+            scrollAmount: scroll.scrollLeft,
+            cornerOffset: Math.abs(corner.getBoundingClientRect().left - scrollLeftEdge),
+            largestRoomOffset: Math.max(...roomLabels.map((label) => Math.abs(label.getBoundingClientRect().left - scrollLeftEdge))),
+            headingTravel: headingBefore - firstHeading.getBoundingClientRect().left,
+            eventContentFits: [...document.querySelectorAll<HTMLElement>(".daypart-week-block")].every((block) => block.scrollHeight <= block.clientHeight),
+          };
+        });
+        expect(stickyMetrics.cornerOffset).toBeLessThanOrEqual(1);
+        expect(stickyMetrics.largestRoomOffset).toBeLessThanOrEqual(1);
+        expect(stickyMetrics.scrollAmount).toBeGreaterThan(0);
+        expect(stickyMetrics.headingTravel).toBeGreaterThanOrEqual(stickyMetrics.scrollAmount - 1);
+        expect(stickyMetrics.eventContentFits).toBe(true);
+      }
+
       if (process.env.WRITE_DAYPARTS_ARTIFACTS === "1" && [1440, 1020, 600, 390].includes(width)) {
         await writeFile(`/tmp/hfy-dayparts-${width}.png`, await page.screenshot({ fullPage: true, animations: "disabled" }));
       }

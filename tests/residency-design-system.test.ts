@@ -59,7 +59,7 @@ describe("Residency design system V1", () => {
     expect(tokens).toContain("--hfy-surface-card-radius: 16px;");
     expect(tokens).toContain("--hfy-collection-panel-scroll-ceiling: 680px;");
     expect(tokens).toContain("--hfy-dayparts-board-min-width: 840px;");
-    expect(docs).toContain("Version: 1.6");
+    expect(docs).toContain("Version: 1.7");
     expect(docs).toContain("## Compact Collection Panel");
     expect(docs).toContain("## Day Parts Implementation Profile");
     expect(docs).toContain("Changed this revision:");

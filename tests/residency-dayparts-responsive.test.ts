@@ -35,6 +35,7 @@ describe("Residency Day Parts responsive contract", () => {
       "--hfy-dayparts-day-track-min: 104px",
       "--hfy-dayparts-event-title-size: 11px",
       "--hfy-dayparts-event-meta-size: 10px",
+      "--hfy-dayparts-event-min-height: 42px",
       "--hfy-dayparts-editor-day-min-width: 124px",
     ]) expect(tokens).toContain(token);
 

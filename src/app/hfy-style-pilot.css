@@ -4115,6 +4115,7 @@
 .hfy-style-system .residency-dayparts-surface .daypart-week-board {
   min-width: var(--hfy-dayparts-board-min-width);
   grid-template-columns: var(--hfy-dayparts-room-track) repeat(7, minmax(var(--hfy-dayparts-day-track-min), 1fr));
+  overflow: clip;
 }
 
 .hfy-style-system .residency-dayparts-surface .daypart-week-row {
@@ -4125,11 +4126,16 @@
   position: sticky;
   left: 0;
   z-index: 4;
-  box-shadow: 1px 0 var(--hfy-line-strong);
+  box-shadow: 1px 0 0 var(--hfy-line-strong), 8px 0 18px rgba(48, 65, 78, 0.08);
 }
 
 .hfy-style-system .residency-dayparts-surface .daypart-week-corner {
   z-index: 5;
+  background: #d8e1e7;
+}
+
+.hfy-style-system .residency-dayparts-surface .daypart-room-label {
+  background: #e5ebef;
 }
 
 .hfy-style-system .residency-dayparts-surface .daypart-week-heading {
@@ -4149,6 +4155,11 @@
 .hfy-style-system .residency-dayparts-surface .daypart-week-block span {
   font-size: var(--hfy-dayparts-event-meta-size);
   line-height: 1.2;
+}
+
+.hfy-style-system .residency-dayparts-surface .daypart-week-block {
+  min-height: var(--hfy-dayparts-event-min-height);
+  padding-block: var(--hfy-space-1);
 }
 
 @container residency-dayparts-workspace (max-width: 840px) {

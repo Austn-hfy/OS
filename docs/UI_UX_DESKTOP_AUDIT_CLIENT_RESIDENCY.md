@@ -423,7 +423,7 @@ Resolution:
 
 Priority: P0
 Applies to: `/residency/dayparts`
-Status: **resolved with a contained responsive bridge**
+Status: **resolved with a contained responsive bridge; live-review correction verified**
 
 The original eight-track grid divided whatever width remained after the Residency sidebar between one room column and seven weekdays. At 1024px and below, day tracks, room labels, and time-positioned event blocks compressed until their text became truncated or unreadable. The manager then hid the overflow, so the missing content could not be reached.
 
@@ -431,9 +431,10 @@ Resolution:
 
 - The board now preserves an 840px readable working width: one 112px room track and seven weekday tracks of at least 104px.
 - When the Day Parts body is narrower than that floor, one named horizontal scroller contains the complete board instead of widening the document.
-- The room column remains sticky while scrolling, and a visible compact-width cue explains that all seven days remain available horizontally.
-- Weekday, room, event-title, and event-metadata sizes now come from semantic Day Parts tokens.
-- Continuous geometry coverage from 1440px through 390px confirms no document-level overflow, no header/action collision, and no day track below its readable floor.
+- The first staging pass declared the room column sticky but retained `overflow: hidden` on the inner board. Live review showed that this inner boundary prevented the sticky positioning from following the actual horizontal scroller.
+- The board now uses non-scrolling clipping, and the opaque room header plus every room label remain pinned to the scroller's left edge while only weekday tracks move. A visible compact-width cue explains that all seven days remain available horizontally.
+- Weekday, room, event-title, and event-metadata sizes now come from semantic Day Parts tokens. Short time-positioned events also use a `42px` tokenized minimum height so the title and time are not vertically clipped.
+- Continuous geometry coverage from 1440px through 390px confirms no document-level overflow, no header/action collision, and no day track below its readable floor. At every overflowing width, the test now performs a real horizontal scroll and measures the locked room track, weekday travel, and event-content containment.
 
 ### CR-018 — Day Parts bypasses the Residency page-family layer and header rules
 
@@ -448,7 +449,7 @@ Resolution:
 - Only the Residency route opts the shared manager into `ResidencyPageSurface`, `ResidencyPageHeader`, and `ResidencyPageBody`; the owner/programming Day Parts surface remains visually unchanged.
 - The route now follows the canvas → frosted page surface → opaque operational board layer sequence.
 - `Day Parts · Schedule setup` and the H1 use the page-family header grammar, and the create action uses the shared header action position.
-- Day Parts is documented as a page-specific operational profile in `docs/DESIGN_SYSTEM_V1.md` v1.6. Its spatial weekly board is not a Compact Collection Panel and was not forced into that unrelated shared component.
+- Day Parts is documented as a page-specific operational profile in `docs/DESIGN_SYSTEM_V1.md` v1.7. Its spatial weekly board is not a Compact Collection Panel and was not forced into that unrelated shared component.
 
 ### CR-019 — Day Parts editors and popovers have undefined intermediate states
 
