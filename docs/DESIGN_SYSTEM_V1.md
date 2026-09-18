@@ -1,8 +1,8 @@
 # HFY OS Design System V1
 
-Version: 1.7
+Version: 1.8
 Last updated: September 17, 2026
-Changed this revision: Corrected the Day Parts compact-board contract so the room track remains measurably pinned during horizontal scrolling and short event blocks retain a readable title-and-time floor.
+Changed this revision: Corrected the Day Parts overlay boundary so Daypart and room editors mount at the document layer, remain anchored to the viewport, and keep their action footers visible independently of the frosted page surface.
 
 This document turns the approved client Settings benchmark into reusable implementation rules. It complements `docs/BRAND_GUIDELINES.md`: the brand guide defines the visual identity, while this document defines the page-level components and tokens that enforce it in HFY OS.
 
@@ -156,13 +156,13 @@ The Compact Collection Panel does not apply. Day Parts is a spatial schedule by 
 | Board readable floor | The complete board has an `840px` minimum working width: a `112px` room track plus seven day tracks of at least `104px`. | `--hfy-dayparts-board-min-width`, `--hfy-dayparts-room-track`, `--hfy-dayparts-day-track-min` |
 | Compact board | When the page body is narrower than the board floor, the board becomes one contained horizontal scroller. The opaque room header and every room label remain pinned to its left edge while only weekday tracks move; the board itself must not establish a competing scroll boundary. A visible scroll cue appears, and the document itself must not widen. | Named `residency-dayparts-workspace` container |
 | Board type | Weekday labels are `10px`, room names are `12px`, event titles are `11px`, and event metadata is `10px`. A time-positioned event keeps a `42px` visual floor so one title line and one time line are never vertically clipped. | `--hfy-dayparts-weekday-size`, `--hfy-dayparts-room-size`, `--hfy-dayparts-event-title-size`, `--hfy-dayparts-event-meta-size`, `--hfy-dayparts-event-min-height` |
-| Daypart editor | Maximum width is `1120px` with a fixed header, one vertically scrolling body, and a contained footer. The editor responds to its own width at `900px`, `640px`, and `520px`; these are Day Parts-only thresholds. | Named `residency-daypart-editor` container, `--hfy-dayparts-drawer-max-width` |
+| Daypart editor | Mount at the document overlay layer rather than inside the filtered page surface. Maximum width is `1120px` with a viewport-anchored backdrop, fixed header, one vertically scrolling body, and an always-visible contained footer. The editor responds to its own width at `900px`, `640px`, and `520px`; these are Day Parts-only thresholds. | Document-level portal, named `residency-daypart-editor` container, `--hfy-dayparts-drawer-max-width` |
 | Weekly-hours editor | Wide state shows seven readable day tracks. Intermediate state keeps those tracks in one contained horizontal scroller. At `520px` of editor width, the seven day controls form one vertical stack. | Named `residency-daypart-editor` container, `--hfy-dayparts-editor-day-min-width` |
 | Form controls | Two-choice and settings groups stack at `640px` of editor width. Supporting form copy uses a `10px` minimum. | `--hfy-dayparts-editor-supporting-size` |
-| Room editor | Uses one scrolling body and one contained action footer. At narrow width, color choices use two even columns and the danger action stacks below its warning copy. | Named `residency-room-editor` container |
+| Room editor | Mount at the document overlay layer and use a viewport-anchored backdrop, one scrolling body, and one always-visible contained action footer. At narrow width, color choices use two even columns and the danger action stacks below its warning copy. | Document-level portal, named `residency-room-editor` container |
 | Saved-template popover | Remains viewport-constrained. At a narrow popover width, template metadata moves below the template name rather than forcing horizontal overflow. | Named `residency-room-template-popover` container |
 | Focus | Daypart and room dialogs move focus inside, trap Tab/Shift+Tab, close on Escape, and restore focus to the initiating control. More Actions supports menu focus and arrow-key movement. Saved-template popovers close on outside interaction, scroll/resize, or Escape. | Cross-cutting keyboard and focus principle |
-| Coverage | The closed page is checked continuously from `1440px` through `390px`. At every overflowing width, the test scrolls the board and confirms the room track stays pinned, weekdays move by the scroll distance, and event content fits its block. Representative Daypart editor states are checked at `1440px`, `1024px`, `760px`, `600px`, and `390px`; the room editor and saved-template popover receive narrow-width containment checks. | Day Parts visual contracts |
+| Coverage | The closed page is checked continuously from `1440px` through `390px`. At every overflowing width, the test scrolls the board and confirms the room track stays pinned, weekdays move by the scroll distance, and event content fits its block. Representative Daypart editor states are checked at `1440px`, `1024px`, `760px`, `600px`, and `390px`; tests confirm the backdrop and editor fill the viewport and the action footer remains visible. The room editor and saved-template popover receive narrow-width containment checks. | Day Parts visual contracts |
 
 ## Adoption status
 

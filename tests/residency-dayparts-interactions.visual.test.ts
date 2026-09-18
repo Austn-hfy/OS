@@ -63,6 +63,7 @@ describe("Residency Day Parts overlay visual contract", () => {
       const metrics = await page.evaluate(() => {
         const element = (selector: string) => document.querySelector<HTMLElement>(selector)!;
         const box = (selector: string) => element(selector).getBoundingClientRect();
+        const backdrop = box(".residency-daypart-drawer-backdrop");
         const drawer = box(".residency-daypart-drawer");
         const footer = box(".daypart-editor-actions");
         const menu = box(".daypart-editor-more-menu");
@@ -73,9 +74,12 @@ describe("Residency Day Parts overlay visual contract", () => {
         const rateAction = box(".daypart-setting-tile.rate > em");
         return {
           documentContained: document.documentElement.scrollWidth === document.documentElement.clientWidth,
+          backdropViewportAnchored: Math.abs(backdrop.top) < 1 && Math.abs(backdrop.bottom - innerHeight) < 1,
           drawerContained: drawer.left >= -0.5 && drawer.right <= innerWidth + 0.5,
+          drawerViewportAnchored: Math.abs(drawer.top) < 1 && Math.abs(drawer.bottom - innerHeight) < 1,
           bodyContained: element(".daypart-editor-scroll").scrollWidth === element(".daypart-editor-scroll").clientWidth,
           footerContained: footer.left >= drawer.left && footer.right <= drawer.right + 0.5,
+          footerVisible: footer.top >= -0.5 && footer.bottom <= innerHeight + 0.5,
           menuContained: menu.left >= drawer.left && menu.right <= drawer.right + 0.5 && menu.top >= -0.5,
           optionsStacked: Math.abs(options[0].left - options[1].left) < 1 && options[1].top >= options[0].bottom,
           weekGridOverflow: weekGrid.scrollWidth > weekGrid.clientWidth,
@@ -84,9 +88,12 @@ describe("Residency Day Parts overlay visual contract", () => {
         };
       });
       expect(metrics.documentContained).toBe(true);
+      expect(metrics.backdropViewportAnchored).toBe(true);
       expect(metrics.drawerContained).toBe(true);
+      expect(metrics.drawerViewportAnchored).toBe(true);
       expect(metrics.bodyContained).toBe(true);
       expect(metrics.footerContained).toBe(true);
+      expect(metrics.footerVisible).toBe(true);
       expect(metrics.menuContained).toBe(true);
       expect(metrics.optionsStacked).toBe(width <= 600);
       expect(metrics.weekGridOverflow).toBe([760, 600].includes(width));
@@ -102,15 +109,20 @@ describe("Residency Day Parts overlay visual contract", () => {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.setContent(await fixtureDocument(roomEditorMarkup()), { waitUntil: "load" });
     const roomMetrics = await page.evaluate(() => {
+      const backdrop = document.querySelector<HTMLElement>(".residency-room-editor-backdrop")!;
       const panel = document.querySelector<HTMLElement>(".residency-room-editor-panel")!;
+      const footer = document.querySelector<HTMLElement>(".room-editor-actions")!;
       const hueButtons = [...document.querySelectorAll<HTMLElement>(".room-hue-picker button")];
       return {
+        backdropViewportAnchored: Math.abs(backdrop.getBoundingClientRect().top) < 1 && Math.abs(backdrop.getBoundingClientRect().bottom - innerHeight) < 1,
         panelContained: panel.getBoundingClientRect().left >= -0.5 && panel.getBoundingClientRect().right <= innerWidth + 0.5,
+        panelViewportAnchored: Math.abs(panel.getBoundingClientRect().top) < 1 && Math.abs(panel.getBoundingClientRect().bottom - innerHeight) < 1,
         bodyContained: panel.scrollWidth === panel.clientWidth,
+        footerVisible: footer.getBoundingClientRect().top >= -0.5 && footer.getBoundingClientRect().bottom <= innerHeight + 0.5,
         hueColumns: new Set(hueButtons.map((button) => Math.round(button.getBoundingClientRect().left))).size,
       };
     });
-    expect(roomMetrics).toEqual({ panelContained: true, bodyContained: true, hueColumns: 2 });
+    expect(roomMetrics).toEqual({ backdropViewportAnchored: true, panelContained: true, panelViewportAnchored: true, bodyContained: true, footerVisible: true, hueColumns: 2 });
     if (process.env.WRITE_DAYPARTS_ARTIFACTS === "1") await writeFile("/tmp/hfy-dayparts-room-editor-390.png", await page.screenshot({ fullPage: true, animations: "disabled" }));
 
     await page.setContent(await fixtureDocument(popoverMarkup()), { waitUntil: "load" });

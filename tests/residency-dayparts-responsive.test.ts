@@ -43,6 +43,8 @@ describe("Residency Day Parts responsive contract", () => {
     expect(manager).toContain("draftDialogRef");
     expect(manager).toContain("roomDialogRef");
     expect(manager).toContain("focusableElements");
+    expect(manager).toContain("roomDraft ? createPortal");
+    expect(manager).toContain("draft ? createPortal");
     expect(manager).toContain("editorActionsTriggerRef.current?.focus()");
     expect(manager).toContain("handleEditorMenuKeyDown");
     expect(manager).not.toContain("}, [draft, editorActionsOpen]);");

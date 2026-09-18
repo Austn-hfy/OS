@@ -449,13 +449,13 @@ Resolution:
 - Only the Residency route opts the shared manager into `ResidencyPageSurface`, `ResidencyPageHeader`, and `ResidencyPageBody`; the owner/programming Day Parts surface remains visually unchanged.
 - The route now follows the canvas → frosted page surface → opaque operational board layer sequence.
 - `Day Parts · Schedule setup` and the H1 use the page-family header grammar, and the create action uses the shared header action position.
-- Day Parts is documented as a page-specific operational profile in `docs/DESIGN_SYSTEM_V1.md` v1.7. Its spatial weekly board is not a Compact Collection Panel and was not forced into that unrelated shared component.
+- Day Parts is documented as a page-specific operational profile in `docs/DESIGN_SYSTEM_V1.md` v1.8. Its spatial weekly board is not a Compact Collection Panel and was not forced into that unrelated shared component.
 
 ### CR-019 — Day Parts editors and popovers have undefined intermediate states
 
 Priority: P1
 Applies to: `/residency/dayparts`
-Status: **resolved**
+Status: **resolved; live staging overlay-boundary correction verified**
 
 The Daypart drawer depended mainly on browser-width media queries even though its available width differs from the viewport. At intermediate widths the seven weekly rule cards could widen the entire form, while two-column choice groups, setting tiles, footer actions, and the room editor did not have one coordinated compact contract. Dialog focus entered and exited inconsistently, and repeated draft updates could preserve the page's locked body-scroll state after closing.
 
@@ -466,7 +466,9 @@ Resolution:
 - Compact footer actions occupy complete rows; More Actions remains contained and supports menu focus plus Arrow Up/Down, Home, and End navigation.
 - The room editor uses a two-column compact hue grid, a stacked danger action, and an even contained action footer. The saved-template popover stacks its metadata when its own width becomes narrow.
 - Daypart and room dialogs now move focus inside, trap Tab/Shift+Tab, close on Escape, restore focus to their initiating control, and release body-scroll locking reliably after edits.
-- Visual and containment checks cover the Daypart editor at 1440px, 1024px, 760px, 600px, and 390px plus the room editor and saved-template popover at narrow width.
+- Live staging review showed that rendering the fixed editors inside the frosted page surface made that filtered surface their positioning boundary. The editor started below the View-as banner, extended beyond the viewport, and hid its action footer.
+- The Daypart and room editors now mount through document-level portals, so their backdrops and panels are anchored to the viewport independently of the page surface.
+- Visual and containment checks cover the Daypart editor at 1440px, 1024px, 760px, 600px, and 390px plus the room editor and saved-template popover at narrow width. They now also measure the viewport boundary and footer visibility.
 
 Intentionally unchanged:
 
