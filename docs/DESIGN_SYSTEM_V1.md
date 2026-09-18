@@ -1,8 +1,8 @@
 # HFY OS Design System V1
 
-Version: 1.8
+Version: 1.9
 Last updated: September 17, 2026
-Changed this revision: Corrected the Day Parts overlay boundary so Daypart and room editors mount at the document layer, remain anchored to the viewport, and keep their action footers visible independently of the frosted page surface.
+Changed this revision: Added the reusable Surface Disclosure pattern, including native disclosure behavior, shared Surface composition, supporting-copy scale, and a visible rotating affordance.
 
 This document turns the approved client Settings benchmark into reusable implementation rules. It complements `docs/BRAND_GUIDELINES.md`: the brand guide defines the visual identity, while this document defines the page-level components and tokens that enforce it in HFY OS.
 
@@ -28,6 +28,7 @@ Primary section content must not sit directly on the frosted page surface. A fro
 | Section header | `ResidencySectionHeader` | Provides eyebrow, H2, supporting copy, and an optional right-side badge/action. |
 | Metric grid | `ResidencyMetricGrid` | Groups primary summary cards and owns their equal-column responsive behavior. |
 | Fact grid | `ResidencyFactGrid` | Renders label/value facts using the locked 4 → 2 × 2 → 1 responsive sequence. |
+| Surface disclosure | `ResidencyDisclosureCard` | Nests a native disclosure inside the shared white Surface card with standard edge clipping, internal padding, and an open/closed affordance. |
 | Compact collection panel | `ResidencyCollectionPanel` family | Provides the locked searchable/filterable collection anatomy, density, alignment, scrolling, and row states defined below. |
 
 The components live in `src/components/residency-design-system.tsx`. They remain server-compatible and add no client-side JavaScript by themselves.
@@ -46,8 +47,34 @@ The authoritative values live in `src/app/hfy-design-tokens.css`:
 | `--hfy-surface-card-shadow` | `0 8px 24px rgba(26, 55, 84, 0.06)` | Standard low-contrast Surface elevation |
 | `--hfy-section-title-size` | `22px` | Section H2 scale |
 | `--hfy-supporting-copy-size` | `12px` | Standard secondary copy scale |
+| `--hfy-disclosure-padding-block` | `20px` | Surface Disclosure summary block padding |
+| `--hfy-disclosure-padding-inline` | `22px` | Surface Disclosure summary/body inline padding |
+| `--hfy-disclosure-affordance-size` | `26px` | Surface Disclosure chevron control size |
 
 Use these tokens through the shared classes and components. Route-specific CSS may define layout unique to its content but must not redefine a shared token locally.
+
+## Surface Disclosure
+
+Use `ResidencyDisclosureCard` for a content section that users can expand or collapse. It is the standard disclosure/accordion composition for the Residency page family; future pages must reuse it instead of placing a one-off accordion class directly on a generic card.
+
+### Anatomy
+
+1. `ResidencySurfaceCard` supplies the opaque white layer-three background, border, radius, and shadow.
+2. A native `<details>` element remains the disclosure owner so keyboard and open/closed semantics do not require client-side JavaScript.
+3. Its `<summary>` contains the consumer-supplied summary content and the shared `⌄` affordance.
+4. `residency-disclosure-body` contains the revealed supporting copy and section content.
+
+### Locked contract
+
+| Role | Locked value or rule | Authority |
+| --- | --- | --- |
+| Surface composition | The native `<details>` is nested inside `ResidencySurfaceCard`; do not apply disclosure behavior directly to a generic legacy card. | `ResidencyDisclosureCard` |
+| Card boundary | The Surface card uses zero outer content padding and clips its rounded edge. The summary and body own their internal padding so divider and interaction states remain inside the radius. | Shared component classes |
+| Summary padding | `20px` block and `22px` inline | `--hfy-disclosure-padding-block`, `--hfy-disclosure-padding-inline` |
+| Body copy | Direct supporting paragraphs use the locked `12px` supporting-copy scale and shared muted color. | `--hfy-supporting-copy-size`, `--hfy-muted` |
+| Affordance | A visible `26px` circular `⌄` uses shared action ink, action-soft background, and line color; it rotates `180deg` while the disclosure is open. The native browser marker is hidden only when this replacement is present. | `--hfy-disclosure-affordance-size`, `--hfy-action-ink`, `--hfy-action-soft`, `--hfy-line` |
+| Motion and focus | Rotation uses the shared motion token. Keyboard focus remains visible on the native summary with the shared focus-ring color. | `--hfy-motion`, `--hfy-focus-ring` |
+| Consumer content | Summary labels, totals, tables, and other domain content remain consumer-owned; the shared pattern must not prescribe page-specific financial or operational layout. | Component contract |
 
 ## Compact Collection Panel
 
@@ -172,4 +199,5 @@ The Compact Collection Panel does not apply. Day Parts is a spatial schedule by 
 - Residency Talent: adopted. The route uses the shared page surface, header, body, Surface cards, section header, fact grid, and Compact Collection Panel family. `TalentWorkspaceShell` remains the domain-specific master/detail composition; the searchable roster is no longer page-specific.
 - Residency Calendar: page-specific implementation profile adopted. It reuses core tokens and cross-cutting interaction principles, but its numeric breakpoints, seven-day grid, command bar, Batch/Share structures, and Schedule Daypart anatomy remain Calendar-local rather than shared system components. Mobile remains deferred.
 - Residency Day Parts: page-specific implementation profile adopted. It uses the shared Residency page surface/header/body and core tokens while keeping its weekly operational grid and editors route-specific. The Compact Collection Panel is intentionally not used.
+- Residency Finances: adopted. Its two ledgers use the shared page surface/body, `ResidencyDisclosureCard`, contained financial-table regions, and the viewport-safe rate dialog. Header-language normalization remains assigned to the future cross-route copy pass.
 - Other Residency pages: not yet migrated and require separate review.

@@ -49,6 +49,28 @@ export function ResidencySurfaceCard({
   return <Component className={classes("card", "residency-surface-card", `residency-surface-card--${variant}`, className)} id={id}>{children}</Component>;
 }
 
+export function ResidencyDisclosureCard({
+  summary,
+  children,
+  className = "",
+  initiallyOpen = false,
+}: {
+  summary: ReactNode;
+  children: ReactNode;
+  className?: string;
+  initiallyOpen?: boolean;
+}) {
+  return <ResidencySurfaceCard className={classes("residency-disclosure-card", className)}>
+    <details className="residency-disclosure" open={initiallyOpen}>
+      <summary>
+        <span className="residency-disclosure-summary-content">{summary}</span>
+        <span className="residency-disclosure-chevron" aria-hidden="true">⌄</span>
+      </summary>
+      <div className="residency-disclosure-body">{children}</div>
+    </details>
+  </ResidencySurfaceCard>;
+}
+
 export function ResidencyCollectionPanel({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <ResidencySurfaceCard className={classes("residency-collection-panel", className)}>{children}</ResidencySurfaceCard>;
 }

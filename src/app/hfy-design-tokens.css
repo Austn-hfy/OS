@@ -51,6 +51,11 @@
   --hfy-section-title-size: 22px;
   --hfy-supporting-copy-size: 12px;
 
+  /* Surface Disclosure */
+  --hfy-disclosure-padding-block: var(--hfy-surface-card-padding);
+  --hfy-disclosure-padding-inline: 22px;
+  --hfy-disclosure-affordance-size: 26px;
+
   /* Compact Collection Panel */
   --hfy-collection-panel-scroll-ceiling: 680px;
   --hfy-collection-panel-scroll-ceiling-compact: 440px;

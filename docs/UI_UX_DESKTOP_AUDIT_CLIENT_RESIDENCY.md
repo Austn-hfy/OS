@@ -1,6 +1,6 @@
 # HFY OS desktop UI/UX audit — Client Residency
 
-Status: Settings desktop benchmark complete; Overview, Talent, Calendar, and Day Parts adopted; broader client audit remains active
+Status: Settings desktop benchmark complete; Overview, Talent, Calendar, Day Parts, and the Finances responsive, rate-dialog, layer-structure, and disclosure/type passes adopted; cross-route header language and the broader client audit remain active
 Date: September 17, 2026
 Scope: the client-facing Residency workspace reached through **View as Residency**
 Reference screen: **Settings → Billing**
@@ -21,7 +21,7 @@ The following manager-facing routes were reviewed during the initial audit:
 | Calendar | `/residency/calendar` | Purpose-built operational surface |
 | Day Parts | `/residency/dayparts` | Shared Residency page frame with a purpose-built operational weekly grid |
 | Talent | `/residency/talent` | Shared workspace surface with roster/detail split |
-| Finances | `/residency/finances` | Shared workspace surface with two accordions |
+| Finances | `/residency/finances` | Shared Residency page surface with two financial disclosure tables |
 | Account | `/residency/settings` | Shared Settings surface with tabs and account form |
 | Billing | `/residency/settings/billing` | Shared Settings surface with plan, usage, and invoices |
 
@@ -53,7 +53,7 @@ The final Settings pass deliberately did not begin the future shared-component o
 
 Priority: P0
 Applies to: every Residency page while viewed from Developer mode
-Reviewed-route status: **resolved for Account, Billing, Overview, Talent, Calendar, and Day Parts**
+Reviewed-route status: **resolved for Account, Billing, Overview, Talent, Calendar, Day Parts, and Finances**
 Broader status: open for the other Residency routes
 
 At viewport widths at or below 1200px, `.main` switches to a smaller horizontal gutter while `.view-as-banner` retained the negative margin calculated from the wider gutter.
@@ -109,6 +109,11 @@ Resolution for Day Parts:
 
 - Residency Day Parts now identifies itself as a `ResidencyPageSurface`, so the View-as banner uses the active compact-desktop gutter.
 - The weekly board owns its compact-width overflow; the page document stays width-contained from 1440px through 390px.
+
+Resolution for Finances:
+
+- Finances now identifies itself as a `ResidencyPageSurface` and places its two disclosures inside `ResidencyPageBody`, so the compact View-as banner uses the active main gutter without route-local geometry.
+- Both financial tables own any width beyond their readable table floor inside keyboard-focusable horizontal regions; neither table can widen the disclosure, page surface, or document.
 
 ### CR-002A — Talent post-adoption control alignment
 
@@ -200,6 +205,8 @@ Talent remains open under this copy-specific item. Its existing eyebrow text was
 Calendar now uses `{Residency name} · Calendar` as its route-family eyebrow while retaining `Calendar` as the task-level H1. The shared owner/programming Calendar keeps its existing wording because this pass is Residency-only.
 
 Day Parts now uses `DAY PARTS · SCHEDULE SETUP` above `Weekly Daypart grid`. The owner/programming Day Parts heading remains unchanged because the shared manager opts into this page-family copy only on the Residency route.
+
+Finances remains open under this cross-route copy item. Its existing `{Residency name} finances` eyebrow was intentionally preserved in the Finances-only cleanup rather than establishing another route-local grammar before the dedicated header-language pass.
 
 ### CR-006A — Calendar command bar and Week view break at compact desktop widths
 
@@ -338,6 +345,10 @@ Resolution for Day Parts:
 - Weekly-board labels, room names, event titles, and event metadata now use semantic Day Parts tokens with a 10px normal-text floor.
 - Editor supporting copy and weekly field labels use the route's 10px supporting token instead of 8–9px one-off values.
 
+Resolution for Finances:
+
+- Disclosure supporting paragraphs now use the locked `--hfy-supporting-copy-size` token at 12px instead of inheriting 16px body copy.
+
 ### CR-011 — Universal surface clipping hides layout mistakes
 
 Priority: P2
@@ -474,6 +485,100 @@ Intentionally unchanged:
 
 - Daypart data, time calculations, room behavior, templates, rates, save/delete behavior, and Calendar projection logic.
 - The weekly board and editor remain a Day Parts-specific implementation profile rather than a new reusable component family.
+
+### CR-020 — Finances disclosures and tables escape the page surface at compact widths
+
+Priority: P0
+Applies to: populated `/residency/finances`
+Status: **resolved in the Finances P0 responsive pass**
+
+The route used a generic `WorkspaceSurface`, so it was not included in the shared compact View-as gutter correction. Its financial tables inherited the global `720px` minimum width, while grid items and disclosure bodies retained their automatic minimum size. The outer workspace then hid the resulting overflow instead of assigning it to the table region.
+
+Previously measured:
+
+- At 1024px, the first disclosure summary extended about 61px beyond the page surface and its table about 39px beyond it.
+- At 900px, those overages grew to about 174px and 152px.
+- At 601px, live sandbox measurement showed each disclosure at 766px and both table wrappers at 722px inside a 561px page surface.
+- Below the 850px shell transition, totals, supporting copy, columns, and rate actions resumed clipping because the tables continued to determine their ancestors' width.
+
+Resolution:
+
+- The route now uses `ResidencyPageSurface` and `ResidencyPageBody`; the shared compact View-as banner rule applies automatically.
+- Every disclosure, disclosure body, and table region explicitly permits its grid track to shrink with `min-width: 0`.
+- Direct-talent and HFY-invoice tables now have separate, keyboard-focusable contained scroll regions with inline overscroll containment. Their readable table floors never widen the page.
+- At compact widths, both tables reuse Billing invoice-history's fixed-layout, reduced-padding, proportional-column treatment. The HFY service period stacks its start and end dates before the row becomes cramped; document and rate actions wrap within their assigned cells.
+- Route-local styling removes the generic workspace's forced overflow hiding so real layout errors are not silently cropped, while each disclosure continues to clip its own rounded boundary.
+- The HFY Internal Test Residency was used throughout. Its existing `HFYTEST-0001` draft was approved through the normal HFY invoice workflow, producing a real $1,500 client-visible invoice and PDF so both financial tables were populated during verification.
+- Automated geometry coverage samples every 17px from 1512px through 390px and checks 851px, 850px, and 849px explicitly. It verifies document, banner, surface, disclosure, supporting-copy, table-region, and rate-action containment at every width.
+
+Intentionally unchanged in this pass:
+
+- The rate dialog, disclosure-card/layer treatment, typography cleanup, and header language remain assigned to later Finances passes.
+- Financial data, totals, permissions, invoice download behavior, and direct-talent rate behavior were not changed.
+
+### CR-021 — Finances rate editor is anchored to the page surface instead of the viewport
+
+Priority: P1
+Applies to: `/residency/finances` → Directly sourced by your team → Edit rate
+Status: **resolved in the Finances rate-dialog pass**
+
+The shared rate editor rendered inside the filtered Residency page surface. Its fixed backdrop therefore began below the View-as banner and to the right of the sidebar instead of covering the browser viewport. At compact widths, the four booking facts and two-column rate editor inherited browser-width decisions rather than reacting to the dialog's usable width. Focus stayed on the obscured table trigger after opening, and the dialog did not trap keyboard focus or restore it through its own lifecycle.
+
+Resolution:
+
+- Only the Finances invocation now mounts through a document-level portal; Talent's approved use of the shared dialog remains unchanged.
+- The backdrop and dialog are anchored to the full viewport with shared desktop and compact overlay insets and a viewport-safe maximum height.
+- The dialog is a named inline-size container. Booking facts reflow from four columns to two, the rate summary and form stack, and the Save action takes a complete row before any control can clip.
+- The dialog body owns any necessary vertical scrolling and every nested rate-control layer explicitly permits width contraction.
+- Opening moves focus to the hourly-rate field, Tab and Shift+Tab remain within the dialog, Escape closes when no save is pending, body scrolling is released on close, and focus returns to the exact Edit rate trigger.
+- Geometry coverage verifies viewport anchoring, dialog and control containment, and the defined reflow states at 1440px, 1200px, 1024px, 760px, 600px, and 390px.
+- The real signed-in Ace Hotel Finances page supplied an existing unresolved-rate row for before-state verification without editing or submitting financial data.
+
+Intentionally unchanged:
+
+- Rate calculation, save behavior, permissions, row data, table layout, and all copy.
+- The disclosure-card/layer treatment, typography cleanup, and header language remain assigned to later Finances passes.
+
+### CR-022 — Finances disclosures do not explicitly consume the locked white Surface-card layer
+
+Priority: P1
+Applies to: `/residency/finances`
+Status: **resolved in the Finances layer-structure pass**
+
+Finances already used the shared frosted page surface, but each ledger disclosure relied on the generic legacy `card` class directly. That made the visual result dependent on broad card styling instead of explicitly enforcing the locked canvas → frosted page surface → opaque white Surface-card sequence.
+
+Resolution:
+
+- Owed to Your Talent and Owed to HFY now each use the shared `ResidencySurfaceCard` white variant as their layer-three boundary.
+- The native `details` disclosure remains nested inside that Surface card, preserving its open/collapse behavior without introducing a Finances-specific component.
+- The shared Surface component now owns the white background, border, radius, and shadow. Finances CSS is limited to the disclosure's route-specific zero-padding and clipped-boundary composition.
+- Continuous Finances geometry coverage still runs from 1512px through 390px and now additionally verifies that both disclosures are contained white Surface cards using the locked radius and elevation.
+
+Intentionally unchanged:
+
+- Disclosure behavior, summary copy, totals, status language, table layout, rate actions, invoice downloads, financial data, and permissions.
+- Typography and disclosure affordance cleanup are resolved in CR-023. Header language remains assigned to the future cross-route copy pass under CR-006.
+
+### CR-023 — Finances disclosure type and open/closed state lack the shared hierarchy
+
+Priority: P1
+Applies to: `/residency/finances`
+Status: **resolved in the final Finances cleanup pass**
+
+The two ledger descriptions inherited 16px body copy instead of the locked supporting scale. Their native disclosure markers were hidden without a replacement, so users had no visible open/closed indicator. The Surface/disclosure composition also existed only as Finances-specific CSS and an audit note rather than a reusable design-system pattern.
+
+Resolution:
+
+- Direct supporting paragraphs now use the locked 12px `--hfy-supporting-copy-size` token and shared muted color.
+- Both summaries display the existing system `⌄` affordance in the shared action colors. It rotates 180 degrees in the native `<details open>` state and retains a visible keyboard focus treatment.
+- `ResidencyDisclosureCard` now formalizes the reusable native-details-inside-Surface composition. The shared component owns the zero-padding Surface boundary, rounded-edge clipping, summary/body padding, replacement affordance, and focus state; Finances owns only its summary labels/totals and ledger contents.
+- `docs/DESIGN_SYSTEM_V1.md` v1.9 names and locks the **Surface Disclosure** pattern so future accordions reuse it rather than rebuilding Finances CSS.
+- Automated checks cover native disclosure markup, token usage, 12px computed supporting copy, chevron state changes, and the existing continuous 1512px-to-390px containment contract.
+
+Intentionally unchanged:
+
+- Financial content, totals, tables, statuses, rate actions, invoice downloads, permissions, and the approved Surface-card/rate-dialog behavior.
+- The `{Residency name} finances` eyebrow remains open under CR-006 for a dedicated cross-route header-language pass.
 
 ## Settings benchmark decisions
 
