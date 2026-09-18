@@ -59,16 +59,6 @@ const populatedOverview: ResidencyClientOverview = {
     overdueInvoiceCount: 2,
     overdueInvoiceCents: 145_000,
   },
-  talent: {
-    activeRosterCount: 18,
-    upcomingTalentCount: 4,
-    pendingConfirmationCount: 1,
-    upcomingBookings: [
-      { id: "booking-1", talentId: "talent-1", talentName: "Casey Rivera", ownership: "hfy", activityName: "Late Night", room: "Lobby", serviceDate: "2026-09-19", bookingStatus: "pending" },
-      { id: "booking-2", talentId: "talent-2", talentName: "Maya James", ownership: "residency", activityName: "Sunday Dinner", room: "Restaurant", serviceDate: "2026-09-20", bookingStatus: "confirmed" },
-      { id: "booking-3", talentId: null, talentName: "Leo Santos", ownership: "hfy", activityName: "Lobby Set", room: "Lobby", serviceDate: "2026-09-21", bookingStatus: "confirmed" },
-    ],
-  },
   finances: {
     currentMonthCommitmentsCents: 1_284_000,
     owedToResidencyTalentCents: 226_000,
@@ -99,12 +89,13 @@ describe("Residency Overview availability", () => {
     expect(html).toContain("1 talent confirmation is pending");
     expect(html).toContain("2 talent invoices are overdue");
     expect(html).toContain("Casey Rivera");
-    expect(html).toContain("Maya James");
+    expect(html).not.toContain("Upcoming roster");
+    expect(html).not.toContain("Maya James");
     expect(html).toContain("$12,840");
     expect(html).toContain("$2,260");
     expect(html).toContain("$1,450");
     expect(html).toContain('href="/residency/calendar"');
-    expect(html).toContain('href="/residency/talent?artist=talent-1"');
+    expect(html).toContain('href="/residency/talent"');
     expect(html).toContain('href="/residency/finances"');
     expect(getResidencyClientOverview).toHaveBeenCalledWith("residency-1", "America/Los_Angeles");
     expect(isCurrentPlatformBillingAvailable).not.toHaveBeenCalled();
@@ -126,12 +117,6 @@ describe("Residency Overview availability", () => {
         overdueInvoiceCount: 0,
         overdueInvoiceCents: 0,
       },
-      talent: {
-        activeRosterCount: 0,
-        upcomingTalentCount: 0,
-        pendingConfirmationCount: 0,
-        upcomingBookings: [],
-      },
       finances: {
         currentMonthCommitmentsCents: 0,
         owedToResidencyTalentCents: 0,
@@ -146,7 +131,7 @@ describe("Residency Overview availability", () => {
     expect(html).toContain("Your operational work is clear right now.");
     expect(html).toContain("All clear");
     expect(html).toContain("No open scheduling gaps, pending confirmations, or overdue talent invoices need attention.");
-    expect(html).toContain("No upcoming talent bookings are scheduled.");
+    expect(html).not.toContain("Upcoming roster");
     expect(html.match(/>No program</g)).toHaveLength(7);
     expect(isCurrentPlatformBillingAvailable).not.toHaveBeenCalled();
     expect(getResidencyPlatformBilling).not.toHaveBeenCalled();

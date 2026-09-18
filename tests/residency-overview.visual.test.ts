@@ -59,16 +59,6 @@ const populatedOverview: ResidencyClientOverview = {
     overdueInvoiceCount: 2,
     overdueInvoiceCents: 145_000,
   },
-  talent: {
-    activeRosterCount: 128,
-    upcomingTalentCount: 47,
-    pendingConfirmationCount: 1,
-    upcomingBookings: [
-      { id: "booking-1", talentId: "talent-1", talentName: "Casey Rivera-Montgomery-Worthington", ownership: "hfy", activityName: "Late Night Lobby Performance and Listening Session", room: "Grand Lobby and Reception", serviceDate: "2026-09-19", bookingStatus: "pending" },
-      { id: "booking-2", talentId: "talent-2", talentName: "Maya James", ownership: "residency", activityName: "Sunday Dinner", room: "Restaurant", serviceDate: "2026-09-20", bookingStatus: "confirmed" },
-      { id: "booking-3", talentId: null, talentName: "Leo Santos", ownership: "hfy", activityName: "Lobby Set", room: "Lobby", serviceDate: "2026-09-21", bookingStatus: "confirmed" },
-    ],
-  },
   finances: {
     currentMonthCommitmentsCents: 98_765_432_100,
     owedToResidencyTalentCents: 12_345_678_900,
@@ -90,7 +80,6 @@ function emptyOverview(): ResidencyClientOverview {
       overdueInvoiceCount: 0,
       overdueInvoiceCents: 0,
     },
-    talent: { activeRosterCount: 0, upcomingTalentCount: 0, pendingConfirmationCount: 0, upcomingBookings: [] },
     finances: { currentMonthCommitmentsCents: 0, owedToResidencyTalentCents: 0, outstandingHfyInvoicesCents: 0, openInvoiceCount: 0, overdueInvoiceCount: 0 },
   };
 }
@@ -174,7 +163,7 @@ describe("Residency Overview responsive visual contract", () => {
             const rect = card.getBoundingClientRect();
             return rect.left >= surface.left - 0.5 && rect.right <= surface.right + 0.5 && card.scrollWidth === card.clientWidth;
           }),
-          cardsUseLockedSurface: cards.length === 4 && cards.every((card) => {
+          cardsUseLockedSurface: cards.length === 3 && cards.every((card) => {
             const style = getComputedStyle(card);
             return style.backgroundColor === "rgb(255, 255, 255)" && style.borderRadius === "16px" && style.boxShadow !== "none";
           }),

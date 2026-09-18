@@ -3277,9 +3277,8 @@
 }
 
 .hfy-style-system .residency-overview-week-card { grid-column: 1 / -1; }
-.hfy-style-system .residency-overview-attention-card { grid-column: span 5; }
-.hfy-style-system .residency-overview-talent-card { grid-column: span 4; }
-.hfy-style-system .residency-overview-finance-card { grid-column: span 3; }
+.hfy-style-system .residency-overview-attention-card { grid-column: span 7; }
+.hfy-style-system .residency-overview-finance-card { grid-column: span 5; }
 
 .hfy-style-system .residency-overview-dashboard .residency-section-header > div > p:not(.eyebrow) {
   max-width: 620px;
@@ -3426,8 +3425,7 @@
 }
 .hfy-style-system .residency-overview-count.has-items { color: var(--hfy-error); background: var(--hfy-error-soft); }
 
-.hfy-style-system .residency-overview-attention-list,
-.hfy-style-system .residency-overview-bookings { display: grid; gap: var(--hfy-space-2); }
+.hfy-style-system .residency-overview-attention-list { display: grid; gap: var(--hfy-space-2); }
 
 .hfy-style-system .residency-overview-attention-item {
   min-width: 0;
@@ -3498,52 +3496,6 @@
 .hfy-style-system .residency-overview-all-clear strong { font-size: 12px; }
 .hfy-style-system .residency-overview-all-clear p { margin: 4px 0 0; color: var(--hfy-muted); font-size: 10px; line-height: 1.45; }
 
-.hfy-style-system .residency-overview-talent-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  margin: 0;
-  padding: 0 0 var(--hfy-space-4);
-  border-bottom: 1px solid var(--hfy-line);
-}
-.hfy-style-system .residency-overview-talent-stats > div { min-width: 0; padding-inline: var(--hfy-space-3); border-left: 1px solid var(--hfy-line); }
-.hfy-style-system .residency-overview-talent-stats > div:first-child { padding-left: 0; border-left: 0; }
-.hfy-style-system .residency-overview-talent-stats dt { color: var(--hfy-muted); font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-.hfy-style-system .residency-overview-talent-stats dd { margin: 4px 0 0; font-size: 21px; font-weight: 850; letter-spacing: -.03em; }
-
-.hfy-style-system .residency-overview-booking {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--hfy-space-2);
-  padding: 7px;
-  border-radius: 11px;
-  color: var(--hfy-ink);
-  text-decoration: none;
-}
-.hfy-style-system a.residency-overview-booking:hover { background: var(--hfy-action-soft); }
-.hfy-style-system a.residency-overview-booking:focus-visible { outline: 3px solid var(--hfy-focus-ring); outline-offset: 1px; }
-.hfy-style-system .residency-overview-avatar {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--hfy-action-ink);
-  background: var(--hfy-action-soft);
-  font-size: 9px;
-  font-weight: 850;
-}
-.hfy-style-system .residency-overview-booking-copy { min-width: 0; }
-.hfy-style-system .residency-overview-booking-copy strong,
-.hfy-style-system .residency-overview-booking-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hfy-style-system .residency-overview-booking-copy strong { font-size: 11px; }
-.hfy-style-system .residency-overview-booking-copy small,
-.hfy-style-system .residency-overview-booking time { color: var(--hfy-muted); font-size: 9px; }
-.hfy-style-system .residency-overview-booking time { white-space: nowrap; }
-.hfy-style-system .residency-overview-empty { padding: var(--hfy-space-4); border-radius: 12px; color: var(--hfy-muted); background: var(--hfy-surface-nested); font-size: 10px; line-height: 1.45; }
-
 .hfy-style-system .residency-overview-finance-primary { display: grid; gap: var(--hfy-space-1); }
 .hfy-style-system .residency-overview-finance-primary strong {
   overflow-wrap: anywhere;
@@ -3569,18 +3521,8 @@
 .hfy-style-system .residency-overview-invoice-status.overdue { color: var(--hfy-error); background: var(--hfy-error-soft); }
 .hfy-style-system .residency-overview-invoice-status strong { color: currentColor; }
 
-@container residency-overview (max-width: 1080px) {
-  .hfy-style-system .residency-overview-attention-card { grid-column: span 7; }
-  .hfy-style-system .residency-overview-talent-card { grid-column: span 5; }
-  .hfy-style-system .residency-overview-finance-card { grid-column: 1 / -1; }
-  .hfy-style-system .residency-overview-finance-card { grid-template-columns: minmax(180px, .8fr) minmax(0, 1fr); }
-  .hfy-style-system .residency-overview-finance-card > .residency-section-header,
-  .hfy-style-system .residency-overview-finance-card > .residency-overview-invoice-status { grid-column: 1 / -1; }
-}
-
 @container residency-overview (max-width: 700px) {
   .hfy-style-system .residency-overview-attention-card,
-  .hfy-style-system .residency-overview-talent-card,
   .hfy-style-system .residency-overview-finance-card { grid-column: 1 / -1; }
   .hfy-style-system .residency-overview-days { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
@@ -3593,8 +3535,6 @@
   .hfy-style-system .residency-overview-day:last-child { grid-column: 1 / -1; }
   .hfy-style-system .residency-overview-finance-card { grid-template-columns: 1fr; }
   .hfy-style-system .residency-overview-finance-card > * { grid-column: auto; }
-  .hfy-style-system .residency-overview-booking { grid-template-columns: 30px minmax(0, 1fr); }
-  .hfy-style-system .residency-overview-booking time { grid-column: 2; }
 }
 
 /* Compact Collection Panel keeps searchable, filterable lists on one locked density scale. */
