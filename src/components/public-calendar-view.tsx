@@ -65,6 +65,9 @@ export function PublicCalendarView({ token, monthKey, calendar }: {
     schedulingStatus: "filled",
   }));
   const groups = [...new Set(visibleEntries.map(({ entry }) => entry.date))];
+  const includedDayparts = calendar.scope === "all"
+    ? "All scheduled Dayparts"
+    : calendar.dayparts.map((daypart) => `${daypart.name} · ${daypart.room}`).join("  •  ") || "No Dayparts selected";
 
   function monthHref(target: string) {
     return `/share/calendar/${token}?${new URLSearchParams({ month: target }).toString()}`;
@@ -103,19 +106,20 @@ export function PublicCalendarView({ token, monthKey, calendar }: {
               <div><small>Time</small><strong>{selected.startTime}–{selected.endTime}</strong></div>
               {selected.room ? <div><small>Location</small><strong>{selected.room}</strong></div> : null}
             </div>
-            <section className="public-calendar-artists" aria-label={selected.artists.length === 1 ? "Artist" : "Artists"}>
+            {selected.artists.length ? <section className="public-calendar-artists" aria-label={selected.artists.length === 1 ? "Artist" : "Artists"}>
               <h3>{selected.artists.length === 1 ? "Artist" : "Artists"}</h3>
               {selected.artists.map((artist) => <div className="public-calendar-artist" key={`${artist.name}-${artist.instagramHandle}`}>
                 <strong>{artist.name}</strong>
                 <span>{displayInstagram(artist.instagramHandle)}</span>
               </div>)}
-            </section>
+            </section> : null}
           </div>
         </div> : <>
           <header className="public-calendar-agenda-heading">
             <p className="eyebrow">Schedule overview</p>
             <h2 id="public-calendar-agenda-title">At a glance</h2>
             <p>{visibleEntries.length} {visibleEntries.length === 1 ? "slot" : "slots"}, in chronological order.</p>
+            <div className="public-calendar-scope"><strong>{calendar.scope === "all" ? "Included" : "Included Dayparts"}</strong><span>{includedDayparts}</span></div>
           </header>
           <div className="public-calendar-agenda-list">
             {groups.map((date) => <article className="public-calendar-agenda-day" key={date}>
@@ -125,7 +129,7 @@ export function PublicCalendarView({ token, monthKey, calendar }: {
                 return <button className="public-calendar-agenda-entry" type="button" style={eventStyle} onClick={() => setSelectedId(id)} key={id}>
                   <span className="public-calendar-agenda-color" aria-hidden="true" />
                   <span><strong>{entry.daypartName}</strong><small>{entry.room ? `${entry.room} · ` : ""}{entry.startTime}–{entry.endTime}</small></span>
-                  <span className="public-calendar-agenda-artists">{entry.artists.map((artist) => artist.name).join(", ")}</span>
+                  {entry.artists.length ? <span className="public-calendar-agenda-artists">{entry.artists.map((artist) => artist.name).join(", ")}</span> : null}
                 </button>;
               })}</div>
             </article>)}

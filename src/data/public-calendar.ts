@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, dayparts, publicCalendarLinkDayparts, publicCalendarLinks, residencies, scheduleOccurrences, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
 import { calendarColorForEconomics, DEFAULT_DAYPART_COLOR } from "@/domain/dayparts";
@@ -31,8 +31,14 @@ export async function getPublicCalendarByToken(token: string): Promise<PublicCal
   if (!link) return null;
 
   const selectedDayparts = link.scope === "selected"
-    ? await database.select({ daypartId: publicCalendarLinkDayparts.daypartId })
+    ? await database.select({
+      daypartId: publicCalendarLinkDayparts.daypartId,
+      name: dayparts.name,
+      room: dayparts.room,
+      color: dayparts.color,
+    })
       .from(publicCalendarLinkDayparts)
+      .innerJoin(dayparts, eq(publicCalendarLinkDayparts.daypartId, dayparts.id))
       .where(eq(publicCalendarLinkDayparts.linkId, link.id))
     : [];
   const selectedDaypartIds = selectedDayparts.map(({ daypartId }) => daypartId);
@@ -40,7 +46,9 @@ export async function getPublicCalendarByToken(token: string): Promise<PublicCal
 
   // A selected-scope link with no allow-listed Dayparts is intentionally empty.
   // It must never fall through to the all-Dayparts behavior.
-  if (link.scope === "selected" && selectedDaypartIds.length === 0) return { residencyName: link.residencyName, entries: [] };
+  if (link.scope === "selected" && selectedDaypartIds.length === 0) {
+    return { residencyName: link.residencyName, scope: link.scope, dayparts: [], entries: [] };
+  }
 
   const [financialRows, trackingRows] = await Promise.all([
     database.select({
@@ -74,11 +82,15 @@ export async function getPublicCalendarByToken(token: string): Promise<PublicCal
       serviceDate: scheduleOccurrences.serviceDate,
       startsAt: scheduleOccurrences.startsAt,
       endsAt: scheduleOccurrences.endsAt,
-    }).from(scheduleOccurrenceTalent)
-      .innerJoin(scheduleOccurrences, eq(scheduleOccurrenceTalent.occurrenceId, scheduleOccurrences.id))
-      .innerJoin(talent, eq(scheduleOccurrenceTalent.talentId, talent.id))
+    }).from(scheduleOccurrences)
+      .leftJoin(scheduleOccurrenceTalent, eq(scheduleOccurrenceTalent.occurrenceId, scheduleOccurrences.id))
+      .leftJoin(talent, eq(scheduleOccurrenceTalent.talentId, talent.id))
       .where(and(
         eq(scheduleOccurrences.residencyId, link.residencyId),
+        or(
+          eq(scheduleOccurrences.type, "house_activity"),
+          isNotNull(scheduleOccurrenceTalent.talentId),
+        ),
         ...(link.scope === "selected" ? [inArray(scheduleOccurrences.daypartId, selectedDaypartIds)] : []),
       )),
   ]);
@@ -98,6 +110,12 @@ export async function getPublicCalendarByToken(token: string): Promise<PublicCal
 
   return {
     residencyName: link.residencyName,
+    scope: link.scope,
+    dayparts: selectedDayparts.map((daypart) => ({
+      name: daypart.name,
+      room: daypart.room,
+      color: daypart.color,
+    })),
     entries: projectPublicCalendarRows(rows.map((row) => ({ ...row, timezone: link.timezone }))),
   };
 }

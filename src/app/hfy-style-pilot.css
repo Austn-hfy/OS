@@ -1666,6 +1666,9 @@
 .hfy-style-system .public-calendar-agenda-heading .eyebrow { margin: 0 0 13px; line-height: 1; }
 .hfy-style-system .public-calendar-agenda-heading h2 { margin: 0 0 7px; font-size: clamp(26px, 2vw, 30px); line-height: 1.04; }
 .hfy-style-system .public-calendar-agenda-heading > p:not(.eyebrow) { margin: 0; color: var(--hfy-muted); font-size: 10px; line-height: 1.45; }
+.hfy-style-system .public-calendar-scope { display: grid; gap: 3px; margin-top: 13px; padding-top: 12px; border-top: 1px solid rgba(48, 68, 84, 0.09); }
+.hfy-style-system .public-calendar-scope strong { color: var(--hfy-label); font-size: 8px; font-weight: 760; letter-spacing: 0.08em; text-transform: uppercase; }
+.hfy-style-system .public-calendar-scope span { color: var(--hfy-ink-soft); font-size: 10px; font-weight: 680; line-height: 1.45; overflow-wrap: anywhere; }
 .hfy-style-system .public-calendar-agenda-list {
   min-width: 0;
   min-height: 0;

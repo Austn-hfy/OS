@@ -12,7 +12,11 @@ describe("public shared calendar page", () => {
   beforeEach(() => mockedLoader.mockReset());
 
   it("mirrors the internal month calendar, preserves Daypart colors, and adds a chronological safe agenda", async () => {
-    mockedLoader.mockResolvedValue({ residencyName: "Test 1", entries: [
+    mockedLoader.mockResolvedValue({
+      residencyName: "Test 1",
+      scope: "selected",
+      dayparts: [{ name: "Sunset DJ Set", room: "Rooftop", color: "#2783DC" }],
+      entries: [
       {
         daypartName: "Sunset DJ Set",
         room: "Rooftop",
@@ -32,6 +36,15 @@ describe("public shared calendar page", () => {
         artists: [{ name: "Echo Park", instagramHandle: "echo-park" }],
       },
       {
+        daypartName: "Poolside Movie",
+        room: "Pool",
+        color: "#124A80",
+        date: "2026-09-20",
+        startTime: "7:00 PM",
+        endTime: "9:00 PM",
+        artists: [],
+      },
+      {
         daypartName: "October Lounge",
         room: "Lobby",
         color: "#EC4899",
@@ -40,7 +53,8 @@ describe("public shared calendar page", () => {
         endTime: "9:00 PM",
         artists: [{ name: "Next Month", instagramHandle: "@next-month" }],
       },
-    ] });
+      ],
+    });
 
     const view = await PublicCalendarPage({
       params: Promise.resolve({ token: "share-token" }),
@@ -55,11 +69,14 @@ describe("public shared calendar page", () => {
     expect(html).toContain('role="grid"');
     expect(html).toContain('aria-label="September 2026 programming calendar"');
     expect(html).toContain("Sunset DJ Set");
+    expect(html).toContain("Included Dayparts");
+    expect(html).toContain("Sunset DJ Set · Rooftop");
+    expect(html).toContain("Poolside Movie");
     expect(html).toContain("DJ Grid");
     expect(html).toContain("--daypart-color:#2783DC");
     expect(html).toContain('aria-label="Open Sunset DJ Set on 2026-09-04"');
     expect(html).toContain("At a glance");
-    expect(html).toContain("2 slots, in chronological order.");
+    expect(html).toContain("3 slots, in chronological order.");
     expect(html.indexOf("Tue, Sep 1")).toBeLessThan(html.indexOf("Fri, Sep 4"));
     expect(html).not.toContain("October Lounge");
     expect(html).not.toContain("@next-month");

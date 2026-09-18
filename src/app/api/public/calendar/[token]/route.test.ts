@@ -40,6 +40,8 @@ describe("GET /api/public/calendar/:token", () => {
     const body = await response.json();
     expect(body).toEqual({
       residencyName: "Test 1",
+      scope: "all",
+      dayparts: [],
       entries: [{
         daypartName: "Sunset DJ Set",
         room: "Rooftop",
