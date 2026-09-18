@@ -110,15 +110,11 @@ export default async function ResidencyOverviewPage({
   const attentionCount = overview.attention.openServiceCount
     + overview.attention.pendingConfirmationCount
     + overview.attention.overdueInvoiceCount;
-  const statusSummary = attentionCount
-    ? `${attentionCount} operational ${attentionCount === 1 ? "item needs" : "items need"} attention.`
-    : "Your operational work is clear right now.";
 
   return <ResidencyPageSurface className="residency-overview-surface">
     <ResidencyPageHeader
       eyebrow={`${actor.residencyName} · Residency overview`}
       title={`Welcome, ${actor.displayName}`}
-      description={statusSummary}
     >
       <time className="residency-overview-current-date" dateTime={overview.asOfDate}>{fullDate(overview.asOfDate)}</time>
     </ResidencyPageHeader>
