@@ -15,6 +15,7 @@ import { calculateBillableAmountCents } from "@/domain/airtable-parity";
 import { calculateClientOwedCents, resolveClientHourlyRateCents } from "@/domain/client-rates";
 import {
   daypartDateKey,
+  formatCompactMinuteRange,
   projectDaypartSlots,
   scheduleOccurrenceScheduling,
   slotSchedulingStatus,
@@ -34,8 +35,12 @@ export type ResidencyClientOverview = {
     openCount: number;
     services: Array<{
       id: string;
+      calendarEventId: string;
+      daypartId: string | null;
       name: string;
       room: string;
+      timeLabel: string;
+      talentNames: string[];
       status: ResidencyOverviewServiceStatus;
     }>;
   }>;
@@ -95,6 +100,15 @@ function dueDate(invoiceDate: string, paymentTermsDays: number) {
   return shiftDateKey(invoiceDate, paymentTermsDays);
 }
 
+function timeRangeLabel(startsAt: Date, endsAt: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+  });
+  return `${formatter.format(startsAt)}–${formatter.format(endsAt)}`;
+}
+
 export async function getResidencyClientOverview(
   residencyId: string,
   timeZone: string,
@@ -134,11 +148,14 @@ export async function getResidencyClientOverview(
     database.select({
       shiftId: assignments.shiftId,
       talentId: assignments.talentId,
+      talentName: talent.stageName,
+      guestName: assignments.guestName,
       startsAt: assignments.startsAt,
       endsAt: assignments.endsAt,
       bookingStatus: assignments.bookingStatus,
     }).from(assignments)
       .innerJoin(shifts, eq(assignments.shiftId, shifts.id))
+      .leftJoin(talent, eq(assignments.talentId, talent.id))
       .where(and(
         eq(shifts.residencyId, residencyId),
         gte(shifts.serviceDate, weekRange.from),
@@ -152,6 +169,8 @@ export async function getResidencyClientOverview(
       type: scheduleOccurrences.type,
       serviceDate: scheduleOccurrences.serviceDate,
       startsAt: scheduleOccurrences.startsAt,
+      endsAt: scheduleOccurrences.endsAt,
+      manualHostName: scheduleOccurrences.manualHostName,
     }).from(scheduleOccurrences).where(and(
       eq(scheduleOccurrences.residencyId, residencyId),
       gte(scheduleOccurrences.serviceDate, weekRange.from),
@@ -159,8 +178,10 @@ export async function getResidencyClientOverview(
     )).orderBy(asc(scheduleOccurrences.startsAt)),
     database.select({
       occurrenceId: scheduleOccurrenceTalent.occurrenceId,
+      talentName: talent.stageName,
     }).from(scheduleOccurrenceTalent)
       .innerJoin(scheduleOccurrences, eq(scheduleOccurrenceTalent.occurrenceId, scheduleOccurrences.id))
+      .innerJoin(talent, eq(scheduleOccurrenceTalent.talentId, talent.id))
       .where(and(
         eq(scheduleOccurrences.residencyId, residencyId),
         gte(scheduleOccurrences.serviceDate, weekRange.from),
@@ -222,29 +243,53 @@ export async function getResidencyClientOverview(
   ]);
   const projectedRows = projectDaypartSlots(daypartRows, weekRange.from, weekRange.to, existingDaypartDates, dateExceptions);
   const services = [
-    ...shiftRows.map((shift) => ({
-      id: `shift:${shift.id}`,
-      name: shift.name,
-      room: shift.room,
-      serviceDate: shift.serviceDate,
-      sortAt: shift.startsAt.getTime(),
-      status: shiftCoverageStatus(shift, weekAssignmentRows.filter((assignment) => assignment.shiftId === shift.id)),
-    })),
-    ...occurrenceRows.map((occurrence) => ({
-      id: `occurrence:${occurrence.id}`,
-      name: occurrence.name,
-      room: occurrence.room,
-      serviceDate: occurrence.serviceDate,
-      sortAt: occurrence.startsAt.getTime(),
-      status: scheduleOccurrenceScheduling(
-        occurrence.type,
-        weekOccurrenceTalentRows.some((assignment) => assignment.occurrenceId === occurrence.id),
-      ).schedulingStatus === "filled" ? "scheduled" as const : "open" as const,
-    })),
+    ...shiftRows.map((shift) => {
+      const shiftAssignments = weekAssignmentRows.filter((assignment) => assignment.shiftId === shift.id);
+      const talentNames = [...new Set(shiftAssignments
+        .filter((assignment) => assignment.bookingStatus !== "cancelled")
+        .map((assignment) => assignment.talentName || assignment.guestName)
+        .filter(Boolean))];
+      return {
+        id: `shift:${shift.id}`,
+        calendarEventId: shift.id,
+        daypartId: shift.daypartId,
+        name: shift.name,
+        room: shift.room,
+        timeLabel: timeRangeLabel(shift.startsAt, shift.endsAt, timeZone),
+        talentNames,
+        serviceDate: shift.serviceDate,
+        sortAt: shift.startsAt.getTime(),
+        status: shiftCoverageStatus(shift, shiftAssignments),
+      };
+    }),
+    ...occurrenceRows.map((occurrence) => {
+      const talentNames = weekOccurrenceTalentRows
+        .filter((assignment) => assignment.occurrenceId === occurrence.id)
+        .map((assignment) => assignment.talentName);
+      return {
+        id: `occurrence:${occurrence.id}`,
+        calendarEventId: occurrence.id,
+        daypartId: occurrence.daypartId,
+        name: occurrence.name,
+        room: occurrence.room,
+        timeLabel: timeRangeLabel(occurrence.startsAt, occurrence.endsAt, timeZone),
+        talentNames: talentNames.length ? talentNames : [occurrence.manualHostName].filter(Boolean),
+        serviceDate: occurrence.serviceDate,
+        sortAt: occurrence.startsAt.getTime(),
+        status: scheduleOccurrenceScheduling(
+          occurrence.type,
+          talentNames.length > 0,
+        ).schedulingStatus === "filled" ? "scheduled" as const : "open" as const,
+      };
+    }),
     ...projectedRows.map((slot) => ({
       id: slot.id,
+      calendarEventId: slot.id,
+      daypartId: slot.daypartId,
       name: slot.name,
       room: slot.room,
+      timeLabel: formatCompactMinuteRange(slot.startMinute, slot.endMinute),
+      talentNames: [] as string[],
       serviceDate: slot.date,
       sortAt: slot.startMinute,
       status: "open" as const,
@@ -259,7 +304,16 @@ export async function getResidencyClientOverview(
       scheduledCount: dayServices.filter((service) => service.status === "scheduled").length,
       pendingCount: dayServices.filter((service) => service.status === "pending").length,
       openCount: dayServices.filter((service) => service.status === "open").length,
-      services: dayServices.map(({ id, name, room, status }) => ({ id, name, room, status })),
+      services: dayServices.map(({ id, calendarEventId, daypartId, name, room, timeLabel, talentNames, status }) => ({
+        id,
+        calendarEventId,
+        daypartId,
+        name,
+        room,
+        timeLabel,
+        talentNames,
+        status,
+      })),
     };
   });
 

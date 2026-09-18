@@ -98,6 +98,7 @@ type ResidencyCalendarProps = {
   residencyOptions?: Array<{ id: string; name: string }>;
   residencySelectionParam?: "residency" | "calendarResidency";
   initialEventId?: string;
+  initialDate?: string;
   initialBatchDaypartId?: string;
   previewMode?: boolean;
   fullProgramming?: boolean;
@@ -179,6 +180,81 @@ function shiftChangeRequestLabel(requestType: ShiftChangeRequestType) {
   return "Delete permanently";
 }
 
+function schedulingSuggestionsForDate(
+  date: string,
+  events: ResidencyEvent[],
+  dayparts: ResidencyCalendarProps["dayparts"],
+  dateExceptions: DaypartDateException[],
+  fullProgramming: boolean,
+) {
+  const weekday = weekdayForDate(date);
+  const existingDayparts = new Set(events.filter((event) => !event.projected && event.date === date && event.daypartId).map((event) => event.daypartId));
+  const suggestions: SuggestionDraft[] = dayparts.flatMap((daypart) => {
+    if (!daypart.active || (daypart.activeUntil && date > daypart.activeUntil)) return [];
+    const recurringRule = daypart.scheduleMode === "standing_weekly" ? daypart.rules.find((item) => item.weekday === weekday) : undefined;
+    const rule = daypartSchedulingWindowForDate(daypart, date);
+    if (!rule) return [];
+    const dateException = dateExceptions.find((item) => item.daypartId === daypart.id && item.serviceDate === date);
+    const startMinute = dateException?.kind === "override" && dateException.startMinute !== null ? dateException.startMinute : rule.startMinute;
+    const endMinute = dateException?.kind === "override" && dateException.endMinute !== null ? dateException.endMinute : rule.endMinute;
+    return [{
+      daypartId: daypart.id,
+      sourceDaypartId: daypart.id,
+      roomId: daypart.roomId,
+      oneTime: false,
+      createMode: null,
+      repeatWeekdays: [],
+      recurringToday: daypart.scheduleMode === "standing_weekly" && Boolean(recurringRule),
+      exceptionKind: dateException?.kind ?? null,
+      name: daypart.name,
+      room: daypart.room,
+      color: daypart.color,
+      type: daypart.type,
+      billingMode: daypart.billingMode,
+      defaultTalentRateCents: daypart.defaultTalentRateCents,
+      defaultDjCount: recurringRule?.defaultDjCount ?? rule.defaultDjCount ?? null,
+      existing: existingDayparts.has(daypart.id),
+      start: minuteToClock(startMinute),
+      end: minuteToClock(endMinute),
+      clientTalentDefaultRate: "",
+      clientRateOverride: "",
+      notes: "",
+      programDetails: "",
+      manualHostName: "",
+      requestHfy: false,
+      slots: [],
+    }];
+  });
+  suggestions.push({
+    daypartId: "one-time",
+    sourceDaypartId: null,
+    roomId: null,
+    oneTime: true,
+    createMode: null,
+    repeatWeekdays: [weekday],
+    recurringToday: false,
+    exceptionKind: null,
+    name: "",
+    room: "",
+    color: "#7A65D1",
+    type: fullProgramming ? "house_activity" : null,
+    billingMode: null,
+    defaultTalentRateCents: null,
+    defaultDjCount: null,
+    existing: false,
+    start: "18:00",
+    end: "21:00",
+    clientTalentDefaultRate: "",
+    clientRateOverride: "",
+    notes: "",
+    programDetails: "",
+    manualHostName: "",
+    requestHfy: false,
+    slots: [],
+  });
+  return suggestions;
+}
+
 function SchedulingActivityDetailsRow({
   name,
   roomId,
@@ -248,7 +324,7 @@ function SchedulingActivityDetailsRow({
   </div>;
 }
 
-export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
+export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendarView = "month", weekStart, events, rooms, dayparts, talent, requestTalent = [], dateExceptions, residencyOptions, residencySelectionParam = "residency", initialEventId, initialDate, initialBatchDaypartId, previewMode = false, fullProgramming = false, calendarBasePath = "/app/calendar", canManage = true }: ResidencyCalendarProps) {
   const router = useRouter();
   const quickDialogRef = useRef<HTMLElement>(null);
   const quickDialogCloseRef = useRef<HTMLButtonElement>(null);
@@ -256,12 +332,21 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
   const batchDialogCloseRef = useRef<HTMLButtonElement>(null);
   const overlayTriggerRef = useRef<HTMLElement | null>(null);
   const initialEditingEvent = initialEventId ? events.find((event) => event.id === initialEventId && !event.projected) : undefined;
-  const [modal, setModal] = useState<ModalState>(() => initialEditingEvent ? { type: "edit", eventId: initialEditingEvent.id } : null);
-  const [suggestions, setSuggestions] = useState<SuggestionDraft[]>([]);
-  const [activeDaypartId, setActiveDaypartId] = useState("");
-  const [addMode, setAddMode] = useState<AddMode>("room");
+  const initialProjectedEvent = initialEventId ? events.find((event) => event.id === initialEventId && event.projected) : undefined;
+  const initialSchedulingDate = initialEditingEvent ? undefined : initialProjectedEvent?.date ?? initialDate;
+  const initialSchedulingDaypartId = initialProjectedEvent?.daypartId ?? undefined;
+  const initialSuggestions = initialSchedulingDate
+    ? schedulingSuggestionsForDate(initialSchedulingDate, events, dayparts, dateExceptions, fullProgramming)
+    : [];
+  const initialPreferredSuggestion = initialSuggestions.find((item) => item.daypartId === initialSchedulingDaypartId);
+  const [modal, setModal] = useState<ModalState>(() => initialEditingEvent
+    ? { type: "edit", eventId: initialEditingEvent.id }
+    : initialSchedulingDate ? { type: "add", date: initialSchedulingDate } : null);
+  const [suggestions, setSuggestions] = useState<SuggestionDraft[]>(initialSuggestions);
+  const [activeDaypartId, setActiveDaypartId] = useState(initialPreferredSuggestion?.daypartId ?? "");
+  const [addMode, setAddMode] = useState<AddMode>(initialPreferredSuggestion ? "daypart" : "room");
   const [createdRooms, setCreatedRooms] = useState<ResidencyRoom[]>([]);
-  const [selectedRoomId, setSelectedRoomId] = useState("");
+  const [selectedRoomId, setSelectedRoomId] = useState(initialPreferredSuggestion?.roomId ?? "");
   const [newRoomName, setNewRoomName] = useState("");
   const [newRoomHue, setNewRoomHue] = useState<RoomHue>(() => roomHueForIndex(Math.max(-1, ...rooms.map((room) => room.sortOrder)) + 1));
   const [newRoomPromptOpen, setNewRoomPromptOpen] = useState(false);
@@ -453,73 +538,7 @@ export function ResidencyCalendar({ residency, headerEyebrow, monthKey, calendar
   }
 
   function prepareDateForScheduling(date: string, preferredDaypartId?: string, openModal = true) {
-    const weekday = weekdayForDate(date);
-    const existingDayparts = new Set(events.filter((event) => !event.projected && event.date === date && event.daypartId).map((event) => event.daypartId));
-    const nextSuggestions: SuggestionDraft[] = dayparts.flatMap((daypart) => {
-      if (!daypart.active || (daypart.activeUntil && date > daypart.activeUntil)) return [];
-      const recurringRule = daypart.scheduleMode === "standing_weekly" ? daypart.rules.find((item) => item.weekday === weekday) : undefined;
-      const rule = daypartSchedulingWindowForDate(daypart, date);
-      if (!rule) return [];
-      const dateException = dateExceptions.find((item) => item.daypartId === daypart.id && item.serviceDate === date);
-      const startMinute = dateException?.kind === "override" && dateException.startMinute !== null ? dateException.startMinute : rule.startMinute;
-      const endMinute = dateException?.kind === "override" && dateException.endMinute !== null ? dateException.endMinute : rule.endMinute;
-      const start = minuteToClock(startMinute);
-      const end = minuteToClock(endMinute);
-      return [{
-        daypartId: daypart.id,
-        sourceDaypartId: daypart.id,
-        roomId: daypart.roomId,
-        oneTime: false,
-        createMode: null,
-        repeatWeekdays: [],
-        recurringToday: daypart.scheduleMode === "standing_weekly" && Boolean(recurringRule),
-        exceptionKind: dateException?.kind ?? null,
-        name: daypart.name,
-        room: daypart.room,
-        color: daypart.color,
-        type: daypart.type,
-        billingMode: daypart.billingMode,
-        defaultTalentRateCents: daypart.defaultTalentRateCents,
-        defaultDjCount: recurringRule?.defaultDjCount ?? rule.defaultDjCount ?? null,
-        existing: existingDayparts.has(daypart.id),
-        start,
-        end,
-        clientTalentDefaultRate: "",
-        clientRateOverride: "",
-        notes: "",
-        programDetails: "",
-        manualHostName: "",
-        requestHfy: false,
-        slots: [],
-      }];
-    });
-    nextSuggestions.push({
-      daypartId: "one-time",
-      sourceDaypartId: null,
-      roomId: null,
-      oneTime: true,
-      createMode: null,
-      repeatWeekdays: [weekday],
-      recurringToday: false,
-      exceptionKind: null,
-      name: "",
-      room: "",
-      color: "#7A65D1",
-      type: fullProgramming ? "house_activity" : null,
-      billingMode: null,
-      defaultTalentRateCents: null,
-      defaultDjCount: null,
-      existing: false,
-      start: "18:00",
-      end: "21:00",
-      clientTalentDefaultRate: "",
-      clientRateOverride: "",
-      notes: "",
-      programDetails: "",
-      manualHostName: "",
-      requestHfy: false,
-      slots: [],
-    });
+    const nextSuggestions = schedulingSuggestionsForDate(date, events, dayparts, dateExceptions, fullProgramming);
     setSuggestions(nextSuggestions);
     const preferred = nextSuggestions.find((item) => item.daypartId === preferredDaypartId);
     setActiveDaypartId(preferred?.daypartId ?? "");

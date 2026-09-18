@@ -68,10 +68,34 @@ function InvoiceAlertIcon() {
   return <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 3.5h10V16l-2-1-2 1-2-1-2 1-2-1zM8 7h4M8 10h4M8 13h2" /></svg>;
 }
 
-export default async function ResidencyOverviewPage() {
-  const actor = await requireResidencyActor();
+function calendarHref(date: string, eventId?: string, openDate = false) {
+  const query = new URLSearchParams({ calendarView: "week", week: date });
+  if (eventId) query.set("event", eventId);
+  else if (openDate) query.set("date", date);
+  return `/residency/calendar?${query.toString()}`;
+}
+
+function serviceStatusLabel(status: "scheduled" | "pending" | "open") {
+  if (status === "scheduled") return "Scheduled";
+  if (status === "pending") return "Pending";
+  return "Needs coverage";
+}
+
+function serviceActionLabel(status: "scheduled" | "pending" | "open") {
+  if (status === "scheduled") return "View or edit";
+  if (status === "pending") return "Review staffing";
+  return "Schedule talent";
+}
+
+export default async function ResidencyOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ day?: string }>;
+}) {
+  const [actor, params] = await Promise.all([requireResidencyActor(), searchParams]);
   if (actor.accessRole !== "manager") redirect("/residency/access-limited");
   const overview = await getResidencyClientOverview(actor.residencyId, actor.residencyTimezone);
+  const selectedDay = overview.week.find((day) => day.date === params.day) ?? overview.week[0];
   const attentionCount = overview.attention.openServiceCount
     + overview.attention.pendingConfirmationCount
     + overview.attention.overdueInvoiceCount;
@@ -93,12 +117,13 @@ export default async function ResidencyOverviewPage() {
           <ResidencySectionHeader
             title="This week"
             eyebrow="Programming coverage"
-            description="Scheduled activity, pending coverage, and open Daypart gaps across the next seven days."
-            aside={<Link className="residency-overview-link" href="/residency/calendar">Open calendar <ArrowIcon /></Link>}
+            description="Select a day to review its programming and take action."
+            aside={<Link className="residency-overview-link" href={calendarHref(overview.asOfDate)}>Open calendar <ArrowIcon /></Link>}
             split
           />
           <div className="residency-overview-days">
             {overview.week.map((day, index) => {
+              const selected = selectedDay.date === day.date;
               const details = [
                 day.scheduledCount ? `${day.scheduledCount} scheduled` : "",
                 day.pendingCount ? `${day.pendingCount} pending` : "",
@@ -107,9 +132,11 @@ export default async function ResidencyOverviewPage() {
               const servicesLabel = day.services.length
                 ? day.services.map((service) => `${service.name} in ${service.room}: ${service.status}`).join("; ")
                 : "No programming scheduled";
-              return <article
-                className={`residency-overview-day${index === 0 ? " is-today" : ""}${day.openCount ? " needs-attention" : ""}`}
+              return <Link
+                className={`residency-overview-day${index === 0 ? " is-today" : ""}${day.openCount ? " needs-attention" : ""}${selected ? " is-selected" : ""}`}
                 aria-label={`${shortDate(day.date)}. ${servicesLabel}.`}
+                aria-current={selected ? "date" : undefined}
+                href={`/residency?day=${day.date}`}
                 key={day.date}
               >
                 <div className="residency-overview-day-heading"><span>{weekday(day.date)}</span>{index === 0 ? <i aria-label="Today" /> : null}</div>
@@ -119,9 +146,39 @@ export default async function ResidencyOverviewPage() {
                 <div className="residency-overview-coverage" aria-hidden="true">
                   {day.services.map((service) => <span className={service.status} title={`${service.name} · ${service.status}`} key={service.id} />)}
                 </div>
-              </article>;
+              </Link>;
             })}
           </div>
+          <section className="residency-overview-day-detail" aria-labelledby="residency-overview-day-detail-title">
+            <header className="residency-overview-day-detail-header">
+              <div><span>Day focus</span><h3 id="residency-overview-day-detail-title">{fullDate(selectedDay.date)}</h3><p>{selectedDay.services.length ? `${selectedDay.services.length} ${selectedDay.services.length === 1 ? "activity" : "activities"} to review.` : "Nothing is programmed yet."}</p></div>
+              <Link className="residency-overview-day-detail-week-link" href={calendarHref(selectedDay.date)}>View this week <ArrowIcon /></Link>
+            </header>
+            {selectedDay.services.length ? <div className="residency-overview-day-services">
+              {selectedDay.services.map((service) => {
+                const staffing = service.talentNames.length
+                  ? service.talentNames.join(" + ")
+                  : service.status === "pending"
+                    ? "Staffing request is pending"
+                    : service.status === "open"
+                      ? "Talent has not been assigned"
+                      : "Programming is confirmed";
+                return <article className={`residency-overview-day-service ${service.status}`} key={service.id}>
+                  <span className="residency-overview-day-service-status" aria-hidden="true" />
+                  <div className="residency-overview-day-service-copy">
+                    <strong>{service.name}</strong>
+                    <span>{service.timeLabel} · {service.room}</span>
+                    <small>{staffing}</small>
+                  </div>
+                  <span className="residency-overview-day-service-label">{serviceStatusLabel(service.status)}</span>
+                  <Link className="residency-overview-day-service-action" href={calendarHref(selectedDay.date, service.calendarEventId)}>{serviceActionLabel(service.status)} <ArrowIcon /></Link>
+                </article>;
+              })}
+            </div> : <div className="residency-overview-day-empty">
+              <div><strong>No programming scheduled</strong><p>Add an activity or open this week in Calendar.</p></div>
+              <Link className="residency-overview-day-service-action" href={calendarHref(selectedDay.date, undefined, true)}>Add activity <ArrowIcon /></Link>
+            </div>}
+          </section>
         </ResidencySurfaceCard>
 
         <ResidencySurfaceCard className="residency-overview-attention-card">

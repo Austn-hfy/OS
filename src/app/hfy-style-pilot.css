@@ -3311,6 +3311,8 @@
 }
 
 .hfy-style-system .residency-overview-link svg,
+.hfy-style-system .residency-overview-day-detail-week-link svg,
+.hfy-style-system .residency-overview-day-service-action svg,
 .hfy-style-system .residency-overview-attention-item > svg {
   width: 14px;
   height: 14px;
@@ -3336,7 +3338,18 @@
   padding: var(--hfy-space-3);
   border: 1px solid transparent;
   border-radius: var(--hfy-radius-card);
+  color: var(--hfy-ink);
   background: var(--hfy-surface-nested);
+  text-align: left;
+  text-decoration: none;
+  transition: border-color var(--hfy-motion), box-shadow var(--hfy-motion), transform var(--hfy-motion);
+}
+
+.hfy-style-system .residency-overview-day:hover { border-color: var(--hfy-line-strong); transform: translateY(-1px); }
+.hfy-style-system .residency-overview-day:focus-visible { outline: 3px solid var(--hfy-focus-ring); outline-offset: 2px; }
+.hfy-style-system .residency-overview-day.is-selected {
+  border-color: var(--hfy-action-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hfy-action-strong) 14%, transparent);
 }
 
 .hfy-style-system .residency-overview-day.is-today {
@@ -3412,6 +3425,101 @@
 .hfy-style-system .residency-overview-coverage > .scheduled { background: var(--hfy-success); }
 .hfy-style-system .residency-overview-coverage > .pending { background: var(--hfy-warning); }
 .hfy-style-system .residency-overview-coverage > .open { background: var(--hfy-error); }
+
+.hfy-style-system .residency-overview-day-detail {
+  min-width: 0;
+  display: grid;
+  gap: var(--hfy-space-3);
+  padding: var(--hfy-space-4);
+  border: 1px solid var(--hfy-line);
+  border-radius: var(--hfy-radius-card);
+  background: var(--hfy-surface-nested);
+}
+
+.hfy-style-system .residency-overview-day-detail-header {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--hfy-space-4);
+}
+
+.hfy-style-system .residency-overview-day-detail-header > div { min-width: 0; }
+.hfy-style-system .residency-overview-day-detail-header > div > span {
+  color: var(--hfy-label);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.hfy-style-system .residency-overview-day-detail-header h3 { margin: 4px 0 0; font-size: 17px; letter-spacing: -.025em; }
+.hfy-style-system .residency-overview-day-detail-header p { margin: 4px 0 0; color: var(--hfy-muted); font-size: 10px; }
+
+.hfy-style-system .residency-overview-day-detail-week-link,
+.hfy-style-system .residency-overview-day-service-action {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hfy-space-1);
+  color: var(--hfy-action-ink);
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.hfy-style-system .residency-overview-day-detail-week-link { padding: 7px 9px; border-radius: var(--hfy-radius-control); background: var(--hfy-action-soft); }
+.hfy-style-system .residency-overview-day-detail-week-link:focus-visible,
+.hfy-style-system .residency-overview-day-service-action:focus-visible { outline: 3px solid var(--hfy-focus-ring); outline-offset: 2px; }
+
+.hfy-style-system .residency-overview-day-services { display: grid; gap: var(--hfy-space-2); }
+.hfy-style-system .residency-overview-day-service {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--hfy-space-3);
+  padding: 10px 12px;
+  border: 1px solid var(--hfy-line);
+  border-radius: 12px;
+  background: var(--hfy-surface-card-background);
+}
+.hfy-style-system .residency-overview-day-service-status { width: 8px; height: 8px; border-radius: 50%; background: var(--hfy-success); }
+.hfy-style-system .residency-overview-day-service.pending .residency-overview-day-service-status { background: var(--hfy-warning); }
+.hfy-style-system .residency-overview-day-service.open .residency-overview-day-service-status { background: var(--hfy-error); }
+.hfy-style-system .residency-overview-day-service-copy { min-width: 0; }
+.hfy-style-system .residency-overview-day-service-copy > strong,
+.hfy-style-system .residency-overview-day-service-copy > span,
+.hfy-style-system .residency-overview-day-service-copy > small { display: block; overflow-wrap: anywhere; }
+.hfy-style-system .residency-overview-day-service-copy > strong { font-size: 11px; line-height: 1.35; }
+.hfy-style-system .residency-overview-day-service-copy > span { margin-top: 2px; color: var(--hfy-label); font-size: 9px; }
+.hfy-style-system .residency-overview-day-service-copy > small { margin-top: 3px; color: var(--hfy-muted); font-size: 9px; }
+.hfy-style-system .residency-overview-day-service-label {
+  padding: 5px 7px;
+  border-radius: var(--hfy-radius-pill);
+  color: var(--hfy-success);
+  background: var(--hfy-success-soft);
+  font-size: 8px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.hfy-style-system .residency-overview-day-service.pending .residency-overview-day-service-label { color: var(--hfy-warning); background: var(--hfy-warning-soft); }
+.hfy-style-system .residency-overview-day-service.open .residency-overview-day-service-label { color: var(--hfy-error); background: var(--hfy-error-soft); }
+.hfy-style-system .residency-overview-day-service-action { padding: 7px 9px; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-control); background: var(--hfy-surface-card-background); }
+.hfy-style-system .residency-overview-day-service-action:hover { border-color: var(--hfy-action-strong); background: var(--hfy-action-soft); }
+
+.hfy-style-system .residency-overview-day-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hfy-space-4);
+  padding: var(--hfy-space-4);
+  border: 1px dashed var(--hfy-line-strong);
+  border-radius: 12px;
+  background: var(--hfy-surface-card-background);
+}
+.hfy-style-system .residency-overview-day-empty strong { font-size: 11px; }
+.hfy-style-system .residency-overview-day-empty p { margin: 4px 0 0; color: var(--hfy-muted); font-size: 9px; }
 
 .hfy-style-system .residency-overview-count {
   flex: 0 0 auto;
@@ -3525,6 +3633,8 @@
   .hfy-style-system .residency-overview-attention-card,
   .hfy-style-system .residency-overview-finance-card { grid-column: 1 / -1; }
   .hfy-style-system .residency-overview-days { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .hfy-style-system .residency-overview-day-service { grid-template-columns: 8px minmax(0, 1fr) auto; }
+  .hfy-style-system .residency-overview-day-service-action { grid-column: 2 / -1; justify-self: start; }
 }
 
 @container residency-overview (max-width: 480px) {
@@ -3533,6 +3643,13 @@
   .hfy-style-system .residency-overview-link { align-self: flex-start; }
   .hfy-style-system .residency-overview-days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hfy-style-system .residency-overview-day:last-child { grid-column: 1 / -1; }
+  .hfy-style-system .residency-overview-day-detail-header,
+  .hfy-style-system .residency-overview-day-empty { align-items: stretch; flex-direction: column; }
+  .hfy-style-system .residency-overview-day-detail-week-link,
+  .hfy-style-system .residency-overview-day-empty .residency-overview-day-service-action { align-self: flex-start; }
+  .hfy-style-system .residency-overview-day-service { grid-template-columns: 8px minmax(0, 1fr); }
+  .hfy-style-system .residency-overview-day-service-label,
+  .hfy-style-system .residency-overview-day-service-action { grid-column: 2; justify-self: start; }
   .hfy-style-system .residency-overview-finance-card { grid-template-columns: 1fr; }
   .hfy-style-system .residency-overview-finance-card > * { grid-column: auto; }
 }

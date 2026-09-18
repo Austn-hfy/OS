@@ -30,22 +30,32 @@ const manager: ResidencyActor = {
   availableResidencies: [],
 };
 
+function service(
+  id: string,
+  name: string,
+  room: string,
+  status: "scheduled" | "pending" | "open",
+  talentNames: string[] = [],
+): ResidencyClientOverview["week"][number]["services"][number] {
+  return { id, calendarEventId: id, daypartId: `daypart-${id}`, name, room, timeLabel: "6:00 PM–9:00 PM", talentNames, status };
+}
+
 const populatedOverview: ResidencyClientOverview = {
   asOfDate: "2026-09-18",
   week: [
     { date: "2026-09-18", scheduledCount: 2, pendingCount: 0, openCount: 0, services: [
-      { id: "shift-1", name: "Pool DJ", room: "Pool", status: "scheduled" },
-      { id: "occurrence-1", name: "Trivia", room: "Lounge", status: "scheduled" },
+      service("shift-1", "Pool DJ", "Pool", "scheduled", ["Casey Rivera"]),
+      service("occurrence-1", "Trivia", "Lounge", "scheduled", ["Maya James"]),
     ] },
     { date: "2026-09-19", scheduledCount: 1, pendingCount: 1, openCount: 0, services: [
-      { id: "shift-2", name: "Dinner DJ", room: "Restaurant", status: "scheduled" },
-      { id: "shift-3", name: "Late Night", room: "Lobby", status: "pending" },
+      service("shift-2", "Dinner DJ", "Restaurant", "scheduled"),
+      service("shift-3", "Late Night", "Lobby", "pending"),
     ] },
     { date: "2026-09-20", scheduledCount: 0, pendingCount: 0, openCount: 1, services: [
-      { id: "projected-1", name: "Sunday Dinner", room: "Restaurant", status: "open" },
+      service("projected-1", "Sunday Dinner", "Restaurant", "open"),
     ] },
     { date: "2026-09-21", scheduledCount: 0, pendingCount: 0, openCount: 1, services: [
-      { id: "shift-4", name: "Lobby Set", room: "Lobby", status: "open" },
+      service("shift-4", "Lobby Set", "Lobby", "open"),
     ] },
     { date: "2026-09-22", scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] },
     { date: "2026-09-23", scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] },
@@ -80,17 +90,20 @@ describe("Residency Overview availability", () => {
   });
 
   it("renders the real operational Overview for managers without consulting Platform billing", async () => {
-    const html = renderToStaticMarkup(await ResidencyOverviewPage());
+    const html = renderToStaticMarkup(await ResidencyOverviewPage({ searchParams: Promise.resolve({}) }));
 
     expect(html).toContain("Welcome, Residency Manager");
     expect(html).toContain("Friday, September 18");
     expect(html).toContain("This week");
+    expect(html).toContain("Day focus");
+    expect(html).toContain("View or edit");
+    expect(html).toContain("6:00 PM–9:00 PM · Pool");
+    expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-18&amp;event=shift-1"');
     expect(html).toContain("2 services need scheduling");
     expect(html).toContain("1 talent confirmation is pending");
     expect(html).toContain("2 talent invoices are overdue");
     expect(html).toContain("Casey Rivera");
     expect(html).not.toContain("Upcoming roster");
-    expect(html).not.toContain("Maya James");
     expect(html).toContain("$12,840");
     expect(html).toContain("$2,260");
     expect(html).toContain("$1,450");
@@ -103,6 +116,17 @@ describe("Residency Overview availability", () => {
     expect(html).not.toContain("Platform subscription");
     expect(html).not.toContain("monthly equivalent");
     expect(html).not.toContain("Plan pending");
+  });
+
+  it("selects a requested day and exposes the exact scheduling action", async () => {
+    const html = renderToStaticMarkup(await ResidencyOverviewPage({ searchParams: Promise.resolve({ day: "2026-09-20" }) }));
+
+    expect(html).toContain("Sunday, September 20");
+    expect(html).toContain("Schedule talent");
+    expect(html).toContain("Talent has not been assigned");
+    expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-20&amp;event=projected-1"');
+    expect(html).toContain('href="/residency?day=2026-09-20"');
+    expect(html).toContain('aria-current="date"');
   });
 
   it("renders calm empty and all-clear states when no operational exceptions exist", async () => {
@@ -126,11 +150,14 @@ describe("Residency Overview availability", () => {
       },
     });
 
-    const html = renderToStaticMarkup(await ResidencyOverviewPage());
+    const html = renderToStaticMarkup(await ResidencyOverviewPage({ searchParams: Promise.resolve({}) }));
 
     expect(html).toContain("Your operational work is clear right now.");
     expect(html).toContain("All clear");
     expect(html).toContain("No open scheduling gaps, pending confirmations, or overdue talent invoices need attention.");
+    expect(html).toContain("No programming scheduled");
+    expect(html).toContain("Add activity");
+    expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-18&amp;date=2026-09-18"');
     expect(html).not.toContain("Upcoming roster");
     expect(html.match(/>No program</g)).toHaveLength(7);
     expect(isCurrentPlatformBillingAvailable).not.toHaveBeenCalled();
@@ -140,7 +167,7 @@ describe("Residency Overview availability", () => {
   it("continues to redirect calendar viewers to access-limited before Overview data loads", async () => {
     vi.mocked(requireResidencyActor).mockResolvedValue({ ...manager, accessRole: "calendar_viewer" });
 
-    await expect(ResidencyOverviewPage()).rejects.toThrow("NEXT_REDIRECT:/residency/access-limited");
+    await expect(ResidencyOverviewPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("NEXT_REDIRECT:/residency/access-limited");
     expect(getResidencyClientOverview).not.toHaveBeenCalled();
     expect(isCurrentPlatformBillingAvailable).not.toHaveBeenCalled();
     expect(getResidencyPlatformBilling).not.toHaveBeenCalled();
