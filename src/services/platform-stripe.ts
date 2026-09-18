@@ -243,7 +243,6 @@ async function previewConnectedAnnualSwitch(
   const preview = await stripe.invoices.createPreview({
     subscription: subscription.id,
     subscription_details: {
-      billing_cycle_anchor: "now",
       items: [{
         id: item.id,
         price_data: annualPreviewPriceData(plan, productId, comped),
@@ -724,7 +723,6 @@ export async function switchResidencyCommittedPlanToAnnualImmediately(
       .where(eq(platformSubscriptionRevisions.id, pendingRevision.id));
     updatedSubscription = await stripe.subscriptions.update(preview.subscription.id, {
       items: [{ id: preview.item.id, price: price.id, quantity: 1 }],
-      billing_cycle_anchor: "now",
       proration_behavior: "always_invoice",
       proration_date: prorationDate,
       payment_behavior: "error_if_incomplete",
