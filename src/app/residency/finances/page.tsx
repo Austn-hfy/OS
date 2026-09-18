@@ -17,7 +17,7 @@ function date(value: string) {
 
 export default async function ResidencyFinancesPage() {
   const actor = await requireResidencyActor();
-  if (!canResidencyRoleAccess(actor.accessRole, "finances")) redirect("/residency/calendar");
+  if (!canResidencyRoleAccess(actor.accessRole, "finances")) redirect("/residency/access-limited");
   const finances = await getResidencyClientFinances(actor.residencyId);
   const owedToHfyCents = finances.talentInvoices
     .filter((invoice) => invoice.status !== "paid")

@@ -189,7 +189,7 @@ async function ensureStripeCustomerAndProduct(plan: CurrentPlan, residency: { na
   return { customerId, productId };
 }
 
-async function createPlanPrice(plan: CurrentPlan, input: Pick<CommittedPlanInput, "term" | "talentBucketSize" | "houseBucketSize">, revision: number, productId: string, comped: boolean) {
+export async function createPlanPrice(plan: CurrentPlan, input: Pick<CommittedPlanInput, "term" | "talentBucketSize" | "houseBucketSize">, revision: number, productId: string, comped: boolean) {
   const stripe = getStripe();
   const amount = platformPlanAmount(input, comped).termChargeAmountCents;
   const recurring = platformTermInterval(input.term);
@@ -257,7 +257,7 @@ async function previewConnectedAnnualSwitch(
   return { amountDueCents: preview.amount_due, subscription, item };
 }
 
-async function nextPlanRevision(plan: CurrentPlan) {
+export async function nextPlanRevision(plan: CurrentPlan) {
   const [latest] = await getDb().select({ revision: platformSubscriptionRevisions.revision })
     .from(platformSubscriptionRevisions)
     .where(eq(platformSubscriptionRevisions.platformSubscriptionId, plan.id))
@@ -327,7 +327,7 @@ async function retireDeferredAnnualState(
   }
 }
 
-async function scheduleStripePlanAtRenewal(subscription: Stripe.Subscription, price: Stripe.Price, revision: number) {
+export async function scheduleStripePlanAtRenewal(subscription: Stripe.Subscription, price: Stripe.Price, revision: number) {
   const stripe = getStripe();
   const currentItem = subscription.items.data[0];
   if (!currentItem) throw new Error("Stripe subscription has no subscription item to update.");

@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { residencyMemberships, residencies, users } from "../src/db/schema";
+import { residencyContacts, residencyMemberships, residencies, users } from "../src/db/schema";
 
 function argument(name: string, required = true): string {
   const index = process.argv.indexOf(`--${name}`);
@@ -37,7 +37,22 @@ try {
     if (role === "hotel_user") {
       const [residency] = await tx.select({ id: residencies.id }).from(residencies).where(eq(residencies.slug, residencySlug)).limit(1);
       if (!residency) throw new Error(`Residency ${residencySlug} does not exist.`);
-      await tx.insert(residencyMemberships).values({ userId: created.data.user.id, residencyId: residency.id });
+      await tx.insert(residencyMemberships).values({ userId: created.data.user.id, residencyId: residency.id, accessRole: "manager" });
+      const [primary] = await tx.select({ id: residencyContacts.id }).from(residencyContacts).where(and(
+        eq(residencyContacts.residencyId, residency.id),
+        eq(residencyContacts.active, true),
+        eq(residencyContacts.isPrimary, true),
+      )).limit(1);
+      await tx.insert(residencyContacts).values({
+        residencyId: residency.id,
+        userId: created.data.user.id,
+        name: displayName,
+        email,
+        accessRole: "manager",
+        invitationStatus: "active",
+        isPrimary: !primary,
+        acceptedAt: new Date(),
+      });
     }
   });
 } catch (error) {
