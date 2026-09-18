@@ -165,7 +165,11 @@ describe("Residency Overview responsive visual contract", () => {
         const dayColumns = new Set(days.map((day) => Math.round(day.getBoundingClientRect().left))).size;
         const expectedDayColumns = dashboard.width <= 480 ? 2 : dashboard.width <= 700 ? 4 : 7;
         const money = element(".residency-overview-finance-primary strong").getBoundingClientRect();
+        const attentionCard = element(".residency-overview-attention-card").getBoundingClientRect();
         const financeCard = element(".residency-overview-finance-card").getBoundingClientRect();
+        const selectedDay = element(".residency-overview-day.is-selected");
+        const dayDetail = element(".residency-overview-day-detail");
+        const selectedMarker = element(".residency-overview-day-markers > b");
         return {
           documentContained: document.documentElement.scrollWidth === viewportWidth,
           surfaceContained: surface.left >= -0.5 && surface.right <= viewportWidth + 0.5,
@@ -179,6 +183,9 @@ describe("Residency Overview responsive visual contract", () => {
           }),
           sevenDays: days.length === 7,
           correctDayColumns: dayColumns === expectedDayColumns,
+          equalSummaryCardWidths: Math.abs(attentionCard.width - financeCard.width) <= 0.5,
+          selectionIsVisuallyLinked: selectedMarker.textContent === "Selected"
+            && getComputedStyle(selectedDay).borderTopColor === getComputedStyle(dayDetail).borderTopColor,
           largeMoneyContained: money.left >= financeCard.left - 0.5 && money.right <= financeCard.right + 0.5,
         };
       });
@@ -190,6 +197,8 @@ describe("Residency Overview responsive visual contract", () => {
         cardsUseLockedSurface: true,
         sevenDays: true,
         correctDayColumns: true,
+        equalSummaryCardWidths: true,
+        selectionIsVisuallyLinked: true,
         largeMoneyContained: true,
       });
     }
