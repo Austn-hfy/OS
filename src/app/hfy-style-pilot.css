@@ -3337,10 +3337,10 @@
   align-content: start;
   gap: 5px;
   padding: var(--hfy-space-3);
-  border: 1px solid transparent;
+  border: 1px solid var(--hfy-line);
   border-radius: var(--hfy-radius-card);
   color: var(--hfy-ink);
-  background: var(--hfy-surface-nested);
+  background: var(--hfy-surface-card-background);
   text-align: left;
   text-decoration: none;
   transition: border-color var(--hfy-motion), box-shadow var(--hfy-motion), transform var(--hfy-motion);
@@ -3457,7 +3457,7 @@
   padding: var(--hfy-space-4);
   border: 1px solid var(--hfy-line);
   border-radius: var(--hfy-radius-card);
-  background: var(--hfy-surface-nested);
+  background: #fbfcfd;
 }
 .hfy-style-system .residency-overview-day-detail.needs-attention { --residency-overview-selection: var(--hfy-warning); border-color: var(--hfy-warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hfy-warning) 12%, transparent); }
 .hfy-style-system .residency-overview-day-detail.is-ready { --residency-overview-selection: var(--hfy-success); border-color: var(--hfy-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hfy-success) 10%, transparent); }
@@ -3501,7 +3501,7 @@
 }
 .hfy-style-system .residency-overview-day-detail-week-link { padding: 7px 9px; border-radius: var(--hfy-radius-control); background: var(--hfy-action-soft); }
 .hfy-style-system .residency-overview-day-detail-week-link:focus-visible,
-.hfy-style-system .residency-overview-day-service-action:focus-visible { outline: 3px solid var(--hfy-focus-ring); outline-offset: 2px; }
+.hfy-style-system .residency-overview-day-service:focus-visible { outline: 3px solid var(--hfy-focus-ring); outline-offset: 2px; }
 
 .hfy-style-system .residency-overview-day-services { display: grid; gap: var(--hfy-space-2); }
 .hfy-style-system .residency-overview-day-service {
@@ -3511,10 +3511,17 @@
   align-items: center;
   gap: var(--hfy-space-3);
   padding: 10px 12px;
-  border: 1px solid var(--hfy-line);
+  border: 1px solid #d7e0e5;
   border-radius: 12px;
-  background: var(--hfy-surface-card-background);
+  color: var(--hfy-ink);
+  background: #f1f5f7;
+  text-decoration: none;
+  transition: background var(--hfy-motion), border-color var(--hfy-motion), transform var(--hfy-motion);
 }
+.hfy-style-system .residency-overview-day-service:hover { border-color: var(--hfy-line-strong); background: #ebf1f4; transform: translateY(-1px); }
+.hfy-style-system .residency-overview-day-service:is(.pending, .open):hover { border-color: color-mix(in srgb, var(--hfy-warning) 35%, #d7e0e5); }
+.hfy-style-system .residency-overview-day-service.scheduled { border-color: #c7ded2; background: #f2f8f5; }
+.hfy-style-system .residency-overview-day-service.scheduled:hover { border-color: #9fc8b5; background: #eaf4ef; }
 .hfy-style-system .residency-overview-day-service-status { width: 8px; height: 8px; border-radius: 50%; background: var(--hfy-success); }
 .hfy-style-system .residency-overview-day-service.pending .residency-overview-day-service-status { background: var(--hfy-warning); }
 .hfy-style-system .residency-overview-day-service.open .residency-overview-day-service-status { background: var(--hfy-warning); }
@@ -3536,8 +3543,7 @@
 }
 .hfy-style-system .residency-overview-day-service.pending .residency-overview-day-service-label { color: var(--hfy-warning); background: var(--hfy-warning-soft); }
 .hfy-style-system .residency-overview-day-service.open .residency-overview-day-service-label { color: var(--hfy-warning); background: var(--hfy-warning-soft); }
-.hfy-style-system .residency-overview-day-service-action { padding: 7px 9px; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-control); background: var(--hfy-surface-card-background); }
-.hfy-style-system .residency-overview-day-service-action:hover { border-color: var(--hfy-action-strong); background: var(--hfy-action-soft); }
+.hfy-style-system .residency-overview-day-service:hover .residency-overview-day-service-action { color: var(--hfy-ink); }
 
 .hfy-style-system .residency-overview-day-empty {
   display: flex;

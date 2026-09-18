@@ -182,7 +182,13 @@ export default async function ResidencyOverviewPage({
                     : service.status === "open"
                       ? "Talent has not been assigned"
                       : "Programming is confirmed";
-                return <article className={`residency-overview-day-service ${service.status}`} key={service.id}>
+                const actionLabel = serviceActionLabel(service.status);
+                return <Link
+                  className={`residency-overview-day-service ${service.status}`}
+                  aria-label={`${actionLabel} for ${service.name}. ${service.timeLabel} in ${service.room}.`}
+                  href={calendarHref(selectedDay.date, service.calendarEventId, false, true)}
+                  key={service.id}
+                >
                   <span className="residency-overview-day-service-status" aria-hidden="true" />
                   <div className="residency-overview-day-service-copy">
                     <strong>{service.name}</strong>
@@ -190,8 +196,8 @@ export default async function ResidencyOverviewPage({
                     <small>{staffing}</small>
                   </div>
                   <span className="residency-overview-day-service-label">{serviceStatusLabel(service.status)}</span>
-                  <Link className="residency-overview-day-service-action" href={calendarHref(selectedDay.date, service.calendarEventId, false, true)}>{serviceActionLabel(service.status)} <ArrowIcon /></Link>
-                </article>;
+                  <span className="residency-overview-day-service-action">{actionLabel} <ArrowIcon /></span>
+                </Link>;
               })}
             </div> : <div className="residency-overview-day-empty">
               <div><strong>No programming scheduled</strong><p>Add an activity or open this week in Calendar.</p></div>
