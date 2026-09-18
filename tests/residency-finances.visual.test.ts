@@ -45,7 +45,11 @@ function fixture() {
   return `<div class="hfy-style-system"><div class="shell client-shell visual-finances-shell"><aside class="sidebar client-sidebar"><div class="brand"><span class="brand-mark">HFY</span><span class="brand-copy"><strong>HFY OS</strong><span>Residency preview</span></span></div><div class="client-residency-context"><small>Your Residency</small><strong>HFY Internal Test Residency</strong></div></aside><main class="main"><div class="view-as-banner" role="status"><strong>Viewing as: HFY Internal Test Residency</strong><span>Changes made here are live for this Residency.</span><button type="button">Exit preview</button></div><section class="workspace-surface residency-workspace-surface residency-page-surface workspace-surface-finances"><header class="page-header client-page-header residency-page-header"><div><p class="eyebrow">HFY Internal Test Residency finances</p><h1>Finances</h1></div></header><div class="residency-page-body finance-accordions"><details class="finance-accordion card" open><summary><span><small>Directly sourced by your team</small><strong>Owed to Your Talent</strong></span><span><strong>$400.00</strong><small>informational only</small></span></summary><div class="finance-accordion-body"><p>This is a summary of what your Residency pays its own talent directly. HFY does not collect, send, or manage these payments.</p>${directTable}</div></details><details class="finance-accordion card" open><summary><span><small>HFY-managed programming</small><strong>Owed to HFY</strong></span><span><strong>$1,500.00</strong><small>outstanding</small></span></summary><div class="finance-accordion-body"><p>Invoices for talent sourced, scheduled, and paid by HFY. Your Platform subscription is managed separately in Settings → Billing.</p>${invoiceTable}</div></details></div></section></main></div></div>`;
 }
 
-async function fixtureDocument() {
+function rateDialogFixture() {
+  return `<div class="quick-modal-backdrop finances-rate-dialog-backdrop"><section class="quick-modal client-assignment-rate-modal finances-rate-dialog" role="dialog"><header class="quick-modal-header"><div><p class="eyebrow">Sep 4, 2026</p><h2>DJ – Main Pool</h2><p>DANAISY · Pool</p></div><button class="quick-modal-close" type="button">×</button></header><div class="quick-modal-body"><dl class="client-assignment-booking-summary"><div><dt>Artist</dt><dd>DANAISY</dd></div><div><dt>Date</dt><dd>Sep 4, 2026</dd></div><div><dt>Hours</dt><dd>12:00 PM–7:00 PM</dd></div><div><dt>Status</dt><dd>confirmed</dd></div></dl><section class="client-assignment-rate-editor"><div><p class="eyebrow">Booking rate</p><h3>Rate needed</h3><span class="client-rate-source">Rate needed</span></div><form class="client-rate-form"><label>Artist hourly rate</label><div class="client-rate-control"><span>$</span><input type="number" placeholder="Enter rate"><button class="button" type="button">Save rate</button></div><small>Enter the hourly rate for this artist and booking.</small></form></section></div></section></div>`;
+}
+
+async function fixtureDocument(markup = fixture()) {
   const [tokens, globals, pilot, font] = await Promise.all([
     readFile(new URL("../src/app/hfy-design-tokens.css", import.meta.url), "utf8"),
     readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
@@ -59,7 +63,7 @@ async function fixtureDocument() {
     html, body { width: 100%; min-height: 100%; }
     body { background: #e9edef; font-family: VisualGeist, Arial, sans-serif; }
   `;
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${tokens}\n${localGlobals}\n${pilot}\n${fixtureStyles}</style></head><body>${fixture()}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${tokens}\n${localGlobals}\n${pilot}\n${fixtureStyles}</style></head><body class="hfy-style-system">${markup}</body></html>`;
 }
 
 describe("Residency Finances responsive visual contract", () => {
@@ -126,6 +130,45 @@ describe("Residency Finances responsive visual contract", () => {
         scrollOwnedByWrappers: true,
         rateActionContained: true,
       });
+    }
+  }, 120_000);
+
+  it("anchors the rate editor to the viewport and reflows it into defined compact states", async () => {
+    const dialogHtml = await fixtureDocument(rateDialogFixture());
+    for (const width of [1440, 1200, 1024, 760, 600, 390]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.setContent(dialogHtml, { waitUntil: "load" });
+      await page.evaluate(() => document.fonts.ready);
+
+      const metrics = await page.evaluate(() => {
+        const element = (selector: string) => document.querySelector<HTMLElement>(selector)!;
+        const backdrop = element(".finances-rate-dialog-backdrop").getBoundingClientRect();
+        const dialog = element(".finances-rate-dialog").getBoundingClientRect();
+        const body = element(".finances-rate-dialog .quick-modal-body");
+        const summaryFacts = [...document.querySelectorAll<HTMLElement>(".client-assignment-booking-summary > div")];
+        const editorChildren = [...document.querySelectorAll<HTMLElement>(".client-assignment-rate-editor > *")];
+        const rateControl = element(".client-rate-control").getBoundingClientRect();
+        const saveButton = element(".client-rate-control .button").getBoundingClientRect();
+        return {
+          documentContained: document.documentElement.scrollWidth === document.documentElement.clientWidth,
+          backdropViewportAnchored: Math.abs(backdrop.top) < 1 && Math.abs(backdrop.left) < 1 && Math.abs(backdrop.right - innerWidth) < 1 && Math.abs(backdrop.bottom - innerHeight) < 1,
+          dialogContained: dialog.left >= -0.5 && dialog.right <= innerWidth + 0.5 && dialog.top >= -0.5 && dialog.bottom <= innerHeight + 0.5,
+          bodyContained: body.scrollWidth === body.clientWidth,
+          summaryColumns: new Set(summaryFacts.map((fact) => Math.round(fact.getBoundingClientRect().left))).size,
+          editorStacked: Math.abs(editorChildren[0].getBoundingClientRect().left - editorChildren[1].getBoundingClientRect().left) < 1 && editorChildren[1].getBoundingClientRect().top >= editorChildren[0].getBoundingClientRect().bottom,
+          rateControlContained: saveButton.right <= rateControl.right + 0.5,
+          saveButtonFullRow: Math.abs(saveButton.left - rateControl.left) < 1 && Math.abs(saveButton.right - rateControl.right) < 1,
+        };
+      });
+
+      expect(metrics.documentContained, `document overflow at ${width}px`).toBe(true);
+      expect(metrics.backdropViewportAnchored, `backdrop anchoring at ${width}px`).toBe(true);
+      expect(metrics.dialogContained, `dialog containment at ${width}px`).toBe(true);
+      expect(metrics.bodyContained, `dialog body overflow at ${width}px`).toBe(true);
+      expect(metrics.summaryColumns, `summary columns at ${width}px`).toBe(width <= 850 ? 2 : 4);
+      expect(metrics.editorStacked, `editor stacking at ${width}px`).toBe(width <= 850);
+      expect(metrics.rateControlContained, `rate controls at ${width}px`).toBe(true);
+      expect(metrics.saveButtonFullRow, `rate action row at ${width}px`).toBe(width === 390);
     }
   }, 120_000);
 });

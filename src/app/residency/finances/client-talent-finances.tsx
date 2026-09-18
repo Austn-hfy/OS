@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { RateNeededWarning } from "@/components/rate-needed-warning";
 import type { getResidencyClientFinances } from "@/data/residency-client";
 import { ClientAssignmentRateDialog } from "../talent/client-assignment-rate-dialog";
@@ -19,18 +19,6 @@ function date(value: string) {
 export function ClientTalentFinances({ rows, timeZone, canManage }: { rows: ClientTalentRow[]; timeZone: string; canManage: boolean }) {
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
   const selectedAssignment = rows.find((row) => row.id === selectedAssignmentId) ?? null;
-
-  useEffect(() => {
-    if (!selectedAssignmentId) return;
-    const priorOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setSelectedAssignmentId(null); };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = priorOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [selectedAssignmentId]);
 
   if (!rows.length) return <div className="empty">Nothing is currently owed to talent sourced directly by this Residency.</div>;
 
@@ -53,6 +41,7 @@ export function ClientTalentFinances({ rows, timeZone, canManage }: { rows: Clie
       artistName={selectedAssignment.artist}
       timeZone={timeZone}
       canManage={canManage}
+      viewportAnchored
       onClose={() => setSelectedAssignmentId(null)}
     /> : null}
   </>;

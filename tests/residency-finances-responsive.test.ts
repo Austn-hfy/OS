@@ -32,4 +32,21 @@ describe("Residency Finances responsive contract", () => {
     expect(styles).toMatch(/\.finance-table--invoice \.finance-invoice-period \{[\s\S]*?display: grid;/);
     expect(styles).toMatch(/\.workspace-surface-finances \{[\s\S]*?overflow: visible;/);
   });
+
+  it("keeps the Finances rate editor viewport-anchored and keyboard-contained without changing Talent's invocation", async () => {
+    const [finances, dialog, styles] = await Promise.all([
+      readSource("../src/app/residency/finances/client-talent-finances.tsx"),
+      readSource("../src/app/residency/talent/client-assignment-rate-dialog.tsx"),
+      readSource("../src/app/hfy-style-pilot.css"),
+    ]);
+
+    expect(finances).toContain("viewportAnchored");
+    expect(dialog).toContain("createPortal(dialog, document.body)");
+    expect(dialog).toContain('event.key === "Escape"');
+    expect(dialog).toContain('event.key !== "Tab"');
+    expect(dialog).toContain("returnFocusTarget?.focus()");
+    expect(styles).toContain("container-name: finances-rate-dialog");
+    expect(styles).toContain("@container finances-rate-dialog (max-width: 520px)");
+    expect(styles).toContain("@container finances-rate-dialog (max-width: 420px)");
+  });
 });

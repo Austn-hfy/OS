@@ -3906,6 +3906,66 @@
 .hfy-style-system .finance-rate-needed-button:hover { border-color: color-mix(in srgb, var(--hfy-coral) 78%, #8a3b35); background: color-mix(in srgb, var(--hfy-coral) 21%, white); }
 .hfy-style-system .finance-rate-needed-button:focus-visible { outline: none; box-shadow: 0 0 0 4px color-mix(in srgb, var(--hfy-coral) 30%, transparent); }
 
+/* Finances owns a viewport-level, compact-safe rate editor without changing Talent's approved dialog presentation. */
+.hfy-style-system .finances-rate-dialog-backdrop {
+  padding: var(--hfy-space-8);
+}
+
+.hfy-style-system .finances-rate-dialog {
+  width: min(610px, 100%);
+  max-height: calc(100dvh - (2 * var(--hfy-space-8)));
+  container-name: finances-rate-dialog;
+  container-type: inline-size;
+}
+
+.hfy-style-system .finances-rate-dialog .quick-modal-body {
+  min-width: 0;
+  scrollbar-gutter: stable;
+}
+
+.hfy-style-system .finances-rate-dialog :is(.client-assignment-booking-summary, .client-assignment-rate-editor, .client-rate-form, .client-rate-control) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@container finances-rate-dialog (max-width: 520px) {
+  .hfy-style-system .finances-rate-dialog .client-assignment-booking-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hfy-style-system .finances-rate-dialog .client-assignment-booking-summary dd {
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .hfy-style-system .finances-rate-dialog .client-assignment-rate-editor {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--hfy-space-4);
+  }
+}
+
+@container finances-rate-dialog (max-width: 420px) {
+  .hfy-style-system .finances-rate-dialog .client-rate-control {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .hfy-style-system .finances-rate-dialog .client-rate-control .button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 650px) {
+  .hfy-style-system .finances-rate-dialog-backdrop {
+    padding: var(--hfy-space-3);
+  }
+
+  .hfy-style-system .finances-rate-dialog {
+    max-height: calc(100dvh - (2 * var(--hfy-space-3)));
+  }
+}
+
 @container residency-finance-table (max-width: 860px) {
   .hfy-style-system .finance-table {
     table-layout: fixed;

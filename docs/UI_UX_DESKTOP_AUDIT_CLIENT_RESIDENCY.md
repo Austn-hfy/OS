@@ -1,6 +1,6 @@
 # HFY OS desktop UI/UX audit — Client Residency
 
-Status: Settings desktop benchmark complete; Overview, Talent, Calendar, Day Parts, and the Finances P0 responsive pass adopted; broader client audit remains active
+Status: Settings desktop benchmark complete; Overview, Talent, Calendar, Day Parts, and the Finances P0 responsive and rate-dialog passes adopted; broader client audit remains active
 Date: September 17, 2026
 Scope: the client-facing Residency workspace reached through **View as Residency**
 Reference screen: **Settings → Billing**
@@ -509,6 +509,29 @@ Intentionally unchanged in this pass:
 
 - The rate dialog, disclosure-card/layer treatment, typography cleanup, and header language remain assigned to later Finances passes.
 - Financial data, totals, permissions, invoice download behavior, and direct-talent rate behavior were not changed.
+
+### CR-021 — Finances rate editor is anchored to the page surface instead of the viewport
+
+Priority: P1
+Applies to: `/residency/finances` → Directly sourced by your team → Edit rate
+Status: **resolved in the Finances rate-dialog pass**
+
+The shared rate editor rendered inside the filtered Residency page surface. Its fixed backdrop therefore began below the View-as banner and to the right of the sidebar instead of covering the browser viewport. At compact widths, the four booking facts and two-column rate editor inherited browser-width decisions rather than reacting to the dialog's usable width. Focus stayed on the obscured table trigger after opening, and the dialog did not trap keyboard focus or restore it through its own lifecycle.
+
+Resolution:
+
+- Only the Finances invocation now mounts through a document-level portal; Talent's approved use of the shared dialog remains unchanged.
+- The backdrop and dialog are anchored to the full viewport with shared desktop and compact overlay insets and a viewport-safe maximum height.
+- The dialog is a named inline-size container. Booking facts reflow from four columns to two, the rate summary and form stack, and the Save action takes a complete row before any control can clip.
+- The dialog body owns any necessary vertical scrolling and every nested rate-control layer explicitly permits width contraction.
+- Opening moves focus to the hourly-rate field, Tab and Shift+Tab remain within the dialog, Escape closes when no save is pending, body scrolling is released on close, and focus returns to the exact Edit rate trigger.
+- Geometry coverage verifies viewport anchoring, dialog and control containment, and the defined reflow states at 1440px, 1200px, 1024px, 760px, 600px, and 390px.
+- The real signed-in Ace Hotel Finances page supplied an existing unresolved-rate row for before-state verification without editing or submitting financial data.
+
+Intentionally unchanged:
+
+- Rate calculation, save behavior, permissions, row data, table layout, and all copy.
+- The disclosure-card/layer treatment, typography cleanup, and header language remain assigned to later Finances passes.
 
 ## Settings benchmark decisions
 
