@@ -5,6 +5,7 @@ import { getDb } from "@/db/client";
 import { accountSetupTokens, auditLog, residencies, residencyContacts, residencyMemberships, users } from "@/db/schema";
 import { buildAccountSetupUrl, issueAccountSetupToken } from "@/domain/account-setup";
 import type { ResidencyActor } from "@/lib/auth";
+import { passwordRecoveryRedirectUrl } from "@/lib/auth-redirect";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendResidencyAccountSetupEmail } from "@/services/account-setup-email";
 
@@ -189,6 +190,37 @@ export async function resendResidencyInvitation(actor: ResidencyActor, contactId
   )).limit(1);
   if (contact?.status !== "invited") throw new Error("Only a pending invitation can be resent.");
   await issueSetupCredential(actor, contactId);
+}
+
+export async function requestResidencyUserPasswordReset(actor: ResidencyActor, contactId: string) {
+  requireManagingActor(actor);
+  const [contact] = await getDb().select({
+    id: residencyContacts.id,
+    email: residencyContacts.email,
+    userId: residencyContacts.userId,
+    status: residencyContacts.invitationStatus,
+  }).from(residencyContacts).where(and(
+    eq(residencyContacts.id, contactId),
+    eq(residencyContacts.residencyId, actor.residencyId),
+    eq(residencyContacts.active, true),
+  )).limit(1);
+  if (!contact?.userId || contact.status !== "active") throw new Error("Only an enrolled user can receive a password reset link.");
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://hfy.app";
+  const { error } = await createSupabaseAdminClient().auth.resetPasswordForEmail(contact.email, {
+    redirectTo: passwordRecoveryRedirectUrl(siteUrl),
+  });
+  if (error) throw error;
+
+  await getDb().insert(auditLog).values({
+    residencyId: actor.residencyId,
+    actorUserId: actor.userId,
+    actorLabel: actor.email,
+    action: "residency_member_password_reset_requested",
+    entityType: "residency_contact",
+    entityId: contact.id,
+    details: { targetUserId: contact.userId, email: contact.email },
+  });
 }
 
 export async function changeResidencyUserRole(actor: ResidencyActor, contactId: string, role: ResidencyUserRole) {

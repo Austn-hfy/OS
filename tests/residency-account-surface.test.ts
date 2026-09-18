@@ -17,7 +17,8 @@ describe("Residency Account surface layering", () => {
     ]);
 
     expect(form.match(/<ResidencySurfaceCard className="settings-account-section">/g)).toHaveLength(1);
-    expect(form.indexOf("<footer>")).toBeGreaterThan(form.lastIndexOf("settings-account-section"));
+    expect(form).toContain('<footer className="settings-account-actions">');
+    expect(form.indexOf('<footer className="settings-account-actions">')).toBeLessThan(form.lastIndexOf("</ResidencySurfaceCard>"));
     expect(users).toContain('ResidencySurfaceCard className="settings-account-section residency-users-card"');
     expect(security).toContain('ResidencySurfaceCard className="settings-account-section account-security-card"');
     expect(page).toContain("<UsersAndRoles");

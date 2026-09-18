@@ -4,16 +4,17 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
 describe("Residency Users & Roles account experience", () => {
-  it("keeps role choices equal-width and stacks them before their copy can clip", async () => {
+  it("uses the approved layered person cards and card-width-responsive layout", async () => {
     const css = await read("../../../app/globals.css");
-    expect(css).toContain(".residency-role-option { display: flex; flex: 1 1 0;");
-    expect(css).toContain(".residency-role-option > span { min-width: 0; overflow-wrap: break-word; }");
+    expect(css).toContain(".residency-users-card { container: residency-users / inline-size; }");
     expect(css).toContain(".residency-user-invite-form { display: grid; min-width: 0;");
-    expect(css).toContain("@media (max-width: 1199px)");
-    expect(css).toContain(".residency-user-invite-form, .residency-user-row { grid-template-columns: minmax(0, 1fr); }");
-    expect(css).toContain("@media (max-width: 480px)");
-    expect(css).toContain(".residency-user-invite-form fieldset { flex-direction: column; }");
-    expect(css).toContain(".residency-role-option { flex: 0 1 auto; width: 100%; }");
+    expect(css).toContain(".residency-user-card-top { min-width: 0; display: flex;");
+    expect(css).toContain(".residency-user-card-bottom { min-width: 0; display: grid;");
+    expect(css).toContain("grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr)");
+    expect(css).toContain("@container residency-users (max-width: 860px)");
+    expect(css).toContain("@container residency-users (max-width: 560px)");
+    expect(css).toContain(".residency-user-invite-form, .residency-user-card-bottom { grid-template-columns: minmax(0, 1fr); }");
+    expect(css).toContain(".residency-user-card-top { align-items: flex-start; flex-direction: column; }");
   });
 
   it("defaults bulk invitations to Calendar viewer and explains both roles at assignment time", async () => {
@@ -22,21 +23,25 @@ describe("Residency Users & Roles account experience", () => {
     expect(actions).toContain("split(/[\\n,]+/)");
     expect(component).toContain("Calendar only. No Account, Billing, Talent, or Finances access.");
     expect(component).toContain("Full workspace, Account, users, roles, and Billing.");
-    expect(component).toContain("users.length}/4");
+    expect(component).toContain("{users.length} of 4 seats");
     expect(settingsForm).not.toContain("primaryContactName");
     expect(settingsForm).not.toContain("primaryContactPhone");
     expect(settingsForm).not.toContain("primaryContactEmail");
   });
 
   it("shows pending and enrolled states, inviter, role audit, and state-specific actions", async () => {
-    const component = await read("./users-and-roles.tsx");
+    const [component, actions, service] = await Promise.all([read("./users-and-roles.tsx"), read("./actions.ts"), read("../../../services/residency-users.ts")]);
     expect(component).toContain("Invitation pending");
     expect(component).toContain("Enrolled");
     expect(component).toContain("Invited ");
     expect(component).toContain("roleHistory[0]");
-    expect(component).toContain(">Resend<");
+    expect(component).toContain(">Resend invite<");
+    expect(component).toContain(">Reset password<");
     expect(component).toContain(">Revoke<");
     expect(component).toContain(">Remove<");
+    expect(actions).toContain("requestResidencyUserPasswordResetAction");
+    expect(service).toContain("requestResidencyUserPasswordReset");
+    expect(service).toContain("resetPasswordForEmail");
   });
 
   it("implements client View As as a read-only preview enforced at the mutation boundary", async () => {
