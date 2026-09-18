@@ -56,15 +56,6 @@ export async function getResidencyClientCalendar(residencyId: string, range: { f
   }));
 }
 
-export async function getResidencyClientOverview(residencyId: string) {
-  const today = new Date().toISOString().slice(0, 10);
-  const rows = await getDb().select({ serviceDate: shifts.serviceDate }).from(shifts).where(and(
-    eq(shifts.residencyId, residencyId),
-    gte(shifts.serviceDate, today),
-  )).orderBy(asc(shifts.serviceDate));
-  return { upcomingServiceCount: rows.length, nextServiceDate: rows[0]?.serviceDate ?? null };
-}
-
 export async function getResidencyClientSafeRoster(residencyId: string) {
   const rows = await getDb().select({
     id: talent.id,

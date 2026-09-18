@@ -378,7 +378,7 @@ describe("billing surface availability", () => {
     expect(residencyLayout).toContain("platformBillingAvailable ? await getResidencyPaymentFailure");
     expect(residencyShell).toContain('{canManage ? <WorkspaceNavLink href="/residency"');
     expect(residencyShell).not.toContain('canManage && platformBillingAvailable ? <WorkspaceNavLink href="/residency"');
-    expect(residencyOverview).toContain("getResidencyClientOverview(actor.residencyId)");
+    expect(residencyOverview).toContain("getResidencyClientOverview(actor.residencyId, actor.residencyTimezone)");
     expect(residencyOverview).not.toContain("isCurrentPlatformBillingAvailable");
     expect(residencyOverview).not.toContain("getResidencyPlatformBilling");
     expect(settingsPage).toContain('...(platformBillingAvailable ? [{ href: "/residency/settings/billing", label: "Billing" }] : [])');

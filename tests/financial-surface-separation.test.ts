@@ -5,9 +5,11 @@ const readSource = (path: string) => readFile(new URL(path, import.meta.url), "u
 
 describe("financial surface separation", () => {
   it("puts Platform billing only in Settings and talent obligations only in Finances", async () => {
-    const [billingPage, financesPage, data] = await Promise.all([
+    const [billingPage, financesPage, overviewPage, overviewData, data] = await Promise.all([
       readSource("../src/app/residency/settings/billing/page.tsx"),
       readSource("../src/app/residency/finances/page.tsx"),
+      readSource("../src/app/residency/page.tsx"),
+      readSource("../src/data/residency-overview.ts"),
       readSource("../src/data/residency-client.ts"),
     ]);
     expect(billingPage).toContain("Platform subscription");
@@ -15,6 +17,13 @@ describe("financial surface separation", () => {
     expect(financesPage).toContain("Owed to HFY");
     expect(financesPage).toContain("Owed to Your Talent");
     expect(financesPage).not.toContain("platformSubscriptions");
+    expect(overviewPage).toContain('from "@/data/residency-overview"');
+    expect(overviewPage).not.toContain("getResidencyPlatformBilling");
+    expect(overviewData).toContain("currentMonthCommitmentsCents");
+    expect(overviewData).toContain("outstandingHfyInvoicesCents");
+    expect(overviewData).not.toContain("platformSubscriptions");
+    expect(overviewData).not.toContain("platformSubscriptionInvoices");
+    expect(overviewData).not.toContain("loadPlatformLiveUsage");
     const platformQuery = data.slice(data.indexOf("export async function getResidencyPlatformBilling"), data.indexOf("export async function getResidencyClientSettings"));
     expect(platformQuery).toContain("platformSubscriptions");
     expect(platformQuery).not.toContain("talentInvoiceAdjustments");
