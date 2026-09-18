@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getResidencyClientOverview, getResidencyPlatformBilling } from "@/data/residency-client";
+import { getResidencyPlatformBilling } from "@/data/residency-client";
+import { getResidencyClientOverview, type ResidencyClientOverview } from "@/data/residency-overview";
 import type { ResidencyActor } from "@/lib/auth";
 import { requireResidencyActor } from "@/lib/auth";
 import { isCurrentPlatformBillingAvailable } from "@/lib/platform-billing-stage";
@@ -9,10 +10,8 @@ import ResidencyOverviewPage from "./page";
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((path: string) => { throw new Error(`NEXT_REDIRECT:${path}`); }),
 }));
-vi.mock("@/data/residency-client", () => ({
-  getResidencyClientOverview: vi.fn(),
-  getResidencyPlatformBilling: vi.fn(),
-}));
+vi.mock("@/data/residency-client", () => ({ getResidencyPlatformBilling: vi.fn() }));
+vi.mock("@/data/residency-overview", () => ({ getResidencyClientOverview: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireResidencyActor: vi.fn() }));
 vi.mock("@/lib/platform-billing-stage", () => ({ isCurrentPlatformBillingAvailable: vi.fn() }));
 
@@ -31,31 +30,126 @@ const manager: ResidencyActor = {
   availableResidencies: [],
 };
 
+const populatedOverview: ResidencyClientOverview = {
+  asOfDate: "2026-09-18",
+  week: [
+    { date: "2026-09-18", scheduledCount: 2, pendingCount: 0, openCount: 0, services: [
+      { id: "shift-1", name: "Pool DJ", room: "Pool", status: "scheduled" },
+      { id: "occurrence-1", name: "Trivia", room: "Lounge", status: "scheduled" },
+    ] },
+    { date: "2026-09-19", scheduledCount: 1, pendingCount: 1, openCount: 0, services: [
+      { id: "shift-2", name: "Dinner DJ", room: "Restaurant", status: "scheduled" },
+      { id: "shift-3", name: "Late Night", room: "Lobby", status: "pending" },
+    ] },
+    { date: "2026-09-20", scheduledCount: 0, pendingCount: 0, openCount: 1, services: [
+      { id: "projected-1", name: "Sunday Dinner", room: "Restaurant", status: "open" },
+    ] },
+    { date: "2026-09-21", scheduledCount: 0, pendingCount: 0, openCount: 1, services: [
+      { id: "shift-4", name: "Lobby Set", room: "Lobby", status: "open" },
+    ] },
+    { date: "2026-09-22", scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] },
+    { date: "2026-09-23", scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] },
+    { date: "2026-09-24", scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] },
+  ],
+  attention: {
+    openServiceCount: 2,
+    nextOpenService: { name: "Sunday Dinner", room: "Restaurant", serviceDate: "2026-09-20" },
+    pendingConfirmationCount: 1,
+    nextPendingConfirmation: { talentName: "Casey Rivera", activityName: "Late Night", serviceDate: "2026-09-19" },
+    overdueInvoiceCount: 2,
+    overdueInvoiceCents: 145_000,
+  },
+  talent: {
+    activeRosterCount: 18,
+    upcomingTalentCount: 4,
+    pendingConfirmationCount: 1,
+    upcomingBookings: [
+      { id: "booking-1", talentId: "talent-1", talentName: "Casey Rivera", ownership: "hfy", activityName: "Late Night", room: "Lobby", serviceDate: "2026-09-19", bookingStatus: "pending" },
+      { id: "booking-2", talentId: "talent-2", talentName: "Maya James", ownership: "residency", activityName: "Sunday Dinner", room: "Restaurant", serviceDate: "2026-09-20", bookingStatus: "confirmed" },
+      { id: "booking-3", talentId: null, talentName: "Leo Santos", ownership: "hfy", activityName: "Lobby Set", room: "Lobby", serviceDate: "2026-09-21", bookingStatus: "confirmed" },
+    ],
+  },
+  finances: {
+    currentMonthCommitmentsCents: 1_284_000,
+    owedToResidencyTalentCents: 226_000,
+    outstandingHfyInvoicesCents: 145_000,
+    openInvoiceCount: 3,
+    overdueInvoiceCount: 2,
+  },
+};
+
 describe("Residency Overview availability", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireResidencyActor).mockResolvedValue(manager);
-    vi.mocked(getResidencyClientOverview).mockResolvedValue({
-      upcomingServiceCount: 3,
-      nextServiceDate: "2026-09-21",
-    });
+    vi.mocked(getResidencyClientOverview).mockResolvedValue(populatedOverview);
     vi.mocked(isCurrentPlatformBillingAvailable).mockImplementation(() => {
       throw new Error("Platform billing is unavailable");
     });
     vi.mocked(getResidencyPlatformBilling).mockRejectedValue(new Error("Platform billing data is unavailable"));
   });
 
-  it("renders for managers without consulting Platform billing availability or data", async () => {
+  it("renders the real operational Overview for managers without consulting Platform billing", async () => {
     const html = renderToStaticMarkup(await ResidencyOverviewPage());
 
     expect(html).toContain("Welcome, Residency Manager");
-    expect(html).toContain("3 upcoming services");
-    expect(html).toContain("Next service Sep 21, 2026");
+    expect(html).toContain("Friday, September 18");
+    expect(html).toContain("This week");
+    expect(html).toContain("2 services need scheduling");
+    expect(html).toContain("1 talent confirmation is pending");
+    expect(html).toContain("2 talent invoices are overdue");
+    expect(html).toContain("Casey Rivera");
+    expect(html).toContain("Maya James");
+    expect(html).toContain("$12,840");
+    expect(html).toContain("$2,260");
+    expect(html).toContain("$1,450");
+    expect(html).toContain('href="/residency/calendar"');
+    expect(html).toContain('href="/residency/talent?artist=talent-1"');
+    expect(html).toContain('href="/residency/finances"');
+    expect(getResidencyClientOverview).toHaveBeenCalledWith("residency-1", "America/Los_Angeles");
     expect(isCurrentPlatformBillingAvailable).not.toHaveBeenCalled();
     expect(getResidencyPlatformBilling).not.toHaveBeenCalled();
     expect(html).not.toContain("Platform subscription");
     expect(html).not.toContain("monthly equivalent");
     expect(html).not.toContain("Plan pending");
+  });
+
+  it("renders calm empty and all-clear states when no operational exceptions exist", async () => {
+    vi.mocked(getResidencyClientOverview).mockResolvedValue({
+      ...populatedOverview,
+      week: populatedOverview.week.map((day) => ({ ...day, scheduledCount: 0, pendingCount: 0, openCount: 0, services: [] })),
+      attention: {
+        openServiceCount: 0,
+        nextOpenService: null,
+        pendingConfirmationCount: 0,
+        nextPendingConfirmation: null,
+        overdueInvoiceCount: 0,
+        overdueInvoiceCents: 0,
+      },
+      talent: {
+        activeRosterCount: 0,
+        upcomingTalentCount: 0,
+        pendingConfirmationCount: 0,
+        upcomingBookings: [],
+      },
+      finances: {
+        currentMonthCommitmentsCents: 0,
+        owedToResidencyTalentCents: 0,
+        outstandingHfyInvoicesCents: 0,
+        openInvoiceCount: 0,
+        overdueInvoiceCount: 0,
+      },
+    });
+
+    const html = renderToStaticMarkup(await ResidencyOverviewPage());
+
+    expect(html).toContain("Your operational work is clear right now.");
+    expect(html).toContain("All clear");
+    expect(html).toContain("No open scheduling gaps, pending confirmations, or overdue talent invoices need attention.");
+    expect(html).toContain("No upcoming talent bookings are scheduled.");
+    expect(html.match(/>No program</g)).toHaveLength(7);
+    expect(isCurrentPlatformBillingAvailable).not.toHaveBeenCalled();
+    expect(getResidencyPlatformBilling).not.toHaveBeenCalled();
   });
 
   it("continues to redirect calendar viewers to access-limited before Overview data loads", async () => {
