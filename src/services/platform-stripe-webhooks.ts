@@ -12,7 +12,7 @@ import {
 } from "@/db/schema";
 import { assertPlatformPlan, PLATFORM_SLOT_UNIT_AMOUNT_CENTS } from "@/domain/platform-billing";
 import { queuePlatformPaymentFailedAlerts, resolvePlatformPaymentFailure, sendPendingPlatformBillingAlerts } from "@/services/platform-billing-alerts";
-import { queueAnnualCancellationRefund, scheduleResidencyCommittedPlanToAnnual } from "@/services/platform-stripe";
+import { queueAnnualCancellationRefund, switchResidencyCommittedPlanToAnnualImmediately } from "@/services/platform-stripe";
 import { getStripe } from "@/lib/stripe";
 import { requireResidencyLiveBillingApproval } from "@/services/live-billing-safety";
 
@@ -264,8 +264,10 @@ async function applyCompletedCheckout(session: Stripe.Checkout.Session) {
     if (metadata.purpose === "update_card_and_switch_annual") {
       const userId = metadata.changed_by_user_id;
       const email = metadata.changed_by_email;
+      const prorationDate = Number(metadata.annual_switch_proration_date);
       if (!userId || !email) throw new Error("Annual-switch card Checkout is missing the initiating manager metadata.");
-      await scheduleResidencyCommittedPlanToAnnual({ residencyId, userId, email });
+      if (!Number.isInteger(prorationDate) || prorationDate <= 0) throw new Error("Annual-switch card Checkout is missing its Stripe proration timestamp.");
+      await switchResidencyCommittedPlanToAnnualImmediately({ residencyId, userId, email }, prorationDate);
     }
     return synced;
   }

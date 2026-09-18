@@ -82,7 +82,8 @@ describe("Platform committed billing", () => {
 
     expect(clientPage).toContain("annualSavingsAmountCents");
     expect(clientPage).toContain("switchResidencyPlatformPlanToAnnualAction");
-    expect(clientAction).toContain("beginResidencyAnnualSwitch(actor)");
+    expect(clientAction).toContain("previewResidencyAnnualSwitch(actor)");
+    expect(clientAction).toContain("beginResidencyAnnualSwitch(actor, prorationDate)");
     expect(clientAction).toContain('formData.get("confirmation") !== "switch_to_annual"');
     expect(annualConfirmation).toContain("Current plan");
     expect(annualConfirmation).toContain("New plan");
@@ -91,7 +92,8 @@ describe("Platform committed billing", () => {
     expect(annualConfirmation).toContain('className="platform-annual-timeline"');
     expect(annualConfirmation).toContain('aria-label="What happens after confirming"');
     expect(annualConfirmation).toContain("Review savings");
-    expect(annualConfirmation).toContain("Starts after successful payment");
+    expect(annualConfirmation).toContain("Annual billing starts today");
+    expect(annualConfirmation).toContain("Actual Stripe charge today");
     expect(annualConfirmation).toContain('<button className="button secondary" type="button" ref={cancelRef}');
     expect(annualConfirmation).toContain("Keep month-to-month");
     expect(annualConfirmation).toContain("card in Stripe Checkout");
@@ -101,7 +103,7 @@ describe("Platform committed billing", () => {
     expect(clientPage).toContain('className="platform-plan-facts"');
     expect(clientPage).toContain('className="platform-client-usage-list"');
     expect(clientPage).toContain('className="platform-annual-switch offer"');
-    expect(clientPage).toContain("Annual billing scheduled");
+    expect(clientPage).not.toContain("Annual billing scheduled");
     expect(clientPage).toContain('className="platform-plan-term-badge active"');
     expect(clientPage).toContain("Annual · 25% off");
     expect(clientPage).toContain("Talent capacity");
@@ -112,21 +114,39 @@ describe("Platform committed billing", () => {
     expect(ownerForm).toContain("House capacity");
   });
 
-  it("keeps the monthly plan visible until Stripe activates the scheduled annual Price", async () => {
-    const [clientData, clientPage, stripeService, webhookService] = await Promise.all([
-      readSource("../src/data/residency-client.ts"),
+  it("activates annual only after Stripe confirms the immediate prorated Price and invoice", async () => {
+    const [clientPage, stripeService, webhookService] = await Promise.all([
       readSource("../src/app/residency/settings/billing/page.tsx"),
       readSource("../src/services/platform-stripe.ts"),
       readSource("../src/services/platform-stripe-webhooks.ts"),
     ]);
 
-    expect(stripeService).toContain("deferActivationUntilRenewal: true");
-    expect(stripeService).toContain("const activatedPlanValues = defersActivation ? {} :");
-    expect(clientData).toContain("pendingAnnualChange");
-    expect(clientPage).toContain("Your month-to-month plan remains active until");
+    expect(stripeService).not.toContain('billing_cycle_anchor: "now"');
+    expect(stripeService.match(/proration_date: prorationDate/g)).toHaveLength(2);
+    expect(stripeService).toContain('proration_behavior: "always_invoice"');
+    expect(stripeService).toContain('payment_behavior: "error_if_incomplete"');
+    expect(stripeService).toContain("updatedItem?.price.id !== price.id || updatedSubscription.pending_update");
+    expect(clientPage).not.toContain("pendingAnnualChange");
+    expect(clientPage).toContain("Stripe is completing the immediate prorated annual charge now.");
     expect(webhookService).toContain("eq(platformSubscriptionRevisions.stripePriceId, item.price.id)");
-    expect(webhookService).toContain("term: activatedRevision.term");
-    expect(webhookService).toContain("revision: activatedRevision.revision");
+    expect(webhookService).toContain("switchResidencyCommittedPlanToAnnualImmediately");
+    expect(webhookService).toContain("annual_switch_proration_date");
+  });
+
+  it("retires Ace's reviewed deferred schedule state without broadening the cleanup target", async () => {
+    const [migration, stripeService] = await Promise.all([
+      readSource("../drizzle/0054_retire_ace_deferred_annual_revision.sql"),
+      readSource("../src/services/platform-stripe.ts"),
+    ]);
+
+    expect(migration).toContain("27c559a6-f548-46c4-a145-d08d89f75da5");
+    expect(migration).toContain('AND "revision" = 4');
+    expect(migration).toContain('AND "stripe_sync_status" = \'pending\'');
+    expect(migration).toContain("platform_deferred_annual_revision_retired");
+    expect(stripeService).toContain("subscriptionSchedules.release(scheduleId)");
+    expect(stripeService).toContain("stripePriceHasActiveReferences");
+    expect(stripeService).toContain("subscriptionSchedules.list({ limit: 100 })");
+    expect(stripeService).toContain("prices.update(priceId, { active: false })");
   });
 });
 

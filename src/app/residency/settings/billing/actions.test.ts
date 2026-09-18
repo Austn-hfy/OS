@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireResidencyActor } from "@/lib/auth";
-import { beginResidencyAnnualSwitch, createPlatformPaymentMethodCheckout, createPlatformSubscriptionCheckout } from "@/services/platform-stripe";
-import { startResidencyPlatformCheckoutAction, switchResidencyPlatformPlanToAnnualAction, updateResidencyPlatformCardAction } from "./actions";
+import { beginResidencyAnnualSwitch, createPlatformPaymentMethodCheckout, createPlatformSubscriptionCheckout, previewResidencyAnnualSwitch } from "@/services/platform-stripe";
+import { previewResidencyPlatformPlanAnnualSwitchAction, startResidencyPlatformCheckoutAction, switchResidencyPlatformPlanToAnnualAction, updateResidencyPlatformCardAction } from "./actions";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
@@ -12,6 +12,7 @@ vi.mock("@/services/platform-stripe", () => ({
   createPlatformPaymentMethodCheckout: vi.fn(),
   createPlatformSubscriptionCheckout: vi.fn(),
   beginResidencyAnnualSwitch: vi.fn(),
+  previewResidencyAnnualSwitch: vi.fn(),
 }));
 
 const initialState = { status: "idle" as const, message: "" };
@@ -20,6 +21,7 @@ const environmentHold = new Error("Platform billing can run only in production o
 function confirmedAnnualSwitch() {
   const formData = new FormData();
   formData.set("confirmation", "switch_to_annual");
+  formData.set("prorationDate", "1790000000");
   return formData;
 }
 
@@ -53,25 +55,41 @@ describe("Residency billing action hold responses", () => {
     });
   });
 
-  it("lets a manager schedule annual billing through the existing plan-change service", async () => {
+  it("activates annual billing immediately after Stripe confirms the prorated update", async () => {
     vi.mocked(beginResidencyAnnualSwitch).mockResolvedValue({
-      kind: "scheduled",
-      effectiveAt: "2026-10-01",
-      annualUpfrontAmountCents: 810_000,
+      kind: "activated",
+      amountChargedCents: 742_315,
+      invoiceId: "in_proration",
     });
 
     await expect(switchResidencyPlatformPlanToAnnualAction(initialState, confirmedAnnualSwitch())).resolves.toEqual({
       status: "success",
-      message: "Annual billing is scheduled. Your current monthly plan remains active until renewal.",
+      message: "Annual billing is active. Stripe charged $7,423.15 today.",
     });
 
     expect(beginResidencyAnnualSwitch).toHaveBeenCalledWith(expect.objectContaining({
       kind: "residency",
       residencyId: "00000000-0000-4000-8000-000000000002",
       accessRole: "manager",
-    }));
+    }), 1_790_000_000);
     expect(revalidatePath).toHaveBeenCalledWith("/residency/settings/billing");
     expect(revalidatePath).toHaveBeenCalledWith("/app/platform-billing");
+  });
+
+  it("returns Stripe's real preview amount before opening confirmation", async () => {
+    vi.mocked(previewResidencyAnnualSwitch).mockResolvedValue({
+      kind: "preview",
+      paymentPath: "charge_card_immediately",
+      amountDueCents: 742_315,
+      prorationDate: 1_790_000_000,
+    });
+
+    await expect(previewResidencyPlatformPlanAnnualSwitchAction()).resolves.toEqual({
+      status: "success",
+      paymentPath: "charge_card_immediately",
+      amountDueCents: 742_315,
+      prorationDate: 1_790_000_000,
+    });
   });
 
   it("does not let a non-manager switch the billing term", async () => {

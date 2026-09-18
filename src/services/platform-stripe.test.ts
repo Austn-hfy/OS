@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { auditLog, platformSubscriptionRevisions, platformSubscriptions } from "@/db/schema";
+import { auditLog, platformSubscriptionInvoices, platformSubscriptionRevisions, platformSubscriptions } from "@/db/schema";
 import { LiveBillingNotApprovedError } from "@/domain/live-billing";
 import type { InternalActor } from "@/lib/auth";
 
@@ -22,9 +22,11 @@ vi.mock("@/services/live-billing-safety", () => ({
 
 import {
   annualPlanChangeInput,
+  beginResidencyAnnualSwitch,
   createPlatformSubscriptionCheckout,
   platformPlanAmount,
-  scheduleResidencyCommittedPlanToAnnual,
+  previewResidencyAnnualSwitch,
+  switchResidencyCommittedPlanToAnnualImmediately,
   updateCommittedPlan,
   type CommittedPlanInput,
 } from "./platform-stripe";
@@ -52,10 +54,13 @@ function databaseWithSelectResults(results: unknown[][]) {
   return {
     select: vi.fn(() => ({
       from: vi.fn(() => {
+        const take = async () => queued.shift() ?? [];
         const chain = {
           innerJoin: vi.fn(() => chain),
           where: vi.fn(() => chain),
-          limit: vi.fn(async () => queued.shift() ?? []),
+          orderBy: vi.fn(() => chain),
+          limit: vi.fn(take),
+          then(resolve: (value: unknown[]) => unknown) { return take().then(resolve); },
         };
         return chain;
       }),
@@ -91,25 +96,25 @@ describe("platform Stripe amount", () => {
 });
 
 describe("Residency annual plan switching", () => {
-  it("preserves capacities and starts the annual term at the monthly renewal", () => {
+  it("preserves capacities and starts the annual term immediately", () => {
     expect(annualPlanChangeInput({
       residencyId,
       talentBucketSize: 40,
       houseBucketSize: 15,
       startsOn: "2026-09-01",
       renewsOn: "2026-10-01",
-    })).toEqual({
+    }, new Date("2026-09-17T18:00:00Z"))).toEqual({
       residencyId,
       term: "annual",
       talentBucketSize: 40,
       houseBucketSize: 15,
-      startsOn: "2026-10-01",
-      renewsOn: "2027-10-01",
+      startsOn: "2026-09-17",
+      renewsOn: "2027-09-17",
       changeReason: "Residency manager switched to annual billing",
     });
   });
 
-  it("keeps month-to-month active locally while Stripe schedules annual billing at renewal", async () => {
+  it("uses Stripe's invoice preview as the exact immediate confirmation amount", async () => {
     const current = {
       id: subscriptionId,
       residencyId,
@@ -126,79 +131,221 @@ describe("Residency annual plan switching", () => {
       stripeSubscriptionItemId: "si_test",
       stripePriceId: "price_monthly",
       status: "active" as const,
+      cardBrand: "visa",
+      cardLast4: "4242",
       nextChargeAt: new Date("2026-10-01T00:00:00Z"),
       lastStripeSyncedAt: new Date("2026-09-01T00:00:00Z"),
     };
-    const database = databaseWithSelectResults([
-      [current],
-      [{ id: residencyId, comped: false }],
-      [current],
-      [{ name: "Test Hotel", billingContactEmail: "billing@example.test", primaryContactEmail: "manager@example.test" }],
-    ]);
-    const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
-    const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
-    const tx = {
-      update(table: unknown) {
-        return {
-          set(values: Record<string, unknown>) {
-            updates.push({ table, values });
-            const query = {
-              where: vi.fn(() => query),
-              returning: vi.fn(async () => table === platformSubscriptions ? [{ ...current, ...values }] : []),
-              then(resolve: (value: unknown[]) => unknown) { return Promise.resolve([]).then(resolve); },
-            };
-            return query;
-          },
-        };
-      },
-      insert(table: unknown) {
-        return { values: async (values: Record<string, unknown>) => { inserts.push({ table, values }); return []; } };
-      },
-    };
-    Object.assign(database, {
-      insert(table: unknown) {
-        return {
-          values(values: Record<string, unknown>) {
-            inserts.push({ table, values });
-            return { returning: async () => [{ id: "00000000-0000-4000-8000-000000000004" }] };
-          },
-        };
-      },
-      transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+    const residency = { name: "Test Hotel", comped: false, billingContactEmail: "billing@example.test", primaryContactEmail: "manager@example.test" };
+    const database = databaseWithSelectResults([[{ plan: current, residency }]]);
+    const createPreview = vi.fn().mockResolvedValue({ id: "upcoming_in", livemode: false, currency: "usd", amount_due: 742_315 });
+    const retrieve = vi.fn().mockResolvedValue({
+      id: "sub_test",
+      livemode: false,
+      status: "active",
+      schedule: null,
+      metadata: { committed_plan_revision: "3" },
+      items: { data: [{ id: "si_test", price: { id: "price_monthly" }, quantity: 1, current_period_start: 1_789_000_000, current_period_end: 1_791_592_000 }] },
     });
-    const renewal = Date.UTC(2026, 9, 1) / 1_000;
     mocks.getDb.mockReturnValue(database);
     mocks.requireResidencyLiveBillingApproval.mockResolvedValue({ id: residencyId, name: "Test Hotel", liveBillingApproved: true });
     mocks.getStripe.mockReturnValue({
-      subscriptions: { retrieve: vi.fn().mockResolvedValue({
-        id: "sub_test",
-        livemode: false,
-        status: "active",
-        schedule: null,
-        metadata: { committed_plan_revision: "3" },
-        items: { data: [{ id: "si_test", price: { id: "price_monthly" }, quantity: 1, current_period_start: Date.UTC(2026, 8, 1) / 1_000, current_period_end: renewal }] },
-      }) },
-      prices: { create: vi.fn().mockResolvedValue({ id: "price_annual", livemode: false, recurring: { interval: "year", interval_count: 1 } }) },
-      subscriptionSchedules: {
-        create: vi.fn().mockResolvedValue({ id: "sched_test", livemode: false, current_phase: { start_date: Date.UTC(2026, 8, 1) / 1_000, end_date: renewal } }),
-        update: vi.fn().mockResolvedValue({ id: "sched_test" }),
+      subscriptions: { retrieve },
+      invoices: { createPreview },
+    });
+
+    await expect(previewResidencyAnnualSwitch({ ...actor, kind: "residency", residencyId, accessRole: "manager" } as never))
+      .resolves.toMatchObject({ kind: "preview", paymentPath: "charge_card_immediately", amountDueCents: 742_315 });
+
+    expect(createPreview).toHaveBeenCalledWith(expect.objectContaining({
+      subscription: "sub_test",
+      subscription_details: expect.objectContaining({
+        proration_behavior: "always_invoice",
+        proration_date: expect.any(Number),
+        items: [expect.objectContaining({ id: "si_test", price_data: expect.objectContaining({ unit_amount: 810_000, recurring: { interval: "year", interval_count: 1 } }) })],
+      }),
+    }));
+    expect(createPreview.mock.calls[0]?.[0].subscription_details).not.toHaveProperty("billing_cycle_anchor");
+  });
+
+  it("updates the existing Stripe subscription immediately with the preview timestamp before activating locally", async () => {
+    const current = {
+      id: subscriptionId, residencyId, revision: 3, term: "month_to_month" as const,
+      talentBucketSize: 20, houseBucketSize: 10, slotUnitAmountCents: 3_000,
+      startsOn: "2026-09-01", renewsOn: "2026-10-01", stripeCustomerId: "cus_test",
+      stripeProductId: "prod_test", stripeSubscriptionId: "sub_test", stripeSubscriptionItemId: "si_test",
+      stripePriceId: "price_monthly", status: "active" as const, cardBrand: "visa", cardLast4: "4242",
+      nextChargeAt: new Date("2026-10-01T00:00:00Z"), lastStripeSyncedAt: new Date("2026-09-01T00:00:00Z"),
+    };
+    const residency = { name: "Test Hotel", comped: false, billingContactEmail: "billing@example.test", primaryContactEmail: "manager@example.test" };
+    const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const inserts: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const database = databaseWithSelectResults([
+      [{ plan: current, residency }],
+      [],
+      [{ revision: 3 }],
+      [{ ...current, term: "annual", revision: 4, stripePriceId: "price_annual" }],
+    ]);
+    const updateBuilder = (table: unknown) => ({
+      set(values: Record<string, unknown>) {
+        updates.push({ table, values });
+        const query = {
+          where: vi.fn(() => query),
+          returning: vi.fn(async () => table === platformSubscriptions ? [{ ...current, ...values }] : []),
+          then(resolve: (value: unknown[]) => unknown) { return Promise.resolve([]).then(resolve); },
+        };
+        return query;
       },
     });
-
-    await scheduleResidencyCommittedPlanToAnnual({ residencyId, userId: actor.userId, email: actor.email });
-
-    const activePlanUpdate = updates.find((entry) => entry.table === platformSubscriptions)?.values;
-    expect(activePlanUpdate).not.toHaveProperty("term");
-    expect(activePlanUpdate).not.toHaveProperty("revision");
-    expect(activePlanUpdate).not.toHaveProperty("stripePriceId");
-    const pendingRevisionUpdate = updates.find((entry) => entry.table === platformSubscriptionRevisions)?.values;
-    expect(pendingRevisionUpdate).toMatchObject({
-      startsOn: "2026-10-01",
-      renewsOn: "2027-10-01",
-      stripeSyncStatus: "pending",
-      stripePriceId: "price_annual",
-      syncedAt: null,
+    const insertBuilder = (table: unknown) => ({
+      values(values: Record<string, unknown>) {
+        inserts.push({ table, values });
+        const query = {
+          returning: vi.fn(async () => table === platformSubscriptionRevisions
+            ? [{ id: "00000000-0000-4000-8000-000000000004" }]
+            : table === platformSubscriptionInvoices
+              ? [{ id: "00000000-0000-4000-8000-000000000005", ...values }]
+              : []),
+          onConflictDoUpdate: vi.fn(() => query),
+          then(resolve: (value: unknown[]) => unknown) { return Promise.resolve([]).then(resolve); },
+        };
+        return query;
+      },
     });
+    const tx = { update: vi.fn(updateBuilder), insert: vi.fn(insertBuilder) };
+    Object.assign(database, {
+      update: vi.fn(updateBuilder),
+      insert: vi.fn(insertBuilder),
+      transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+    });
+    const prorationDate = 1_790_000_000;
+    const monthlySubscription = {
+      id: "sub_test", livemode: false, status: "active", schedule: null, pending_update: null,
+      metadata: { committed_plan_revision: "3" },
+      items: { data: [{ id: "si_test", price: { id: "price_monthly" }, quantity: 1, current_period_start: 1_789_000_000, current_period_end: 1_791_592_000 }] },
+    };
+    const annualSubscription = {
+      ...monthlySubscription,
+      latest_invoice: {
+        id: "in_proration", livemode: false, currency: "usd", amount_due: 742_315, amount_paid: 742_315,
+        status: "paid", number: "PRORATION-1", period_start: prorationDate, period_end: 1_821_536_000,
+        created: prorationDate, hosted_invoice_url: "https://invoice.stripe.test/in_proration", invoice_pdf: null,
+        parent: { subscription_details: { subscription: "sub_test", metadata: { committed_plan_revision: "4" } } },
+      },
+      metadata: { committed_plan_revision: "4" },
+      items: { data: [{ id: "si_test", price: { id: "price_annual" }, quantity: 1, current_period_start: prorationDate, current_period_end: 1_821_536_000 }] },
+    };
+    const subscriptionUpdate = vi.fn().mockResolvedValue(annualSubscription);
+    mocks.getDb.mockReturnValue(database);
+    mocks.requireResidencyLiveBillingApproval.mockResolvedValue({ id: residencyId, name: "Test Hotel", liveBillingApproved: true });
+    mocks.getStripe.mockReturnValue({
+      subscriptions: { retrieve: vi.fn().mockResolvedValue(monthlySubscription), update: subscriptionUpdate },
+      invoices: { createPreview: vi.fn().mockResolvedValue({ id: "upcoming_in", livemode: false, currency: "usd", amount_due: 742_315 }) },
+      prices: { create: vi.fn().mockResolvedValue({ id: "price_annual", livemode: false, recurring: { interval: "year", interval_count: 1 } }) },
+    });
+
+    await expect(switchResidencyCommittedPlanToAnnualImmediately({ residencyId, userId: actor.userId, email: actor.email }, prorationDate))
+      .resolves.toMatchObject({ amountChargedCents: 742_315, invoiceId: "in_proration" });
+
+    expect(subscriptionUpdate).toHaveBeenCalledWith("sub_test", expect.objectContaining({
+      items: [{ id: "si_test", price: "price_annual", quantity: 1 }],
+      proration_behavior: "always_invoice",
+      proration_date: prorationDate,
+      payment_behavior: "error_if_incomplete",
+      off_session: true,
+    }), expect.anything());
+    expect(subscriptionUpdate.mock.calls[0]?.[1]).not.toHaveProperty("billing_cycle_anchor");
+    const localActivation = updates.find((entry) => entry.table === platformSubscriptions)?.values;
+    expect(localActivation).toMatchObject({ term: "annual", revision: 4, stripePriceId: "price_annual" });
+    expect(updates.filter((entry) => entry.table === platformSubscriptions)).toHaveLength(1);
+    expect(inserts.find((entry) => entry.table === platformSubscriptionInvoices)?.values).toMatchObject({
+      stripeInvoiceId: "in_proration",
+      amountDueCents: 742_315,
+      amountPaidCents: 742_315,
+      status: "paid",
+      planRevision: 4,
+    });
+  });
+
+  it("leaves the local plan month-to-month when Stripe cannot complete the immediate charge", async () => {
+    const current = {
+      id: subscriptionId, residencyId, revision: 3, term: "month_to_month" as const,
+      talentBucketSize: 20, houseBucketSize: 10, slotUnitAmountCents: 3_000,
+      startsOn: "2026-09-01", renewsOn: "2026-10-01", stripeCustomerId: "cus_test",
+      stripeProductId: "prod_test", stripeSubscriptionId: "sub_test", stripeSubscriptionItemId: "si_test",
+      stripePriceId: "price_monthly", status: "active" as const, cardBrand: "visa", cardLast4: "4242",
+    };
+    const residency = { name: "Test Hotel", comped: false, billingContactEmail: "billing@example.test", primaryContactEmail: "manager@example.test" };
+    const database = databaseWithSelectResults([[{ plan: current, residency }], [], [{ revision: 3 }]]);
+    const updatedTables: unknown[] = [];
+    Object.assign(database, {
+      update: vi.fn((table: unknown) => ({
+        set: vi.fn(() => {
+          updatedTables.push(table);
+          const query = { where: vi.fn(() => query), then(resolve: (value: unknown[]) => unknown) { return Promise.resolve([]).then(resolve); } };
+          return query;
+        }),
+      })),
+      insert: vi.fn((table: unknown) => ({
+        values: vi.fn(() => {
+          const query = {
+            returning: vi.fn(async () => table === platformSubscriptionRevisions ? [{ id: "00000000-0000-4000-8000-000000000004" }] : []),
+            onConflictDoUpdate: vi.fn(() => query),
+            then(resolve: (value: unknown[]) => unknown) { return Promise.resolve([]).then(resolve); },
+          };
+          return query;
+        }),
+      })),
+    });
+    const subscription = {
+      id: "sub_test", livemode: false, status: "active", schedule: null,
+      metadata: { committed_plan_revision: "3" },
+      items: { data: [{ id: "si_test", price: { id: "price_monthly" }, quantity: 1, current_period_start: 1_789_000_000, current_period_end: 1_791_592_000 }] },
+    };
+    mocks.getDb.mockReturnValue(database);
+    mocks.requireResidencyLiveBillingApproval.mockResolvedValue({ id: residencyId, name: "Test Hotel", liveBillingApproved: true });
+    mocks.getStripe.mockReturnValue({
+      subscriptions: {
+        retrieve: vi.fn().mockResolvedValue(subscription),
+        update: vi.fn().mockRejectedValue(new Error("Your card was declined.")),
+      },
+      invoices: { createPreview: vi.fn().mockResolvedValue({ livemode: false, currency: "usd", amount_due: 742_315 }) },
+      prices: { create: vi.fn().mockResolvedValue({ id: "price_annual", livemode: false }) },
+    });
+
+    await expect(switchResidencyCommittedPlanToAnnualImmediately({ residencyId, userId: actor.userId, email: actor.email }, 1_790_000_000))
+      .rejects.toThrow("Your card was declined.");
+
+    expect(updatedTables).not.toContain(platformSubscriptions);
+    expect(updatedTables).toContain(platformSubscriptionRevisions);
+  });
+
+  it("carries the exact preview timestamp through Setup Checkout for the no-card branch", async () => {
+    const prorationDate = Math.floor(Date.now() / 1_000);
+    const plan = {
+      id: subscriptionId, residencyId, revision: 3, term: "month_to_month" as const,
+      talentBucketSize: 20, houseBucketSize: 10, slotUnitAmountCents: 3_000,
+      startsOn: "2026-09-01", renewsOn: "2026-10-01", stripeCustomerId: "cus_test",
+      stripeProductId: "prod_test", stripeSubscriptionId: "sub_test", stripeSubscriptionItemId: "si_test",
+      stripePriceId: "price_monthly", status: "active" as const, cardBrand: "", cardLast4: "",
+    };
+    const residency = { name: "Test Hotel", comped: false, billingContactEmail: "billing@example.test", primaryContactEmail: "manager@example.test" };
+    const database = databaseWithSelectResults([[{ plan, residency }], [{ plan, comped: false }]]);
+    const checkoutCreate = vi.fn().mockResolvedValue({ id: "cs_setup", livemode: false, url: "https://checkout.stripe.com/test/setup" });
+    mocks.getDb.mockReturnValue(database);
+    mocks.requireResidencyLiveBillingApproval.mockResolvedValue({ id: residencyId, name: "Test Hotel", liveBillingApproved: true });
+    mocks.getStripe.mockReturnValue({ checkout: { sessions: { create: checkoutCreate } } });
+
+    await expect(beginResidencyAnnualSwitch({ ...actor, kind: "residency", residencyId, accessRole: "manager" } as never, prorationDate))
+      .resolves.toMatchObject({ kind: "checkout", paymentPath: "collect_card_then_charge_immediately" });
+
+    expect(checkoutCreate).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "setup",
+      metadata: expect.objectContaining({
+        purpose: "update_card_and_switch_annual",
+        annual_switch_proration_date: String(prorationDate),
+      }),
+    }), expect.anything());
   });
 });
 
