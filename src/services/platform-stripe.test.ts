@@ -142,7 +142,7 @@ describe("Stripe renewal schedule reuse", () => {
       { idempotencyKey: "platform-schedule/sub_schedule_history/r8" },
     );
     expect(update).toHaveBeenCalledWith("sub_sched_fresh", expect.anything(), {
-      idempotencyKey: "platform-schedule-update/sub_schedule_history/r8",
+      idempotencyKey: "platform-schedule-update/sub_schedule_history/sub_sched_fresh/r8",
     });
   });
 
@@ -161,7 +161,46 @@ describe("Stripe renewal schedule reuse", () => {
     await scheduleStripePlanAtRenewal({ ...subscription, schedule: "sub_sched_updatable" } as never, replacementPrice as never, 8);
 
     expect(create).not.toHaveBeenCalled();
-    expect(update).toHaveBeenCalledWith("sub_sched_updatable", expect.anything(), expect.anything());
+    expect(update).toHaveBeenCalledWith("sub_sched_updatable", expect.anything(), {
+      idempotencyKey: "platform-schedule-update/sub_schedule_history/sub_sched_updatable/r8",
+    });
+  });
+
+  it("uses a different update key when the same revision moves to a fresh schedule", async () => {
+    const retrieve = vi.fn()
+      .mockResolvedValueOnce({
+        id: "sub_sched_first",
+        livemode: false,
+        status: "active",
+        current_phase: { start_date: 1_790_000_000, end_date: 1_792_592_000 },
+        phases: [],
+      })
+      .mockResolvedValueOnce({
+        id: "sub_sched_first",
+        livemode: false,
+        status: "released",
+        current_phase: null,
+        phases: [],
+      });
+    const create = vi.fn().mockResolvedValue({
+      id: "sub_sched_second",
+      livemode: false,
+      status: "active",
+      current_phase: { start_date: 1_790_000_000, end_date: 1_792_592_000 },
+      phases: [],
+    });
+    const update = vi.fn().mockResolvedValue({ id: "sub_sched_second", status: "active" });
+    mocks.getStripe.mockReturnValue({ subscriptionSchedules: { retrieve, create, update } });
+
+    await scheduleStripePlanAtRenewal({ ...subscription, schedule: "sub_sched_first" } as never, replacementPrice as never, 8);
+    await scheduleStripePlanAtRenewal({ ...subscription, schedule: "sub_sched_first" } as never, replacementPrice as never, 8);
+
+    expect(update).toHaveBeenNthCalledWith(1, "sub_sched_first", expect.anything(), {
+      idempotencyKey: "platform-schedule-update/sub_schedule_history/sub_sched_first/r8",
+    });
+    expect(update).toHaveBeenNthCalledWith(2, "sub_sched_second", expect.anything(), {
+      idempotencyKey: "platform-schedule-update/sub_schedule_history/sub_sched_second/r8",
+    });
   });
 });
 
