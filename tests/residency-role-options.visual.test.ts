@@ -11,11 +11,12 @@ describe("Residency Focus Panel responsive layout", () => {
 
   beforeAll(async () => {
     browser = await chromium.launch({ executablePath: chromePath, headless: true });
-    const [globals, tokens] = await Promise.all([
+    const [globals, tokens, pilot] = await Promise.all([
       readFile(new URL("src/app/globals.css", root), "utf8"),
       readFile(new URL("src/app/hfy-design-tokens.css", root), "utf8"),
+      readFile(new URL("src/app/hfy-style-pilot.css", root), "utf8"),
     ]);
-    css = `${tokens}\n${globals}`;
+    css = `${tokens}\n${globals}\n${pilot}`;
   });
 
   afterAll(async () => {
@@ -39,6 +40,7 @@ describe("Residency Focus Panel responsive layout", () => {
           main { width: min(1100px, 100%); margin: 0 auto; }
           @media (min-width: 850px) { main { width: min(1100px, calc(100% - 252px)); margin: 0 0 0 252px; } }
         </style>
+        <body class="hfy-style-system">
         <main>
           <section class="residency-users-card">
             <div class="residency-section-header residency-section-header--split"><div><p class="eyebrow">Users &amp; roles</p><h2>People with access</h2><p>Pending invitations and active users both count toward the four-user limit.</p></div><span class="residency-user-seat-count">2 of 4 seats · 2 available</span></div>
@@ -73,6 +75,7 @@ describe("Residency Focus Panel responsive layout", () => {
             </div>
           </section>
         </main>
+        </body>
         <script>
           document.querySelectorAll('[data-member]').forEach((button) => button.addEventListener('click', () => {
             document.querySelectorAll('[data-member]').forEach((member) => member.setAttribute('aria-pressed', String(member === button)));
@@ -88,7 +91,9 @@ describe("Residency Focus Panel responsive layout", () => {
         const list = document.querySelector<HTMLElement>(".residency-user-focus-list")!;
         const detail = document.querySelector<HTMLElement>(".residency-user-focus-detail")!;
         const detailGrid = document.querySelector<HTMLElement>(".residency-user-focus-detail-grid")!;
+        const heading = document.querySelector<HTMLElement>(".residency-section-header h2")!;
         const columnCount = (element: HTMLElement) => getComputedStyle(element).gridTemplateColumns.split(" ").length;
+        const headingLineCount = Math.round(heading.getBoundingClientRect().height / parseFloat(getComputedStyle(heading).lineHeight));
 
         return {
           documentContained: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -101,6 +106,7 @@ describe("Residency Focus Panel responsive layout", () => {
           focusColumns: columnCount(layout),
           listColumns: columnCount(list),
           detailColumns: columnCount(detailGrid),
+          headingLineCount,
         };
       });
 
@@ -114,6 +120,7 @@ describe("Residency Focus Panel responsive layout", () => {
       expect(metrics.focusColumns).toBe(viewport.focusColumns);
       expect(metrics.listColumns).toBe(viewport.listColumns);
       expect(metrics.detailColumns).toBe(viewport.detailColumns);
+      expect(metrics.headingLineCount).toBe(1);
 
       const inviteRole = page.locator("#invite-role");
       await inviteRole.selectOption("manager");

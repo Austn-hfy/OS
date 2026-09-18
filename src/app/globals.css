@@ -2007,7 +2007,7 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 }
 
 @container residency-users (max-width: 560px) {
-  .residency-users-card .residency-section-header--split { align-items: flex-start; flex-direction: column; }
+  .hfy-style-system .residency-users-card .residency-section-header--split { align-items: stretch; flex-direction: column; }
   .residency-user-invite-form, .residency-user-focus-list, .residency-user-focus-detail-grid { grid-template-columns: minmax(0, 1fr); }
   .residency-user-invite-submit { grid-column: auto; width: 100%; }
   .residency-user-focus-detail-head, .residency-user-focus-actions { align-items: stretch; flex-direction: column; }

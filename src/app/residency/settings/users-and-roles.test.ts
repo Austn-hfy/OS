@@ -15,6 +15,7 @@ describe("Residency Users & Roles account experience", () => {
     expect(css).toContain(".residency-user-focus-option[aria-pressed=\"true\"]");
     expect(css).toContain("@container residency-users (max-width: 860px)");
     expect(css).toContain("@container residency-users (max-width: 560px)");
+    expect(css).toContain(".hfy-style-system .residency-users-card .residency-section-header--split { align-items: stretch; flex-direction: column; }");
     expect(css).toContain(".residency-user-focus-layout { grid-template-columns: minmax(0, 1fr); }");
     expect(css).toContain(".residency-user-invite-form, .residency-user-focus-list, .residency-user-focus-detail-grid { grid-template-columns: minmax(0, 1fr); }");
     expect(component).toContain("const [selectedUserId, setSelectedUserId] = useState");
