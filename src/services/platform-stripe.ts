@@ -373,7 +373,7 @@ export async function scheduleStripePlanAtRenewal(subscription: Stripe.Subscript
         },
       },
     ],
-  }, { idempotencyKey: `platform-schedule-update/${subscription.id}/r${revision}` });
+  }, { idempotencyKey: `platform-schedule-update/${subscription.id}/${schedule.id}/r${revision}` });
 }
 
 async function updateStripeSubscriptionPlan(plan: CurrentPlan, input: CommittedPlanInput, revision: number, productId: string, comped: boolean) {
