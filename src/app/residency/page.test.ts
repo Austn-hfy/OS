@@ -129,6 +129,10 @@ describe("Residency Overview availability", () => {
     expect(html).toContain("Schedule talent");
     expect(html).toContain("Talent has not been assigned");
     expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-20&amp;event=projected-1&amp;returnTo=%2Fresidency%3Fday%3D2026-09-20"');
+    const activityLink = html.match(/<a class="residency-overview-day-service open"[^>]*>/)?.[0] ?? "";
+    expect(activityLink).toContain('aria-label="Schedule talent for Sunday Dinner. 6:00 PM–9:00 PM in Restaurant."');
+    expect(activityLink).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-20&amp;event=projected-1&amp;returnTo=%2Fresidency%3Fday%3D2026-09-20"');
+    expect(html).not.toContain('<article class="residency-overview-day-service');
     expect(html).toContain('href="/residency?day=2026-09-20"');
     expect(html).toContain('aria-current="date"');
   });

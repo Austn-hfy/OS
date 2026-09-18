@@ -175,6 +175,9 @@ describe("Residency Overview responsive visual contract", () => {
         const todayMarker = element(".residency-overview-day.is-today .residency-overview-day-markers > i");
         const attentionMarker = element(".residency-overview-day.is-selected .residency-overview-day-markers > b");
         const attentionLine = element(".residency-overview-day.is-selected .residency-overview-coverage > .open");
+        const serviceRows = [...document.querySelectorAll<HTMLElement>(".residency-overview-day-service")];
+        const openService = element(".residency-overview-day-service.open");
+        const serviceDot = element(".residency-overview-day-service.open .residency-overview-day-service-status");
         return {
           documentContained: document.documentElement.scrollWidth === viewportWidth,
           surfaceContained: surface.left >= -0.5 && surface.right <= viewportWidth + 0.5,
@@ -194,6 +197,12 @@ describe("Residency Overview responsive visual contract", () => {
             && getComputedStyle(selectedDay).borderTopColor === getComputedStyle(dayDetail).borderTopColor
             && getComputedStyle(selectedDay).borderTopColor === getComputedStyle(attentionLine).backgroundColor
             && getComputedStyle(selectedDay).backgroundColor === getComputedStyle(today).backgroundColor,
+          porcelainSurfaces: days.every((day) => getComputedStyle(day).backgroundColor === "rgb(255, 255, 255)")
+            && getComputedStyle(dayDetail).backgroundColor === "rgb(251, 252, 253)",
+          activitiesAreWholeRowLinks: serviceRows.length === 1
+            && serviceRows.every((row) => row.tagName === "A" && row.getAttribute("href")?.includes("returnTo=%2Fresidency%3Fday%3D2026-09-21")),
+          activitySurfaceIsDistinct: getComputedStyle(openService).backgroundColor !== getComputedStyle(dayDetail).backgroundColor
+            && getComputedStyle(serviceDot).backgroundColor === getComputedStyle(attentionLine).backgroundColor,
           largeMoneyContained: money.left >= financeCard.left - 0.5 && money.right <= financeCard.right + 0.5,
         };
       });
@@ -207,6 +216,9 @@ describe("Residency Overview responsive visual contract", () => {
         correctDayColumns: true,
         equalSummaryCardWidths: true,
         selectionIsVisuallyLinked: true,
+        porcelainSurfaces: true,
+        activitiesAreWholeRowLinks: true,
+        activitySurfaceIsDistinct: true,
         largeMoneyContained: true,
       });
     }
