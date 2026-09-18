@@ -219,12 +219,14 @@ body.staging-environment .public-calendar-page { min-height: calc(100dvh - 26px)
 .genre-options label { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.62); font-size: 12px; font-weight: 700; }
 .genre-options input { width: 17px; height: 17px; margin: 0; }
 .residency-client-settings-form { display: grid; gap: 22px; }
-.residency-client-settings-form > section { display: grid; grid-template-columns: minmax(220px,.7fr) minmax(0,1.3fr); gap: 28px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
-.residency-client-settings-form > section > div:first-child p:last-child { margin-top: 7px; color: var(--muted); line-height: 1.5; }
+.residency-client-settings-form > .settings-account-section { display: grid; grid-template-columns: minmax(220px,.7fr) minmax(0,1.3fr); gap: 24px 28px; }
+.residency-client-settings-form > .settings-account-section > div:first-child p:last-child { margin-top: 7px; color: var(--muted); line-height: 1.5; }
 .settings-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
 .settings-fields .wide { grid-column: 1 / -1; }
-.residency-client-settings-form > footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.residency-client-settings-form > footer span { color: var(--muted); font-size: 11px; }
+.settings-account-status, .settings-account-actions { grid-column: 1 / -1; }
+.settings-account-status { margin: 0; }
+.settings-account-actions { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.settings-account-actions span { color: var(--muted); font-size: var(--hfy-supporting-copy-size, 12px); line-height: 1.5; }
 .public-calendar-header { display: flex; align-items: flex-start; gap: 18px; padding: 28px; border: 1px solid rgba(255,255,255,.74); border-radius: 28px; background: rgba(249,251,252,.84); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
 .public-calendar-header .brand-mark { width: 48px; height: 48px; flex: 0 0 48px; }
 .public-calendar-header h1 { margin: 6px 0 8px; font-size: clamp(34px, 7vw, 54px); }
@@ -1738,9 +1740,9 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
   .payout-detail-panel { position: static; min-height: 480px; max-height: none; }
   .payout-detail-empty { min-height: 440px; }
   .residency-overview-grid, .workspace-shortcuts { grid-template-columns: 1fr; }
-  .residency-client-settings-form > section, .settings-fields { grid-template-columns: 1fr; }
+  .residency-client-settings-form > .settings-account-section, .settings-fields { grid-template-columns: 1fr; }
   .settings-fields .wide { grid-column: auto; }
-  .residency-client-settings-form > footer { align-items: stretch; flex-direction: column; }
+  .settings-account-actions { align-items: stretch; flex-direction: column; }
   .calendar-controls { align-items: stretch; flex-direction: column; }
   .month-navigation { justify-content: space-between; }
   .calendar-filter-form { align-items: end; }
@@ -1923,23 +1925,42 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .residency-overview-grid h2 { font-size: 24px; }
 .residency-overview-grid p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
-.residency-users-card, .account-security-card { display: grid; gap: 22px; padding: 22px; }
-.residency-user-invite-form { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr) auto; gap: 16px; align-items: end; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #f8fbfe; }
-.residency-user-invite-form fieldset, .platform-pause-periods { display: flex; gap: 10px; margin: 0; padding: 0; border: 0; }
-.residency-user-invite-form legend, .platform-pause-periods legend { margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; }
-.residency-role-option { display: flex; flex: 1 1 0; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
-.residency-role-option > span { min-width: 0; overflow-wrap: break-word; }
-.residency-role-option span, .residency-role-option small { display: block; }
-.residency-role-option small { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.35; }
-.residency-user-list { display: grid; gap: 10px; }
-.residency-user-row { display: grid; grid-template-columns: minmax(190px, .8fr) minmax(240px, 1fr) minmax(260px, auto); gap: 18px; align-items: center; padding: 16px; border: 1px solid #d8e1e9; border-radius: 15px; background: white; }
-.residency-user-row.pending { border-style: dashed; background: #fafbfd; }
-.residency-user-identity, .residency-user-role { display: grid; gap: 5px; }
-.residency-user-identity > div { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
-.residency-user-identity > span, .residency-user-role > span, .residency-user-role small { color: var(--muted); font-size: 9px; line-height: 1.45; }
-.residency-user-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
-.residency-user-actions form { display: flex; gap: 6px; }
-.residency-user-actions .button, .residency-user-actions select { min-height: 31px; padding: 7px 9px; font-size: 9px; }
+.residency-users-card, .account-security-card { display: grid; gap: var(--hfy-space-6); padding: var(--hfy-surface-card-padding); }
+.residency-users-card { container: residency-users / inline-size; }
+.residency-users-card .residency-section-header > div > p:not(.eyebrow) { max-width: 660px; margin: 5px 0 0; color: var(--hfy-muted); font-size: var(--hfy-supporting-copy-size); line-height: 1.5; }
+.residency-user-seat-count { flex: 0 0 auto; padding: 7px 10px; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-pill); color: var(--hfy-action-ink); background: var(--hfy-action-soft); font-size: 10px; font-weight: 800; white-space: nowrap; }
+.residency-user-invite-form { display: grid; min-width: 0; grid-template-columns: minmax(260px, 1fr) minmax(180px, .34fr) auto; gap: var(--hfy-space-3); align-items: start; padding: var(--hfy-space-4); border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-card); background: #f8fbfe; }
+.residency-user-invite-form > .field { min-width: 0; grid-template-rows: auto var(--hfy-control-height) auto; }
+.residency-user-invite-form > .field > :is(input, select) { height: var(--hfy-control-height); min-height: var(--hfy-control-height); }
+.residency-user-invite-form > .field > small { color: var(--hfy-muted); font-size: 9px; line-height: 1.35; }
+.residency-user-invite-submit { min-height: var(--hfy-control-height); align-self: start; margin-top: 18px; white-space: nowrap; }
+.residency-user-invite-form > :is(.error, .success) { grid-column: 1 / -1; margin: 0; }
+.platform-pause-periods { display: flex; gap: 10px; margin: 0; padding: 0; border: 0; }
+.platform-pause-periods legend { margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; }
+.residency-user-roster { min-width: 0; overflow: hidden; border: 1px solid var(--hfy-line); border-radius: var(--hfy-radius-card); background: white; }
+.residency-user-roster-header, .residency-user-row { min-width: 0; display: grid; grid-template-columns: minmax(220px, 1.25fr) minmax(190px, .8fr) minmax(130px, .55fr) minmax(260px, 1.25fr); gap: var(--hfy-space-4); align-items: center; }
+.residency-user-roster-header { padding: 10px var(--hfy-space-4); border-bottom: 1px solid var(--hfy-line); color: var(--hfy-label); background: var(--hfy-surface-nested); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.residency-user-list { display: grid; }
+.residency-user-row { padding: var(--hfy-space-4); border-bottom: 1px solid var(--hfy-line); }
+.residency-user-row:last-child { border-bottom: 0; }
+.residency-user-row.pending { background: #fafbfd; }
+.residency-user-identity { min-width: 0; display: flex; align-items: center; gap: var(--hfy-space-3); }
+.residency-user-avatar { flex: 0 0 38px; width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--hfy-action-strong) 28%, transparent); border-radius: 50%; color: var(--hfy-action-ink); background: var(--hfy-action-soft); font-size: 11px; font-weight: 850; }
+.residency-user-identity > span:last-child { min-width: 0; display: grid; gap: 3px; }
+.residency-user-identity strong { min-width: 0; font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; }
+.residency-user-identity small, .residency-user-pending-role small, .residency-user-audit { color: var(--hfy-muted); font-size: 10px; line-height: 1.4; }
+.residency-user-identity small { min-width: 0; overflow-wrap: anywhere; }
+.residency-user-access { min-width: 0; }
+.residency-user-role-form { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--hfy-space-2); }
+.residency-user-role-form select { min-width: 0; width: 100%; height: 36px; min-height: 36px; padding: 7px 28px 7px 10px; font-size: 10px; }
+.residency-user-role-form .button, .residency-user-actions .button { width: auto; min-height: 36px; padding: 8px 11px; font-size: 10px; white-space: nowrap; }
+.residency-user-pending-role { min-width: 0; display: grid; gap: 3px; }
+.residency-user-pending-role strong { font-size: var(--hfy-supporting-copy-size); }
+.residency-user-status { min-width: 0; display: flex; flex-wrap: wrap; gap: var(--hfy-space-2); align-items: center; }
+.residency-user-status .status { margin: 0; white-space: nowrap; }
+.residency-user-actions { min-width: 0; display: flex; flex-wrap: wrap; gap: var(--hfy-space-2); justify-content: flex-end; }
+.residency-user-actions form { min-width: 0; display: flex; }
+.residency-user-audit { grid-column: 2 / -1; display: block; padding-top: var(--hfy-space-2); border-top: 1px dashed var(--hfy-line); }
 .account-security-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .account-security-grid form { display: grid; align-content: start; gap: 12px; padding: 18px; border: 1px solid var(--line); border-radius: 15px; background: #fafcfe; }
 .account-security-grid .button { justify-self: start; }
@@ -1964,10 +1985,25 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-payment-failed-inline.restricted { border-color: #e2a4a4; background: #fff2f2; }
 .platform-payment-failure-banner.restricted { border-color: #e2a4a4; background: #fff2f2; }
 
-@media (max-width: 1199px) {
+@container residency-users (max-width: 860px) {
+  .residency-user-invite-form { grid-template-columns: minmax(0, 1fr) minmax(180px, .48fr); }
+  .residency-user-invite-submit { grid-column: 1 / -1; justify-self: start; margin-top: 0; }
+  .residency-user-roster-header { display: none; }
+  .residency-user-row { grid-template-columns: minmax(220px, 1fr) minmax(190px, .8fr); align-items: start; }
+  .residency-user-status { grid-column: 1; }
+  .residency-user-actions { grid-column: 2; grid-row: 2; justify-content: flex-start; }
+  .residency-user-audit { grid-column: 1 / -1; }
+}
+
+@container residency-users (max-width: 560px) {
+  .residency-users-card .residency-section-header--split { align-items: flex-start; flex-direction: column; }
   .residency-user-invite-form, .residency-user-row { grid-template-columns: minmax(0, 1fr); }
-  .residency-user-invite-form { align-items: stretch; }
+  .residency-user-invite-submit { grid-column: auto; width: 100%; }
+  .residency-user-row { gap: var(--hfy-space-3); }
+  .residency-user-status, .residency-user-actions, .residency-user-audit { grid-column: auto; grid-row: auto; }
   .residency-user-actions { justify-content: flex-start; }
+  .residency-user-actions form { flex: 1 1 130px; }
+  .residency-user-actions .button { width: 100%; }
 }
 
 @media (max-width: 1050px) {
@@ -1992,12 +2028,5 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
   .platform-annual-plan-comparison { grid-template-columns: 1fr; }
   .platform-annual-confirmation-actions { align-items: stretch; flex-direction: column-reverse; }
   .platform-annual-confirmation-actions .button { width: 100%; }
-  .residency-user-invite-form, .residency-user-row, .account-security-grid, .platform-self-service-fields { grid-template-columns: 1fr; }
-  .residency-user-invite-form { align-items: stretch; }
-  .residency-user-actions { justify-content: flex-start; }
-}
-
-@media (max-width: 480px) {
-  .residency-user-invite-form fieldset { flex-direction: column; }
-  .residency-role-option { flex: 0 1 auto; width: 100%; }
+  .account-security-grid, .platform-self-service-fields { grid-template-columns: 1fr; }
 }
