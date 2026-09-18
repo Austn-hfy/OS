@@ -8,7 +8,9 @@ describe("Residency Users & Roles account experience", () => {
     const css = await read("../../../app/globals.css");
     expect(css).toContain(".residency-role-option { display: flex; flex: 1 1 0;");
     expect(css).toContain(".residency-role-option > span { min-width: 0; overflow-wrap: break-word; }");
-    expect(css).toContain(".residency-user-invite-form { grid-template-columns: 1fr; align-items: stretch; }");
+    expect(css).toContain(".residency-user-invite-form { display: grid; min-width: 0;");
+    expect(css).toContain("@media (max-width: 1199px)");
+    expect(css).toContain(".residency-user-invite-form, .residency-user-row { grid-template-columns: minmax(0, 1fr); }");
     expect(css).toContain("@media (max-width: 480px)");
     expect(css).toContain(".residency-user-invite-form fieldset { flex-direction: column; }");
     expect(css).toContain(".residency-role-option { flex: 0 1 auto; width: 100%; }");
