@@ -122,6 +122,8 @@ describe("Residency Overview availability", () => {
     const html = renderToStaticMarkup(await ResidencyOverviewPage({ searchParams: Promise.resolve({ day: "2026-09-20" }) }));
 
     expect(html).toContain("Sunday, September 20");
+    expect(html).toContain("Day focus · Sunday selected");
+    expect(html).toContain("Selected");
     expect(html).toContain("Schedule talent");
     expect(html).toContain("Talent has not been assigned");
     expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-20&amp;event=projected-1"');

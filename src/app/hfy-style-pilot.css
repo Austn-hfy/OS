@@ -3277,8 +3277,8 @@
 }
 
 .hfy-style-system .residency-overview-week-card { grid-column: 1 / -1; }
-.hfy-style-system .residency-overview-attention-card { grid-column: span 7; }
-.hfy-style-system .residency-overview-finance-card { grid-column: span 5; }
+.hfy-style-system .residency-overview-attention-card,
+.hfy-style-system .residency-overview-finance-card { grid-column: span 6; }
 
 .hfy-style-system .residency-overview-dashboard .residency-section-header > div > p:not(.eyebrow) {
   max-width: 620px;
@@ -3347,11 +3347,6 @@
 
 .hfy-style-system .residency-overview-day:hover { border-color: var(--hfy-line-strong); transform: translateY(-1px); }
 .hfy-style-system .residency-overview-day:focus-visible { outline: 3px solid var(--hfy-focus-ring); outline-offset: 2px; }
-.hfy-style-system .residency-overview-day.is-selected {
-  border-color: var(--hfy-action-strong);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hfy-action-strong) 14%, transparent);
-}
-
 .hfy-style-system .residency-overview-day.is-today {
   border-color: color-mix(in srgb, var(--hfy-action-strong) 28%, var(--hfy-line));
   background: var(--hfy-action-soft);
@@ -3362,6 +3357,16 @@
   background: var(--hfy-coral-soft);
 }
 
+.hfy-style-system .residency-overview-day.is-selected {
+  border-color: var(--hfy-action-strong);
+  background: linear-gradient(145deg, var(--hfy-action-soft), var(--hfy-surface-card-background));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--hfy-action-strong) 18%, transparent), 0 8px 20px color-mix(in srgb, var(--hfy-action-strong) 14%, transparent);
+  transform: translateY(-2px);
+}
+
+.hfy-style-system .residency-overview-day.is-selected:hover { border-color: var(--hfy-action-strong); transform: translateY(-2px); }
+.hfy-style-system .residency-overview-day.is-selected > strong { color: var(--hfy-action-ink); }
+
 .hfy-style-system .residency-overview-day-heading {
   display: flex;
   align-items: center;
@@ -3369,7 +3374,7 @@
   gap: var(--hfy-space-1);
 }
 
-.hfy-style-system .residency-overview-day-heading > span {
+.hfy-style-system .residency-overview-day-name {
   color: var(--hfy-label);
   font-size: 9px;
   font-weight: 850;
@@ -3377,11 +3382,34 @@
   text-transform: uppercase;
 }
 
-.hfy-style-system .residency-overview-day-heading > i {
+.hfy-style-system .residency-overview-day-markers {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.hfy-style-system .residency-overview-day-markers > i {
   width: 7px;
   height: 7px;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: var(--hfy-action-strong);
+}
+
+.hfy-style-system .residency-overview-day-markers > b {
+  padding: 3px 5px;
+  overflow: hidden;
+  border-radius: var(--hfy-radius-pill);
+  color: var(--hfy-action-ink);
+  background: color-mix(in srgb, var(--hfy-action-strong) 14%, var(--hfy-surface-card-background));
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
 }
 
 .hfy-style-system .residency-overview-day > strong {
@@ -3431,9 +3459,10 @@
   display: grid;
   gap: var(--hfy-space-3);
   padding: var(--hfy-space-4);
-  border: 1px solid var(--hfy-line);
+  border: 1px solid var(--hfy-action-strong);
   border-radius: var(--hfy-radius-card);
-  background: var(--hfy-surface-nested);
+  background: linear-gradient(100deg, var(--hfy-action-soft), var(--hfy-surface-nested) 24%);
+  box-shadow: inset 3px 0 0 var(--hfy-action-strong), 0 0 0 2px color-mix(in srgb, var(--hfy-action-strong) 9%, transparent);
 }
 
 .hfy-style-system .residency-overview-day-detail-header {
@@ -3445,13 +3474,17 @@
 }
 
 .hfy-style-system .residency-overview-day-detail-header > div { min-width: 0; }
-.hfy-style-system .residency-overview-day-detail-header > div > span {
-  color: var(--hfy-label);
+.hfy-style-system .residency-overview-day-detail-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--hfy-action-ink);
   font-size: 8px;
   font-weight: 850;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+.hfy-style-system .residency-overview-day-detail-kicker > i { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--hfy-action-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hfy-action-strong) 12%, transparent); }
 .hfy-style-system .residency-overview-day-detail-header h3 { margin: 4px 0 0; font-size: 17px; letter-spacing: -.025em; }
 .hfy-style-system .residency-overview-day-detail-header p { margin: 4px 0 0; color: var(--hfy-muted); font-size: 10px; }
 

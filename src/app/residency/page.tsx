@@ -40,6 +40,10 @@ function weekday(value: string) {
   return new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(dateValue(value));
 }
 
+function longWeekday(value: string) {
+  return new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "UTC" }).format(dateValue(value));
+}
+
 function dayNumber(value: string) {
   return new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "UTC" }).format(dateValue(value));
 }
@@ -139,7 +143,13 @@ export default async function ResidencyOverviewPage({
                 href={`/residency?day=${day.date}`}
                 key={day.date}
               >
-                <div className="residency-overview-day-heading"><span>{weekday(day.date)}</span>{index === 0 ? <i aria-label="Today" /> : null}</div>
+                <div className="residency-overview-day-heading">
+                  <span className="residency-overview-day-name">{weekday(day.date)}</span>
+                  <span className="residency-overview-day-markers">
+                    {index === 0 ? <i aria-label="Today" /> : null}
+                    {selected ? <b>Selected</b> : null}
+                  </span>
+                </div>
                 <strong>{dayNumber(day.date)}</strong>
                 <p>{day.services.length ? `${day.services.length} ${day.services.length === 1 ? "activity" : "activities"}` : "No program"}</p>
                 <small>{details.join(" · ") || "Nothing scheduled"}</small>
@@ -149,9 +159,9 @@ export default async function ResidencyOverviewPage({
               </Link>;
             })}
           </div>
-          <section className="residency-overview-day-detail" aria-labelledby="residency-overview-day-detail-title">
+          <section className="residency-overview-day-detail" aria-labelledby="residency-overview-day-detail-title" aria-live="polite">
             <header className="residency-overview-day-detail-header">
-              <div><span>Day focus</span><h3 id="residency-overview-day-detail-title">{fullDate(selectedDay.date)}</h3><p>{selectedDay.services.length ? `${selectedDay.services.length} ${selectedDay.services.length === 1 ? "activity" : "activities"} to review.` : "Nothing is programmed yet."}</p></div>
+              <div><span className="residency-overview-day-detail-kicker"><i aria-hidden="true" />Day focus · {longWeekday(selectedDay.date)} selected</span><h3 id="residency-overview-day-detail-title">{fullDate(selectedDay.date)}</h3><p>{selectedDay.services.length ? `${selectedDay.services.length} ${selectedDay.services.length === 1 ? "activity" : "activities"} to review.` : "Nothing is programmed yet."}</p></div>
               <Link className="residency-overview-day-detail-week-link" href={calendarHref(selectedDay.date)}>View this week <ArrowIcon /></Link>
             </header>
             {selectedDay.services.length ? <div className="residency-overview-day-services">
