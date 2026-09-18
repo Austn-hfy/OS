@@ -332,13 +332,20 @@ export async function scheduleStripePlanAtRenewal(subscription: Stripe.Subscript
   const currentItem = subscription.items.data[0];
   if (!currentItem) throw new Error("Stripe subscription has no subscription item to update.");
   const existingScheduleId = stripeId(subscription.schedule);
-  const schedule = existingScheduleId
+  const existingSchedule = existingScheduleId
     ? await stripe.subscriptionSchedules.retrieve(existingScheduleId)
+    : null;
+  if (existingSchedule?.livemode) throw new Error("Stripe returned a live-mode Subscription Schedule; staging billing stopped.");
+  const schedule = existingSchedule && ["active", "not_started"].includes(existingSchedule.status)
+    ? existingSchedule
     : await stripe.subscriptionSchedules.create(
       { from_subscription: subscription.id },
-      { idempotencyKey: `platform-schedule/${subscription.id}` },
+      { idempotencyKey: `platform-schedule/${subscription.id}/r${revision}` },
     );
   if (schedule.livemode) throw new Error("Stripe returned a live-mode Subscription Schedule; staging billing stopped.");
+  if (!["active", "not_started"].includes(schedule.status)) {
+    throw new Error("Stripe did not return an updatable Subscription Schedule for this plan change.");
+  }
   const currentStart = schedule.current_phase?.start_date ?? subscriptionPeriodStart(subscription);
   const currentEnd = schedule.current_phase?.end_date ?? currentItem.current_period_end;
   const nextInterval = price.recurring;
