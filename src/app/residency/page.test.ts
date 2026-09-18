@@ -93,6 +93,7 @@ describe("Residency Overview availability", () => {
     const html = renderToStaticMarkup(await ResidencyOverviewPage({ searchParams: Promise.resolve({}) }));
 
     expect(html).toContain("Welcome, Residency Manager");
+    expect(html).not.toContain("5 operational items need attention.");
     expect(html).toContain("Friday, September 18");
     expect(html).toContain("This week");
     expect(html).toContain("Day focus");
@@ -160,7 +161,7 @@ describe("Residency Overview availability", () => {
 
     const html = renderToStaticMarkup(await ResidencyOverviewPage({ searchParams: Promise.resolve({}) }));
 
-    expect(html).toContain("Your operational work is clear right now.");
+    expect(html).not.toContain("Your operational work is clear right now.");
     expect(html).toContain("All clear");
     expect(html).toContain("No open scheduling gaps, pending confirmations, or overdue talent invoices need attention.");
     expect(html).toContain("No programming scheduled");

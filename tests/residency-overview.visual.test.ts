@@ -161,6 +161,7 @@ describe("Residency Overview responsive visual contract", () => {
         };
         const viewportWidth = document.documentElement.clientWidth;
         const surface = element(".residency-overview-surface").getBoundingClientRect();
+        const overviewHeader = element(".residency-overview-surface > .residency-page-header");
         const dashboard = element(".residency-overview-dashboard").getBoundingClientRect();
         const cards = [...document.querySelectorAll<HTMLElement>(".residency-overview-dashboard > .residency-surface-card")];
         const days = [...document.querySelectorAll<HTMLElement>(".residency-overview-day")];
@@ -181,6 +182,7 @@ describe("Residency Overview responsive visual contract", () => {
         return {
           documentContained: document.documentElement.scrollWidth === viewportWidth,
           surfaceContained: surface.left >= -0.5 && surface.right <= viewportWidth + 0.5,
+          conciseWelcomeHeader: overviewHeader.querySelector(".subhead") === null,
           cardsContained: cards.every((card) => {
             const rect = card.getBoundingClientRect();
             return rect.left >= surface.left - 0.5 && rect.right <= surface.right + 0.5 && card.scrollWidth === card.clientWidth;
@@ -210,6 +212,7 @@ describe("Residency Overview responsive visual contract", () => {
       expect(metrics, `Overview geometry failed at ${width}px`).toEqual({
         documentContained: true,
         surfaceContained: true,
+        conciseWelcomeHeader: true,
         cardsContained: true,
         cardsUseLockedSurface: true,
         sevenDays: true,
