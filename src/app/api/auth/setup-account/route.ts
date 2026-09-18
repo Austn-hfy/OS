@@ -9,6 +9,8 @@ const requestSchema = z.object({
   token: z.string().min(32).max(256),
   password: z.string().min(12).max(200),
   confirmation: z.string().min(12).max(200),
+  name: z.string().trim().min(2).max(120),
+  phone: z.string().trim().max(50),
 }).refine((value) => value.password === value.confirmation, {
   message: "The two passwords do not match.",
   path: ["confirmation"],

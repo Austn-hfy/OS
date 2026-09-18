@@ -361,7 +361,16 @@ export async function getResidencyPlatformBilling(residencyId: string) {
     cardLast4: platformSubscriptions.cardLast4,
     nextChargeAt: platformSubscriptions.nextChargeAt,
     paymentFailedAt: platformSubscriptions.paymentFailedAt,
+    paymentGraceEndsAt: platformSubscriptions.paymentGraceEndsAt,
+    accessRestrictedAt: platformSubscriptions.accessRestrictedAt,
     paymentFailureMessage: platformSubscriptions.paymentFailureMessage,
+    pendingChangeKind: platformSubscriptions.pendingChangeKind,
+    pendingChangeEffectiveAt: platformSubscriptions.pendingChangeEffectiveAt,
+    cancelAtPeriodEnd: platformSubscriptions.cancelAtPeriodEnd,
+    pausePeriods: platformSubscriptions.pausePeriods,
+    pauseEffectiveAt: platformSubscriptions.pauseEffectiveAt,
+    pauseResumesAt: platformSubscriptions.pauseResumesAt,
+    pausedAt: platformSubscriptions.pausedAt,
   }).from(platformSubscriptions)
     .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
     .where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
@@ -392,6 +401,12 @@ export async function getResidencyPlatformBilling(residencyId: string) {
       ...subscription,
       nextChargeAt: subscription.nextChargeAt?.toISOString() ?? null,
       paymentFailedAt: subscription.paymentFailedAt?.toISOString() ?? null,
+      paymentGraceEndsAt: subscription.paymentGraceEndsAt?.toISOString() ?? null,
+      accessRestrictedAt: subscription.accessRestrictedAt?.toISOString() ?? null,
+      pendingChangeEffectiveAt: subscription.pendingChangeEffectiveAt?.toISOString() ?? null,
+      pauseEffectiveAt: subscription.pauseEffectiveAt?.toISOString() ?? null,
+      pauseResumesAt: subscription.pauseResumesAt?.toISOString() ?? null,
+      pausedAt: subscription.pausedAt?.toISOString() ?? null,
       ...amounts,
     },
     invoices: invoiceRows,
@@ -404,10 +419,14 @@ export async function getResidencyPlatformBilling(residencyId: string) {
 export async function getResidencyPaymentFailure(residencyId: string) {
   const [row] = await getDb().select({
     paymentFailedAt: platformSubscriptions.paymentFailedAt,
+    paymentGraceEndsAt: platformSubscriptions.paymentGraceEndsAt,
+    accessRestrictedAt: platformSubscriptions.accessRestrictedAt,
     paymentFailureMessage: platformSubscriptions.paymentFailureMessage,
   }).from(platformSubscriptions).where(eq(platformSubscriptions.residencyId, residencyId)).limit(1);
   return row?.paymentFailedAt ? {
     failedAt: row.paymentFailedAt.toISOString(),
+    graceEndsAt: row.paymentGraceEndsAt?.toISOString() ?? null,
+    restrictedAt: row.accessRestrictedAt?.toISOString() ?? null,
     message: row.paymentFailureMessage,
   } : null;
 }

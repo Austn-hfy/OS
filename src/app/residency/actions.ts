@@ -5,8 +5,9 @@ import { z } from "zod";
 import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { assignments, auditLog, clientAssignmentTerms, residencies, residencyTalent, scheduleOccurrenceTalent, shifts, talent } from "@/db/schema";
-import { requireResidencyActor, type ResidencyActor } from "@/lib/auth";
+import { requireResidencyActorForMutation, type ResidencyActor } from "@/lib/auth";
 import { resolveClientArtistGenre } from "@/domain/talent-genres";
+import { assertResidencyOperationalWriteAllowed } from "@/services/residency-access-state";
 
 export type ClientSettingsActionState = {
   status: "idle" | "success" | "error";
@@ -25,8 +26,9 @@ export async function createClientOwnedArtistAction(
   formData: FormData,
 ): Promise<ClientSettingsActionState> {
   try {
-    const actor = await requireResidencyActor();
+    const actor = await requireResidencyActorForMutation();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    await assertResidencyOperationalWriteAllowed(actor.residencyId);
     requireSelfServeTalentAccess(actor);
     const parsed = z.object({
       name: z.string().trim().min(1).max(200),
@@ -91,8 +93,9 @@ export async function updateClientOwnedArtistAction(
   formData: FormData,
 ): Promise<ClientSettingsActionState> {
   try {
-    const actor = await requireResidencyActor();
+    const actor = await requireResidencyActorForMutation();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    await assertResidencyOperationalWriteAllowed(actor.residencyId);
     requireSelfServeTalentAccess(actor);
     const parsed = z.object({
       artistId: z.uuid(),
@@ -151,8 +154,9 @@ export async function archiveClientOwnedArtistAction(
   formData: FormData,
 ): Promise<ClientSettingsActionState> {
   try {
-    const actor = await requireResidencyActor();
+    const actor = await requireResidencyActorForMutation();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    await assertResidencyOperationalWriteAllowed(actor.residencyId);
     requireSelfServeTalentAccess(actor);
     const parsed = z.object({ artistId: z.uuid() }).parse(Object.fromEntries(formData));
     const database = getDb();
@@ -195,8 +199,9 @@ export async function restoreClientOwnedArtistAction(
   formData: FormData,
 ): Promise<ClientSettingsActionState> {
   try {
-    const actor = await requireResidencyActor();
+    const actor = await requireResidencyActorForMutation();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    await assertResidencyOperationalWriteAllowed(actor.residencyId);
     requireSelfServeTalentAccess(actor);
     const parsed = z.object({ artistId: z.uuid() }).parse(Object.fromEntries(formData));
     const database = getDb();
@@ -239,8 +244,9 @@ export async function permanentlyDeleteClientOwnedArtistAction(
   formData: FormData,
 ): Promise<ClientSettingsActionState> {
   try {
-    const actor = await requireResidencyActor();
+    const actor = await requireResidencyActorForMutation();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    await assertResidencyOperationalWriteAllowed(actor.residencyId);
     requireSelfServeTalentAccess(actor);
     const parsed = z.object({ artistId: z.uuid() }).parse(Object.fromEntries(formData));
     const database = getDb();
@@ -289,8 +295,9 @@ export async function updateClientOwnedRateAction(
   formData: FormData,
 ): Promise<ClientSettingsActionState> {
   try {
-    const actor = await requireResidencyActor();
+    const actor = await requireResidencyActorForMutation();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+    await assertResidencyOperationalWriteAllowed(actor.residencyId);
     requireSelfServeTalentAccess(actor);
     const parsed = z.object({
       assignmentId: z.uuid(),
@@ -333,15 +340,12 @@ export async function updateResidencyClientSettingsAction(
   formData: FormData,
 ): Promise<ClientSettingsActionState> {
   try {
-    const actor = await requireResidencyActor();
+    const actor = await requireResidencyActorForMutation();
     if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
     const parsed = z.object({
       name: z.string().trim().min(2).max(160),
       cityState: z.string().trim().max(120),
       timezone: z.string().trim().min(3).max(100),
-      primaryContactName: z.string().trim().max(160),
-      primaryContactPhone: z.string().trim().max(50),
-      primaryContactEmail: z.union([z.literal(""), z.email()]),
     }).parse(Object.fromEntries(formData));
     const [updated] = await getDb().update(residencies).set({
       ...parsed,

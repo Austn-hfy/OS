@@ -17,6 +17,10 @@ function escapeHtml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
+function paymentDeadline(value: Date) {
+  return `${new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(value)} UTC`;
+}
+
 export async function queuePlatformPaymentFailedAlerts(input: {
   platformSubscriptionId: string;
   stripeEventId: string;
@@ -29,11 +33,15 @@ export async function queuePlatformPaymentFailedAlerts(input: {
     residencyName: residencies.name,
     billingContactEmail: residencies.billingContactEmail,
     primaryContactEmail: residencies.primaryContactEmail,
+    paymentGraceEndsAt: platformSubscriptions.paymentGraceEndsAt,
   }).from(platformSubscriptions)
     .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
     .where(eq(platformSubscriptions.id, input.platformSubscriptionId)).limit(1);
   if (!record) return [];
   const ownerEmail = await getOwnerBillingEmail();
+  const graceDeadline = record.paymentGraceEndsAt
+    ? paymentDeadline(record.paymentGraceEndsAt)
+    : "14 days after the first failed payment";
   const hotelEmail = record.billingContactEmail || record.primaryContactEmail;
   const recipients = [
     { audience: "owner" as const, email: ownerEmail },
@@ -57,14 +65,14 @@ export async function queuePlatformPaymentFailedAlerts(input: {
     entityType: "platform_subscription",
     entityId: input.platformSubscriptionId,
     code: "platform_payment_failed",
-    message: `${record.residencyName}'s Platform subscription payment failed. Portal access remains active.`,
-    details: { stripeEventId: input.stripeEventId, failureMessage: input.failureMessage, accessBehavior: "never_restrict" },
+    message: `${record.residencyName}'s Platform subscription payment failed. Full access continues through ${graceDeadline}.`,
+    details: { stripeEventId: input.stripeEventId, failureMessage: input.failureMessage, accessBehavior: "restrict_operational_writes_after_grace", graceDeadline },
   }).onConflictDoUpdate({
     target: [attentionItems.entityType, attentionItems.entityId, attentionItems.code],
     targetWhere: eq(attentionItems.status, "open"),
     set: {
-      message: `${record.residencyName}'s Platform subscription payment failed. Portal access remains active.`,
-      details: { stripeEventId: input.stripeEventId, failureMessage: input.failureMessage, accessBehavior: "never_restrict" },
+      message: `${record.residencyName}'s Platform subscription payment failed. Full access continues through ${graceDeadline}.`,
+      details: { stripeEventId: input.stripeEventId, failureMessage: input.failureMessage, accessBehavior: "restrict_operational_writes_after_grace", graceDeadline },
     },
   });
   return queued;
@@ -131,14 +139,18 @@ function alertContent(alert: {
   kind: "payment_failed" | "payment_resolved" | "overage_heads_up";
   audience: "owner" | "hotel";
   residencyName: string;
+  paymentGraceEndsAt: Date | null;
 }) {
   if (alert.kind === "payment_failed") {
+    const deadline = alert.paymentGraceEndsAt
+      ? paymentDeadline(alert.paymentGraceEndsAt)
+      : "14 days after the first failed payment";
     return alert.audience === "hotel" ? {
       subject: `Action needed: ${alert.residencyName} Platform payment failed`,
-      html: `<p>Hi there,</p><p>We could not process the latest Platform subscription payment for <strong>${escapeHtml(alert.residencyName)}</strong>.</p><p>Your portal remains fully available. Please sign in and open Settings → Billing to update the card on file.</p><p>Platform Billing</p>`,
+      html: `<p>Hi there,</p><p>We could not process the latest Platform subscription payment for <strong>${escapeHtml(alert.residencyName)}</strong>.</p><p>Full access continues through <strong>${escapeHtml(deadline)}</strong>. After that deadline, operational changes pause until payment succeeds; your data remains available.</p><p>Please sign in and open Settings → Billing to update the card or pay the outstanding invoice.</p><p>Platform Billing</p>`,
     } : {
       subject: `[TEST MODE] ${alert.residencyName} Platform payment failed`,
-      html: `<p>The Stripe test-mode Platform payment for <strong>${escapeHtml(alert.residencyName)}</strong> failed.</p><p>The hotel has also been queued for notification. Portal access remains active by design.</p>`,
+      html: `<p>The Stripe test-mode Platform payment for <strong>${escapeHtml(alert.residencyName)}</strong> failed.</p><p>The hotel has also been queued for notification. Full access continues through ${escapeHtml(deadline)}, followed by operational-write restriction if unresolved.</p>`,
     };
   }
   if (alert.kind === "overage_heads_up") return {
@@ -162,8 +174,10 @@ export async function sendPendingPlatformBillingAlerts(limit = 25, alertIds?: st
     idempotencyKey: platformBillingAlerts.idempotencyKey,
     residencyId: platformBillingAlerts.residencyId,
     residencyName: residencies.name,
+    paymentGraceEndsAt: platformSubscriptions.paymentGraceEndsAt,
   }).from(platformBillingAlerts)
     .innerJoin(residencies, eq(platformBillingAlerts.residencyId, residencies.id))
+    .innerJoin(platformSubscriptions, eq(platformBillingAlerts.platformSubscriptionId, platformSubscriptions.id))
     .where(alertIds?.length
       ? inArray(platformBillingAlerts.id, alertIds)
       : inArray(platformBillingAlerts.status, ["pending", "failed"]))

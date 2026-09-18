@@ -195,7 +195,17 @@ export const platformSubscriptions = pgTable("platform_subscriptions", {
   cardLast4: text("card_last4").notNull().default(""),
   nextChargeAt: timestamp("next_charge_at", { withTimezone: true }),
   paymentFailedAt: timestamp("payment_failed_at", { withTimezone: true }),
+  paymentGraceEndsAt: timestamp("payment_grace_ends_at", { withTimezone: true }),
+  accessRestrictedAt: timestamp("access_restricted_at", { withTimezone: true }),
   paymentFailureMessage: text("payment_failure_message").notNull().default(""),
+  pendingChangeKind: text("pending_change_kind").notNull().default("none"),
+  pendingChangeEffectiveAt: timestamp("pending_change_effective_at", { withTimezone: true }),
+  pendingRevision: integer("pending_revision"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  pausePeriods: integer("pause_periods"),
+  pauseEffectiveAt: timestamp("pause_effective_at", { withTimezone: true }),
+  pauseResumesAt: timestamp("pause_resumes_at", { withTimezone: true }),
+  pausedAt: timestamp("paused_at", { withTimezone: true }),
   lastStripeSyncedAt: timestamp("last_stripe_synced_at", { withTimezone: true }),
   updatedByUserId: uuid("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
   ...timestamps,
@@ -209,6 +219,9 @@ export const platformSubscriptions = pgTable("platform_subscriptions", {
   check("platform_subscriptions_dates_valid", sql`${table.renewsOn} >= ${table.startsOn}`),
   check("platform_subscriptions_currency_valid", sql`${table.currency} = 'USD'`),
   check("platform_subscriptions_card_complete", sql`(${table.cardBrand} = '' AND ${table.cardLast4} = '') OR (${table.cardBrand} <> '' AND ${table.cardLast4} ~ '^[0-9]{4}$')`),
+  check("platform_subscriptions_pending_change_valid", sql`${table.pendingChangeKind} IN ('none', 'downgrade', 'term_change', 'cancel', 'pause')`),
+  check("platform_subscriptions_pause_periods_valid", sql`${table.pausePeriods} IS NULL OR ${table.pausePeriods} IN (1, 2, 3)`),
+  check("platform_subscriptions_grace_valid", sql`${table.paymentGraceEndsAt} IS NULL OR (${table.paymentFailedAt} IS NOT NULL AND ${table.paymentGraceEndsAt} >= ${table.paymentFailedAt})`),
 ]);
 
 export const platformSubscriptionInvoices = pgTable("platform_subscription_invoices", {
@@ -548,9 +561,10 @@ export const residencyMemberships = pgTable("residency_memberships", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   residencyId: uuid("residency_id").notNull().references(() => residencies.id, { onDelete: "cascade" }),
-  accessRole: residencyAccessRole("access_role").notNull().default("manager"),
+  accessRole: residencyAccessRole("access_role").notNull().default("calendar_viewer"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("residency_memberships_user_residency_unique").on(table.userId, table.residencyId),
   index("residency_memberships_residency_idx").on(table.residencyId),
@@ -570,12 +584,19 @@ export const residencyContacts = pgTable("residency_contacts", {
   active: boolean("active").notNull().default(true),
   invitedAt: timestamp("invited_at", { withTimezone: true }),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  invitedByUserId: uuid("invited_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  roleChangedAt: timestamp("role_changed_at", { withTimezone: true }),
+  roleChangedByUserId: uuid("role_changed_by_user_id").references(() => users.id, { onDelete: "set null" }),
   ...timestamps,
 }, (table) => [
   index("residency_contacts_residency_idx").on(table.residencyId, table.active),
   uniqueIndex("residency_contacts_residency_email_unique")
     .on(table.residencyId, sql`lower(${table.email})`)
     .where(sql`${table.email} <> ''`),
+  uniqueIndex("residency_contacts_one_active_primary")
+    .on(table.residencyId)
+    .where(sql`${table.active} = true AND ${table.isPrimary} = true`),
 ]);
 
 export const accountSetupTokens = pgTable("account_setup_tokens", {

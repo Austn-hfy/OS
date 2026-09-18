@@ -35,7 +35,7 @@ export function AccountSetupForm() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password, confirmation }),
+        body: JSON.stringify({ token, password, confirmation, name: data.get("name"), phone: data.get("phone") }),
       });
       const result = await response.json() as SetupResponse;
       if (!response.ok || result.status !== "success" || !result.email) {
@@ -51,7 +51,7 @@ export function AccountSetupForm() {
         window.location.replace("/login?setup=success");
         return;
       }
-      window.location.replace("/app");
+      window.location.replace("/residency");
     } catch {
       setError("HFY OS could not reach the secure setup service. Your link has not been used; try again.");
       setLoading(false);
@@ -63,6 +63,14 @@ export function AccountSetupForm() {
       <p className="eyebrow">Account setup</p>
       <h2>Choose your password</h2>
       <p className="subhead">Opening or refreshing this page does not use the link. It is used only after your password saves successfully.</p>
+    </div>
+    <div className="field">
+      <label htmlFor="name">Your name</label>
+      <input id="name" name="name" autoComplete="name" minLength={2} maxLength={120} required />
+    </div>
+    <div className="field">
+      <label htmlFor="phone">Phone <span className="muted">(optional)</span></label>
+      <input id="phone" name="phone" type="tel" autoComplete="tel" maxLength={50} />
     </div>
     <div className="field">
       <label htmlFor="password">New password</label>

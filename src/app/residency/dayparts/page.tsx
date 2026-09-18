@@ -7,7 +7,7 @@ import { getRoomsForResidency } from "@/services/rooms";
 
 export default async function ResidencyDaypartsPage({ searchParams }: { searchParams: Promise<{ create?: string }> }) {
   const [actor, params] = await Promise.all([requireResidencyActor(), searchParams]);
-  if (!canResidencyRoleAccess(actor.accessRole, "manage_dayparts")) redirect("/residency/calendar");
+  if (!canResidencyRoleAccess(actor.accessRole, "manage_dayparts")) redirect("/residency/access-limited");
   const [dayparts, rooms] = await Promise.all([getDaypartsForResidency(actor.residencyId), getRoomsForResidency(actor.residencyId)]);
 
   return <DaypartRouteManager
