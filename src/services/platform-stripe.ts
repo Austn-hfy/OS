@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gt, gte, lte } from "drizzle-orm";
 import type Stripe from "stripe";
 import { getDb } from "@/db/client";
 import {
@@ -56,14 +56,18 @@ function annualRenewalDate(startsOn: string) {
   return date.toISOString().slice(0, 10);
 }
 
-export function annualPlanChangeInput(current: Pick<CurrentPlan, "residencyId" | "talentBucketSize" | "houseBucketSize" | "startsOn" | "renewsOn">): CommittedPlanInput {
+export function annualPlanChangeInput(
+  current: Pick<CurrentPlan, "residencyId" | "talentBucketSize" | "houseBucketSize" | "startsOn" | "renewsOn">,
+  startsAt = new Date(),
+): CommittedPlanInput {
+  const startsOn = startsAt.toISOString().slice(0, 10);
   return {
     residencyId: current.residencyId,
     term: "annual",
     talentBucketSize: current.talentBucketSize,
     houseBucketSize: current.houseBucketSize,
-    startsOn: current.renewsOn,
-    renewsOn: annualRenewalDate(current.renewsOn),
+    startsOn,
+    renewsOn: annualRenewalDate(startsOn),
     changeReason: "Residency manager switched to annual billing",
   };
 }
@@ -209,6 +213,119 @@ async function createPlanPrice(plan: CurrentPlan, input: Pick<CommittedPlanInput
   }, { idempotencyKey: `platform-price/${plan.id}/r${revision}/v14` });
   if (price.livemode) throw new Error("Stripe returned a live-mode Price; staging billing stopped.");
   return price;
+}
+
+function annualPreviewPriceData(plan: CurrentPlan, productId: string, comped: boolean) {
+  return {
+    currency: "usd",
+    product: productId,
+    recurring: { interval: "year" as const, interval_count: 1 },
+    unit_amount: platformPlanAmount({
+      term: "annual",
+      talentBucketSize: plan.talentBucketSize,
+      houseBucketSize: plan.houseBucketSize,
+    }, comped).termChargeAmountCents,
+  };
+}
+
+async function previewConnectedAnnualSwitch(
+  plan: CurrentPlan,
+  productId: string,
+  comped: boolean,
+  prorationDate: number,
+) {
+  if (!plan.stripeSubscriptionId) throw new Error("Stripe subscription is not connected.");
+  const stripe = getStripe();
+  const subscription = await stripe.subscriptions.retrieve(plan.stripeSubscriptionId);
+  if (subscription.livemode) throw new Error("A live-mode Stripe Subscription cannot be used by staging.");
+  const item = subscription.items.data[0];
+  if (!item) throw new Error("Stripe subscription has no subscription item to update.");
+  const preview = await stripe.invoices.createPreview({
+    subscription: subscription.id,
+    subscription_details: {
+      billing_cycle_anchor: "now",
+      items: [{
+        id: item.id,
+        price_data: annualPreviewPriceData(plan, productId, comped),
+        quantity: 1,
+      }],
+      proration_behavior: "always_invoice",
+      proration_date: prorationDate,
+    },
+  });
+  if (preview.livemode) throw new Error("Stripe returned a live-mode invoice preview; staging billing stopped.");
+  if (preview.currency.toLowerCase() !== "usd") throw new Error("Stripe returned an annual-switch preview in an unexpected currency.");
+  return { amountDueCents: preview.amount_due, subscription, item };
+}
+
+async function nextPlanRevision(plan: CurrentPlan) {
+  const [latest] = await getDb().select({ revision: platformSubscriptionRevisions.revision })
+    .from(platformSubscriptionRevisions)
+    .where(eq(platformSubscriptionRevisions.platformSubscriptionId, plan.id))
+    .orderBy(desc(platformSubscriptionRevisions.revision))
+    .limit(1);
+  return Math.max(plan.revision, latest?.revision ?? 0) + 1;
+}
+
+async function stripePriceHasActiveReferences(priceId: string) {
+  const stripe = getStripe();
+  const subscriptions = await stripe.subscriptions.list({ price: priceId, status: "all", limit: 1 });
+  if (subscriptions.data.length > 0) return true;
+  for await (const schedule of stripe.subscriptionSchedules.list({ limit: 100 })) {
+    if (!["active", "not_started"].includes(schedule.status)) continue;
+    if (schedule.phases.some((phase) => phase.items.some((item) => stripeId(item.price) === priceId))) return true;
+  }
+  return false;
+}
+
+async function retireDeferredAnnualState(
+  actor: Pick<AuditActor, "userId" | "email">,
+  plan: CurrentPlan,
+  subscription: Stripe.Subscription,
+) {
+  const database = getDb();
+  const stripe = getStripe();
+  const pending = await database.select().from(platformSubscriptionRevisions).where(and(
+    eq(platformSubscriptionRevisions.platformSubscriptionId, plan.id),
+    gt(platformSubscriptionRevisions.revision, plan.revision),
+    eq(platformSubscriptionRevisions.term, "annual"),
+    eq(platformSubscriptionRevisions.stripeSyncStatus, "pending"),
+  )).orderBy(desc(platformSubscriptionRevisions.revision));
+  const scheduleId = stripeId(subscription.schedule);
+  if (scheduleId) {
+    const released = await stripe.subscriptionSchedules.release(scheduleId);
+    if (released.status !== "released" || stripeId(released.released_subscription) !== subscription.id) {
+      throw new Error("Stripe did not confirm release of the deferred annual schedule from this subscription.");
+    }
+  }
+  if (!pending.length) return;
+
+  const reason = "Deferred annual schedule retired in favor of an immediate prorated annual switch.";
+  for (const revision of pending) {
+    await database.update(platformSubscriptionRevisions).set({
+      stripeSyncStatus: "failed",
+      stripeSyncError: reason,
+      syncedAt: null,
+    }).where(eq(platformSubscriptionRevisions.id, revision.id));
+    await database.insert(auditLog).values({
+      residencyId: plan.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "platform_deferred_annual_revision_retired",
+      entityType: "platform_subscription_revision",
+      entityId: revision.id,
+      details: {
+        revision: revision.revision,
+        stripeScheduleId: scheduleId,
+        stripePriceId: revision.stripePriceId,
+        reason,
+      },
+    });
+  }
+
+  for (const priceId of new Set(pending.flatMap((revision) => revision.stripePriceId ? [revision.stripePriceId] : []))) {
+    if (!await stripePriceHasActiveReferences(priceId)) await stripe.prices.update(priceId, { active: false });
+  }
 }
 
 async function scheduleStripePlanAtRenewal(subscription: Stripe.Subscription, price: Stripe.Price, revision: number) {
@@ -503,25 +620,224 @@ export async function updateCommittedPlan(actor: InternalActor, input: Committed
   return applyCommittedPlanUpdate(actor, input, options);
 }
 
-export async function switchResidencyCommittedPlanToAnnual(actor: ResidencyActor) {
-  if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
-  return scheduleResidencyCommittedPlanToAnnual(actor);
+function assertRecentProrationDate(value: number | null) {
+  const now = Math.floor(Date.now() / 1_000);
+  if (!value || !Number.isInteger(value) || value < now - 30 * 60 || value > now + 60) {
+    throw new Error("The Stripe charge preview expired. Reopen the confirmation to refresh the exact amount.");
+  }
+  return value;
 }
 
-export async function scheduleResidencyCommittedPlanToAnnual(actor: Pick<AuditActor, "userId" | "email"> & { residencyId: string }) {
-  const [current] = await getDb().select().from(platformSubscriptions)
-    .where(eq(platformSubscriptions.residencyId, actor.residencyId)).limit(1);
-  if (!current) throw new Error("Your Platform subscription is not ready yet.");
-  if (current.term === "annual") return current;
+async function residencyAnnualSwitchPlan(residencyId: string) {
+  const [row] = await getDb().select({
+    plan: platformSubscriptions,
+    residency: {
+      name: residencies.name,
+      comped: residencies.comped,
+      billingContactEmail: residencies.billingContactEmail,
+      primaryContactEmail: residencies.primaryContactEmail,
+    },
+  }).from(platformSubscriptions)
+    .innerJoin(residencies, eq(platformSubscriptions.residencyId, residencies.id))
+    .where(eq(platformSubscriptions.residencyId, residencyId))
+    .limit(1);
+  if (!row) throw new Error("Your Platform subscription is not ready yet.");
+  return row;
+}
+
+export async function previewResidencyAnnualSwitch(actor: ResidencyActor) {
+  if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
+  assertCurrentPlatformBillingStaging();
+  const { plan, residency } = await residencyAnnualSwitchPlan(actor.residencyId);
+  if (plan.term === "annual") return { kind: "already_annual" as const };
+
+  const paymentPath = annualSwitchPaymentPath(plan);
+  if (!plan.stripeSubscriptionId) {
+    return {
+      kind: "preview" as const,
+      paymentPath,
+      amountDueCents: platformPlanAmount({ ...plan, term: "annual" }, residency.comped).termChargeAmountCents,
+      prorationDate: null,
+    };
+  }
+  await requireResidencyLiveBillingApproval({
+    residencyId: plan.residencyId,
+    action: "stripe_subscription_update",
+    actor,
+    entityType: "platform_subscription",
+    entityId: plan.id,
+    details: { source: "annual_switch_proration_preview" },
+  });
+  const { productId } = await ensureStripeCustomerAndProduct(plan, residency);
+  const prorationDate = Math.floor(Date.now() / 1_000);
+  const preview = await previewConnectedAnnualSwitch(plan, productId, residency.comped, prorationDate);
+  return { kind: "preview" as const, paymentPath, amountDueCents: preview.amountDueCents, prorationDate };
+}
+
+export async function switchResidencyCommittedPlanToAnnualImmediately(
+  actor: Pick<AuditActor, "userId" | "email"> & { residencyId: string },
+  prorationDate: number,
+) {
+  assertCurrentPlatformBillingStaging();
+  const database = getDb();
+  const { plan: current, residency } = await residencyAnnualSwitchPlan(actor.residencyId);
+  if (current.term === "annual") return {
+    plan: current,
+    amountChargedCents: 0,
+    invoiceId: null,
+  };
   if (!current.stripeSubscriptionId) throw new Error("Add a card through Checkout to complete the annual switch.");
-  return applyCommittedPlanUpdate(actor, annualPlanChangeInput(current), { deferActivationUntilRenewal: true });
+  await requireResidencyLiveBillingApproval({
+    residencyId: current.residencyId,
+    action: "stripe_subscription_update",
+    actor,
+    entityType: "platform_subscription",
+    entityId: current.id,
+    details: { source: "immediate_annual_switch", prorationDate },
+  });
+  const { productId } = await ensureStripeCustomerAndProduct(current, residency);
+  const preview = await previewConnectedAnnualSwitch(current, productId, residency.comped, prorationDate);
+  await retireDeferredAnnualState(actor, current, preview.subscription);
+  const revision = await nextPlanRevision(current);
+  const planInput = annualPlanChangeInput(current, new Date(prorationDate * 1_000));
+  const [pendingRevision] = await database.insert(platformSubscriptionRevisions).values({
+    platformSubscriptionId: current.id,
+    residencyId: current.residencyId,
+    revision,
+    term: "annual",
+    talentBucketSize: current.talentBucketSize,
+    houseBucketSize: current.houseBucketSize,
+    slotUnitAmountCents: PLATFORM_SLOT_UNIT_AMOUNT_CENTS,
+    startsOn: planInput.startsOn,
+    renewsOn: planInput.renewsOn,
+    changeReason: planInput.changeReason,
+    changedByUserId: actor.userId,
+    stripeSyncStatus: "pending",
+  }).returning({ id: platformSubscriptionRevisions.id });
+
+  const stripe = getStripe();
+  let price: Stripe.Price | null = null;
+  let updatedSubscription: Stripe.Subscription;
+  try {
+    price = await createPlanPrice(current, planInput, revision, productId, residency.comped);
+    await database.update(platformSubscriptionRevisions).set({ stripePriceId: price.id })
+      .where(eq(platformSubscriptionRevisions.id, pendingRevision.id));
+    updatedSubscription = await stripe.subscriptions.update(preview.subscription.id, {
+      items: [{ id: preview.item.id, price: price.id, quantity: 1 }],
+      billing_cycle_anchor: "now",
+      proration_behavior: "always_invoice",
+      proration_date: prorationDate,
+      payment_behavior: "error_if_incomplete",
+      off_session: true,
+      metadata: {
+        ...preview.subscription.metadata,
+        hfy_residency_id: current.residencyId,
+        hfy_platform_subscription_id: current.id,
+        committed_plan_revision: String(revision),
+        annual_switch: "true",
+        environment: "staging-test",
+      },
+      expand: ["latest_invoice"],
+    }, { idempotencyKey: `platform-immediate-annual/${current.id}/r${revision}/${prorationDate}` });
+    const updatedItem = updatedSubscription.items.data.find((item) => item.id === preview.item.id);
+    if (updatedItem?.price.id !== price.id || updatedSubscription.pending_update) {
+      throw new Error("Stripe did not confirm the immediate annual Price update.");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Stripe annual plan update failed.";
+    await database.update(platformSubscriptionRevisions).set({ stripeSyncStatus: "failed", stripeSyncError: message })
+      .where(eq(platformSubscriptionRevisions.id, pendingRevision.id));
+    await database.insert(attentionItems).values({
+      residencyId: current.residencyId,
+      entityType: "platform_subscription",
+      entityId: current.id,
+      code: "platform_plan_sync_failed",
+      message: "The annual switch was not activated because Stripe could not complete the immediate charge.",
+      details: { revision, prorationDate, error: message },
+    }).onConflictDoUpdate({
+      target: [attentionItems.entityType, attentionItems.entityId, attentionItems.code],
+      targetWhere: eq(attentionItems.status, "open"),
+      set: { message: "The annual switch was not activated because Stripe could not complete the immediate charge.", details: { revision, prorationDate, error: message } },
+    });
+    throw error;
+  }
+
+  const now = new Date();
+  const startsOn = dateFromUnix(subscriptionPeriodStart(updatedSubscription));
+  const renewsOn = dateFromUnix(subscriptionPeriodEnd(updatedSubscription));
+  const activated = await database.transaction(async (tx) => {
+    const [updated] = await tx.update(platformSubscriptions).set({
+      term: "annual",
+      revision,
+      startsOn,
+      renewsOn,
+      stripePriceId: price.id,
+      stripeSubscriptionItemId: preview.item.id,
+      status: mapStripeSubscriptionStatus(updatedSubscription.status),
+      nextChargeAt: new Date(subscriptionPeriodEnd(updatedSubscription) * 1_000),
+      lastStripeSyncedAt: now,
+      updatedByUserId: actor.userId,
+      updatedAt: now,
+    }).where(and(eq(platformSubscriptions.id, current.id), eq(platformSubscriptions.revision, current.revision))).returning();
+    if (!updated) throw new Error("The Committed Plan changed while Stripe was applying the annual switch. HFY support has been alerted.");
+    await tx.update(platformSubscriptionRevisions).set({
+      startsOn,
+      renewsOn,
+      stripeSyncStatus: "synced",
+      stripeSyncError: "",
+      stripePriceId: price.id,
+      syncedAt: now,
+    }).where(eq(platformSubscriptionRevisions.id, pendingRevision.id));
+    await tx.update(attentionItems).set({ status: "resolved", resolvedAt: now })
+      .where(and(eq(attentionItems.entityType, "platform_subscription"), eq(attentionItems.entityId, current.id), eq(attentionItems.code, "platform_plan_sync_failed"), eq(attentionItems.status, "open")));
+    await tx.insert(auditLog).values({
+      residencyId: current.residencyId,
+      actorUserId: actor.userId,
+      actorLabel: actor.email,
+      action: "platform_committed_plan_updated",
+      entityType: "platform_subscription",
+      entityId: current.id,
+      details: {
+        previousRevision: current.revision,
+        revision,
+        changeReason: planInput.changeReason,
+        stripeSubscriptionId: current.stripeSubscriptionId,
+        term: "annual",
+        talentBucketSize: current.talentBucketSize,
+        houseBucketSize: current.houseBucketSize,
+        slotUnitAmountCents: PLATFORM_SLOT_UNIT_AMOUNT_CENTS,
+        stripeUpdateMode: "immediate_proration_always_invoice",
+        prorationDate,
+        previewedAmountDueCents: preview.amountDueCents,
+        effectiveAt: startsOn,
+      },
+    });
+    return updated;
+  });
+
+  const latestInvoice = updatedSubscription.latest_invoice;
+  let invoice: Stripe.Invoice | null = typeof latestInvoice === "string"
+    ? await stripe.invoices.retrieve(latestInvoice)
+    : latestInvoice;
+  if (invoice && "deleted" in invoice && invoice.deleted) invoice = null;
+  if (!invoice) {
+    const invoices = await stripe.invoices.list({ subscription: updatedSubscription.id, limit: 1 });
+    invoice = invoices.data[0] ?? null;
+  }
+  if (invoice) {
+    const { syncStripeInvoice } = await import("@/services/platform-stripe-webhooks");
+    await syncStripeInvoice(invoice);
+  }
+  return {
+    plan: activated,
+    amountChargedCents: invoice?.amount_due ?? preview.amountDueCents,
+    invoiceId: invoice?.id ?? null,
+  };
 }
 
-export async function beginResidencyAnnualSwitch(actor: ResidencyActor) {
+export async function beginResidencyAnnualSwitch(actor: ResidencyActor, prorationDate: number | null) {
   if (actor.accessRole !== "manager") throw new Error("Manager access is required.");
-  const [current] = await getDb().select().from(platformSubscriptions)
-    .where(eq(platformSubscriptions.residencyId, actor.residencyId)).limit(1);
-  if (!current) throw new Error("Your Platform subscription is not ready yet.");
+  const { plan: current } = await residencyAnnualSwitchPlan(actor.residencyId);
   if (current.term === "annual") return { kind: "already_annual" as const };
 
   const paymentPath = annualSwitchPaymentPath(current);
@@ -529,16 +845,17 @@ export async function beginResidencyAnnualSwitch(actor: ResidencyActor) {
     const url = await createPlatformSubscriptionCheckout(actor, actor.residencyId, { term: "annual", annualSwitch: true });
     return { kind: "checkout" as const, url, paymentPath };
   }
-  if (paymentPath === "collect_card_then_schedule") {
-    const url = await createPlatformPaymentMethodCheckout(actor, actor.residencyId, { annualSwitch: true });
+  const exactProrationDate = assertRecentProrationDate(prorationDate);
+  if (paymentPath === "collect_card_then_charge_immediately") {
+    const url = await createPlatformPaymentMethodCheckout(actor, actor.residencyId, { annualSwitch: true, prorationDate: exactProrationDate });
     return { kind: "checkout" as const, url, paymentPath };
   }
 
-  await switchResidencyCommittedPlanToAnnual(actor);
+  const result = await switchResidencyCommittedPlanToAnnualImmediately(actor, exactProrationDate);
   return {
-    kind: "scheduled" as const,
-    effectiveAt: current.renewsOn,
-    annualUpfrontAmountCents: platformPlanAmount({ ...current, term: "annual" }).termChargeAmountCents,
+    kind: "activated" as const,
+    amountChargedCents: result.amountChargedCents,
+    invoiceId: result.invoiceId,
   };
 }
 
@@ -692,7 +1009,7 @@ export async function createPlatformSubscriptionCheckout(
 export async function createPlatformPaymentMethodCheckout(
   actor: AuditActor,
   residencyId: string,
-  options: { annualSwitch?: boolean } = {},
+  options: { annualSwitch?: boolean; prorationDate?: number } = {},
 ) {
   assertCurrentPlatformBillingStaging();
   const [row] = await getDb().select({ plan: platformSubscriptions, comped: residencies.comped }).from(platformSubscriptions)
@@ -719,6 +1036,7 @@ export async function createPlatformPaymentMethodCheckout(
       hfy_platform_subscription_id: plan.id,
       stripe_subscription_id: plan.stripeSubscriptionId,
       purpose: options.annualSwitch ? "update_card_and_switch_annual" : "update_platform_subscription_card",
+      annual_switch_proration_date: options.prorationDate ? String(options.prorationDate) : "",
       changed_by_user_id: actor.userId,
       changed_by_email: actor.email,
       environment: "staging-test",
