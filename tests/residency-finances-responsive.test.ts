@@ -9,12 +9,31 @@ describe("Residency Finances responsive contract", () => {
 
     expect(page).toContain("ResidencyPageSurface");
     expect(page).toContain("ResidencyPageBody");
-    expect(page).toContain("ResidencySurfaceCard");
-    expect(page.match(/<ResidencySurfaceCard className="finance-disclosure-card">/g)).toHaveLength(2);
+    expect(page).toContain("ResidencyDisclosureCard");
+    expect(page.match(/<ResidencyDisclosureCard/g)).toHaveLength(2);
+    expect(page.match(/className="finance-disclosure-card"/g)).toHaveLength(2);
     expect(page).not.toContain('className="finance-accordion card"');
     expect(page).not.toContain("WorkspaceSurface");
     expect(page).toContain("Owed to Your Talent");
     expect(page).toContain("Owed to HFY");
+  });
+
+  it("uses the shared Surface Disclosure affordance and supporting-copy contract", async () => {
+    const [system, styles, tokens, docs] = await Promise.all([
+      readSource("../src/components/residency-design-system.tsx"),
+      readSource("../src/app/hfy-style-pilot.css"),
+      readSource("../src/app/hfy-design-tokens.css"),
+      readSource("../docs/DESIGN_SYSTEM_V1.md"),
+    ]);
+
+    expect(system).toContain("export function ResidencyDisclosureCard");
+    expect(system).toContain('<details className="residency-disclosure" open={initiallyOpen}>');
+    expect(system).toContain('className="residency-disclosure-chevron" aria-hidden="true">⌄');
+    expect(styles).toContain(".residency-disclosure[open] > summary .residency-disclosure-chevron");
+    expect(styles).toContain("font-size: var(--hfy-supporting-copy-size)");
+    expect(tokens).toContain("--hfy-supporting-copy-size: 12px;");
+    expect(docs).toContain("## Surface Disclosure");
+    expect(docs).toContain("native `<details>`");
   });
 
   it("contains both populated financial tables in dedicated responsive regions", async () => {

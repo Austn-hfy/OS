@@ -25,6 +25,7 @@ describe("Residency design system V1", () => {
       "ResidencyPageBody",
       "ResidencyTabs",
       "ResidencySurfaceCard",
+      "ResidencyDisclosureCard",
       "ResidencySectionHeader",
       "ResidencyMetricGrid",
       "ResidencyFactGrid",
@@ -59,7 +60,9 @@ describe("Residency design system V1", () => {
     expect(tokens).toContain("--hfy-surface-card-radius: 16px;");
     expect(tokens).toContain("--hfy-collection-panel-scroll-ceiling: 680px;");
     expect(tokens).toContain("--hfy-dayparts-board-min-width: 840px;");
-    expect(docs).toContain("Version: 1.8");
+    expect(tokens).toContain("--hfy-disclosure-affordance-size: 26px;");
+    expect(docs).toContain("Version: 1.9");
+    expect(docs).toContain("## Surface Disclosure");
     expect(docs).toContain("## Compact Collection Panel");
     expect(docs).toContain("## Day Parts Implementation Profile");
     expect(docs).toContain("Changed this revision:");

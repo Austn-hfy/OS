@@ -3846,39 +3846,57 @@
   overflow: visible;
 }
 
-.hfy-style-system .workspace-surface-finances :is(.finance-accordions, .finance-accordion, .finance-accordion-body) {
+.hfy-style-system .workspace-surface-finances :is(.finance-accordions, .residency-disclosure, .residency-disclosure-body) {
   min-width: 0;
 }
 
-.hfy-style-system .finance-disclosure-card {
+.hfy-style-system .residency-disclosure-card {
   padding: 0;
   overflow: clip;
 }
 
-.hfy-style-system .finance-accordion {
+.hfy-style-system .residency-disclosure {
   width: 100%;
   margin: 0;
   padding: 0;
   overflow: clip;
 }
 
-.hfy-style-system .finance-accordion > summary {
-  padding: 20px 22px;
+.hfy-style-system .residency-disclosure > summary {
+  padding: var(--hfy-disclosure-padding-block) var(--hfy-disclosure-padding-inline);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  gap: var(--hfy-space-3);
   cursor: pointer;
   list-style: none;
 }
 
-.hfy-style-system .finance-accordion > summary::-webkit-details-marker { display: none; }
-.hfy-style-system .finance-accordion > summary > span { min-width: 0; display: grid; gap: 4px; }
-.hfy-style-system .finance-accordion > summary > span:last-child { text-align: right; }
-.hfy-style-system .finance-accordion > summary small { color: var(--hfy-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
-.hfy-style-system .finance-accordion > summary strong { font-size: 18px; }
-.hfy-style-system .finance-accordion-body { padding: 0 22px 22px; border-top: 1px solid var(--hfy-line); }
-.hfy-style-system .finance-accordion-body > p { margin: 16px 0; color: var(--hfy-muted); }
+.hfy-style-system .residency-disclosure > summary::-webkit-details-marker { display: none; }
+.hfy-style-system .residency-disclosure > summary::marker { content: ""; }
+.hfy-style-system .residency-disclosure > summary:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--hfy-focus-ring); }
+.hfy-style-system .residency-disclosure-summary-content { min-width: 0; flex: 1; }
+.hfy-style-system .residency-disclosure-chevron {
+  width: var(--hfy-disclosure-affordance-size);
+  height: var(--hfy-disclosure-affordance-size);
+  flex: 0 0 var(--hfy-disclosure-affordance-size);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hfy-line);
+  border-radius: 50%;
+  color: var(--hfy-action-ink);
+  background: var(--hfy-action-soft);
+  font-size: 12px;
+  line-height: 1;
+  transition: transform var(--hfy-motion);
+}
+.hfy-style-system .residency-disclosure[open] > summary .residency-disclosure-chevron { transform: rotate(180deg); }
+.hfy-style-system .residency-disclosure-body { padding: 0 var(--hfy-disclosure-padding-inline) var(--hfy-disclosure-padding-inline); border-top: 1px solid var(--hfy-line); }
+.hfy-style-system .residency-disclosure-body > p { margin: var(--hfy-space-4) 0; color: var(--hfy-muted); font-size: var(--hfy-supporting-copy-size); }
+.hfy-style-system .finance-disclosure-card .residency-disclosure-summary-content { display: flex; justify-content: space-between; gap: 20px; }
+.hfy-style-system .finance-disclosure-card .residency-disclosure-summary-content > span { min-width: 0; display: grid; gap: 4px; }
+.hfy-style-system .finance-disclosure-card .residency-disclosure-summary-content > span:last-child { text-align: right; }
+.hfy-style-system .finance-disclosure-card .residency-disclosure-summary-content small { color: var(--hfy-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.hfy-style-system .finance-disclosure-card .residency-disclosure-summary-content strong { font-size: 18px; }
 .hfy-style-system .finance-table-wrap {
   width: 100%;
   max-width: 100%;
@@ -4153,7 +4171,7 @@
 @media (max-width: 850px) {
   .hfy-style-system .residency-metric-grid,
   .hfy-style-system .platform-plan-breakdown { grid-template-columns: 1fr; }
-  .hfy-style-system .finance-accordion > summary { align-items: flex-start; }
+  .hfy-style-system .residency-disclosure > summary { align-items: flex-start; }
   .hfy-style-system .residency-metric-grid > .residency-surface-card { min-height: 0; }
 }
 

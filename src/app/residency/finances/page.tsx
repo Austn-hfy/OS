@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ResidencyPageBody, ResidencyPageHeader, ResidencyPageSurface, ResidencySurfaceCard } from "@/components/residency-design-system";
+import { ResidencyDisclosureCard, ResidencyPageBody, ResidencyPageHeader, ResidencyPageSurface } from "@/components/residency-design-system";
 import { getResidencyClientFinances } from "@/data/residency-client";
 import { canResidencyRoleAccess } from "@/domain/residency-access";
 import { requireResidencyActor } from "@/lib/auth";
@@ -27,25 +27,23 @@ export default async function ResidencyFinancesPage() {
   return <ResidencyPageSurface className="workspace-surface-finances">
     <ResidencyPageHeader eyebrow={`${actor.residencyName} finances`} title="Finances" />
     <ResidencyPageBody className="finance-accordions">
-      <ResidencySurfaceCard className="finance-disclosure-card">
-        <details className="finance-accordion" open>
-          <summary><span><small>Directly sourced by your team</small><strong>Owed to Your Talent</strong></span><span><strong>{money(owedToTalentCents)}</strong><small>informational only</small></span></summary>
-          <div className="finance-accordion-body">
-            <p>This is a summary of what your Residency pays its own talent directly. HFY does not collect, send, or manage these payments.</p>
-            <ClientTalentFinances rows={finances.clientTalent} timeZone={actor.residencyTimezone} canManage={actor.accessRole === "manager" && actor.residencyTier !== "complete"} />
-          </div>
-        </details>
-      </ResidencySurfaceCard>
+      <ResidencyDisclosureCard
+        className="finance-disclosure-card"
+        initiallyOpen
+        summary={<><span><small>Directly sourced by your team</small><strong>Owed to Your Talent</strong></span><span><strong>{money(owedToTalentCents)}</strong><small>informational only</small></span></>}
+      >
+        <p>This is a summary of what your Residency pays its own talent directly. HFY does not collect, send, or manage these payments.</p>
+        <ClientTalentFinances rows={finances.clientTalent} timeZone={actor.residencyTimezone} canManage={actor.accessRole === "manager" && actor.residencyTier !== "complete"} />
+      </ResidencyDisclosureCard>
 
-      {finances.hasHfyManagedTalentActivity ? <ResidencySurfaceCard className="finance-disclosure-card">
-        <details className="finance-accordion" open>
-          <summary><span><small>HFY-managed programming</small><strong>Owed to HFY</strong></span><span><strong>{money(owedToHfyCents)}</strong><small>outstanding</small></span></summary>
-          <div className="finance-accordion-body">
-            <p>Invoices for talent sourced, scheduled, and paid by HFY. Your Platform subscription is managed separately in Settings → Billing.</p>
-            {finances.talentInvoices.length ? <div className="table-wrap finance-table-wrap finance-table-wrap--invoice" role="region" aria-label="HFY talent invoices" tabIndex={0}><table className="finance-table finance-table--invoice"><thead><tr><th>Invoice</th><th>Invoice date</th><th>Service month</th><th>Amount</th><th>Status</th><th>Document</th></tr></thead><tbody>{finances.talentInvoices.map((invoice) => <tr key={invoice.id}><td><strong>{invoice.invoiceNumber}</strong></td><td>{date(invoice.invoiceDate)}</td><td><span className="finance-invoice-period"><span>{date(invoice.billingPeriodStart)}</span><span className="finance-invoice-period-separator" aria-hidden="true">–</span><span>{date(invoice.billingPeriodEnd)}</span></span></td><td>{money(invoice.totalCents)}</td><td><span className={`status ${invoice.status}`}>{invoice.status}</span></td><td><Link className="button secondary" href={`/residency/invoices/${invoice.id}/pdf`}>Download PDF</Link></td></tr>)}</tbody></table></div> : <div className="empty">HFY-managed activity is scheduled, but no client-visible talent invoice has been issued yet.</div>}
-          </div>
-        </details>
-      </ResidencySurfaceCard> : null}
+      {finances.hasHfyManagedTalentActivity ? <ResidencyDisclosureCard
+        className="finance-disclosure-card"
+        initiallyOpen
+        summary={<><span><small>HFY-managed programming</small><strong>Owed to HFY</strong></span><span><strong>{money(owedToHfyCents)}</strong><small>outstanding</small></span></>}
+      >
+        <p>Invoices for talent sourced, scheduled, and paid by HFY. Your Platform subscription is managed separately in Settings → Billing.</p>
+        {finances.talentInvoices.length ? <div className="table-wrap finance-table-wrap finance-table-wrap--invoice" role="region" aria-label="HFY talent invoices" tabIndex={0}><table className="finance-table finance-table--invoice"><thead><tr><th>Invoice</th><th>Invoice date</th><th>Service month</th><th>Amount</th><th>Status</th><th>Document</th></tr></thead><tbody>{finances.talentInvoices.map((invoice) => <tr key={invoice.id}><td><strong>{invoice.invoiceNumber}</strong></td><td>{date(invoice.invoiceDate)}</td><td><span className="finance-invoice-period"><span>{date(invoice.billingPeriodStart)}</span><span className="finance-invoice-period-separator" aria-hidden="true">–</span><span>{date(invoice.billingPeriodEnd)}</span></span></td><td>{money(invoice.totalCents)}</td><td><span className={`status ${invoice.status}`}>{invoice.status}</span></td><td><Link className="button secondary" href={`/residency/invoices/${invoice.id}/pdf`}>Download PDF</Link></td></tr>)}</tbody></table></div> : <div className="empty">HFY-managed activity is scheduled, but no client-visible talent invoice has been issued yet.</div>}
+      </ResidencyDisclosureCard> : null}
 
     </ResidencyPageBody>
   </ResidencyPageSurface>;

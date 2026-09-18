@@ -1,6 +1,6 @@
 # HFY OS desktop UI/UX audit — Client Residency
 
-Status: Settings desktop benchmark complete; Overview, Talent, Calendar, Day Parts, and the Finances responsive, rate-dialog, and layer-structure passes adopted; broader client audit remains active
+Status: Settings desktop benchmark complete; Overview, Talent, Calendar, Day Parts, and the Finances responsive, rate-dialog, layer-structure, and disclosure/type passes adopted; cross-route header language and the broader client audit remain active
 Date: September 17, 2026
 Scope: the client-facing Residency workspace reached through **View as Residency**
 Reference screen: **Settings → Billing**
@@ -206,6 +206,8 @@ Calendar now uses `{Residency name} · Calendar` as its route-family eyebrow whi
 
 Day Parts now uses `DAY PARTS · SCHEDULE SETUP` above `Weekly Daypart grid`. The owner/programming Day Parts heading remains unchanged because the shared manager opts into this page-family copy only on the Residency route.
 
+Finances remains open under this cross-route copy item. Its existing `{Residency name} finances` eyebrow was intentionally preserved in the Finances-only cleanup rather than establishing another route-local grammar before the dedicated header-language pass.
+
 ### CR-006A — Calendar command bar and Week view break at compact desktop widths
 
 Priority: P0
@@ -342,6 +344,10 @@ Resolution for Day Parts:
 
 - Weekly-board labels, room names, event titles, and event metadata now use semantic Day Parts tokens with a 10px normal-text floor.
 - Editor supporting copy and weekly field labels use the route's 10px supporting token instead of 8–9px one-off values.
+
+Resolution for Finances:
+
+- Disclosure supporting paragraphs now use the locked `--hfy-supporting-copy-size` token at 12px instead of inheriting 16px body copy.
 
 ### CR-011 — Universal surface clipping hides layout mistakes
 
@@ -551,7 +557,28 @@ Resolution:
 Intentionally unchanged:
 
 - Disclosure behavior, summary copy, totals, status language, table layout, rate actions, invoice downloads, financial data, and permissions.
-- Typography cleanup and header language remain assigned to the final Finances visual pass.
+- Typography and disclosure affordance cleanup are resolved in CR-023. Header language remains assigned to the future cross-route copy pass under CR-006.
+
+### CR-023 — Finances disclosure type and open/closed state lack the shared hierarchy
+
+Priority: P1
+Applies to: `/residency/finances`
+Status: **resolved in the final Finances cleanup pass**
+
+The two ledger descriptions inherited 16px body copy instead of the locked supporting scale. Their native disclosure markers were hidden without a replacement, so users had no visible open/closed indicator. The Surface/disclosure composition also existed only as Finances-specific CSS and an audit note rather than a reusable design-system pattern.
+
+Resolution:
+
+- Direct supporting paragraphs now use the locked 12px `--hfy-supporting-copy-size` token and shared muted color.
+- Both summaries display the existing system `⌄` affordance in the shared action colors. It rotates 180 degrees in the native `<details open>` state and retains a visible keyboard focus treatment.
+- `ResidencyDisclosureCard` now formalizes the reusable native-details-inside-Surface composition. The shared component owns the zero-padding Surface boundary, rounded-edge clipping, summary/body padding, replacement affordance, and focus state; Finances owns only its summary labels/totals and ledger contents.
+- `docs/DESIGN_SYSTEM_V1.md` v1.9 names and locks the **Surface Disclosure** pattern so future accordions reuse it rather than rebuilding Finances CSS.
+- Automated checks cover native disclosure markup, token usage, 12px computed supporting copy, chevron state changes, and the existing continuous 1512px-to-390px containment contract.
+
+Intentionally unchanged:
+
+- Financial content, totals, tables, statuses, rate actions, invoice downloads, permissions, and the approved Surface-card/rate-dialog behavior.
+- The `{Residency name} finances` eyebrow remains open under CR-006 for a dedicated cross-route header-language pass.
 
 ## Settings benchmark decisions
 

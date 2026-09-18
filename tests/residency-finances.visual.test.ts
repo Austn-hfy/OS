@@ -42,7 +42,7 @@ function fixture() {
     "invoice",
   );
 
-  return `<div class="hfy-style-system"><div class="shell client-shell visual-finances-shell"><aside class="sidebar client-sidebar"><div class="brand"><span class="brand-mark">HFY</span><span class="brand-copy"><strong>HFY OS</strong><span>Residency preview</span></span></div><div class="client-residency-context"><small>Your Residency</small><strong>HFY Internal Test Residency</strong></div></aside><main class="main"><div class="view-as-banner" role="status"><strong>Viewing as: HFY Internal Test Residency</strong><span>Changes made here are live for this Residency.</span><button type="button">Exit preview</button></div><section class="workspace-surface residency-workspace-surface residency-page-surface workspace-surface-finances"><header class="page-header client-page-header residency-page-header"><div><p class="eyebrow">HFY Internal Test Residency finances</p><h1>Finances</h1></div></header><div class="residency-page-body finance-accordions"><section class="card residency-surface-card residency-surface-card--white finance-disclosure-card"><details class="finance-accordion" open><summary><span><small>Directly sourced by your team</small><strong>Owed to Your Talent</strong></span><span><strong>$400.00</strong><small>informational only</small></span></summary><div class="finance-accordion-body"><p>This is a summary of what your Residency pays its own talent directly. HFY does not collect, send, or manage these payments.</p>${directTable}</div></details></section><section class="card residency-surface-card residency-surface-card--white finance-disclosure-card"><details class="finance-accordion" open><summary><span><small>HFY-managed programming</small><strong>Owed to HFY</strong></span><span><strong>$1,500.00</strong><small>outstanding</small></span></summary><div class="finance-accordion-body"><p>Invoices for talent sourced, scheduled, and paid by HFY. Your Platform subscription is managed separately in Settings → Billing.</p>${invoiceTable}</div></details></section></div></section></main></div></div>`;
+  return `<div class="hfy-style-system"><div class="shell client-shell visual-finances-shell"><aside class="sidebar client-sidebar"><div class="brand"><span class="brand-mark">HFY</span><span class="brand-copy"><strong>HFY OS</strong><span>Residency preview</span></span></div><div class="client-residency-context"><small>Your Residency</small><strong>HFY Internal Test Residency</strong></div></aside><main class="main"><div class="view-as-banner" role="status"><strong>Viewing as: HFY Internal Test Residency</strong><span>Changes made here are live for this Residency.</span><button type="button">Exit preview</button></div><section class="workspace-surface residency-workspace-surface residency-page-surface workspace-surface-finances"><header class="page-header client-page-header residency-page-header"><div><p class="eyebrow">HFY Internal Test Residency finances</p><h1>Finances</h1></div></header><div class="residency-page-body finance-accordions"><section class="card residency-surface-card residency-surface-card--white residency-disclosure-card finance-disclosure-card"><details class="residency-disclosure" open><summary><span class="residency-disclosure-summary-content"><span><small>Directly sourced by your team</small><strong>Owed to Your Talent</strong></span><span><strong>$400.00</strong><small>informational only</small></span></span><span class="residency-disclosure-chevron" aria-hidden="true">⌄</span></summary><div class="residency-disclosure-body"><p>This is a summary of what your Residency pays its own talent directly. HFY does not collect, send, or manage these payments.</p>${directTable}</div></details></section><section class="card residency-surface-card residency-surface-card--white residency-disclosure-card finance-disclosure-card"><details class="residency-disclosure" open><summary><span class="residency-disclosure-summary-content"><span><small>HFY-managed programming</small><strong>Owed to HFY</strong></span><span><strong>$1,500.00</strong><small>outstanding</small></span></span><span class="residency-disclosure-chevron" aria-hidden="true">⌄</span></summary><div class="residency-disclosure-body"><p>Invoices for talent sourced, scheduled, and paid by HFY. Your Platform subscription is managed separately in Settings → Billing.</p>${invoiceTable}</div></details></section></div></section></main></div></div>`;
 }
 
 function rateDialogFixture() {
@@ -101,8 +101,8 @@ describe("Residency Finances responsive visual contract", () => {
         const surface = element(".workspace-surface-finances").getBoundingClientRect();
         const banner = element(".view-as-banner").getBoundingClientRect();
         const cards = [...document.querySelectorAll<HTMLElement>(".finance-disclosure-card")];
-        const summaries = [...document.querySelectorAll<HTMLElement>(".finance-accordion > summary")].map((node) => node.getBoundingClientRect());
-        const bodies = [...document.querySelectorAll<HTMLElement>(".finance-accordion-body")].map((node) => node.getBoundingClientRect());
+        const summaries = [...document.querySelectorAll<HTMLElement>(".residency-disclosure > summary")].map((node) => node.getBoundingClientRect());
+        const bodies = [...document.querySelectorAll<HTMLElement>(".residency-disclosure-body")].map((node) => node.getBoundingClientRect());
         const wraps = [...document.querySelectorAll<HTMLElement>(".finance-table-wrap")];
         const rateAction = element(".finance-rate-needed-button").getBoundingClientRect();
         const rateCell = element(".finance-table--direct tbody td:last-child").getBoundingClientRect();
@@ -143,6 +143,31 @@ describe("Residency Finances responsive visual contract", () => {
       });
     }
   }, 120_000);
+
+  it("renders 12px supporting copy and toggles the visible disclosure affordance", async () => {
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await page.setContent(html, { waitUntil: "load" });
+    await page.evaluate(() => document.fonts.ready);
+
+    const initial = await page.evaluate(() => {
+      const details = document.querySelector<HTMLDetailsElement>(".residency-disclosure")!;
+      const chevron = details.querySelector<HTMLElement>(".residency-disclosure-chevron")!;
+      const copy = details.querySelector<HTMLElement>(".residency-disclosure-body > p")!;
+      return { open: details.open, transform: getComputedStyle(chevron).transform, fontSize: getComputedStyle(copy).fontSize };
+    });
+    expect(initial.open).toBe(true);
+    expect(initial.transform).not.toBe("none");
+    expect(initial.fontSize).toBe("12px");
+
+    await page.locator(".residency-disclosure > summary").first().click();
+    await page.waitForTimeout(220);
+    const closed = await page.evaluate(() => {
+      const details = document.querySelector<HTMLDetailsElement>(".residency-disclosure")!;
+      const chevron = details.querySelector<HTMLElement>(".residency-disclosure-chevron")!;
+      return { open: details.open, transform: getComputedStyle(chevron).transform };
+    });
+    expect(closed).toEqual({ open: false, transform: "none" });
+  });
 
   it("anchors the rate editor to the viewport and reflows it into defined compact states", async () => {
     const dialogHtml = await fixtureDocument(rateDialogFixture());
