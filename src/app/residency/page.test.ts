@@ -98,7 +98,7 @@ describe("Residency Overview availability", () => {
     expect(html).toContain("Day focus");
     expect(html).toContain("View or edit");
     expect(html).toContain("6:00 PM–9:00 PM · Pool");
-    expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-18&amp;event=shift-1"');
+    expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-18&amp;event=shift-1&amp;returnTo=%2Fresidency%3Fday%3D2026-09-18"');
     expect(html).toContain("2 services need scheduling");
     expect(html).toContain("1 talent confirmation is pending");
     expect(html).toContain("2 talent invoices are overdue");
@@ -126,7 +126,7 @@ describe("Residency Overview availability", () => {
     expect(html).toContain("Selected");
     expect(html).toContain("Schedule talent");
     expect(html).toContain("Talent has not been assigned");
-    expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-20&amp;event=projected-1"');
+    expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-20&amp;event=projected-1&amp;returnTo=%2Fresidency%3Fday%3D2026-09-20"');
     expect(html).toContain('href="/residency?day=2026-09-20"');
     expect(html).toContain('aria-current="date"');
   });
@@ -159,7 +159,7 @@ describe("Residency Overview availability", () => {
     expect(html).toContain("No open scheduling gaps, pending confirmations, or overdue talent invoices need attention.");
     expect(html).toContain("No programming scheduled");
     expect(html).toContain("Add activity");
-    expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-18&amp;date=2026-09-18"');
+    expect(html).toContain('href="/residency/calendar?calendarView=week&amp;week=2026-09-18&amp;date=2026-09-18&amp;returnTo=%2Fresidency%3Fday%3D2026-09-18"');
     expect(html).not.toContain("Upcoming roster");
     expect(html.match(/>No program</g)).toHaveLength(7);
     expect(isCurrentPlatformBillingAvailable).not.toHaveBeenCalled();

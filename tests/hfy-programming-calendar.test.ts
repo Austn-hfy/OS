@@ -77,9 +77,13 @@ describe("HFY Programming calendar and Day Parts integration", () => {
 
     expect(overview).toContain('query.set("event", eventId)');
     expect(overview).toContain('query.set("date", date)');
-    expect(residencyPage).toContain("initialEventId={params.event} initialDate={initialDate}");
+    expect(overview).toContain('query.set("returnTo", `/residency?day=${date}`)');
+    expect(residencyPage).toContain("initialEventId={params.event} initialDate={initialDate} modalReturnPath={modalReturnPath}");
+    expect(residencyPage).toContain('/^\\/residency\\?day=\\d{4}-\\d{2}-\\d{2}$/');
     expect(calendar).toContain("const initialProjectedEvent");
     expect(calendar).toContain('initialSchedulingDate ? { type: "add", date: initialSchedulingDate }');
+    expect(calendar).toContain("router.replace(modalReturnPath, { scroll: false })");
+    expect(calendar).toContain('aria-label={modalReturnPath ? "Close and return to Overview" : "Close popup"}');
   });
 
   it("enforces the default talent-rate guard in every HFY assignment entry point", async () => {

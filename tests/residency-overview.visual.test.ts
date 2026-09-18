@@ -103,10 +103,10 @@ async function browserExecutable() {
   return { executablePath: await bundledChromium.executablePath(), args: bundledChromium.args };
 }
 
-async function fixtureDocument(overview: ResidencyClientOverview) {
+async function fixtureDocument(overview: ResidencyClientOverview, selectedDay?: string) {
   vi.mocked(requireResidencyActor).mockResolvedValue(manager);
   vi.mocked(getResidencyClientOverview).mockResolvedValue(overview);
-  const pageMarkup = renderToStaticMarkup(await ResidencyOverviewPage({ searchParams: Promise.resolve({}) }));
+  const pageMarkup = renderToStaticMarkup(await ResidencyOverviewPage({ searchParams: Promise.resolve(selectedDay ? { day: selectedDay } : {}) }));
   const [tokens, globals, pilot, font] = await Promise.all([
     readFile(new URL("../src/app/hfy-design-tokens.css", import.meta.url), "utf8"),
     readFile(new URL("../src/app/globals.css", import.meta.url), "utf8"),
@@ -134,7 +134,7 @@ describe("Residency Overview responsive visual contract", () => {
     const executable = await browserExecutable();
     browser = await chromium.launch({ headless: true, ...executable });
     page = await browser.newPage({ deviceScaleFactor: 1 });
-    populatedHtml = await fixtureDocument(populatedOverview);
+    populatedHtml = await fixtureDocument(populatedOverview, "2026-09-21");
     emptyHtml = await fixtureDocument(emptyOverview());
   }, 120_000);
 
@@ -168,7 +168,8 @@ describe("Residency Overview responsive visual contract", () => {
         const attentionCard = element(".residency-overview-attention-card").getBoundingClientRect();
         const financeCard = element(".residency-overview-finance-card").getBoundingClientRect();
         const selectedDay = element(".residency-overview-day.is-selected");
-        const dayDetail = element(".residency-overview-day-detail");
+        const dayDetailHeader = element(".residency-overview-day-detail-header");
+        const today = element(".residency-overview-day.is-today");
         const selectedMarker = element(".residency-overview-day-markers > b");
         return {
           documentContained: document.documentElement.scrollWidth === viewportWidth,
@@ -185,7 +186,8 @@ describe("Residency Overview responsive visual contract", () => {
           correctDayColumns: dayColumns === expectedDayColumns,
           equalSummaryCardWidths: Math.abs(attentionCard.width - financeCard.width) <= 0.5,
           selectionIsVisuallyLinked: selectedMarker.textContent === "Selected"
-            && getComputedStyle(selectedDay).borderTopColor === getComputedStyle(dayDetail).borderTopColor,
+            && getComputedStyle(selectedDay).backgroundColor === getComputedStyle(dayDetailHeader).backgroundColor
+            && getComputedStyle(selectedDay).backgroundColor !== getComputedStyle(today).backgroundColor,
           largeMoneyContained: money.left >= financeCard.left - 0.5 && money.right <= financeCard.right + 0.5,
         };
       });
