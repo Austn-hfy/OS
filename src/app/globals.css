@@ -1924,10 +1924,11 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .residency-overview-grid p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 
 .residency-users-card, .account-security-card { display: grid; gap: 22px; padding: 22px; }
-.residency-user-invite-form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr) auto; gap: 16px; align-items: end; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #f8fbfe; }
+.residency-user-invite-form { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr) auto; gap: 16px; align-items: end; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #f8fbfe; }
 .residency-user-invite-form fieldset, .platform-pause-periods { display: flex; gap: 10px; margin: 0; padding: 0; border: 0; }
 .residency-user-invite-form legend, .platform-pause-periods legend { margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 800; }
-.residency-role-option { display: flex; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.residency-role-option { display: flex; flex: 1 1 0; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.residency-role-option > span { min-width: 0; overflow-wrap: break-word; }
 .residency-role-option span, .residency-role-option small { display: block; }
 .residency-role-option small { margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.35; }
 .residency-user-list { display: grid; gap: 10px; }
@@ -1963,6 +1964,12 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
 .platform-payment-failed-inline.restricted { border-color: #e2a4a4; background: #fff2f2; }
 .platform-payment-failure-banner.restricted { border-color: #e2a4a4; background: #fff2f2; }
 
+@media (max-width: 1199px) {
+  .residency-user-invite-form, .residency-user-row { grid-template-columns: minmax(0, 1fr); }
+  .residency-user-invite-form { align-items: stretch; }
+  .residency-user-actions { justify-content: flex-start; }
+}
+
 @media (max-width: 1050px) {
   .platform-owner-plan-summary, .platform-plan-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .platform-plan-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 18px; }
@@ -1988,4 +1995,9 @@ button.daypart-setting-tile:hover { border-color: rgba(39,131,220,.38); backgrou
   .residency-user-invite-form, .residency-user-row, .account-security-grid, .platform-self-service-fields { grid-template-columns: 1fr; }
   .residency-user-invite-form { align-items: stretch; }
   .residency-user-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 480px) {
+  .residency-user-invite-form fieldset { flex-direction: column; }
+  .residency-role-option { flex: 0 1 auto; width: 100%; }
 }
