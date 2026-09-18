@@ -160,12 +160,12 @@ describe("Residency annual plan switching", () => {
     expect(createPreview).toHaveBeenCalledWith(expect.objectContaining({
       subscription: "sub_test",
       subscription_details: expect.objectContaining({
-        billing_cycle_anchor: "now",
         proration_behavior: "always_invoice",
         proration_date: expect.any(Number),
         items: [expect.objectContaining({ id: "si_test", price_data: expect.objectContaining({ unit_amount: 810_000, recurring: { interval: "year", interval_count: 1 } }) })],
       }),
     }));
+    expect(createPreview.mock.calls[0]?.[0].subscription_details).not.toHaveProperty("billing_cycle_anchor");
   });
 
   it("updates the existing Stripe subscription immediately with the preview timestamp before activating locally", async () => {
@@ -249,12 +249,12 @@ describe("Residency annual plan switching", () => {
 
     expect(subscriptionUpdate).toHaveBeenCalledWith("sub_test", expect.objectContaining({
       items: [{ id: "si_test", price: "price_annual", quantity: 1 }],
-      billing_cycle_anchor: "now",
       proration_behavior: "always_invoice",
       proration_date: prorationDate,
       payment_behavior: "error_if_incomplete",
       off_session: true,
     }), expect.anything());
+    expect(subscriptionUpdate.mock.calls[0]?.[1]).not.toHaveProperty("billing_cycle_anchor");
     const localActivation = updates.find((entry) => entry.table === platformSubscriptions)?.values;
     expect(localActivation).toMatchObject({ term: "annual", revision: 4, stripePriceId: "price_annual" });
     expect(updates.filter((entry) => entry.table === platformSubscriptions)).toHaveLength(1);

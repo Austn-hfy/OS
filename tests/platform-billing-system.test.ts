@@ -121,7 +121,8 @@ describe("Platform committed billing", () => {
       readSource("../src/services/platform-stripe-webhooks.ts"),
     ]);
 
-    expect(stripeService).toContain('billing_cycle_anchor: "now"');
+    expect(stripeService).not.toContain('billing_cycle_anchor: "now"');
+    expect(stripeService.match(/proration_date: prorationDate/g)).toHaveLength(2);
     expect(stripeService).toContain('proration_behavior: "always_invoice"');
     expect(stripeService).toContain('payment_behavior: "error_if_incomplete"');
     expect(stripeService).toContain("updatedItem?.price.id !== price.id || updatedSubscription.pending_update");
